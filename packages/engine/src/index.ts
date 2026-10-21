@@ -5,6 +5,7 @@ export * from './rules/units.js';
 export * from './rules/buildings.js';
 export * from './rules/nations.js';
 export * from './rules/fathers.js';
+export * from './rules/colonyNames.js';
 export * from './queries.js';
 export * from './production.js';
 export * from './colony.js';
