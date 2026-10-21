@@ -115,7 +115,8 @@ export class App {
     const head = this.state.config.headStart;
     if (head) {
       // A watched head start: follow the nation the player will take over.
-      this.speed = Math.max(this.speed, HEAD_START_MIN_MS);
+      this.speed = HEAD_START_MIN_MS;
+      this.camera.zoom = 40;
       this.setWatch(head.humans[0]);
       this.centerOnStart();
       this.setAutoplay(true);
@@ -174,6 +175,7 @@ export class App {
       if (head && this.state.turn >= head.turn) break;
       this.game.dispatch({ type: 'endTurn' });
     }
+    if (this.watch !== 'all') this.follow(this.watch);
     this.requestRender();
     if (head && this.state.turn >= head.turn && !this.state.gameOver) {
       this.takeOver();
@@ -184,6 +186,22 @@ export class App {
       void this.showGameOver();
     }
   }
+
+  /** Keeps the watched nation's latest activity in view: its newest colony, or its ships before it has one. */
+  private follow(nation: NationId): void {
+    const newest = Object.values(this.state.colonies)
+      .filter((c) => c.owner === nation)
+      .sort((a, b) => b.founded - a.founded)[0];
+    const ship = Object.values(this.state.units).find((u) => u.owner === nation && isShip(u) && u.loc.kind === 'map');
+    const at = newest ?? (ship && unitPosition(this.state, ship));
+    if (!at) return;
+    // Jump to each new colony; otherwise only move when the action leaves the screen.
+    const fresh = !!newest && newest.id !== this.followed;
+    if (newest) this.followed = newest.id;
+    this.centerOn(at.x, at.y, !fresh);
+  }
+
+  private followed?: string;
 
   /** Ends a head start: the player's nation leaves computer control. */
   takeOver(): void {

@@ -53,6 +53,7 @@ In a colony, click a colonist and then a field or building to put them to work. 
   - **Competent** runs an efficient economy. It scouts for rumours and chiefs, learns skills from natives, trains experts, keeps colonies staffed and fed, runs a merchant fleet, buys or calms native land, garrisons with its own militia, and works towards independence.
   - **Combative** has a competent economy behind an aggressive army. It takes native land, raids settlements for treasure, sends privateers after shipping and attacks weak neighbours.
   - **Creative** plays like a person. It reviews the game every few turns and shifts focus between exploring, expanding, developing, liberty, defence, war and independence. It reacts to threats at once and takes openings when a rival leaves a colony undefended.
+- **Head start**: start in 1550, 1600, 1650, 1700, 1750 or 1800 instead of 1492. The strongest computer level (Creative) plays your nation until then and hands it over in a developed position. Watch the run as a speedrun on the map (at least 250 ms per turn, following your newest colony), or skip ahead without drawing for a much faster start.
 - **Computer-only games**: choose no players to watch the computers play each other in observer mode, with play/pause, speed, stepping, a live scoreboard and a choice of whose view to show.
 - **Saving**: an autosave every turn, a manual save slot, and export or import of save files. Saves from Alpha 0.1 are upgraded on load.
 
@@ -63,6 +64,15 @@ In a colony, click a colonist and then a field or building to put them to work. 
 ```sh
 npm run tournament -- --games 8 --turns 330 --size medium --levels naive,competent,combative,creative
 ```
+
+With those options, the current results are as follows. The three advanced levels are close; Creative has the best average and plays head starts.
+
+| Level | Wins | Score | Colonies | Colonists |
+| --- | ---: | ---: | ---: | ---: |
+| Creative | 2 | 343 | 21.9 | 102 |
+| Combative | 2 | 339 | 22.4 | 116 |
+| Competent | 4 | 337 | 19.1 | 101 |
+| Naive | 0 | 204 | 20.0 | 75 |
 
 Simplifications in this alpha:
 - Native braves are not shown as units; their raids and gifts happen as events.
