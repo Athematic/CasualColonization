@@ -32,6 +32,7 @@ export function newGameScreen(
   host: HTMLElement,
   start: (config: GameConfig, head?: { turn: number; watch: boolean }) => void,
   resume: (state: GameState) => void,
+  back?: () => void,
 ): HTMLElement {
   let count = 4;
   const slots: Slot[] = NATION_ORDER.map((nation, i) => ({ nation, controller: i === 0 ? 'human' : 'competent' }));
@@ -54,6 +55,7 @@ export function newGameScreen(
       h('div', { class: 'menu-card' },
         h('div', { class: 'menu-title' },
           icon({ kind: 'unit', type: 'caravel', role: 'none', nation: chosen.find((s) => s.controller === 'human')?.nation ?? 'england' }, 72),
+          back ? h('button', { class: 'btn small back', onclick: back, 'aria-label': 'Back to the title screen' }, '←') : null,
           h('div', null, h('h1', null, 'Casual Colonization'), h('p', { class: 'muted' }, 'Alpha 0.2: a clone of the classic game of colonising the New World.'))),
         auto || manual
           ? h('div', { class: 'row wrap' },

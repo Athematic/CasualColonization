@@ -11,7 +11,7 @@ const assets = readdirSync(join(dist, 'assets'));
 const css = assets.filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(dist, 'assets', f), 'utf8')).join('\n');
 const js = assets.filter((f) => f.endsWith('.js')).map((f) => readFileSync(join(dist, 'assets', f), 'utf8')).join('\n');
 const safeJs = js.replace(/<\/script/gi, '<\\/script');
-const fonts = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap">';
+const fonts = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&family=Fredoka:wght@700&display=swap">';
 
 const body = `<div id="app"></div>\n<script type="module">\n${safeJs}\n</script>`;
 const head = `<title>Casual Colonization</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n${fonts}\n<style>\n${css}\n</style>`;

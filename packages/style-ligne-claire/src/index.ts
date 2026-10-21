@@ -36,7 +36,7 @@ export const ligneClaire: StylePlugin = {
   id: 'ligne-claire',
   name: 'Ligne claire',
   description: 'Clean, even ink lines and flat, bright colours in the tradition of the Franco-Belgian comic.',
-  stylesheets: ['https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap'],
+  stylesheets: ['https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&family=Fredoka:wght@700&display=swap'],
   theme: {
     '--paper': PAPER,
     '--ink': INK,

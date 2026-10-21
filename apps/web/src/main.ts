@@ -3,16 +3,43 @@ import { h } from './dom.js';
 import { App } from './app.js';
 import { savedStyle, setStyle } from './styles.js';
 import './style.css';
+import { landingScreen } from './ui/landing.js';
 import { newGameScreen } from './ui/newgame.js';
+import { pickSaveFile } from './save.js';
+import { toast } from './ui/dialogs.js';
 
 const host = document.getElementById('app')!;
 let app: App | null = null;
 
-function showMenu(): void {
+function leaveGame(): void {
   app?.destroy();
   app = null;
   host.replaceChildren();
-  newGameScreen(host, startGame, resumeGame);
+}
+
+/** The title screen with the cover art. */
+function showLanding(): void {
+  leaveGame();
+  const randomSeed = () => Math.floor(Math.random() * 1e9);
+  landingScreen(host, {
+    resume: resumeGame,
+    newGame: showMenu,
+    quickGame: () =>
+      startGame({ seed: randomSeed(), mapSize: 'medium', nations: ['england', 'france', 'netherlands', 'spain'], humans: ['england'], ai: { france: 'competent', netherlands: 'competent', spain: 'competent' } }),
+    watch: () =>
+      startGame({ seed: randomSeed(), mapSize: 'medium', nations: ['england', 'france', 'netherlands', 'spain'], humans: [], ai: { england: 'naive', france: 'competent', netherlands: 'combative', spain: 'creative' } }),
+    load: async () => {
+      const state = await pickSaveFile();
+      if (state) resumeGame(state);
+      else toast('That file is not a Casual Colonization save.', 'error');
+    },
+  });
+}
+
+/** The new-game settings screen. */
+function showMenu(): void {
+  leaveGame();
+  newGameScreen(host, startGame, resumeGame, showLanding);
 }
 
 export interface HeadStart {
@@ -47,7 +74,7 @@ function skipAhead(state: GameState, turn: number): void {
         h('p', { class: 'muted' }, `The computer is playing your nation until ${formatDate(turn)}.`),
         h('div', { class: 'bar', role: 'progressbar', 'aria-label': 'Head start progress' }, bar),
         label,
-        h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => { cancelled = true; showMenu(); } }, 'Cancel')))),
+        h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => { cancelled = true; showLanding(); } }, 'Cancel')))),
   );
   const step = () => {
     if (cancelled) return;
@@ -70,7 +97,7 @@ function resumeGame(state: GameState): void {
 
 function run(game: Game): void {
   host.replaceChildren();
-  app = new App(host, game, showMenu);
+  app = new App(host, game, showLanding);
 }
 
 // Debug handle for the browser console and automated play-tests.
@@ -93,10 +120,10 @@ function boot(data: HotHook['data']): void {
       resumeGame(deserialize(data.save));
       return;
     } catch {
-      // Fall through to the menu if the snapshot cannot be read.
+      // Fall through to the title screen if the snapshot cannot be read.
     }
   }
-  showMenu();
+  showLanding();
 }
 
 if (hot?.ready) hot.ready(boot);
