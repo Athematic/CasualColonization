@@ -1,12 +1,13 @@
 import { applyCommand, type Command, type CommandResult } from './commands.js';
 import { initialMarket, randomImmigrant } from './europe.js';
-import { generateMap } from './mapgen.js';
 import { placeOnMap } from './movement.js';
 import { createUnit, message, reveal } from './queries.js';
 import { NATIONS, TRIBE_ORDER, type NationId } from './rules/nations.js';
 import { beginPlayerTurn, runAiUntilHuman } from './turn.js';
 import type { GameConfig, GameState, Player } from './types.js';
 import { offerFathers } from './fathers.js';
+import { createWorld } from './world.js';
+import { entryPoints } from './mapgen.js';
 
 export const SAVE_VERSION = 2;
 
@@ -16,7 +17,7 @@ export function createGame(config: GameConfig): GameState {
   for (const h of config.humans) if (!config.nations.includes(h)) throw new Error(`${h} is not taking part.`);
 
   const rngHolder = { rng: config.seed | 0 };
-  const world = generateMap(rngHolder, config.mapSize);
+  const world = createWorld(rngHolder, config);
   const s: GameState = {
     version: SAVE_VERSION,
     config,
@@ -33,10 +34,9 @@ export function createGame(config: GameConfig): GameState {
     messages: [],
   };
 
-  const { width, height } = s.map;
+  const entries = entryPoints(s.map, config.nations.length, world.entryRows);
   config.nations.forEach((nation, i) => {
-    const y = Math.round(((i + 1) * height) / (config.nations.length + 1));
-    const entry = { x: width - 2, y };
+    const entry = entries[i];
     const p = newPlayer(s, nation, config.humans.includes(nation), entry);
     if (!p.human) p.ai = config.ai?.[nation] ?? 'naive';
     s.players.push(p);

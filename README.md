@@ -35,7 +35,7 @@ In a colony, click a colonist and then a field or building to put them to work. 
 
 ## What is in the alpha
 
-- **Map**: generated from a seed, with 13 terrain types and their forested variants, hills, mountains, bonus resources and Lost City Rumours. High seas to the east lead to Europe. Fog of war shows explored land and what your units can currently see.
+- **Map**: generated from a seed, or one of three hand-made stored maps (North America, South America, The Americas; see `packages/engine/src/maps/`), with 13 terrain types and their forested variants, hills, mountains, bonus resources and Lost City Rumours. High seas to the east lead to Europe. Fog of war shows explored land and what your units can currently see.
 - **Colonies**: worked fields and buildings with the classic production chains (lumber → hammers, ore → tools → muskets, sugar → rum, and so on). Also food growth and starvation, warehouse limits, horse breeding, a build queue with hurry-buying, and 15 building types with upgrades.
 - **Liberty**: Sons of Liberty bonuses and the Tory penalty for colonies with many royalists.
 - **Schools**: a schoolhouse, college or university lets experts teach. Criminals become servants, servants become free colonists, and free colonists become experts.
