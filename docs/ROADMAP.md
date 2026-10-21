@@ -19,6 +19,7 @@ The one plan for Casual Colonization. We decide the priorities here together. Ne
 | Turn-start modal with every decision and notice; turns-to-arrive badge on the go-to marker; stronger end-turn pulse | M | P1 | in progress |
 | Progress statistics every turn, a Progress Graphs screen, shown when the game ends | M | P1 | in progress |
 | Audit of which features each computer level uses; computer players build roads and buy ships | M | P1 | in progress |
+| Rivers (minor and major): road-like movement, production bonus, in generated and stored maps, drawn in both styles, valued by the computer players | M | P1 | planned (after the current agents) |
 | Difficulty levels (prices, taxes, native tension, size of the Royal Expeditionary Force, computer-player strength) | M | P2 | planned (after the above) |
 
 ## 0.4: Favoured Nation (the first thing the original could not do)

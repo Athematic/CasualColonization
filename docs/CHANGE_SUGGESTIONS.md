@@ -35,6 +35,7 @@ Compared with the gameplay of the original game, as described in the Wikipedia a
 - **Tories after the declaration.** Colonies with few rebels can resist or desert the cause.
 
 ### Economy and logistics
+- **Rivers.** Minor and major rivers are missing entirely. Moving along a river costs the same as a road. River tiles produce more (major rivers more than minor ones), and they make good colony sites. Rivers are fixed features that cannot be built or removed. The map generator, the stored maps (the Mississippi, St. Lawrence, Amazon, Río de la Plata and others), movement, production, both graphical styles and the computer players' choice of colony sites all need updating.
 - **Trade routes.** Standing orders for ships and wagon trains to load and unload goods between colonies and Europe automatically. This is the original game's answer to warehouses overflowing, and it also helps the computer players.
 - **Wagon trains in use.** Wagon trains can be built, but neither people nor the computer have much reason to use them without trade routes.
 - **Running out of resources.** Silver and ore deposits run out after heavy mining.
