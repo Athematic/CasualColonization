@@ -1,4 +1,4 @@
-import { MAP_SIZES, NATION_ORDER, NATIONS, formatDate, nationTitle, type GameConfig, type GameState, type MapSize, type NationId } from '@cc/engine';
+import { MAP_SIZES, NATION_ORDER, NATIONS, STORED_MAPS, formatDate, nationTitle, type GameConfig, type GameState, type MapSize, type NationId } from '@cc/engine';
 import { clear, h } from '../dom.js';
 import { loadAuto, loadManual, pickSaveFile } from '../save.js';
 import { activeStyle, availableStyles, icon, setStyle } from '../styles.js';
@@ -13,6 +13,8 @@ export function newGameScreen(host: HTMLElement, start: (config: GameConfig) => 
   let count = 4;
   const slots: Slot[] = NATION_ORDER.map((nation, i) => ({ nation, human: i === 0 }));
   let mapSize: MapSize = 'medium';
+  /** Stored map id; empty for a generated map. */
+  let map = '';
   let seed = Math.floor(Math.random() * 1e9);
 
   const el = h('main', { class: 'menu-screen' });
@@ -49,8 +51,12 @@ export function newGameScreen(host: HTMLElement, start: (config: GameConfig) => 
         })),
         humans > 1 ? h('p', { class: 'muted small' }, 'Several players take turns on this device (hot seat).') : null,
         h('div', { class: 'row wrap' },
+          h('label', { class: 'field' }, h('span', null, 'Map'),
+            h('select', { onchange: (e: Event) => { map = (e.target as HTMLSelectElement).value; render(); } },
+              h('option', { value: '', selected: !map || undefined }, 'Random (generated)'),
+              STORED_MAPS.map((m) => h('option', { value: m.id, selected: m.id === map || undefined, title: m.description }, m.name)))),
           h('label', { class: 'field' }, h('span', null, 'Map size'),
-            h('select', { onchange: (e: Event) => (mapSize = (e.target as HTMLSelectElement).value as MapSize) },
+            h('select', { disabled: !!map || undefined, title: map ? 'Stored maps have a fixed size.' : undefined, onchange: (e: Event) => (mapSize = (e.target as HTMLSelectElement).value as MapSize) },
               (Object.keys(MAP_SIZES) as MapSize[]).map((m) => h('option', { value: m, selected: m === mapSize || undefined }, `${m[0].toUpperCase()}${m.slice(1)} (${MAP_SIZES[m].width}×${MAP_SIZES[m].height})`)))),
           h('label', { class: 'field' }, h('span', null, 'Map seed'),
             h('input', { type: 'number', value: seed, onchange: (e: Event) => (seed = Number((e.target as HTMLInputElement).value) || 0) })),
@@ -62,7 +68,7 @@ export function newGameScreen(host: HTMLElement, start: (config: GameConfig) => 
           h('button', {
             class: 'btn primary big',
             disabled: humans === 0,
-            onclick: () => start({ seed, mapSize, nations: chosen.map((s) => s.nation), humans: chosen.filter((s) => s.human).map((s) => s.nation) }),
+            onclick: () => start({ seed, mapSize, ...(map ? { map } : {}), nations: chosen.map((s) => s.nation), humans: chosen.filter((s) => s.human).map((s) => s.nation) }),
           }, humans === 0 ? 'Choose at least one player' : 'Set sail'),
           h('button', {
             class: 'btn',

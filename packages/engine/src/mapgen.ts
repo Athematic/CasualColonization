@@ -35,9 +35,12 @@ function octaves(rng: { rng: number }, width: number, height: number, cells: num
   return (x, y) => fields.reduce((sum, f, i) => sum + f(x, y) / (i + 1), 0) / total;
 }
 
+/** A new world, generated or loaded from a stored map. */
 export interface GeneratedWorld {
   map: GameMap;
   settlements: Settlement[];
+  /** Rows (inclusive) along the east edge where European expeditions arrive. */
+  entryRows: [number, number];
 }
 
 export function generateMap(rng: { rng: number }, size: MapSize): GeneratedWorld {
@@ -108,21 +111,65 @@ export function generateMap(rng: { rng: number }, size: MapSize): GeneratedWorld
     for (let x = width - 2; x < width; x++) tiles[idx(x, y)].t = 'highSeas';
   }
 
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const tile = tiles[idx(x, y)];
-      const def = TERRAIN[tile.t];
-      if (def.bonusGood && random(rng) < (def.water ? (landNear(x, y, 1) ? 0.06 : 0) : 0.05)) tile.b = true;
-      if (!def.water && tile.t !== 'arctic' && random(rng) < 0.03) tile.lcr = true;
-    }
-  }
-
+  const map = { width, height, tiles };
+  sprinkleExtras(rng, map);
   const settlements = placeSettlements(rng, tiles, width, height);
   for (const st of settlements) {
     const tile = tiles[idx(st.x, st.y)];
     delete tile.lcr;
   }
-  return { map: { width, height, tiles }, settlements };
+  return { map, settlements, entryRows: [0, height - 1] };
+}
+
+/**
+ * Spreads up to `n` arrival points evenly along the east-edge high seas between two rows.
+ * Over the whole height this is the same spacing the generated map has always used.
+ */
+export function entryPoints(map: GameMap, n: number, rows: [number, number] = [0, map.height - 1]): { x: number; y: number }[] {
+  const [top, bottom] = rows;
+  const span = bottom - top + 1;
+  return Array.from({ length: n }, (_, i) => ({ x: map.width - 2, y: top + Math.round(((i + 1) * span) / (n + 1)) }));
+}
+
+/** Scatters bonus resources (on land and on coastal ocean) and Lost City Rumours. */
+export function sprinkleExtras(rng: { rng: number }, map: GameMap): void {
+  const { width, height, tiles } = map;
+  const landNear = (x: number, y: number) => {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx >= 0 && ny >= 0 && nx < width && ny < height && !TERRAIN[tiles[ny * width + nx].t].water) return true;
+      }
+    }
+    return false;
+  };
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const tile = tiles[y * width + x];
+      const def = TERRAIN[tile.t];
+      if (def.bonusGood && random(rng) < (def.water ? (landNear(x, y) ? 0.06 : 0) : 0.05)) tile.b = true;
+      if (!def.water && tile.t !== 'arctic' && random(rng) < 0.03) tile.lcr = true;
+    }
+  }
+}
+
+/** A native settlement with a random skill, defenders and gold for its tribe. */
+export function newSettlement(rng: { rng: number }, id: string, tribe: TribeId, x: number, y: number, capital: boolean): Settlement {
+  const def = TRIBES[tribe];
+  const size = def.settlement === 'city' ? 3 : def.settlement === 'village' ? 2 : 1;
+  return {
+    id,
+    tribe,
+    x,
+    y,
+    capital,
+    skill: pick(rng, def.skills),
+    visited: [],
+    defenders: size + (capital ? 2 : 0) + randInt(rng, 2),
+    gold: (size * 150 + randInt(rng, 200)) * (capital ? 2 : 1),
+    tension: {},
+  };
 }
 
 function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, height: number): Settlement[] {
@@ -146,22 +193,9 @@ function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, he
     if (placed.some((p) => Math.max(Math.abs(p.x - c.x), Math.abs(p.y - c.y)) < 4)) continue;
     const band = Math.min(TRIBE_ORDER.length - 1, Math.floor(((c.y - 2) / (height - 4)) * TRIBE_ORDER.length));
     const tribe = TRIBE_ORDER[band];
-    const def = TRIBES[tribe];
     const capital = !capitals.has(tribe);
     capitals.add(tribe);
-    const size = def.settlement === 'city' ? 3 : def.settlement === 'village' ? 2 : 1;
-    placed.push({
-      id: `s${placed.length + 1}`,
-      tribe,
-      x: c.x,
-      y: c.y,
-      capital,
-      skill: pick(rng, def.skills),
-      visited: [],
-      defenders: size + (capital ? 2 : 0) + randInt(rng, 2),
-      gold: (size * 150 + randInt(rng, 200)) * (capital ? 2 : 1),
-      tension: {},
-    });
+    placed.push(newSettlement(rng, `s${placed.length + 1}`, tribe, c.x, c.y, capital));
   }
   return placed;
 }

@@ -10,6 +10,8 @@ export type MapSize = 'small' | 'medium' | 'large';
 export interface GameConfig {
   seed: number;
   mapSize: MapSize;
+  /** Id of a stored map (see STORED_MAPS); absent means a generated map. `mapSize` is then ignored. */
+  map?: string;
   /** European nations taking part, in turn order. Between 1 and 8. */
   nations: NationId[];
   /** Nations controlled by people (hot-seat); the rest are AI. */
