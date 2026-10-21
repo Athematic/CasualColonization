@@ -14,7 +14,41 @@
 
 ## Missing features
 
-[add all missing features from the Gameplay section of https://en.wikipedia.org/wiki/Sid_Meier%27s_Colonization]
+Compared with the gameplay of the original game, as described in the Wikipedia article. Everything not listed here is already in the alpha: Europe and the market, immigration, colonies and production chains, schools, the Continental Congress, natives (learning, trade, missions, land, tension, raids), Lost City Rumours, treasure, custom houses, boycotts, the War of Independence and scoring.
+
+### Native peoples
+- **Visible native units.** Braves that wander between settlements, visit colonies (bringing gifts or trading), demand tribute when angry and attack as units, instead of raids being abstract events.
+- **Armed and mounted braves.** Natives who get muskets and horses through trade or capture fight harder, as in the original.
+- **Buying from natives.** Wagon trains and ships can buy goods from settlements (furs, silver, cotton) as well as sell to them, at prices that change with what the tribe has.
+- **Burial grounds.** A rumour outcome: disturbing a burial ground turns the tribe against you permanently.
+- **Surrender of a tribe.** Destroying a tribe's capital can make the remaining settlements submit.
+- **Missionary actions.** Missionaries can denounce another nation's mission, or incite a tribe against a rival nation.
+
+### The Crown
+- **Royal demands.** The king occasionally demands a sum of gold; refusing costs goods or goodwill.
+- **Royal wars.** The Crown drags its colonies into wars with other European nations, whether or not the player wants war.
+- **A growing Royal Expeditionary Force.** In the original, the king adds troops to the REF throughout the game, more as liberty grows, and the player can watch it build up. Here it is sized once, at the declaration.
+- **Mercenaries.** During the war of independence, foreign mercenaries offer their services for gold.
+- **Foreign intervention.** A rival European power sends a force to help a rebellion that is holding out (known as the intervention force in later versions).
+- **Tories after the declaration.** Colonies with few rebels can resist or desert the cause.
+
+### Economy and logistics
+- **Trade routes.** Standing orders for ships and wagon trains to load and unload goods between colonies and Europe automatically. This is the original game's answer to warehouses overflowing, and it also helps the computer players.
+- **Wagon trains in use.** Wagon trains can be built, but neither people nor the computer have much reason to use them without trade routes.
+- **Running out of resources.** Silver and ore deposits run out after heavy mining.
+- **Trading with other Europeans.** Selling goods to another nation's colony (Jan de Witt's original effect).
+
+### Military
+- **Damaged artillery.** Artillery that loses a fight is damaged first, and destroyed only on a second loss.
+- **Ambush bonus.** Attackers in woods and hills get a terrain bonus against units in the open.
+- **Fortress level.** The third stockade level (fortress), and coastal forts firing on enemy ships.
+- **Capturing equipment.** A winning unit can take horses or muskets from the loser.
+
+### Game setup and information
+- **Difficulty levels.** The original has five (Discoverer to Viceroy). They affect prices, taxes, native tension, the size of the REF and the computer players.
+- **Advisor reports.** Colony, trade, military, naval, religious and native overviews, plus a Continental Congress report and a history of past events.
+- **Abandoning a colony,** and **retiring** to end the game early with your current score.
+- **Map editor** for making new stored maps in the game.
 
 ## New Features
 
