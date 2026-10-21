@@ -75,12 +75,12 @@ npm run tournament -- --games 6 --turns 300 --size medium --features   # feature
 
 With those options, the current results are as follows. Creative has the best average and plays head starts.
 
-| Level | Wins | Score | Colonies | Colonists |
-| --- | ---: | ---: | ---: | ---: |
-| Creative | 3 | 510 | 21.8 | 148 |
-| Competent | 2 | 435 | 20.3 | 131 |
-| Combative | 3 | 415 | 21.9 | 140 |
-| Naive | 0 | 190 | 20.5 | 71 |
+| Level | Wins | Score | Colonies | Colonists | Goods spoiled |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Creative | 2 | 476 | 21.0 | 138 | 10,037 |
+| Competent | 4 | 460 | 21.1 | 138 | 9,628 |
+| Combative | 2 | 417 | 22.5 | 139 | 8,082 |
+| Naive | 0 | 208 | 19.8 | 77 | 15,042 |
 
 Add `--difficulty <level>` (`discoverer`, `explorer`, `conquistador`, `governor`, `viceroy`) to play every arena nation at that level's economics, as if each were a person; without it, games use the standard rules (Conquistador), and `--difficulty conquistador` gives exactly the same results.
 
