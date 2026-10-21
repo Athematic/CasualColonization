@@ -2,8 +2,8 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    # The repository's default branch builds the site; add others here if needed.
-    branches: [main, claude/nifty-ptolemy-10e7mv]
+    # Only main is published; feature branches are merged into main when they are ready.
+    branches: [main]
   workflow_dispatch:
 
 permissions:
