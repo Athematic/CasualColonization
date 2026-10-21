@@ -10,6 +10,7 @@ import {
   FATHERS,
   Game,
   GOOD_DEFS,
+  handOver,
   nationTitle,
   nextFatherCost,
   tensionLabel,
@@ -47,6 +48,9 @@ export interface Screen {
   close?(): void;
 }
 
+/** A watched head start shows each turn for at least this long. */
+export const HEAD_START_MIN_MS = 250;
+
 const KEY_DIRS: Record<string, Direction> = {
   ArrowUp: 'n', ArrowDown: 's', ArrowLeft: 'w', ArrowRight: 'e',
   Home: 'nw', PageUp: 'ne', End: 'sw', PageDown: 'se',
@@ -69,7 +73,7 @@ export class App {
   hover?: Point;
   gotoMode = false;
   /** No people play: the computers play each other and the user watches. */
-  readonly observer: boolean;
+  observer: boolean;
   /** In observer mode, whose view of the world is shown ('all' reveals everything). */
   watch: NationId | 'all' = 'all';
   autoplay = false;
@@ -108,7 +112,14 @@ export class App {
     ro.observe(this.mapWrap);
     this.disposers.push(() => ro.disconnect());
 
-    if (this.observer) {
+    const head = this.state.config.headStart;
+    if (head) {
+      // A watched head start: follow the nation the player will take over.
+      this.speed = Math.max(this.speed, HEAD_START_MIN_MS);
+      this.setWatch(head.humans[0]);
+      this.centerOnStart();
+      this.setAutoplay(true);
+    } else if (this.observer) {
       this.camera.zoom = 26;
       this.centerOn(this.state.map.width / 2, this.state.map.height / 2);
     } else {
@@ -158,12 +169,43 @@ export class App {
 
   /** Plays whole rounds of computer turns. */
   observeTurns(n: number): void {
-    for (let i = 0; i < n && !this.state.gameOver; i++) this.game.dispatch({ type: 'endTurn' });
+    const head = this.state.config.headStart;
+    for (let i = 0; i < n && !this.state.gameOver; i++) {
+      if (head && this.state.turn >= head.turn) break;
+      this.game.dispatch({ type: 'endTurn' });
+    }
     this.requestRender();
+    if (head && this.state.turn >= head.turn && !this.state.gameOver) {
+      this.takeOver();
+      return;
+    }
     if (this.state.gameOver) {
       this.setAutoplay(false);
       void this.showGameOver();
     }
+  }
+
+  /** Ends a head start: the player's nation leaves computer control. */
+  takeOver(): void {
+    if (!this.state.config.headStart) return;
+    this.setAutoplay(false);
+    const nations = this.state.config.headStart.humans;
+    handOver(this.state);
+    this.observer = false;
+    this.watch = 'all';
+    this.viewer = this.humanViewer();
+    this.camera.zoom = 56;
+    this.selected = undefined;
+    this.selectNext();
+    if (!this.selected) {
+      const home = Object.values(this.state.colonies).find((c) => c.owner === this.viewer);
+      if (home) this.centerOn(home.x, home.y);
+      else this.centerOnStart();
+    }
+    saveAuto(serialize(this.state));
+    this.game.emit();
+    toast(`${formatDate(this.state.turn)}: ${nations.length > 1 ? 'your nations are' : `${nationTitle(this.viewer)} is`} yours to command.`);
+    void this.answerPending();
   }
 
   setAutoplay(on: boolean): void {

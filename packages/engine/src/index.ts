@@ -24,3 +24,4 @@ export { RuleError } from './errors.js';
 export { siteScore } from './ai/common.js';
 export * from './ai/profiles.js';
 export * from './arena.js';
+export * from './headstart.js';

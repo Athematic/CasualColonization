@@ -17,6 +17,8 @@ export interface GameConfig {
   humans: NationId[];
   /** Level of each computer nation; missing means Naive. */
   ai?: Partial<Record<NationId, AiLevel>>;
+  /** While a head start runs: the people's nations, played by the computer until hand-over. */
+  headStart?: { humans: NationId[]; level: AiLevel; turn: number };
 }
 
 export interface Tile {

@@ -130,12 +130,19 @@ export class Sidebar {
     const watch = h('select', { 'aria-label': 'Whose view to show', onchange: (e: Event) => app.setWatch((e.target as HTMLSelectElement).value as NationId | 'all') },
       h('option', { value: 'all', selected: app.watch === 'all' || undefined }, 'Everything'),
       rows.map((r) => h('option', { value: r.p.id, selected: app.watch === r.p.id || undefined }, `${nationTitle(r.p.id)}'s view`)));
+    const head = s.config.headStart;
+    const speeds = (head ? [[1000, 'Slow'], [500, 'Normal'], [250, 'Fast']] : [[1200, 'Slow'], [400, 'Normal'], [80, 'Fast'], [0, 'Fastest']]) as [number, string][];
     const speed = h('select', { 'aria-label': 'Autoplay speed', onchange: (e: Event) => { app.speed = Number((e.target as HTMLSelectElement).value); if (app.autoplay) app.setAutoplay(true); } },
-      [[1200, 'Slow'], [400, 'Normal'], [80, 'Fast'], [0, 'Fastest']].map(([ms, label]) => h('option', { value: ms, selected: app.speed === ms || undefined }, String(label))));
+      speeds.map(([ms, label]) => h('option', { value: ms, selected: app.speed === ms || undefined }, label)));
     const over = s.gameOver;
+    const progress = head ? Math.min(100, Math.round((s.turn / head.turn) * 100)) : 0;
     return h('div', { class: 'card observer' },
-      h('div', { class: 'title-row' }, h('h1', null, 'Casual Colonization'), h('span', { class: 'pill' }, 'Observer')),
+      h('div', { class: 'title-row' }, h('h1', null, 'Casual Colonization'), h('span', { class: 'pill' }, head ? 'Head start' : 'Observer')),
       h('div', { class: 'stats' }, h('strong', null, formatDate(s.turn)), over ? ` · ${over.reason}` : ''),
+      head ? h('div', null,
+        h('p', { class: 'small' }, `The computer plays ${head.humans.map((n) => nationTitle(n)).join(' and ')} for you until ${formatDate(head.turn)}.`),
+        h('div', { class: 'bar', role: 'progressbar', 'aria-valuenow': progress, 'aria-valuemin': 0, 'aria-valuemax': 100 }, h('span', { style: `width:${progress}%` })),
+        h('button', { class: 'btn small', onclick: () => app.takeOver() }, 'Take over now')) : null,
       h('div', { class: 'row' },
         h('button', { class: 'btn primary', disabled: !!over, onclick: () => app.setAutoplay(!app.autoplay), title: 'Space' }, app.autoplay ? 'Pause' : 'Play'),
         h('button', { class: 'btn', disabled: !!over || app.autoplay, onclick: () => app.observeTurns(1), title: 'Enter' }, '+1 turn'),
