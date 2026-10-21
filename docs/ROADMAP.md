@@ -76,14 +76,17 @@ Builds on 0.4.
 
 Each beta gets design notes first.
 
-## Scenarios: Australia
+## Scenarios
 
-Design: [design/australia.md](design/australia.md). Comes after the cooperation betas, so Federation can be a peaceful way to win.
+Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](design/australia.md). Comes after the cooperation betas, so Federation can be a peaceful way to win.
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | idea |
+| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | idea, agreed |
+| Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | idea, agreed |
+| Convict transport mechanic (Australia; late game for British colonies in the Americas) | M | P2 | idea, agreed |
 | Australia, 1788–1901: map, Aboriginal nations and Country, wool, wheat, gold and whaling, convict colonists, the long sea route, drought, Federation | XL | P1 | idea |
+| Vinland, around 1000: Norse survival from Greenland with scarce resources and a fragile supply line | L | P3 | idea |
 
 ## Later
 

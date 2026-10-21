@@ -1,6 +1,6 @@
 # Design note: Australia scenario
 
-Status: **idea**. To be agreed before work starts.
+Status: **idea**. Builds on the [scenario framework](scenarios.md).
 
 ## Goal
 A second setting: the colonisation of Australia, roughly 1788–1901, instead of the Americas, 1492–1850. The rules stay the same, with different land, peoples, goods, history and ending.
@@ -28,8 +28,10 @@ Today the rules are hard-coded for the Americas: `TRIBES`, the goods, nations, y
 ## Care with the subject
 The colonisation of Australia includes frontier wars, massacres, land taken under the "terra nullius" doctrine, and the Stolen Generations. The game must not present the land as empty or Aboriginal peoples as obstacles. Their nations, languages and Country should be shown with respect and based on reputable sources (for example, the AIATSIS map of Indigenous Australia). The cooperation focus helps here, but it needs care in the design and in the text, not only in the rules.
 
+## Decided
+- **Rivals:** both. *Real rivals* (Britain, with others only exploring) and *alternative history* (a French Western Australia, a Dutch New Holland and so on) are setup options, as in every scenario.
+- **Map:** both. A dedicated map of Australia, or a generated map in an Australian style.
+- **Convict transport:** a mechanic in its own right, shared with the Americas, where British colonies get a limited late-game version. See [scenarios.md](scenarios.md#convict-transport-a-shared-mechanic).
+
 ## Open questions
-- **Rivals:** which rivals are in play? Real history is mostly British. Alternative history (a French Western Australia, a Dutch New Holland) makes better gameplay.
-- **Map:** one fixed map, generated maps, or both?
-- **Convict transport:** is it a mechanic in its own right (the Crown sends convicts, and you choose free settlers instead)?
 - **Placement:** does the scenario come after the cooperation betas, so it can use them?
