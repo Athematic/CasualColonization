@@ -8,7 +8,7 @@ export interface Choice<T> {
   hint?: string;
 }
 
-function layer(): HTMLElement {
+export function layer(): HTMLElement {
   let el = document.getElementById('dialog-layer');
   if (!el) {
     el = h('div', { id: 'dialog-layer' });

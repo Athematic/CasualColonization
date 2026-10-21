@@ -1,4 +1,5 @@
 import { assignJob, equipInColony, foundColony, hurryBuild, leaveColony, setBuild } from './colony.js';
+import { applyCheat, type CheatId } from './cheats.js';
 import { attack, cashTreasure } from './combat.js';
 import { fail, RuleError } from './errors.js';
 import {
@@ -70,6 +71,8 @@ export type Command =
   | { type: 'proposePeace'; nation: NationId }
   | { type: 'giftTribe'; tribe: TribeId; gold: number }
   | { type: 'declareIndependence' }
+  /** A cheat (see cheats.ts). `nation` defaults to the nation whose turn it is; `on` sets a toggle, omitted flips it. */
+  | { type: 'cheat'; cheat: CheatId; nation?: NationId; on?: boolean }
   | { type: 'endTurn' };
 
 export type CommandResult = { ok: true; text?: string } | { ok: false; error: string };
@@ -293,6 +296,9 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'declareIndependence':
         text = declareIndependence(s, nation);
+        break;
+      case 'cheat':
+        text = applyCheat(s, cmd.cheat, cmd.nation ?? nation, cmd.on);
         break;
       case 'endTurn':
         endTurn(s);

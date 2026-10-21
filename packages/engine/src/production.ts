@@ -2,6 +2,7 @@ import { BUILDINGS, BUILDING_ORDER, BUILDING_SKILL_OUTPUT, PRINTING_BELL_BONUS, 
 import { GOODS, type GoodId, type ProductId } from './rules/goods.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
+import { yieldMultiplier } from './cheats.js';
 import { hasFather } from './fathers.js';
 import { colonyWorkers, isWater, tileAt } from './queries.js';
 import type { Colony, GameState, Tile } from './types.js';
@@ -47,7 +48,7 @@ export function tileYield(s: GameState, colony: Colony, x: number, y: number, go
   const tile = tileAt(s, x, y);
   if (!tile) return 0;
   if (isWater(tile) && colony.buildings.docks === 0) return 0;
-  let amount = baseTileYield(tile, good);
+  let amount = baseTileYield(tile, good) * yieldMultiplier(s);
   if (amount === 0) return 0;
   const def = UNIT_TYPES[unitType];
   const expert =
@@ -75,6 +76,8 @@ export function centreProduction(s: GameState, colony: Colony): Partial<Record<G
     if (!best || baseTileYield(tile, g) > baseTileYield(tile, best)) best = g;
   }
   if (best) out[best] = baseTileYield({ ...tile, p: true }, best);
+  const mult = yieldMultiplier(s);
+  if (mult !== 1) for (const g of Object.keys(out) as GoodId[]) out[g]! *= mult;
   return out;
 }
 

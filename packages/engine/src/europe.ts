@@ -54,7 +54,8 @@ function adjustMarket(p: Player, good: GoodId, sold: number): void {
   }
   while (m.volume <= -def.elasticity) {
     m.volume += def.elasticity;
-    m.price = Math.min(def.maxPrice, m.price + 1);
+    // A price above the maximum (after the double-prices cheat) does not jump back down on a purchase.
+    if (m.price < def.maxPrice) m.price += 1;
   }
 }
 

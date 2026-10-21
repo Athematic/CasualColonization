@@ -57,6 +57,7 @@ In a colony, click a colonist and then a field or building to put them to work. 
   - **Creative** plays like a person. It reviews the game every few turns and shifts focus between exploring, expanding, developing, liberty, defence, war and independence. It reacts to threats at once and takes openings when a rival leaves a colony undefended.
 - **Head start**: start in 1550, 1600, 1650, 1700, 1750 or 1800 instead of 1492. The strongest computer level (Creative) plays your nation until then and hands it over in a developed position. Watch the run as a speedrun on the map (at least 250 ms per turn, following your newest colony), or skip ahead without drawing for a much faster start.
 - **Computer-only games**: choose no players to watch the computers play each other in observer mode, with play/pause, speed, stepping, a live scoreboard and a choice of whose view to show.
+- **Cheats** (for testing the computer players): *Cheats…* in the Game menu, or `Ctrl+Shift+C`. Add 10,000 gold, double a nation's home-port prices, force peace between all European nations (tribes and the Crown are not affected), double all terrain yields (toggle) and reveal the map in a nation's view (toggle). Each cheat is an engine command, so games stay deterministic. The first use marks the game as cheated for good; the mark is kept in saves and shown on the score screen and in tournament tables.
 - **Saving**: an autosave every turn, a manual save slot, and export or import of save files. Saves from Alpha 0.1 are upgraded on load.
 
 ### Measuring the computer players

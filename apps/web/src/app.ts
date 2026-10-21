@@ -16,6 +16,7 @@ import {
   tensionLabel,
   isShip,
   isWater,
+  mapRevealed,
   NATIONS,
   player,
   settlementAt,
@@ -37,6 +38,7 @@ import { h } from './dom.js';
 import { saveAuto } from './save.js';
 import { activeStyle, onStyleChange } from './styles.js';
 import { ColonyScreen } from './ui/colony.js';
+import { openCheats } from './ui/cheats.js';
 import { choose, confirmDialog, promptDialog, toast } from './ui/dialogs.js';
 import { DiplomacyScreen } from './ui/diplomacy.js';
 import { EuropeScreen } from './ui/europe.js';
@@ -157,7 +159,12 @@ export class App {
 
   /** Whether the shown view knows this tile. */
   knows(index: number): boolean {
-    return (this.observer && this.watch === 'all') || this.me.explored[index] === 1;
+    return this.revealAll() || this.me.explored[index] === 1;
+  }
+
+  /** Whether the shown view has the whole map: an observer watching everything, or the reveal-map cheat. */
+  revealAll(): boolean {
+    return (this.observer && this.watch === 'all') || mapRevealed(this.state, this.viewer);
   }
 
   // ---- Observer mode ----
@@ -270,7 +277,7 @@ export class App {
       hover: this.hover,
       path,
       visible: computeVisibility(this.state, this.viewer),
-      revealAll: this.observer && this.watch === 'all',
+      revealAll: this.revealAll(),
     };
   }
 
@@ -377,6 +384,7 @@ export class App {
     const rows = (Object.entries(over.scores) as [NationId, number][]).sort((a, b) => b[1] - a[1]);
     const body = h('div', null,
       h('p', null, over.reason),
+      this.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used'), ` since ${formatDate(this.state.cheated.turn)}.`) : null,
       over.winner ? h('p', null, h('strong', null, `${nationTitle(over.winner)} ${over.winner === this.viewer ? '(you) ' : ''}wins.`)) : null,
       h('table', { class: 'scores' }, rows.map(([n, score]) => h('tr', null, h('td', null, nationTitle(n)), h('td', null, String(score))))));
     const again = await choose('The game is over', body, [
@@ -575,6 +583,10 @@ export class App {
     this.showScreen(new DiplomacyScreen(this));
   }
 
+  openCheats(): void {
+    void openCheats(this);
+  }
+
   private showScreen(screen: Screen): void {
     this.closeScreen();
     this.screen = screen;
@@ -737,6 +749,11 @@ export class App {
     if (document.getElementById('dialog-layer')?.childElementCount || document.querySelector('.handoff')) return;
     const target = e.target as HTMLElement;
     if (target.matches('input, select, textarea')) return;
+    if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
+      e.preventDefault();
+      this.openCheats();
+      return;
+    }
     if (this.screen) {
       if (e.key === 'Escape') this.closeScreen();
       return;
