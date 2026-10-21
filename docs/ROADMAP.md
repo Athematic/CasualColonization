@@ -16,9 +16,11 @@ The one plan for Casual Colonization. We decide the priorities here together. Ne
 | --- | --- | --- | --- |
 | Cheat menu with a permanent cheated marker | M | P1 | done |
 | Trade routes for ships and wagon trains; computer players stop goods spoiling (warehouses, routes, selling to natives) | L | P1 | in progress |
-| Turn-start modal with every decision and notice; turns-to-arrive badge on the go-to marker; stronger end-turn pulse | M | P1 | in progress |
+| Turn-start modal with every decision and notice; turns-to-arrive badge on the go-to marker; stronger end-turn pulse | M | P1 | done |
 | Progress statistics every turn, a Progress Graphs screen, shown when the game ends | M | P1 | in progress |
-| Audit of which features each computer level uses; computer players build roads and buy ships | M | P1 | in progress |
+| Audit of which features each computer level uses; computer players build roads and buy ships | M | P1 | done (see [AI_FEATURE_AUDIT.md](AI_FEATURE_AUDIT.md)) |
+| Next computer-player gaps from the audit: Combative's idle army, missions and native trade, schools and custom houses earlier, buying experts, declaring independence, refusing taxes | M | P2 | planned |
+| New game screen previews planned options | S | P3 | done |
 | Rivers (minor and major): road-like movement, production bonus, in generated and stored maps, drawn in both styles, valued by the computer players | M | P1 | planned (after the current agents) |
 | Difficulty levels (prices, taxes, native tension, size of the Royal Expeditionary Force, computer-player strength) | M | P2 | planned (after the above) |
 
@@ -85,6 +87,7 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
 | Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | idea, agreed |
 | Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | idea, agreed |
 | Convict transport mechanic (Australia; late game for British colonies in the Americas) | M | P2 | idea, agreed |
+| Australia map (geography preview with the current rules; ships arrive from the west) | M | P2 | done |
 | Australia, 1788–1901: map, Aboriginal nations and Country, wool, wheat, gold and whaling, convict colonists, the long sea route, drought, Federation | XL | P1 | idea |
 | Vinland, around 1000: Norse survival from Greenland with scarce resources and a fragile supply line | L | P3 | idea |
 
