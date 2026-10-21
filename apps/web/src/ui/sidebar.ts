@@ -2,8 +2,12 @@ import {
   canFoundColony,
   canImprove,
   colonyAt,
+  AI_LEVEL_INFO,
+  colonyWorkers,
   FATHERS,
   formatDate,
+  rebelShare,
+  score,
   nextFatherCost,
   GOOD_DEFS,
   GOODS,
@@ -21,6 +25,7 @@ import {
   unitsAwaitingOrders,
   UNIT_TYPES,
   type GameState,
+  type NationId,
   type Unit,
 } from '@cc/engine';
 import type { App } from '../app.js';
@@ -65,6 +70,11 @@ export class Sidebar {
     const s = app.state;
     const me = app.me;
     clear(this.body);
+    if (app.observer) {
+      this.body.append(this.observerPanel(), this.unitCard(app.selectedUnit()), this.reports(), this.menu());
+      this.drawMinimap();
+      return;
+    }
     const myTurn = app.isMyTurn();
     const awaiting = unitsAwaitingOrders(s, app.viewer).length;
 
@@ -100,11 +110,55 @@ export class Sidebar {
     this.drawMinimap();
   }
 
+  /** Controls and a live scoreboard for games played only by computers. */
+  private observerPanel(): HTMLElement {
+    const app = this.app;
+    const s = app.state;
+    const rows = s.players
+      .filter((p) => p.id !== 'crown')
+      .map((p) => {
+        const colonies = Object.values(s.colonies).filter((c) => c.owner === p.id);
+        return {
+          p,
+          colonies: colonies.length,
+          pop: colonies.reduce((n, c) => n + colonyWorkers(s, c).length, 0),
+          rebels: rebelShare(s, p.id),
+          score: score(s, p),
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+    const watch = h('select', { 'aria-label': 'Whose view to show', onchange: (e: Event) => app.setWatch((e.target as HTMLSelectElement).value as NationId | 'all') },
+      h('option', { value: 'all', selected: app.watch === 'all' || undefined }, 'Everything'),
+      rows.map((r) => h('option', { value: r.p.id, selected: app.watch === r.p.id || undefined }, `${nationTitle(r.p.id)}'s view`)));
+    const speed = h('select', { 'aria-label': 'Autoplay speed', onchange: (e: Event) => { app.speed = Number((e.target as HTMLSelectElement).value); if (app.autoplay) app.setAutoplay(true); } },
+      [[1200, 'Slow'], [400, 'Normal'], [80, 'Fast'], [0, 'Fastest']].map(([ms, label]) => h('option', { value: ms, selected: app.speed === ms || undefined }, String(label))));
+    const over = s.gameOver;
+    return h('div', { class: 'card observer' },
+      h('div', { class: 'title-row' }, h('h1', null, 'Casual Colonization'), h('span', { class: 'pill' }, 'Observer')),
+      h('div', { class: 'stats' }, h('strong', null, formatDate(s.turn)), over ? ` · ${over.reason}` : ''),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn primary', disabled: !!over, onclick: () => app.setAutoplay(!app.autoplay), title: 'Space' }, app.autoplay ? 'Pause' : 'Play'),
+        h('button', { class: 'btn', disabled: !!over || app.autoplay, onclick: () => app.observeTurns(1), title: 'Enter' }, '+1 turn'),
+        h('button', { class: 'btn', disabled: !!over || app.autoplay, onclick: () => app.observeTurns(10) }, '+10')),
+      h('div', { class: 'row' }, h('label', { class: 'field' }, h('span', null, 'Speed'), speed), h('label', { class: 'field' }, h('span', null, 'Show'), watch)),
+      h('table', { class: 'table scoreboard' },
+        h('tr', null, h('th', null, 'Nation'), h('th', null, 'Level'), h('th', { title: 'Colonies' }, 'Col'), h('th', { title: 'Colonists' }, 'Pop'), h('th', { title: 'Sons of Liberty' }, 'SoL'), h('th', null, 'Score')),
+        rows.map((r) => h('tr', { class: app.watch === r.p.id ? 'watched' : undefined, onclick: () => app.setWatch(app.watch === r.p.id ? 'all' : r.p.id) },
+          h('td', null, h('span', { class: 'flag', style: `background:${NATIONS[r.p.id].color}` }), ' ', nationTitle(r.p.id), r.p.independence === 'declared' ? ' ⚔' : r.p.independence === 'won' ? ' ★' : ''),
+          h('td', null, AI_LEVEL_INFO[r.p.ai ?? 'naive'].name, r.p.aiMemory?.focus ? h('span', { class: 'muted small' }, ` (${r.p.aiMemory.focus})`) : null),
+          h('td', null, String(r.colonies)),
+          h('td', null, String(r.pop)),
+          h('td', null, `${r.rebels}%`),
+          h('td', null, h('strong', null, String(r.score)))))));
+  }
+
   private unitCard(u: Unit | undefined): HTMLElement {
     const app = this.app;
     const s = app.state;
     if (!u) {
-      return h('div', { class: 'card unit-card empty' }, h('p', { class: 'muted' }, 'No unit selected. Click one of your units, or a colony to manage it.'));
+      return h('div', { class: 'card unit-card empty' }, h('p', { class: 'muted' }, this.app.observer
+        ? 'Click a unit to inspect it, or a colony to look inside. Space plays or pauses; Enter plays one turn.'
+        : 'No unit selected. Click one of your units, or a colony to manage it.'));
     }
     const pos = unitPosition(s, u);
     const tile = pos && tileAt(s, pos.x, pos.y);
@@ -200,17 +254,16 @@ export class Sidebar {
     const ctx = c.getContext('2d')!;
     ctx.fillStyle = style.theme['--paper'];
     ctx.fillRect(0, 0, c.width, c.height);
-    const me = this.app.me;
     for (let y = 0; y < s.map.height; y++) {
       for (let x = 0; x < s.map.width; x++) {
         const i = y * s.map.width + x;
-        if (!me.explored[i]) continue;
+        if (!this.app.knows(i)) continue;
         ctx.fillStyle = style.tileColor(s.map.tiles[i]);
         ctx.fillRect(x * scale, y * scale, scale, scale);
       }
     }
     for (const col of Object.values(s.colonies)) {
-      if (!me.explored[col.y * s.map.width + col.x]) continue;
+      if (!this.app.knows(col.y * s.map.width + col.x)) continue;
       ctx.fillStyle = NATIONS[col.owner].color;
       ctx.fillRect(col.x * scale - 1, col.y * scale - 1, scale + 2, scale + 2);
     }

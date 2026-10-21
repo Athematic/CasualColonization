@@ -83,7 +83,7 @@ export class ColonyScreen implements Screen {
 
   refresh(): void {
     const colony = this.colony;
-    if (!colony || colony.owner !== this.app.viewer) {
+    if (!colony || (colony.owner !== this.app.viewer && !this.app.observer)) {
       this.app.closeScreen();
       return;
     }

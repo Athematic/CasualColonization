@@ -38,6 +38,7 @@ export function createGame(config: GameConfig): GameState {
     const y = Math.round(((i + 1) * height) / (config.nations.length + 1));
     const entry = { x: width - 2, y };
     const p = newPlayer(s, nation, config.humans.includes(nation), entry);
+    if (!p.human) p.ai = config.ai?.[nation] ?? 'naive';
     s.players.push(p);
     p.recruitPool = [randomImmigrant(s), randomImmigrant(s), randomImmigrant(s)];
     offerFathers(s, p);

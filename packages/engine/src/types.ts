@@ -1,3 +1,4 @@
+import type { AiLevel, AiMemory } from './ai/profiles.js';
 import type { BuildingKind } from './rules/buildings.js';
 import type { FatherCategory, FatherId } from './rules/fathers.js';
 import type { GoodId } from './rules/goods.js';
@@ -12,8 +13,10 @@ export interface GameConfig {
   mapSize: MapSize;
   /** European nations taking part, in turn order. Between 1 and 8. */
   nations: NationId[];
-  /** Nations controlled by people (hot-seat); the rest are AI. */
+  /** Nations controlled by people (hot-seat); the rest are AI. May be empty to let computers play each other. */
   humans: NationId[];
+  /** Level of each computer nation; missing means Naive. */
+  ai?: Partial<Record<NationId, AiLevel>>;
 }
 
 export interface Tile {
@@ -50,6 +53,9 @@ export type Stance = 'peace' | 'war';
 export interface Player {
   id: NationId;
   human: boolean;
+  /** Computer level, for nations not played by people. */
+  ai?: AiLevel;
+  aiMemory?: AiMemory;
   gold: number;
   /** Tax rate in percent. */
   tax: number;

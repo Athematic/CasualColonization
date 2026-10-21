@@ -48,12 +48,24 @@ In a colony, click a colonist and then a field or building to put them to work. 
 - **Diplomacy**: war and peace with other European nations, which fight back while at war and make peace once war-weary. Gifts to tribes are made from the Foreign Affairs screen.
 - **War of Independence**: once half your colonists are rebels, declare independence. Europe closes, veterans form the Continental Army, and the Royal Expeditionary Force lands in waves. Destroy it to win; lose half your colonies and the rebellion fails.
 - **Game end**: the game ends with independence or in 1850, with scores.
-- **Opponents**: 1–8 European nations, each with a national bonus. Any of them can be computer players, or human players taking turns on one device (hot seat).
+- **Opponents**: 1–8 European nations, each with a national bonus. Each one is a person (several people take turns on one device, hot seat) or a computer player at one of four levels:
+  - **Naive** settles and works the land and ships goods home, but plans nothing ahead.
+  - **Competent** runs an efficient economy. It scouts for rumours and chiefs, learns skills from natives, trains experts, keeps colonies staffed and fed, runs a merchant fleet, buys or calms native land, garrisons with its own militia, and works towards independence.
+  - **Combative** has a competent economy behind an aggressive army. It takes native land, raids settlements for treasure, sends privateers after shipping and attacks weak neighbours.
+  - **Creative** plays like a person. It reviews the game every few turns and shifts focus between exploring, expanding, developing, liberty, defence, war and independence. It reacts to threats at once and takes openings when a rival leaves a colony undefended.
+- **Computer-only games**: choose no players to watch the computers play each other in observer mode, with play/pause, speed, stepping, a live scoreboard and a choice of whose view to show.
 - **Saving**: an autosave every turn, a manual save slot, and export or import of save files. Saves from Alpha 0.1 are upgraded on load.
+
+### Measuring the computer players
+
+`npm run tournament` plays seeded computer-only games with no browser. It rotates nations and seating so that no level keeps the same advantage, and prints a table of each level's average score, wins, colonies, colonists, gold, Founding Fathers and independence results. The engine is deterministic, so the same options always give the same result.
+
+```sh
+npm run tournament -- --games 8 --turns 330 --size medium --levels naive,competent,combative,creative
+```
 
 Simplifications in this alpha:
 - Native braves are not shown as units; their raids and gifts happen as events.
-- The computer nations never declare independence, and they don't use schools or missions.
 - An independent nation cannot trade with Europe.
 
 ## Architecture

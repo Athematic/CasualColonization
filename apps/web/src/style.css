@@ -992,3 +992,34 @@ button.good:not(:disabled):hover {
     overflow-x: auto;
   }
 }
+
+/* ---- Observer mode ---- */
+
+.observer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.observer .row .field {
+  flex: 1;
+  margin: 0;
+}
+
+.scoreboard {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+}
+
+.scoreboard tr:not(:first-child) {
+  cursor: pointer;
+}
+
+.scoreboard tr.watched td {
+  background: color-mix(in srgb, #ffd84a 45%, transparent);
+}
+
+.scoreboard td:nth-child(n + 3),
+.scoreboard th:nth-child(n + 3) {
+  text-align: right;
+}

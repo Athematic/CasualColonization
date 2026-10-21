@@ -13,11 +13,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm test && npm run build",
-    "build:single": "npm run build && node scripts/single-file.mjs apps/web/dist/casual-colonization.html"
+    "build:single": "npm run build && node scripts/single-file.mjs apps/web/dist/casual-colonization.html",
+    "tournament": "rolldown scripts/tournament.ts --file scripts/.tournament.mjs --format esm --platform node --log-level warn && node scripts/.tournament.mjs"
   },
   "devDependencies": {
     "typescript": "5.9.3",
     "vite": "8.3.4",
-    "vitest": "5.0.5"
+    "vitest": "5.0.5",
+    "rolldown": "1.2.14"
   }
 }

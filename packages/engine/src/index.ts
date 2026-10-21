@@ -21,4 +21,6 @@ export * from './independence.js';
 export * from './score.js';
 export { MAP_SIZES } from './mapgen.js';
 export { RuleError } from './errors.js';
-export { siteScore } from './ai.js';
+export { siteScore } from './ai/common.js';
+export * from './ai/profiles.js';
+export * from './arena.js';

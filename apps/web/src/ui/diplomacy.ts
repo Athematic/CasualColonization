@@ -1,4 +1,5 @@
 import {
+  AI_LEVEL_INFO,
   canDeclareIndependence,
   colonyWorkers,
   FATHERS,
@@ -41,7 +42,7 @@ export class DiplomacyScreen implements Screen {
           const pop = colonies.reduce((n, c) => n + colonyWorkers(s, c).length, 0);
           const war = me.stance[p.id] === 'war';
           return h('tr', null,
-            h('td', null, h('span', { class: 'flag', style: `background:${NATIONS[p.id].color}` }), ' ', nationTitle(p.id), p.human ? ' (player)' : ''),
+            h('td', null, h('span', { class: 'flag', style: `background:${NATIONS[p.id].color}` }), ' ', nationTitle(p.id), p.human ? ' (player)' : ` (${AI_LEVEL_INFO[p.ai ?? 'naive'].name})`),
             h('td', null, String(colonies.length)),
             h('td', null, String(pop)),
             h('td', null, h('span', { class: `pill ${war ? 'bad' : 'good'}` }, war ? 'At war' : 'At peace')),

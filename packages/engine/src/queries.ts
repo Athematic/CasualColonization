@@ -150,7 +150,13 @@ export function unitsAboard(s: GameState, carrier: Unit): Unit[] {
 }
 
 export function colonyWorkers(s: GameState, colony: Colony): Unit[] {
-  return Object.values(s.units).filter((u) => u.loc.kind === 'colony' && u.loc.colonyId === colony.id);
+  // Hot path for the AI: a plain loop avoids building a full array of every unit.
+  const out: Unit[] = [];
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (u.loc.kind === 'colony' && u.loc.colonyId === colony.id) out.push(u);
+  }
+  return out;
 }
 
 export function colonyPopulation(s: GameState, colony: Colony): number {

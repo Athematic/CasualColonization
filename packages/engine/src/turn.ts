@@ -1,4 +1,4 @@
-import { runAi } from './ai.js';
+import { runAi } from './ai/index.js';
 import { processColony } from './colony.js';
 import { advanceSailing, processImmigration, recoverMarkets } from './europe.js';
 import { advanceWork, continueOrders, placeOnMap } from './movement.js';

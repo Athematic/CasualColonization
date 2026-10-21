@@ -1,48 +1,20 @@
-import { assignJob, bestJob, canBuild, colonySiteProblem, foundColony, jobOptions, setBuild } from './colony.js';
-import { attack, defencePower, offencePower } from './combat.js';
-import { RuleError } from './errors.js';
-import { aiPeace } from './diplomacy.js';
-import { runCrown } from './independence.js';
-import { boardInEurope, recruit, recruitPrice, sailToAmerica, sellGoods } from './europe.js';
-import { describeMove, findPath, leaveShip, moveUnit, setDestination, startImprovement, canImprove } from './movement.js';
-import { colonyReport, baseTileYield } from './production.js';
-import {
-  cargoFree,
-  cargoRoomFor,
-  colonyAt,
-  colonyWorkers,
-  DIRECTIONS,
-  distance,
-  isCoastal,
-  isShip,
-  isWater,
-  neighbours,
-  tileAt,
-  unitPosition,
-  unitsAboard,
-  unitsAt,
-  type Direction,
-} from './queries.js';
-import type { BuildingKind } from './rules/buildings.js';
-import { GOODS, type GoodId } from './rules/goods.js';
-import { UNIT_TYPES } from './rules/units.js';
-import type { Colony, GameState, Player, Unit } from './types.js';
+import { assignJob, bestJob, canBuild, foundColony, jobOptions, setBuild } from '../colony.js';
+import { aiPeace } from '../diplomacy.js';
+import { boardInEurope, recruit, recruitPrice, sailToAmerica, sellGoods } from '../europe.js';
+import { canImprove, findPath, setDestination, startImprovement } from '../movement.js';
+import { colonyReport } from '../production.js';
+import { cargoFree, cargoRoomFor, colonyAt, colonyWorkers, distance, isShip, isWater, tileAt, unitsAboard } from '../queries.js';
+import type { BuildingKind } from '../rules/buildings.js';
+import { GOODS, type GoodId } from '../rules/goods.js';
+import { UNIT_TYPES } from '../rules/units.js';
+import type { Colony, GameState, Player, Unit } from '../types.js';
+import { aiFight, disembarkAll, guardColony, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
 
 const SELLABLE: GoodId[] = ['sugar', 'tobacco', 'cotton', 'furs', 'ore', 'silver', 'rum', 'cigars', 'cloth', 'coats'];
 const BUILD_PREFERENCE: BuildingKind[] = ['docks', 'stockade', 'warehouse', 'carpenter', 'printingPress', 'church', 'schoolhouse', 'customHouse', 'armory'];
 
-/** Runs an AI action, ignoring moves the rules turn down. */
-function safely(fn: () => void): void {
-  try {
-    fn();
-  } catch (e) {
-    if (!(e instanceof RuleError)) throw e;
-  }
-}
-
-/** Plays one turn for a computer-controlled European nation. */
-export function runAi(s: GameState, p: Player): void {
-  if (p.id === 'crown') return runCrown(s);
+/** The Naive level: settles, works the land and trades, but plans nothing ahead. */
+export function runNaive(s: GameState, p: Player): void {
   aiPeace(s, p.id);
   const units = Object.values(s.units).filter((u) => u.owner === p.id);
   for (const u of units) {
@@ -53,46 +25,6 @@ export function runAi(s: GameState, p: Player): void {
   for (const c of Object.values(s.colonies)) {
     if (c.owner === p.id) safely(() => aiColony(s, c));
   }
-}
-
-export function siteScore(s: GameState, x: number, y: number): number {
-  if (colonySiteProblem(s, x, y)) return -Infinity;
-  let score = 0;
-  let water = 0;
-  for (const p of [{ x, y }, ...neighbours(s, x, y)]) {
-    const tile = tileAt(s, p.x, p.y)!;
-    if (isWater(tile)) {
-      water++;
-      score += 1.5;
-      continue;
-    }
-    if (colonyAt(s, p.x, p.y)) continue;
-    score += baseTileYield(tile, 'food') * 1.2;
-    let best = 0;
-    for (const g of GOODS) if (g !== 'food') best = Math.max(best, baseTileYield(tile, g));
-    score += best * 0.6;
-  }
-  if (water > 0 && water < 6) score += 8;
-  if (water >= 6) score -= 10;
-  return score;
-}
-
-function directionTo(fx: number, fy: number, tx: number, ty: number): Direction | undefined {
-  return DIRECTIONS.find((d) => d.dx === Math.sign(tx - fx) && d.dy === Math.sign(ty - fy))?.id;
-}
-
-function nearestColony(s: GameState, p: Player, x: number, y: number, coastalOnly = false): Colony | undefined {
-  let best: Colony | undefined;
-  for (const c of Object.values(s.colonies)) {
-    if (c.owner !== p.id) continue;
-    if (coastalOnly && !isCoastal(s, c.x, c.y)) continue;
-    if (!best || distance(c.x, c.y, x, y) < distance(best.x, best.y, x, y)) best = c;
-  }
-  return best;
-}
-
-function ownColonies(s: GameState, p: Player): Colony[] {
-  return Object.values(s.colonies).filter((c) => c.owner === p.id);
 }
 
 function aiUnit(s: GameState, p: Player, u: Unit): void {
@@ -107,41 +39,6 @@ function aiUnit(s: GameState, p: Player, u: Unit): void {
     if (aiFight(s, p, u)) return;
     return guardColony(s, p, u);
   }
-}
-
-function guardColony(s: GameState, p: Player, u: Unit): void {
-  if (u.loc.kind !== 'map') return;
-  const here = colonyAt(s, u.loc.x, u.loc.y);
-  if (here && here.owner === p.id) {
-    u.state = 'fortified';
-    return;
-  }
-  const target = nearestColony(s, p, u.loc.x, u.loc.y);
-  if (target) setDestination(s, u.id, { x: target.x, y: target.y });
-}
-
-/** Armed units strike adjacent enemies when the odds favour them. */
-function aiFight(s: GameState, p: Player, u: Unit): boolean {
-  const pos = unitPosition(s, u);
-  if (!pos || u.moves <= 0) return false;
-  const atWar = (owner: string) => p.stance[owner] === 'war';
-  for (const n of neighbours(s, pos.x, pos.y)) {
-    const colony = colonyAt(s, n.x, n.y);
-    if (colony && atWar(colony.owner)) {
-      const defenders = unitsAt(s, n.x, n.y).filter((o) => o.owner === colony.owner && !isShip(o));
-      const best = Math.max(0, ...defenders.map((d) => defencePower(s, d)));
-      if (offencePower(s, u) >= best) {
-        attack(s, u.id, { colonyId: colony.id });
-        return true;
-      }
-    }
-    const enemy = unitsAt(s, n.x, n.y).find((o) => atWar(o.owner) && isShip(o) === isShip(u));
-    if (enemy && offencePower(s, u) >= defencePower(s, enemy)) {
-      attack(s, u.id, { unitId: enemy.id });
-      return true;
-    }
-  }
-  return false;
 }
 
 function aiColonist(s: GameState, p: Player, u: Unit): void {
@@ -258,60 +155,6 @@ function aiShip(s: GameState, p: Player, ship: Unit): void {
   if (loaded || docks || p.gold >= recruitPrice(p) + 200 || !here) {
     if (!ship.dest) setDestination(s, ship.id, { europe: true });
   }
-}
-
-function landingSpot(s: GameState, p: Player, ship: Unit): { x: number; y: number } | null {
-  const pos = unitPosition(s, ship)!;
-  const colony = nearestColony(s, p, pos.x, pos.y, true);
-  if (colony && findPath(s, ship, colony.x, colony.y)) return { x: colony.x, y: colony.y };
-  // Breadth-first search over water for a tile next to a promising site.
-  const w = s.map.width;
-  const seen = new Set([pos.y * w + pos.x]);
-  const queue = [pos];
-  while (queue.length) {
-    const cur = queue.shift()!;
-    for (const n of neighbours(s, cur.x, cur.y)) {
-      const tile = tileAt(s, n.x, n.y)!;
-      if (!isWater(tile)) {
-        if (siteScore(s, n.x, n.y) > 18 && !(cur.x === pos.x && cur.y === pos.y)) return cur;
-        continue;
-      }
-      const i = n.y * w + n.x;
-      if (seen.has(i)) continue;
-      seen.add(i);
-      queue.push(n);
-    }
-  }
-  return null;
-}
-
-function disembarkAll(s: GameState, ship: Unit): boolean {
-  if (ship.loc.kind !== 'map') return false;
-  const passengers = unitsAboard(s, ship);
-  if (colonyAt(s, ship.loc.x, ship.loc.y)) {
-    for (const u of passengers) leaveShip(s, u.id);
-    return true;
-  }
-  let best: { x: number; y: number; score: number } | null = null;
-  for (const n of neighbours(s, ship.loc.x, ship.loc.y)) {
-    const tile = tileAt(s, n.x, n.y)!;
-    if (isWater(tile)) continue;
-    const score = siteScore(s, n.x, n.y);
-    if (!best || score > best.score) best = { ...n, score };
-  }
-  if (!best || best.score < 10) return false;
-  const dir = directionTo(ship.loc.x, ship.loc.y, best.x, best.y)!;
-  let landed = false;
-  for (const u of passengers) {
-    u.moves = Math.max(u.moves, 3);
-    const option = describeMove(s, u.id, dir);
-    if (option.kind === 'disembark' || option.kind === 'move') {
-      moveUnit(s, u.id, dir);
-      landed = true;
-    }
-  }
-  if (landed) delete ship.dest;
-  return landed;
 }
 
 function aiEurope(s: GameState, p: Player): void {

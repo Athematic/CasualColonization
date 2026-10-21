@@ -1,5 +1,5 @@
 import { fail } from './errors.js';
-import { buildingCapacityPerWorker, colonyReport, foodToGrow, tileYield, type ColonyReport } from './production.js';
+import { buildingCapacityPerWorker, colonyReport, foodToGrow, libertyBonus, tileYield, type ColonyReport } from './production.js';
 import {
   colonyAt,
   colonyPopulation,
@@ -117,12 +117,13 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
 /** All jobs open to a unit in a colony, with the amount it would produce. */
 export function jobOptions(s: GameState, colony: Colony, u: Unit): { job: Job; amount: number }[] {
   const out: { job: Job; amount: number }[] = [];
+  const bonus = libertyBonus(s, colony);
   for (const p of neighbours(s, colony.x, colony.y)) {
     const worker = tileWorkedBy(s, p.x, p.y);
     if (worker && worker.id !== u.id) continue;
     if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y) || nativeLandOwner(s, p.x, p.y)) continue;
     for (const g of GOODS) {
-      const amount = tileYield(s, colony, p.x, p.y, g, u.type);
+      const amount = tileYield(s, colony, p.x, p.y, g, u.type, bonus);
       if (amount > 0) out.push({ job: { kind: 'tile', x: p.x, y: p.y, good: g }, amount });
     }
   }
@@ -133,7 +134,7 @@ export function jobOptions(s: GameState, colony: Colony, u: Unit): { job: Job; a
       (w) => w.id !== u.id && w.loc.kind === 'colony' && w.loc.job.kind === 'building' && w.loc.job.building === kind,
     );
     if (here.length >= def.workplaces) continue;
-    out.push({ job: { kind: 'building', building: kind }, amount: buildingCapacityPerWorker(s, colony, kind, u.type) });
+    out.push({ job: { kind: 'building', building: kind }, amount: buildingCapacityPerWorker(s, colony, kind, u.type, bonus) });
   }
   if (canTeachHere(s, colony, u, u.id)) out.push({ job: { kind: 'building', building: 'schoolhouse' }, amount: 0 });
   return out;

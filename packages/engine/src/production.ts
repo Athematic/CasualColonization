@@ -13,8 +13,7 @@ export function foodToGrow(colony: Colony): number {
 }
 
 /** Sons of Liberty membership in percent. */
-export function sonsOfLiberty(s: GameState, colony: Colony): number {
-  const pop = colonyWorkers(s, colony).length;
+export function sonsOfLiberty(s: GameState, colony: Colony, pop = colonyWorkers(s, colony).length): number {
   if (pop === 0) return 0;
   return Math.min(100, Math.floor((colony.liberty / 200 / pop) * 100));
 }
@@ -23,9 +22,8 @@ export function sonsOfLiberty(s: GameState, colony: Colony): number {
 export const TORY_PENALTY_AT = [6, 10];
 
 /** Production bonus per worker from Sons of Liberty membership, less the Tory penalty. */
-export function libertyBonus(s: GameState, colony: Colony): number {
-  const sol = sonsOfLiberty(s, colony);
-  const pop = colonyWorkers(s, colony).length;
+export function libertyBonus(s: GameState, colony: Colony, pop = colonyWorkers(s, colony).length): number {
+  const sol = sonsOfLiberty(s, colony, pop);
   const tories = pop - Math.round((pop * sol) / 100);
   const penalty = tories > TORY_PENALTY_AT[1] ? 2 : tories > TORY_PENALTY_AT[0] ? 1 : 0;
   return (sol >= 100 ? 2 : sol >= 50 ? 1 : 0) - penalty;
@@ -44,7 +42,8 @@ export function baseTileYield(tile: Tile, good: GoodId): number {
   return amount;
 }
 
-export function tileYield(s: GameState, colony: Colony, x: number, y: number, good: GoodId, unitType: UnitTypeId): number {
+/** `bonus` is the colony's liberty bonus, when the caller has already worked it out. */
+export function tileYield(s: GameState, colony: Colony, x: number, y: number, good: GoodId, unitType: UnitTypeId, bonus = libertyBonus(s, colony)): number {
   const tile = tileAt(s, x, y);
   if (!tile) return 0;
   if (isWater(tile) && colony.buildings.docks === 0) return 0;
@@ -58,7 +57,7 @@ export function tileYield(s: GameState, colony: Colony, x: number, y: number, go
   if (good === 'furs' && hasFather(s, colony.owner, 'henryHudson')) amount *= 2;
   // Converts know the land: better at farming, fishing and trapping.
   if (unitType === 'nativeConvert' && (good === 'food' || good === 'sugar' || good === 'tobacco' || good === 'cotton' || good === 'furs')) amount += 1;
-  return Math.max(0, amount + libertyBonus(s, colony));
+  return Math.max(0, amount + bonus);
 }
 
 /** Goods produced by the colony's centre tile without a worker. */
@@ -79,7 +78,7 @@ export function centreProduction(s: GameState, colony: Colony): Partial<Record<G
   return out;
 }
 
-export function buildingCapacityPerWorker(s: GameState, colony: Colony, kind: BuildingKind, unitType: UnitTypeId): number {
+export function buildingCapacityPerWorker(s: GameState, colony: Colony, kind: BuildingKind, unitType: UnitTypeId, bonus = libertyBonus(s, colony)): number {
   const def = BUILDINGS[kind];
   const level = colony.buildings[kind];
   if (level === 0 || !def.output) return 0;
@@ -87,7 +86,7 @@ export function buildingCapacityPerWorker(s: GameState, colony: Colony, kind: Bu
   const expert = u.expertFor === def.output;
   const skillIndex = expert ? 3 : unitType === 'nativeConvert' ? 1 : Math.max(0, Math.min(2, u.skill + 2));
   const levelFactor = level >= 2 ? 2 : 1;
-  return Math.max(0, BUILDING_SKILL_OUTPUT[skillIndex] * levelFactor + libertyBonus(s, colony));
+  return Math.max(0, BUILDING_SKILL_OUTPUT[skillIndex] * levelFactor + bonus);
 }
 
 export interface ColonyReport {
@@ -119,12 +118,13 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
   const workers: Record<string, number> = {};
   const buildings: ColonyReport['buildings'] = {};
   const units = colonyWorkers(s, colony);
+  const bonus = libertyBonus(s, colony, units.length);
 
   for (const [g, n] of Object.entries(centreProduction(s, colony)) as [GoodId, number][]) produced[g] += n;
 
   for (const u of units) {
     if (u.loc.kind !== 'colony' || u.loc.job.kind !== 'tile') continue;
-    const n = tileYield(s, colony, u.loc.job.x, u.loc.job.y, u.loc.job.good, u.type);
+    const n = tileYield(s, colony, u.loc.job.x, u.loc.job.y, u.loc.job.good, u.type, bonus);
     produced[u.loc.job.good] += n;
     workers[u.id] = n;
   }
@@ -139,7 +139,7 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
     let capacity = def.baseOutput?.[level - 1] ?? 0;
     for (const u of units) {
       if (u.loc.kind === 'colony' && u.loc.job.kind === 'building' && u.loc.job.building === kind) {
-        const n = buildingCapacityPerWorker(s, colony, kind, u.type);
+        const n = buildingCapacityPerWorker(s, colony, kind, u.type, bonus);
         capacity += n;
         workers[u.id] = n;
       }
@@ -164,5 +164,5 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
 
   const net = zero();
   for (const key of Object.keys(net) as ProductId[]) net[key] = produced[key] - consumed[key];
-  return { produced, consumed, net, buildings, workers, population: units.length, sonsOfLiberty: sonsOfLiberty(s, colony) };
+  return { produced, consumed, net, buildings, workers, population: units.length, sonsOfLiberty: sonsOfLiberty(s, colony, units.length) };
 }

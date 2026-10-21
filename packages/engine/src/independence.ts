@@ -31,7 +31,7 @@ export function rebelShare(s: GameState, nation: NationId): number {
     if (c.owner !== nation) continue;
     const n = colonyWorkers(s, c).length;
     pop += n;
-    rebels += (n * sonsOfLiberty(s, c)) / 100;
+    rebels += (n * sonsOfLiberty(s, c, n)) / 100;
   }
   return pop ? Math.round((rebels / pop) * 100) : 0;
 }

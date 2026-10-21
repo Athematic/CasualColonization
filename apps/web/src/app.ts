@@ -68,6 +68,14 @@ export class App {
   selected?: string;
   hover?: Point;
   gotoMode = false;
+  /** No people play: the computers play each other and the user watches. */
+  readonly observer: boolean;
+  /** In observer mode, whose view of the world is shown ('all' reveals everything). */
+  watch: NationId | 'all' = 'all';
+  autoplay = false;
+  /** Milliseconds between turns while autoplaying. */
+  speed = 400;
+  private autoplayTimer = 0;
   private pointers = new Map<number, { x: number; y: number }>();
   private drag: { x: number; y: number; cx: number; cy: number; moved: boolean; pinch?: number; zoom?: number } | null = null;
   private disposers: (() => void)[] = [];
@@ -77,6 +85,7 @@ export class App {
     public game: Game,
     private onExit: () => void,
   ) {
+    this.observer = !game.state.players.some((p) => p.human);
     this.viewer = this.humanViewer();
     this.canvas = h('canvas', { class: 'map', 'aria-label': 'Map of the New World' });
     this.mapWrap = h('div', { class: 'map-wrap' }, this.canvas);
@@ -99,12 +108,18 @@ export class App {
     ro.observe(this.mapWrap);
     this.disposers.push(() => ro.disconnect());
 
-    this.selectNext();
-    if (!this.selected) this.centerOnStart();
+    if (this.observer) {
+      this.camera.zoom = 26;
+      this.centerOn(this.state.map.width / 2, this.state.map.height / 2);
+    } else {
+      this.selectNext();
+      if (!this.selected) this.centerOnStart();
+    }
     this.requestRender();
   }
 
   destroy(): void {
+    clearTimeout(this.autoplayTimer);
     for (const d of this.disposers) d();
     this.renderer.dispose();
     this.root.remove();
@@ -125,7 +140,42 @@ export class App {
   }
 
   isMyTurn(): boolean {
-    return this.game.current.id === this.viewer && this.game.current.human;
+    return !this.observer && this.game.current.id === this.viewer && this.game.current.human;
+  }
+
+  /** Whether the shown view knows this tile. */
+  knows(index: number): boolean {
+    return (this.observer && this.watch === 'all') || this.me.explored[index] === 1;
+  }
+
+  // ---- Observer mode ----
+
+  setWatch(watch: NationId | 'all'): void {
+    this.watch = watch;
+    this.viewer = watch === 'all' ? this.state.players[0].id : watch;
+    this.requestRender();
+  }
+
+  /** Plays whole rounds of computer turns. */
+  observeTurns(n: number): void {
+    for (let i = 0; i < n && !this.state.gameOver; i++) this.game.dispatch({ type: 'endTurn' });
+    this.requestRender();
+    if (this.state.gameOver) {
+      this.setAutoplay(false);
+      void this.showGameOver();
+    }
+  }
+
+  setAutoplay(on: boolean): void {
+    this.autoplay = on && !this.state.gameOver;
+    clearTimeout(this.autoplayTimer);
+    const tick = () => {
+      if (!this.autoplay) return;
+      this.observeTurns(1);
+      if (this.autoplay) this.autoplayTimer = window.setTimeout(tick, this.speed);
+    };
+    if (this.autoplay) this.autoplayTimer = window.setTimeout(tick, 0);
+    this.requestRender();
   }
 
   selectedUnit(): Unit | undefined {
@@ -160,6 +210,7 @@ export class App {
       hover: this.hover,
       path,
       visible: computeVisibility(this.state, this.viewer),
+      revealAll: this.observer && this.watch === 'all',
     };
   }
 
@@ -259,7 +310,7 @@ export class App {
 
   private shownGameOver = false;
 
-  private async showGameOver(): Promise<void> {
+  async showGameOver(): Promise<void> {
     const over = this.state.gameOver;
     if (!over || this.shownGameOver) return;
     this.shownGameOver = true;
@@ -581,7 +632,14 @@ export class App {
 
   private async click(t: Point, alt: boolean): Promise<void> {
     const s = this.state;
-    if (!tileAt(s, t.x, t.y) || !this.me.explored[t.y * s.map.width + t.x]) return;
+    if (!tileAt(s, t.x, t.y) || !this.knows(t.y * s.map.width + t.x)) return;
+    if (this.observer) {
+      const c = colonyAt(s, t.x, t.y);
+      if (c) return this.openColony(c.id);
+      const here = unitsAt(s, t.x, t.y);
+      if (here.length) this.select(here[(here.findIndex((o) => o.id === this.selected) + 1) % here.length].id);
+      return;
+    }
     const u = this.selectedUnit();
     const pos = u && unitPosition(s, u);
     const adjacent = !!pos && distance(pos.x, pos.y, t.x, t.y) === 1;
@@ -621,6 +679,16 @@ export class App {
     if (target.matches('input, select, textarea')) return;
     if (this.screen) {
       if (e.key === 'Escape') this.closeScreen();
+      return;
+    }
+    if (this.observer) {
+      if (e.key === ' ') {
+        e.preventDefault();
+        this.setAutoplay(!this.autoplay);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        this.observeTurns(1);
+      }
       return;
     }
     const dir = KEY_DIRS[e.code] ?? KEY_DIRS[e.key];
