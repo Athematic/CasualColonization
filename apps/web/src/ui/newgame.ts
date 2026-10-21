@@ -108,10 +108,10 @@ export function newGameScreen(
             h('span', { class: 'flag', style: `background:${NATIONS[slot.nation].color}` }),
             h('select', { 'aria-label': `Nation ${i + 1}`, onchange: (e: Event) => { slot.nation = (e.target as HTMLSelectElement).value as NationId; render(); } },
               NATION_ORDER.filter((n) => !taken.has(n)).map((n) => h('option', { value: n, selected: n === slot.nation || undefined }, nationTitle(n)))),
-            h('select', { 'aria-label': `Controller of nation ${i + 1}`, onchange: (e: Event) => { slot.controller = (e.target as HTMLSelectElement).value as Slot['controller']; render(); } },
+            h('select', { 'aria-label': `Controller of nation ${i + 1}`, title: slot.controller === 'human' ? undefined : AI_LEVEL_INFO[slot.controller].description, onchange: (e: Event) => { slot.controller = (e.target as HTMLSelectElement).value as Slot['controller']; render(); } },
               h('option', { value: 'human', selected: slot.controller === 'human' || undefined }, 'Player'),
               AI_LEVELS.map((level) => h('option', { value: level, selected: slot.controller === level || undefined, title: AI_LEVEL_INFO[level].description }, `Computer: ${AI_LEVEL_INFO[level].name}`))),
-            h('span', { class: 'muted small bonus' }, slot.controller === 'human' ? NATIONS[slot.nation].bonus : `${AI_LEVEL_INFO[slot.controller].description} ${NATIONS[slot.nation].bonus}`));
+            h('span', { class: 'muted small bonus' }, NATIONS[slot.nation].bonus));
         })),
         h('div', { class: 'row wrap' },
           plannedSelect('Difficulty', '0.3', ['Conquistador (today\'s rules)', 'Discoverer', 'Explorer', 'Governor', 'Viceroy'],
