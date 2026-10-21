@@ -114,7 +114,10 @@ function Get-ApiKeySecure {
 
 # ------------------------------------------------------------------------- jobs
 $jobs = Get-ImageJobs -SpriteDoc $SpriteDoc -BoxArtDoc $BoxArtDoc -Doc $Doc -Only $Only -Variants $Variants -IncludeTitle:$IncludeTitle
-$byDoc = $jobs | Group-Object Doc | ForEach-Object { "$($_.Name): $($_.Count)" }
+$byDoc = foreach ($d in 'sprites', 'boxart') {
+    $n = @($jobs | Where-Object Doc -eq $d).Count
+    if ($n) { "${d}: $n" }
+}
 $countText = if ($byDoc) { ($byDoc -join ', ') } else { 'none' }
 
 if ($List) {
