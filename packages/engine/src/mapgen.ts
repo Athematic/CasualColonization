@@ -39,9 +39,14 @@ function octaves(rng: { rng: number }, width: number, height: number, cells: num
 export interface GeneratedWorld {
   map: GameMap;
   settlements: Settlement[];
-  /** Rows (inclusive) along the east edge where European expeditions arrive. */
+  /** Rows (inclusive) along the arrival edge where European expeditions arrive. */
   entryRows: [number, number];
+  /** The map edge European expeditions arrive at. Absent means the east edge. */
+  entrySide?: EntrySide;
 }
+
+/** The map edge whose high seas European expeditions arrive at. */
+export type EntrySide = 'east' | 'west';
 
 export function generateMap(rng: { rng: number }, size: MapSize): GeneratedWorld {
   const { width, height } = MAP_SIZES[size];
@@ -122,13 +127,14 @@ export function generateMap(rng: { rng: number }, size: MapSize): GeneratedWorld
 }
 
 /**
- * Spreads up to `n` arrival points evenly along the east-edge high seas between two rows.
+ * Spreads up to `n` arrival points evenly along the east-edge (or west-edge) high seas between two rows.
  * Over the whole height this is the same spacing the generated map has always used.
  */
-export function entryPoints(map: GameMap, n: number, rows: [number, number] = [0, map.height - 1]): { x: number; y: number }[] {
+export function entryPoints(map: GameMap, n: number, rows: [number, number] = [0, map.height - 1], side: EntrySide = 'east'): { x: number; y: number }[] {
   const [top, bottom] = rows;
   const span = bottom - top + 1;
-  return Array.from({ length: n }, (_, i) => ({ x: map.width - 2, y: top + Math.round(((i + 1) * span) / (n + 1)) }));
+  const x = side === 'west' ? 1 : map.width - 2;
+  return Array.from({ length: n }, (_, i) => ({ x, y: top + Math.round(((i + 1) * span) / (n + 1)) }));
 }
 
 /** Scatters bonus resources (on land and on coastal ocean) and Lost City Rumours. */

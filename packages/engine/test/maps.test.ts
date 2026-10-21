@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyCommand,
   createGame,
+  entryPoints,
   isWater,
   NATION_ORDER,
   parseStoredMap,
@@ -9,6 +10,7 @@ import {
   STORED_MAPS,
   storedMap,
   TERRAIN,
+  type GameMap,
   type GameState,
   type StoredMap,
 } from '../src/index.js';
@@ -20,7 +22,7 @@ function play(def: StoredMap, nations: number, seed = 7, humans = 1): GameState 
 
 describe('stored maps', () => {
   it('lists each map once with a name and description', () => {
-    expect(STORED_MAPS.map((m) => m.id)).toEqual(['north-america', 'south-america', 'americas']);
+    expect(STORED_MAPS.map((m) => m.id)).toEqual(['north-america', 'south-america', 'americas', 'australia']);
     for (const def of STORED_MAPS) {
       expect(def.name).toBeTruthy();
       expect(def.description).toBeTruthy();
@@ -37,9 +39,21 @@ describe('stored maps', () => {
     expect(() => parseStoredMap({ ...base, rows: '~H' })).toThrow(/unknown terrain/);
   });
 
+  it('arrives on the east edge unless a map asks for the west', () => {
+    const map: GameMap = { width: 10, height: 20, tiles: [] };
+    expect(entryPoints(map, 3)).toEqual([{ x: 8, y: 5 }, { x: 8, y: 10 }, { x: 8, y: 15 }]);
+    expect(entryPoints(map, 3, [0, 19], 'east')).toEqual(entryPoints(map, 3));
+    expect(entryPoints(map, 3, [0, 19], 'west')).toEqual([{ x: 1, y: 5 }, { x: 1, y: 10 }, { x: 1, y: 15 }]);
+    expect(STORED_MAPS.filter((m) => m.entrySide).map((m) => m.id)).toEqual(['australia']);
+    const generated = createGame({ seed: 3, mapSize: 'small', nations: ['england'], humans: ['england'] });
+    expect(generated.players[0].entry.x).toBe(generated.map.width - 2);
+    expect(generated.messages.some((m) => m.text.includes('Sail west to find land!'))).toBe(true);
+  });
+
   for (const def of STORED_MAPS) {
     describe(def.name, () => {
       const map = parseStoredMap(def);
+      const arrivalX = def.entrySide === 'west' ? 1 : map.width - 2;
 
       it('parses with consistent rows at about the large size or bigger', () => {
         const lines = def.rows.trim().split('\n');
@@ -50,22 +64,28 @@ describe('stored maps', () => {
         expect(land).toBeGreaterThan(map.tiles.length * 0.2);
       });
 
-      it('has high seas along the east edge and in deep water', () => {
+      it('has high seas along the arrival edge and in deep water', () => {
+        const edge = def.entrySide === 'west' ? [0, 1] : [map.width - 2, map.width - 1];
         for (let y = 0; y < map.height; y++) {
-          for (let x = map.width - 2; x < map.width; x++) expect(map.tiles[y * map.width + x].t).toBe('highSeas');
+          for (const x of edge) expect(map.tiles[y * map.width + x].t).toBe('highSeas');
         }
         const deep = map.tiles.filter((t) => t.t === 'highSeas').length;
         expect(deep).toBeGreaterThan(map.height * 6);
       });
 
       it('has region rectangles inside the map, with land in them', () => {
-        for (const { region: [x0, y0, x1, y1] } of def.tribes) {
+        for (const { tribe, region: [x0, y0, x1, y1], count } of def.tribes) {
           expect(x0).toBeGreaterThanOrEqual(0);
           expect(y0).toBeGreaterThanOrEqual(0);
           expect(x1).toBeLessThan(map.width);
           expect(y1).toBeLessThan(map.height);
           expect(x0).toBeLessThanOrEqual(x1);
           expect(y0).toBeLessThanOrEqual(y1);
+          let land = 0;
+          for (let y = y0; y <= y1; y++) {
+            for (let x = x0; x <= x1; x++) if (!TERRAIN[map.tiles[y * map.width + x].t].water) land++;
+          }
+          expect(land, `${tribe} region ${[x0, y0, x1, y1]}`).toBeGreaterThanOrEqual(count * 4);
         }
         if (def.entryRows) {
           expect(def.entryRows[0]).toBeGreaterThanOrEqual(0);
@@ -96,7 +116,7 @@ describe('stored maps', () => {
         }
       });
 
-      it('starts games with 1 and 8 nations on the east-edge high seas', () => {
+      it('starts games with 1 and 8 nations on the arrival-edge high seas', () => {
         for (const n of [1, 8]) {
           const s = play(def, n);
           expect(s.map.width).toBe(map.width);
@@ -106,9 +126,11 @@ describe('stored maps', () => {
           expect(rows.size).toBe(n);
           for (const p of s.players) {
             expect(s.map.tiles[p.entry.y * s.map.width + p.entry.x].t).toBe('highSeas');
-            expect(p.entry.x).toBe(map.width - 2);
+            expect(p.entry.x).toBe(arrivalX);
           }
         }
+        const heading = def.entrySide === 'west' ? 'east' : 'west';
+        expect(play(def, 1).messages.some((m) => m.text.includes(`Sail ${heading} to find land!`))).toBe(true);
         // The terrain comes from the map, the extras from the seed.
         const a = play(def, 2, 1);
         const b = play(def, 2, 2);
@@ -117,6 +139,19 @@ describe('stored maps', () => {
         expect(serialize(play(def, 2, 1))).toBe(serialize(a));
         expect(a.map.tiles.some((t) => t.b)).toBe(true);
         expect(a.map.tiles.some((t) => t.lcr)).toBe(true);
+      });
+
+      it('sails to Europe from the arrival point and back', () => {
+        const s = play(def, 1);
+        const ship = Object.values(s.units).find((u) => u.owner === s.players[0].id && u.type === 'caravel')!;
+        const entry = { ...s.players[0].entry };
+        expect(ship.loc).toEqual({ kind: 'map', ...entry });
+        expect(applyCommand(s, { type: 'sailToEurope', unitId: ship.id }).ok).toBe(true);
+        for (let i = 0; i < 20 && ship.loc.kind !== 'europe'; i++) applyCommand(s, { type: 'endTurn' });
+        expect(ship.loc.kind).toBe('europe');
+        expect(applyCommand(s, { type: 'sailToAmerica', unitId: ship.id }).ok).toBe(true);
+        for (let i = 0; i < 20 && ship.loc.kind !== 'map'; i++) applyCommand(s, { type: 'endTurn' });
+        expect(ship.loc).toEqual({ kind: 'map', ...entry });
       });
 
       it('plays 30 AI-only turns and colonies get founded', () => {
