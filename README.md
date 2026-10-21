@@ -105,6 +105,8 @@ npm run build
 
 ## Roadmap
 
+The full plan is in [docs/ROADMAP.md](docs/ROADMAP.md). In short:
+
 1. **Alpha (now)**: a faithful clone of the classic game, with a configurable number of nations.
 2. **Alpha+**: visible native units, a smarter computer opponent, and balance passes.
 3. **Beta: Cooperation overhaul**:

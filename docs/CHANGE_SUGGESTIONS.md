@@ -1,5 +1,7 @@
 # Changes to come
 
+This file is the inbox for new ideas. Once we have discussed an idea, it moves to [ROADMAP.md](ROADMAP.md), which says where each one went.
+
 ## Tweaks
 
 - When moving a unit it is possible to set a target they cannot reach on the current turn. When the mouse is moving the target square gets big dot in the center (good), but it would be nice with a badge counter style number indicating how many turns the journey is expected to take.
