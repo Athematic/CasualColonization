@@ -20,6 +20,8 @@ Or build a static site with `npm run build` (output in `apps/web/dist`), or a si
 
 **Releases** are built with `npm run release`, which writes the finished site to `site/`. That folder is committed and copied by hand to https://casual.spence.dk/. It uses relative paths, so it works from any folder on the server. There is no automatic GitHub Pages deployment any more.
 
+**Painted sprites** (the *Ligne claire (painted)* style) are not in git. To update them: run the sprite pipeline (`node tools/sprite-pipeline/build.mjs --in https://casual.spence.dk/assets/sprites/`, from the image tool branch), upload its `out/` folder (without `index.html` and `_sheet/`) to https://casual.spence.dk/assets/runtime/, then run `npm run release`. The release also copies a local runtime set into `site/assets/runtime/` (gitignored) when it finds one in `tools/sprite-pipeline/out` or in the folder named by `CC_RUNTIME_DIR`. Without the sprites, the style draws everything as Ligne claire. See [docs/STYLE_PLUGINS.md](docs/STYLE_PLUGINS.md#sprite-packs).
+
 ### Controls
 
 | Action | Mouse / touch | Keys |
@@ -101,6 +103,7 @@ packages/
   engine/              Rules and game state. Pure TypeScript, no DOM, deterministic.
   render-api/          The contract between the game shell and graphical styles.
   style-ligne-claire/  Default style plugin.
+  style-sprites/       Styles from bitmap sprite packs over a procedural fallback; packs/ has Ligne claire (painted).
   style-schematic/     Minimal second style; the reference for new plugins.
 apps/
   web/                 Browser shell: menus, map input, colony and Europe screens.
@@ -130,4 +133,4 @@ The full plan is in [docs/ROADMAP.md](docs/ROADMAP.md). In short:
 
 ## Credits
 
-Inspired by *Sid Meier's Colonization* (MicroProse, 1994) and the FreeCol project. All code and graphics here are original. The graphics are drawn procedurally, with no copied assets.
+Inspired by *Sid Meier's Colonization* (MicroProse, 1994) and the FreeCol project. All code and graphics here are original. The default graphics are drawn procedurally, with no copied assets. The optional painted sprites were generated for this game from the prompts in docs/SPRITE_PROMPTS.md.

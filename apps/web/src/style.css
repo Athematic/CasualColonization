@@ -547,6 +547,9 @@ summary {
 
 .building-name {
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .slots {
