@@ -4,21 +4,29 @@
  * trade routes from the busiest ports to Europe, warehouses go up before they overflow, and
  * wagon trains with no port to go to sell surplus to native settlements instead.
  */
+import { buyPrice, sellPrice } from '../europe.js';
 import { findPath, setDestination } from '../movement.js';
 import { nativeOffer, tensionOf, tradeWithSettlement } from '../natives.js';
 import { colonyReport, type ColonyReport } from '../production.js';
-import { cargoRoomFor, colonyAt, distance, isCoastal, isShip, unitPosition, unitsAboard, warehouseCapacity } from '../queries.js';
-import { assignRoute, createRoute, deleteRoute, editRoute, EUROPE_STOP, routesOf, routeUnits } from '../routes.js';
+import { cargoRoomFor, colonyAt, distance, isCoastal, isShip, player, unitPosition, unitsAboard, warehouseCapacity } from '../queries.js';
+import { favouredPartners, favouredUnlocked, FOREIGN_KEEP, hasTradeAgreement, inWaitingPeriod, isFavoured, routesBetween, ROUTES_NEEDED } from '../relations.js';
+import { assignRoute, createRoute, deleteRoute, editRoute, EUROPE_STOP, foreignStopColonies, isForeignStop, routesOf, routeUnits } from '../routes.js';
+import type { NationId } from '../rules/nations.js';
+import { track } from '../telemetry.js';
+import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
 import type { GoodId } from '../rules/goods.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, RouteCargo, RouteStop, TradeRoute, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
+import { wagonSteps } from './foreign.js';
 
 /** Goods worth carrying away from a colony to sell. */
 export const TRADE_GOODS: GoodId[] = ['silver', 'furs', 'sugar', 'tobacco', 'cotton', 'ore', 'rum', 'cigars', 'cloth', 'coats', 'horses'];
 
 /** Turns between reviews of the computer's routes. */
 const REVIEW_EVERY = 10;
+/** No wagon train is built for, or put on, a route to a partner's colony before this turn. */
+const FOREIGN_WAGON_FROM = 80;
 
 /** Goods a colony will lose to its full warehouse within the given number of turns. */
 export function overflowSoon(s: GameState, c: Colony, turns = 4, report: ColonyReport = colonyReport(s, c)): number {
@@ -41,9 +49,9 @@ function keepFor(c: Colony, report: ColonyReport, g: GoodId): number {
   return used > 0 ? Math.min(cap - 30, used * 8) : 0;
 }
 
-function loadRules(s: GameState, c: Colony): RouteCargo[] {
+function loadRules(s: GameState, c: Colony, skip: (g: GoodId) => boolean = () => false): RouteCargo[] {
   const report = colonyReport(s, c);
-  return TRADE_GOODS.map((g) => {
+  return TRADE_GOODS.filter((g) => !skip(g)).map((g) => {
     const keep = keepFor(c, report, g);
     return keep > 0 ? { good: g, amount: keep } : { good: g };
   });
@@ -97,6 +105,13 @@ function needsCarting(s: GameState, c: Colony, report: ColonyReport = colonyRepo
  * (one wagon train serves up to three neighbouring colonies).
  */
 export function wantsWagon(s: GameState, p: Player, c: Colony): boolean {
+  // A wagon train for a trade route to a partner's colony (see planForeignWagon).
+  const fw = p.aiMemory?.foreignWagon;
+  if (fw && fw.colony === c.id && fw.until > s.turn) {
+    const idle = Object.values(s.units).some((u) => u.owner === p.id && isWagon(u) && !u.route);
+    const building = ownColonies(s, p).some((o) => o.id !== c.id && o.build?.kind === 'unit' && o.build.id === 'wagonTrain');
+    if (!idle && !building) return true;
+  }
   const { waiting, yard } = cartingNeeds(s, p);
   // The colony with the most hammers builds wagon trains for its neighbours; failing one, a colony builds its own.
   if (yard ? yard !== c.id : !waiting.has(c.id)) return false;
@@ -149,6 +164,7 @@ export function manageLogistics(s: GameState, p: Player): void {
     if (isWagon(u) && u.loc.kind === 'map') safely(() => routeWagon(s, p, u));
   }
   if (p.independence === 'none') safely(() => routeShips(s, p));
+  if (review) safely(() => planForeignWagon(s, p));
 }
 
 /** A route name like "Port to Europe", numbered if the nation already has one by that name. */
@@ -165,24 +181,262 @@ function routeName(s: GameState, p: Player, stops: RouteStop[], except?: string)
 
 /** Keeps load amounts in step with the colonies' workshops, and ship stops with where goods pile up. */
 function refreshRoute(s: GameState, p: Player, r: TradeRoute, users: Unit[]): void {
+  const foreign = r.stops.find((st) => isForeignStop(s, st, p.id));
   let stops: RouteStop[] = r.stops.filter((st) => st.at === EUROPE_STOP || s.colonies[st.at]?.owner === p.id);
-  if (users.some(isShip) && stops.some((st) => st.at === EUROPE_STOP)) {
+  const ship = users.some(isShip);
+  const toEurope = stops.some((st) => st.at === EUROPE_STOP);
+  if (ship && toEurope) {
     const others = shipStops(s, p, r.id);
     const ports = busiestPorts(s, p, others);
     if (ports.length) stops = [...ports.map((c) => ({ at: c.id, load: [], unload: [] })), { at: EUROPE_STOP, load: [], unload: [] }];
+  }
+  if (!ship && !toEurope && foreign && stops.length === 1) {
+    // A wagon train's route to a partner's colony: kept while it still pays (or builds ties).
+    const f = s.colonies[foreign.at];
+    const own = s.colonies[stops[0].at];
+    const rules = f && own ? wagonForeignRules(s, p, own, f) : null;
+    if (!rules) {
+      deleteRoute(s, p.id, r.id);
+      return;
+    }
+    editRoute(s, p.id, r.id, { name: routeName(s, p, [rules.home, rules.stop], r.id), stops: [rules.home, rules.stop] });
+    return;
   }
   if (stops.length < 2) {
     deleteRoute(s, p.id, r.id);
     return;
   }
-  editRoute(s, p.id, r.id, { name: routeName(s, p, stops, r.id), stops: stops.map((st) => withRules(s, st, stops)) });
+  let ruled = stops.map((st) => withRules(s, p, st, stops));
+  if (ship && toEurope) ruled = withForeignShipStop(s, p, ruled);
+  editRoute(s, p.id, r.id, { name: routeName(s, p, stops, r.id), stops: ruled });
 }
 
-/** The cargo rules for a stop: the last colony (or Europe) takes the goods, the others give them. */
-function withRules(s: GameState, stop: RouteStop, all: RouteStop[]): RouteStop {
+/** Whether a good can go to Europe: not boycotted at home, unless a partner's port takes it (free ships only). */
+function exportable(s: GameState, p: Player, g: GoodId): boolean {
+  return !p.boycotts[g] || favouredPartners(s, p.id).length > 0;
+}
+
+/**
+ * The cargo rules for a stop: the last colony (or Europe) takes the goods, the others give them.
+ * Trade routes call only at the home port, so goods boycotted there are not loaded for Europe;
+ * any still aboard go back into the colonies' warehouses.
+ */
+function withRules(s: GameState, p: Player, stop: RouteStop, all: RouteStop[]): RouteStop {
   const end = all[all.length - 1];
-  if (stop === end) return stop.at === EUROPE_STOP ? { at: stop.at, load: [], unload: unloadRules(), passengers: true } : { at: stop.at, load: [], unload: unloadRules() };
-  return { at: stop.at, load: loadRules(s, s.colonies[stop.at]), unload: [] };
+  const europe = end.at === EUROPE_STOP;
+  const banned = (g: GoodId) => !!p.boycotts[g] && (europe || !exportable(s, p, g));
+  if (stop === end) {
+    return europe ? { at: stop.at, load: [], unload: unloadRules().filter((r) => !banned(r.good)), passengers: true } : { at: stop.at, load: [], unload: unloadRules() };
+  }
+  return { at: stop.at, load: loadRules(s, s.colonies[stop.at], banned), unload: TRADE_GOODS.filter(banned).map((good) => ({ good })) };
+}
+
+// ---------------------------------------------------------------------------
+// Trade with partners' colonies
+
+/** What a unit of a good brings when shipped home and sold there after tax; 0 when boycotted. */
+export function homeNet(p: Player, g: GoodId): number {
+  return p.boycotts[g] ? 0 : (sellPrice(p, g) * (100 - p.tax)) / 100;
+}
+
+/** Gold per unit a partner's colony pays above what shipping the good home brings (its owner's price, untaxed). */
+export function saleGain(s: GameState, p: Player, f: Colony, g: GoodId): number {
+  return sellPrice(player(s, f.owner), g) - homeNet(p, g);
+}
+
+/** Gold per unit gained buying a good at a partner's colony and selling it at home. */
+export function buyGain(s: GameState, p: Player, f: Colony, g: GoodId): number {
+  return homeNet(p, g) - buyPrice(player(s, f.owner), g);
+}
+
+/**
+ * Whether the nation is building trade ties with a partner towards Favoured Nation: it has a trade
+ * agreement, no Favoured Nation status yet, the thresholds are not reached, and there are fewer
+ * routes between them than the most that can be needed. While it is, a stop that sells at no loss
+ * is worth adding; otherwise a stop must gain at least 1 gold per unit.
+ */
+export function buildingTies(s: GameState, p: Player, other: NationId): boolean {
+  return (
+    !s.config.noFavoured &&
+    hasTradeAgreement(s, p.id, other) &&
+    !isFavoured(s, p.id, other) &&
+    !favouredUnlocked(s, p.id, other) &&
+    routesBetween(s, p.id, other) < ROUTES_NEEDED.max
+  );
+}
+
+/** Partners' colonies a route may call at now: a trade agreement, peace, no waiting period, and an owner with gold. */
+function partnerColonies(s: GameState, p: Player): Colony[] {
+  return foreignStopColonies(s, p.id).filter((f) => !inWaitingPeriod(s, p.id, f.owner) && player(s, f.owner).gold >= 200);
+}
+
+/** Goods a nation sells at partners' colonies: its exports, plus lumber and tools for their workshops and builds. */
+const FOREIGN_GOODS: GoodId[] = [...TRADE_GOODS.filter((g) => g !== 'horses'), 'lumber', 'tools'];
+
+/** A partner whose treasury is this full also buys goods its workshops do not use. */
+const RICH_PARTNER = 4000;
+
+/** Units of a good a colony's staffed workshops could use each turn. */
+function workshopDemand(report: ColonyReport, g: GoodId): number {
+  let n = 0;
+  for (const [kind, b] of Object.entries(report.buildings) as [BuildingKind, { capacity: number }][]) if (BUILDINGS[kind].input === g) n += b.capacity;
+  return n;
+}
+
+/**
+ * The stop at a partner's colony for goods the unit brings. It sells what the colony's workshops
+ * use and it does not make enough of itself (or, from a rich partner, anything it does not make),
+ * where the colony pays more than home after tax (no less, while building ties), filling the
+ * warehouse to its capacity less 20 (to 100 for goods no workshop uses). It buys the colony's
+ * surplus above FOREIGN_KEEP where home pays more after tax. Selling only what the partner needs
+ * keeps the trade good for both sides: a partner never pays for goods it can only ship on at a loss.
+ * Returns null when there is nothing to trade, else the stop and the expected gain per trip.
+ */
+function foreignStop(s: GameState, p: Player, f: Colony, goods: GoodId[]): { stop: RouteStop; gain: number; sells: GoodId[]; buys: GoodId[] } | null {
+  const ties = buildingTies(s, p, f.owner);
+  const report = colonyReport(s, f);
+  const cap = warehouseCapacity(f);
+  const rich = player(s, f.owner).gold >= RICH_PARTNER;
+  const unload: RouteCargo[] = [];
+  const sells: GoodId[] = [];
+  let gain = 0;
+  for (const g of goods) {
+    const demand = workshopDemand(report, g);
+    const wanted = demand > 0 ? report.produced[g] < demand : rich && report.produced[g] === 0;
+    if (!wanted) continue;
+    const fill = demand > 0 ? cap - 20 : Math.min(cap - 20, 100);
+    const room = fill - f.goods[g];
+    const per = saleGain(s, p, f, g);
+    if (room < 30 || per < (ties ? 0 : 1)) continue;
+    unload.push({ good: g, amount: fill });
+    sells.push(g);
+    gain += per * Math.min(room, 100) + (demand > 0 ? 20 : 0);
+  }
+  const buys = TRADE_GOODS.filter((g) => g !== 'horses' && !p.boycotts[g] && f.goods[g] >= FOREIGN_KEEP + 30 && buyGain(s, p, f, g) >= 1);
+  for (const g of buys) gain += buyGain(s, p, f, g) * Math.min(100, f.goods[g] - FOREIGN_KEEP);
+  if (!unload.length && !buys.length) return null;
+  return { stop: { at: f.id, load: buys.map((good) => ({ good })), unload }, gain, sells, buys };
+}
+
+/**
+ * Adds a stop at a partner's coastal colony to a ship route from the nation's ports to Europe,
+ * just before Europe, when one lies within 6 tiles of a port on the route and trading there pays
+ * (or builds ties). Unsold goods go on to Europe as before, with whatever was bought there.
+ */
+function withForeignShipStop(s: GameState, p: Player, stops: RouteStop[]): RouteStop[] {
+  const ports = stops.filter((st) => st.at !== EUROPE_STOP).map((st) => s.colonies[st.at]);
+  if (!ports.length) return stops;
+  const goods = [...new Set(stops.flatMap((st) => st.load.map((r) => r.good)))];
+  let best: { stop: RouteStop; score: number } | null = null;
+  for (const f of partnerColonies(s, p)) {
+    if (!isCoastal(s, f.x, f.y)) continue;
+    const d = Math.min(...ports.map((c) => distance(c.x, c.y, f.x, f.y)));
+    if (d > 6) continue;
+    const plan = foreignStop(s, p, f, goods);
+    if (!plan) continue;
+    const score = plan.gain + (buildingTies(s, p, f.owner) ? 200 : 0) - d * 10;
+    if (score > 0 && (!best || score > best.score)) best = { stop: plan.stop, score };
+  }
+  if (!best) return stops;
+  const end = stops[stops.length - 1];
+  const stop = best.stop;
+  const extra = stop.load.filter((r) => !end.unload.some((u) => u.good === r.good)).map((r) => ({ good: r.good }));
+  return [...stops.slice(0, -1), stop, { ...end, unload: [...end.unload, ...extra] }];
+}
+
+/**
+ * Goods a colony has to spare for a partner: goods it makes itself (never goods it bought, so two
+ * partners' routes cannot pass the same goods back and forth), with at least 30 above what it
+ * keeps, or 3 or more to spare every turn.
+ */
+function spareGoods(s: GameState, c: Colony): GoodId[] {
+  const report = colonyReport(s, c);
+  return FOREIGN_GOODS.filter((g) => report.produced[g] > 0 && (c.goods[g] - keepFor(c, report, g) >= 30 || report.net[g] >= 3));
+}
+
+/** The two stops of a wagon train's route between one of the nation's colonies and a partner's, or null when it does not pay. */
+function wagonForeignRules(s: GameState, p: Player, own: Colony, f: Colony): { home: RouteStop; stop: RouteStop; gain: number } | null {
+  if (!partnerColonies(s, p).some((o) => o.id === f.id)) return null;
+  const plan = foreignStop(s, p, f, spareGoods(s, own));
+  if (!plan || !plan.sells.length) return null;
+  const report = colonyReport(s, own);
+  const load = plan.sells.map((g) => {
+    const keep = keepFor(own, report, g);
+    return keep > 0 ? { good: g, amount: keep } : { good: g };
+  });
+  return { home: { at: own.id, load, unload: plan.buys.map((good) => ({ good })) }, stop: plan.stop, gain: plan.gain };
+}
+
+/** Partners' colonies already served by one of the nation's wagon train routes. */
+function wagonForeignStops(s: GameState, p: Player): Set<string> {
+  const out = new Set<string>();
+  for (const r of routesOf(s, p.id)) {
+    if (!routeUnits(s, r.id).some(isWagon)) continue;
+    for (const st of r.stops) if (isForeignStop(s, st, p.id)) out.add(st.at);
+  }
+  return out;
+}
+
+/**
+ * Puts an idle wagon train on a route to a partner's colony within reach: from the nation's colony
+ * (within 8 tiles of the wagon) with the most to gain, to a partner's colony near it (WAGON_REACH
+ * steps at most). Returns whether it did.
+ */
+function routeWagonForeign(s: GameState, p: Player, wagon: Unit): boolean {
+  // Early on, a spare wagon train trades with the natives, which pays better and costs no ties.
+  if (s.turn < FOREIGN_WAGON_FROM) return false;
+  const pos = unitPosition(s, wagon)!;
+  const partners = partnerColonies(s, p);
+  if (!partners.length) return false;
+  const taken = wagonForeignStops(s, p);
+  let best: { own: Colony; f: Colony; score: number } | null = null;
+  let checks = 0;
+  for (const own of ownColonies(s, p)) {
+    if (distance(own.x, own.y, pos.x, pos.y) > 8) continue;
+    for (const f of partners) {
+      if (taken.has(f.id) || distance(own.x, own.y, f.x, f.y) > 8 || checks++ > 6) continue;
+      const rules = wagonForeignRules(s, p, own, f);
+      if (!rules) continue;
+      const score = rules.gain + (buildingTies(s, p, f.owner) ? 200 : 0) - distance(own.x, own.y, pos.x, pos.y) * 10;
+      if (score <= 0 || (best && score <= best.score)) continue;
+      if (wagonSteps(s, p, own, f) === null) continue;
+      best = { own, f, score };
+    }
+  }
+  if (!best) return false;
+  const rules = wagonForeignRules(s, p, best.own, best.f)!;
+  const route = createRoute(s, p.id, routeName(s, p, [rules.home, rules.stop]), [rules.home, rules.stop]);
+  assignRoute(s, wagon.id, route.id);
+  track(p.id, 'route:foreign route created');
+  return true;
+}
+
+/**
+ * Asks a colony near a partner to build a wagon train when the nation is building ties with that
+ * partner and has no wagon train route to it yet: the colony within reach with the most hammers.
+ * Worked out at route reviews; the choice is kept in the nation's memory until the next one.
+ */
+function planForeignWagon(s: GameState, p: Player): void {
+  const memory = (p.aiMemory = p.aiMemory ?? {});
+  delete memory.foreignWagon;
+  // Not while the nation is young: early hammers go into growing.
+  if (s.turn < FOREIGN_WAGON_FROM || ownColonies(s, p).length < 5) return;
+  const partners = partnerColonies(s, p).filter((f) => buildingTies(s, p, f.owner));
+  if (!partners.length) return;
+  const served = new Set([...wagonForeignStops(s, p)].map((id) => s.colonies[id]?.owner));
+  let best: { c: Colony; hammers: number } | null = null;
+  let checks = 0;
+  for (const f of partners) {
+    if (served.has(f.owner)) continue;
+    for (const c of ownColonies(s, p)) {
+      if (distance(c.x, c.y, f.x, f.y) > 6 || checks++ > 6) continue;
+      const hammers = colonyReport(s, c).produced.hammers;
+      if (hammers < 3 || (best && hammers <= best.hammers)) continue;
+      if (!wagonForeignRules(s, p, c, f) || wagonSteps(s, p, c, f) === null) continue;
+      best = { c, hammers };
+    }
+  }
+  if (best) memory.foreignWagon = { colony: best.c.id, until: s.turn + REVIEW_EVERY };
 }
 
 /** Puts an idle wagon train on a route from up to three inland colonies to a port, or sends it to trade with natives. */
@@ -206,10 +460,11 @@ function routeWagon(s: GameState, p: Player, wagon: Unit): void {
     }
     chain.sort((a, b) => distance(b.x, b.y, port.x, port.y) - distance(a.x, a.y, port.x, port.y));
     const stops: RouteStop[] = [...chain.map((o) => ({ at: o.id, load: [], unload: [] })), { at: port.id, load: [], unload: [] }];
-    const route = createRoute(s, p.id, routeName(s, p, stops), stops.map((st) => withRules(s, st, stops)));
+    const route = createRoute(s, p.id, routeName(s, p, stops), stops.map((st) => withRules(s, p, st, stops)));
     assignRoute(s, wagon.id, route.id);
     return;
   }
+  if (routeWagonForeign(s, p, wagon)) return;
   nativeTrade(s, p, wagon);
 }
 
@@ -308,12 +563,12 @@ function routeShips(s: GameState, p: Player): void {
   const ships = Object.values(s.units).filter((u) => u.owner === p.id && isCargoShip(u) && !u.repair);
   const free = ships.filter((u) => !u.route);
   if (free.length < 2) return;
-  const candidate = free.find((u) => (u.loc.kind === 'map' || u.loc.kind === 'europe') && !unitsAboard(s, u).length && !u.dest);
+  const candidate = free.find((u) => (u.loc.kind === 'map' || u.loc.kind === 'europe') && !unitsAboard(s, u).length && !u.dest && !p.aiMemory?.triangle?.[u.id]);
   if (!candidate) return;
   const covered = shipStops(s, p);
   const ports = busiestPorts(s, p, covered);
   if (!ports.length) return;
   const stops: RouteStop[] = [...ports.map((c) => ({ at: c.id, load: [], unload: [] })), { at: EUROPE_STOP, load: [], unload: [] }];
-  const route = createRoute(s, p.id, routeName(s, p, stops), stops.map((st) => withRules(s, st, stops)));
+  const route = createRoute(s, p.id, routeName(s, p, stops), withForeignShipStop(s, p, stops.map((st) => withRules(s, p, st, stops))));
   assignRoute(s, candidate.id, route.id);
 }

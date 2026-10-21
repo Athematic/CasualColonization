@@ -32,6 +32,55 @@ export interface ArenaOptions {
    * were a person. Missing means Conquistador, the standard rules.
    */
   difficulty?: DifficultyId;
+  /** Computer players make no trade or Favoured Nation proposals (`GameConfig.noFavoured`), to measure what the feature brings. */
+  noFavoured?: boolean;
+}
+
+/**
+ * Relations and trade between the European nations, per nation and game. Counted in every arena
+ * game (from a few telemetry events), whether or not the full feature audit runs.
+ */
+export interface RelationsTally {
+  /** Trade agreement and Favoured Nation proposals the nation made. */
+  proposals: number;
+  /** Trade agreements and Favoured Nation statuses the nation entered. */
+  agreements: number;
+  favoured: number;
+  /** Favoured Nation partners at the end of the game. */
+  favouredAtEnd: number;
+  /** Favoured Nation statuses the nation cancelled (including by declaring war). */
+  cancelled: number;
+  /** Gold that changed hands at partners' colonies, over all the nation's relations. */
+  volume: number;
+  /** Units the nation sold at partners' colonies, and in partners' home ports. */
+  foreignStopSales: number;
+  partnerPortSales: number;
+  /** Triangle trades completed: goods bought in one European port and sold in another. */
+  triangles: number;
+  /** Wars the nation declared, and how many of them on a trade partner or Favoured Nation. */
+  wars: number;
+  warsOnPartners: number;
+  /** Tax raises the nation refused (boycotting a good). */
+  taxRefusals: number;
+}
+
+const TALLY: Record<string, keyof RelationsTally> = {
+  'cmd:proposeTrade': 'proposals',
+  'cmd:proposeFavoured': 'proposals',
+  'diplomacy:trade agreement made': 'agreements',
+  'diplomacy:favoured nation made': 'favoured',
+  'diplomacy:favoured nation cancelled': 'cancelled',
+  'trade:foreign stop sales': 'foreignStopSales',
+  'europe:partner port sales': 'partnerPortSales',
+  'trade:triangle trade': 'triangles',
+  'diplomacy:war started': 'wars',
+  'diplomacy:war on a trade partner': 'warsOnPartners',
+  'diplomacy:war on a Favoured Nation': 'warsOnPartners',
+  'tax:refused (boycott)': 'taxRefusals',
+};
+
+function emptyTally(): RelationsTally {
+  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0 };
 }
 
 export interface ArenaEntry {
@@ -53,6 +102,8 @@ export interface ArenaEntry {
   won: boolean;
   /** Feature uses, when the arena counts them. */
   features?: FeatureCounts;
+  /** Relations and trade with the other Europeans (arena games always count them). */
+  relations?: RelationsTally;
 }
 
 export interface ArenaSummary {
@@ -71,6 +122,8 @@ export interface ArenaSummary {
   cheated: number;
   /** Average feature uses per nation per game, when counted. */
   features?: FeatureCounts;
+  /** Average relations and trade per nation per game. */
+  relations?: RelationsTally;
 }
 
 /** Plays one computer-only game and reports every nation's standing at the end. */
@@ -82,6 +135,7 @@ export function playArenaGame(
   map?: string,
   features = false,
   difficulty?: DifficultyId,
+  noFavoured = false,
 ): { state: GameState; entries: Omit<ArenaEntry, 'game' | 'won'>[] } {
   const ai = Object.fromEntries(line.map((l) => [l.nation, l.level]));
   const config = {
@@ -92,28 +146,47 @@ export function playArenaGame(
     ai,
     ...(map ? { map } : {}),
     ...(difficulty ? { difficulty, difficultyForAll: true } : {}),
+    ...(noFavoured ? { noFavoured: true } : {}),
   };
   const counts = new Map<string, FeatureCounts>();
-  const previous = features
-    ? setFeatureSink((nation, feature, n) => {
-        let c = counts.get(nation);
-        if (!c) counts.set(nation, (c = {}));
-        c[feature] = (c[feature] ?? 0) + n;
-      })
-    : null;
+  const tallies = new Map<string, RelationsTally>();
+  // The sink only counts; it never touches the game, so scores do not depend on it.
+  const previous = setFeatureSink((nation, feature, n) => {
+    const key = TALLY[feature];
+    if (key) {
+      let r = tallies.get(nation);
+      if (!r) tallies.set(nation, (r = emptyTally()));
+      r[key] += key === 'foreignStopSales' || key === 'partnerPortSales' ? n : 1;
+    }
+    if (!features) return;
+    let c = counts.get(nation);
+    if (!c) counts.set(nation, (c = {}));
+    c[feature] = (c[feature] ?? 0) + n;
+  });
   let s: GameState;
   try {
     s = createGame(config);
     let guard = turns * 2 + 10;
     while (s.turn < turns && !s.gameOver && guard-- > 0) applyCommand(s, { type: 'endTurn' });
   } finally {
-    if (features) setFeatureSink(previous);
+    setFeatureSink(previous);
   }
   const entries = line.map((l) => {
-    const e = standing(s, seed, l.nation, l.level);
+    const e = { ...standing(s, seed, l.nation, l.level), relations: endRelations(s, l.nation, tallies.get(l.nation)) };
     return features ? { ...e, features: { ...counts.get(l.nation), ...endStateFeatures(s, l.nation) } } : e;
   });
   return { state: s, entries };
+}
+
+/** A nation's relations tally, completed with the end state: Favoured Nation partners and trade volume. */
+function endRelations(s: GameState, nation: NationId, counted?: RelationsTally): RelationsTally {
+  const r = { ...(counted ?? emptyTally()) };
+  for (const rel of Object.values(s.relations ?? {})) {
+    if (rel.a !== nation && rel.b !== nation) continue;
+    r.volume += rel.volume;
+    if (rel.favoured) r.favouredAtEnd++;
+  }
+  return r;
 }
 
 export function standing(s: GameState, seed: number, nation: NationId, level: AiLevel): Omit<ArenaEntry, 'game' | 'won'> {
@@ -143,7 +216,7 @@ export function runArena(opts: ArenaOptions, onGame?: (entries: ArenaEntry[], ga
     const seed = (opts.firstSeed ?? 1000) + g;
     const nations = [...NATION_ORDER.slice(g % 8), ...NATION_ORDER.slice(0, g % 8)].slice(0, n);
     const line = nations.map((nation, i) => ({ nation, level: opts.levels[(i + g) % n] }));
-    const { entries: game } = playArenaGame(seed, line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty);
+    const { entries: game } = playArenaGame(seed, line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured);
     const best = Math.max(...game.map((e) => e.score));
     const rows = game.map((e) => ({ ...e, game: g, won: e.score === best }));
     entries.push(...rows);
@@ -172,6 +245,7 @@ export function summarise(entries: ArenaEntry[]): ArenaSummary[] {
         spoiled: mean((e) => e.spoiled),
         cheated: rows.filter((e) => e.cheated).length,
         ...(rows.some((e) => e.features) ? { features: averageFeatures(rows) } : {}),
+        ...(rows.some((e) => e.relations) ? { relations: averageTally(rows) } : {}),
       };
     })
     .sort((a, b) => b.score - a.score);
@@ -182,6 +256,40 @@ function averageFeatures(rows: ArenaEntry[]): FeatureCounts {
   for (const e of rows) for (const [k, v] of Object.entries(e.features ?? {})) out[k] = (out[k] ?? 0) + v;
   for (const k of Object.keys(out)) out[k] = Math.round((out[k] / rows.length) * 10) / 10;
   return out;
+}
+
+function averageTally(rows: ArenaEntry[]): RelationsTally {
+  const out = emptyTally();
+  for (const e of rows) for (const k of Object.keys(out) as (keyof RelationsTally)[]) out[k] += e.relations?.[k] ?? 0;
+  for (const k of Object.keys(out) as (keyof RelationsTally)[]) out[k] = Math.round((out[k] / rows.length) * 10) / 10;
+  return out;
+}
+
+/** A Markdown table of relations and trade between the Europeans, per level (average per nation per game). */
+export function formatRelations(summary: ArenaSummary[]): string {
+  const head = '| Level | Proposals | Agreements | Favoured made | Favoured at end | Cancelled | Trade volume | Foreign stop sales | Partner port sales | Triangle trades | Wars declared | on partners | Tax refusals |';
+  const rule = '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
+  const rows = summary
+    .filter((r) => r.relations)
+    .map((r) => {
+      const t = r.relations!;
+      return `| ${AI_LEVEL_INFO[r.level].name} | ${t.proposals} | ${t.agreements} | ${t.favoured} | ${t.favouredAtEnd} | ${t.cancelled} | ${t.volume} | ${t.foreignStopSales} | ${t.partnerPortSales} | ${t.triangles} | ${t.wars} | ${t.warsOnPartners} | ${t.taxRefusals} |`;
+    });
+  return [head, rule, ...rows].join('\n');
+}
+
+/** One line with the per-game totals of relations between the Europeans. */
+export function formatRelationsLine(entries: ArenaEntry[]): string {
+  const games = new Set(entries.map((e) => e.game)).size || 1;
+  const sum = (k: keyof RelationsTally) => entries.reduce((n, e) => n + (e.relations?.[k] ?? 0), 0);
+  const per = (n: number) => Math.round((n / games) * 10) / 10;
+  // Agreements and Favoured Nation statuses involve two nations; volume is counted by both.
+  return (
+    `Per game: ${per(sum('agreements') / 2)} trade agreements, ${per(sum('favoured') / 2)} Favoured Nation pairs made ` +
+    `(${per(sum('favouredAtEnd') / 2)} at the end, ${per(sum('cancelled'))} cancelled), ${Math.round(sum('volume') / 2 / games)} gold traded at each other's colonies, ` +
+    `${per(sum('foreignStopSales'))} units sold at partners' colonies and ${per(sum('partnerPortSales'))} in partners' ports, ${per(sum('triangles'))} triangle trades, ` +
+    `${per(sum('wars'))} wars declared (${per(sum('warsOnPartners'))} on trade partners or Favoured Nations), ${per(sum('taxRefusals'))} tax raises refused.`
+  );
 }
 
 /** A Markdown table of a summary. */

@@ -27,6 +27,11 @@ export interface GameConfig {
   difficulty?: DifficultyId;
   /** Give computer players the chosen difficulty's economics too (tournaments); by default only people get it. */
   difficultyForAll?: boolean;
+  /**
+   * Computer players propose no trade agreements and no Favoured Nation status (they still answer
+   * people's proposals). For tournaments that measure what the feature brings (`--no-favoured`).
+   */
+  noFavoured?: boolean;
 }
 
 export interface Tile {
