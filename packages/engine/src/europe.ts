@@ -12,6 +12,7 @@ import {
   unitsAboard,
 } from './queries.js';
 import { random, randInt, weightedPick } from './rng.js';
+import { noteTrade } from './stats.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import { IMMIGRANT_WEIGHTS, PIONEER_MAX_TOOLS, PURCHASABLE, ROLES, TRAINABLE, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
 import type { GameState, MarketEntry, Player, Unit } from './types.js';
@@ -78,6 +79,7 @@ export function sellToMarket(s: GameState, p: Player, good: GoodId, amount: numb
   const gross = amount * sellPrice(p, good);
   const net = gross - Math.floor((gross * p.tax) / 100);
   p.gold += net;
+  noteTrade(s, p.id, net);
   adjustMarket(p, good, amount);
   maybeRaiseTax(s, p, gross, good);
   return net;

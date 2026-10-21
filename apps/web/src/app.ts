@@ -40,6 +40,7 @@ import { ColonyScreen } from './ui/colony.js';
 import { choose, confirmDialog, promptDialog, toast } from './ui/dialogs.js';
 import { DiplomacyScreen } from './ui/diplomacy.js';
 import { EuropeScreen } from './ui/europe.js';
+import { ProgressScreen } from './ui/progress.js';
 import { Sidebar } from './ui/sidebar.js';
 
 export interface Screen {
@@ -374,16 +375,8 @@ export class App {
     const over = this.state.gameOver;
     if (!over || this.shownGameOver) return;
     this.shownGameOver = true;
-    const rows = (Object.entries(over.scores) as [NationId, number][]).sort((a, b) => b[1] - a[1]);
-    const body = h('div', null,
-      h('p', null, over.reason),
-      over.winner ? h('p', null, h('strong', null, `${nationTitle(over.winner)} ${over.winner === this.viewer ? '(you) ' : ''}wins.`)) : null,
-      h('table', { class: 'scores' }, rows.map(([n, score]) => h('tr', null, h('td', null, nationTitle(n)), h('td', null, String(score))))));
-    const again = await choose('The game is over', body, [
-      { label: 'Keep playing', value: false },
-      { label: 'Main menu', value: true, primary: true },
-    ]);
-    if (again) this.exitToMenu();
+    // The final scores open on the Progress Graphs, so the whole game can be looked back on.
+    this.showScreen(new ProgressScreen(this, { ...over, viewer: this.observer ? undefined : this.viewer, onMenu: () => this.exitToMenu() }));
   }
 
   /** After a unit acts, move on to the next one that needs orders. */
@@ -575,6 +568,10 @@ export class App {
     this.showScreen(new DiplomacyScreen(this));
   }
 
+  openProgress(): void {
+    this.showScreen(new ProgressScreen(this));
+  }
+
   private showScreen(screen: Screen): void {
     this.closeScreen();
     this.screen = screen;
@@ -739,6 +736,11 @@ export class App {
     if (target.matches('input, select, textarea')) return;
     if (this.screen) {
       if (e.key === 'Escape') this.closeScreen();
+      return;
+    }
+    if (e.key.toLowerCase() === 'h' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      this.openProgress();
       return;
     }
     if (this.observer) {

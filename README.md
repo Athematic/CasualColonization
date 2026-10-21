@@ -31,6 +31,7 @@ Or build a static site with `npm run build` (output in `apps/web/dist`), or a si
 | Open a colony | Click it | |
 | Europe | *Europe* button | `E` |
 | End turn | *End turn* | `Enter` |
+| Progress graphs | *Progress* | `H` |
 | Pan and zoom | Drag, mouse wheel, pinch | `+`, `-`, `C` centres on the unit |
 
 In a colony, click a colonist and then a field or building to put them to work. Click a worker's own field again to switch what it produces.
@@ -57,6 +58,7 @@ In a colony, click a colonist and then a field or building to put them to work. 
   - **Creative** plays like a person. It reviews the game every few turns and shifts focus between exploring, expanding, developing, liberty, defence, war and independence. It reacts to threats at once and takes openings when a rival leaves a colony undefended.
 - **Head start**: start in 1550, 1600, 1650, 1700, 1750 or 1800 instead of 1492. The strongest computer level (Creative) plays your nation until then and hands it over in a developed position. Watch the run as a speedrun on the map (at least 250 ms per turn, following your newest colony), or skip ahead without drawing for a much faster start.
 - **Computer-only games**: choose no players to watch the computers play each other in observer mode, with play/pause, speed, stepping, a live scoreboard and a choice of whose view to show.
+- **Progress Graphs**: line charts comparing every nation over time: score, gold, colonies, colonists, rebels, liberty bells, crosses, Founding Fathers, military strength, ships and tonnage, goods produced, trade income, tax rate, native tension and land explored. Open them with *Progress* in the side panel (*Graphs* when watching) or `H`; they open by themselves with the final scores when the game ends. Hover or tap for values; click a nation in the legend to hide it, Shift-click or double-click to show only that one. The graphs show all nations whatever you have explored, as the original game's reports did. The engine records one snapshot per nation at the end of every round (`statsHistory(state)` in `packages/engine/src/stats.ts`), stored as small differences: about 36 bytes per nation and turn, so 360 turns of an eight-nation game add about 105 KB to a save and a full game to 1850 (about 600 turns) under 200 KB. Saves made before this feature start recording when loaded.
 - **Saving**: an autosave every turn, a manual save slot, and export or import of save files. Saves from Alpha 0.1 are upgraded on load.
 
 ### Measuring the computer players

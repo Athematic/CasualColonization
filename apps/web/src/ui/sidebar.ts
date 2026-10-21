@@ -98,9 +98,10 @@ export class Sidebar {
     this.body.append(this.unitCard(app.selectedUnit()));
 
     this.body.append(
-      h('div', { class: 'row' },
+      h('div', { class: 'row wrap nav-row' },
         h('button', { class: 'btn', onclick: () => app.openEurope(), title: 'Europe (E)' }, 'Europe'),
         h('button', { class: 'btn', onclick: () => app.openDiplomacy(), title: 'Foreign affairs (D)' }, 'Affairs'),
+        h('button', { class: 'btn', onclick: () => app.openProgress(), title: 'Progress graphs (H)' }, 'Progress'),
         h('button', { class: 'btn', onclick: () => app.selectNext(), title: 'Next unit (W)', disabled: !awaiting }, `Next unit${awaiting ? ` (${awaiting})` : ''}`),
       ),
       h('button', { class: `btn primary end-turn${myTurn && !awaiting ? ' pulse' : ''}`, onclick: () => void app.endTurn(), disabled: !myTurn, title: 'End turn (Enter)' }, 'End turn'),
@@ -146,7 +147,8 @@ export class Sidebar {
       h('div', { class: 'row' },
         h('button', { class: 'btn primary', disabled: !!over, onclick: () => app.setAutoplay(!app.autoplay), title: 'Space' }, app.autoplay ? 'Pause' : 'Play'),
         h('button', { class: 'btn', disabled: !!over || app.autoplay, onclick: () => app.observeTurns(1), title: 'Enter' }, '+1 turn'),
-        h('button', { class: 'btn', disabled: !!over || app.autoplay, onclick: () => app.observeTurns(10) }, '+10')),
+        h('button', { class: 'btn', disabled: !!over || app.autoplay, onclick: () => app.observeTurns(10) }, '+10'),
+        h('button', { class: 'btn', onclick: () => app.openProgress(), title: 'Progress graphs (H)' }, 'Graphs')),
       h('div', { class: 'row' }, h('label', { class: 'field' }, h('span', null, 'Speed'), speed), h('label', { class: 'field' }, h('span', null, 'Show'), watch)),
       h('table', { class: 'table scoreboard' },
         h('tr', null, h('th', null, 'Nation'), h('th', null, 'Level'), h('th', { title: 'Colonies' }, 'Col'), h('th', { title: 'Colonists' }, 'Pop'), h('th', { title: 'Sons of Liberty' }, 'SoL'), h('th', null, 'Score')),
@@ -244,7 +246,7 @@ export class Sidebar {
         h('button', { class: 'btn small', onclick: () => toast(saveManual(serialize(app.state)) ? 'Game saved in this browser.' : 'Could not save here.') }, 'Save'),
         h('button', { class: 'btn small', onclick: () => downloadSave(serialize(app.state), `casual-colonization-${app.state.turn}.json`) }, 'Export save'),
         h('button', { class: 'btn small', onclick: () => app.exitToMenu() }, 'Main menu')),
-      h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · D foreign affairs · Enter end turn · Right-click or Shift-click to send a unit.'));
+      h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · D foreign affairs · H progress graphs · Enter end turn · Right-click or Shift-click to send a unit.'));
     details.addEventListener('toggle', () => (this.menuOpen = details.open));
     return details;
   }

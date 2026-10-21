@@ -4,6 +4,7 @@ import { chooseDefender, defencePower } from './combat.js';
 import { hasFather } from './fathers.js';
 import { colonyWorkers, createUnit, distance, message, player, reveal, tileAt, unitName, unitPosition, unitsAt } from './queries.js';
 import { random, randInt } from './rng.js';
+import { noteTrade } from './stats.js';
 import { BUILDINGS, type BuildingKind } from './rules/buildings.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import { NATIONS, TRIBES, type NationId, type TribeId } from './rules/nations.js';
@@ -102,6 +103,7 @@ export function tradeWithSettlement(s: GameState, unitId: string, settlementId: 
   st.gold -= gold;
   addTension(st, u.owner, -15);
   player(s, u.owner).gold += gold;
+  noteTrade(s, u.owner, gold);
   u.moves = 0;
   const text = `The ${settlementName(st)} buys ${amount} ${GOOD_DEFS[chosen].name.toLowerCase()} for ${gold} gold.`;
   message(s, text, u.owner, st);

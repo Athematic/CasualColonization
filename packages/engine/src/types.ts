@@ -203,4 +203,18 @@ export interface GameState {
   settlements: Record<string, Settlement>;
   messages: GameMessage[];
   gameOver?: { turn: number; reason: string; winner?: NationId; scores: Partial<Record<NationId, number>> };
+  /** Progress statistics, one snapshot per round (see stats.ts). Missing in older saves. */
+  stats?: StatsHistory;
+}
+
+/**
+ * Compact per-round statistics: `data[nation]` holds `keys.length` numbers per entry of `turns`,
+ * each the change since the nation's previous entry (the first entry as is). Read it with statsHistory.
+ */
+export interface StatsHistory {
+  keys: string[];
+  turns: number[];
+  data: Partial<Record<NationId, number[]>>;
+  /** Trade income, goods produced and crosses since the last snapshot. */
+  flows?: Partial<Record<NationId, { trade?: number; production?: number; crosses?: number }>>;
 }
