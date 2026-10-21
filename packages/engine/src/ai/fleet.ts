@@ -3,8 +3,9 @@
  * more than the fleet can carry, a galleon for treasure, warships for aggressive nations, and
  * ships from a colony's own shipyard.
  */
-import { train } from '../europe.js';
-import { colonyWorkers, isCoastal, isShip } from '../queries.js';
+import { buyableInPartnerPort, portsFor, train, trainPrice } from '../europe.js';
+import { colonyWorkers, isCoastal, isShip, player } from '../queries.js';
+import type { NationId } from '../rules/nations.js';
 import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import type { BuildTarget, Colony, GameState, Player } from '../types.js';
 import { ownColonies, safely } from './common.js';
@@ -79,11 +80,26 @@ export function warshipWanted(s: GameState, p: Player, prof: AiProfile, r: Fleet
   return null;
 }
 
+/**
+ * Where to buy a ship: a Favoured Nation partner's port when one of the nation's ships is there and
+ * the ship is cheaper there (merchant ships only), otherwise the home port (undefined).
+ */
+export function shipPort(s: GameState, p: Player, type: UnitTypeId): NationId | undefined {
+  if (!buyableInPartnerPort(type)) return undefined;
+  let best: { port?: NationId; price: number } = { price: trainPrice(p, type) };
+  for (const port of portsFor(s, p.id).slice(1)) {
+    if (!Object.values(s.units).some((u) => u.owner === p.id && u.loc.kind === 'europe' && u.loc.port === port)) continue;
+    const price = trainPrice(player(s, port), type);
+    if (price < best.price) best = { port, price };
+  }
+  return best.port;
+}
+
 /** Buys ships in Europe as the economy grows. Call with a ship in port in Europe. */
 export function buyShips(s: GameState, p: Player, prof: AiProfile): void {
   const r = fleetReport(s, p);
   const cargo = cargoShipWanted(r, p.gold - prof.reserve);
-  if (cargo) safely(() => train(s, p.id, cargo));
+  if (cargo) safely(() => train(s, p.id, cargo, shipPort(s, p, cargo)));
   const war = warshipWanted(s, p, prof, fleetReport(s, p), p.gold - prof.reserve);
   if (war) safely(() => train(s, p.id, war));
 }

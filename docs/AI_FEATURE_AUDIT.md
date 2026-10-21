@@ -143,7 +143,52 @@ Ordered by how much they should help:
 5. **Schools, custom houses and level-2 production buildings are never built.** They sit late in `buildPlan`, behind docks, the printing press and warehouses, in colonies averaging 5–6 colonists. Consider a "core colony" plan for the 2–3 largest colonies.
 6. **Few experts are trained in Europe.** Fisherman, farmer, statesman and preacher purchases are checked only after other spending, and only when a ship with room is in Europe.
 7. **Independence is almost never declared** (minimum share 50–55%, plus stockade and musket requirements). No level has ever won it in the arena.
-8. **Tax refusals.** The AI always accepts a raise. A refusal could pay off for goods it no longer ships.
+8. **Tax refusals.** Done in 0.4: the advanced levels refuse a raise when the boycott costs less (see the Favoured Nation section below).
+
+## Favoured Nation (0.4)
+
+Step 2 of 0.4 taught the Competent, Combative and Creative levels to use the Favoured Nation rules: they propose trade agreements and Favoured Nation, run trade routes to partners' colonies, choose between their home port and partners' ports, refuse tax raises when a boycott costs less, cancel Favoured Nation only rarely, and Creative trades goods between ports (triangle trading). Naive only answers proposals and accepts every tax raise. The rules chosen are in [design/favoured-nation.md](design/favoured-nation.md) ("Computer players"); the code is in `ai/foreign.ts` and `ai/logistics.ts`.
+
+### How it was measured
+
+The tournament now counts relations and trade in every game and prints a second table per level, and a line per game. `--no-favoured` (`GameConfig.noFavoured`) stops the computer players proposing anything, so nobody gets an agreement: the fair comparison for what Favoured Nation brings. Tax decisions are part of the new code in both runs. The step-1 code ("Before") is the third column.
+
+```sh
+npm run tournament -- --games 16 --turns 300 --size medium --features
+npm run tournament -- --games 16 --turns 300 --size medium --features --no-favoured
+```
+
+Sixteen games, 300 turns, medium map, seeds 1000–1015, the same seeds and seating in all three runs. Scores are the average per nation; the last two columns are the average difference per game, with the same seed, and its standard error.
+
+| Level | Before (step 1) | Without proposals | With Favoured Nation | With − without | With − before |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Creative | 484.8 | 486.9 | 472.7 | −14.3 ± 6.8 | −12.1 ± 7.1 |
+| Combative | 447.3 | 443.5 | 451.7 | +8.2 ± 5.4 | +4.4 ± 9.0 |
+| Competent | 418.9 | 426.9 | 426.6 | −0.3 ± 6.5 | +7.6 ± 6.1 |
+| Naive | 181.2 | 174.1 | 172.6 | −1.4 ± 4.8 | −8.6 ± 7.0 |
+
+Relations and trade with Favoured Nation, average per nation per game:
+
+| Level | Proposals | Agreements | Favoured made | Favoured at end | Cancelled | Trade volume | Foreign stop sales | Partner port sales | Triangle trades | Wars declared | on partners | Tax refusals |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Creative | 2.7 | 2.6 | 1.2 | 1.2 | 0 | 532 | 79 | 266 | 0.1 | 0 | 0 | 0.5 |
+| Combative | 2.6 | 2.8 | 1.1 | 1.1 | 0 | 517 | 71 | 312 | 0 | 0.3 | 0.2 | 0.6 |
+| Competent | 1.5 | 2.3 | 1.0 | 1.0 | 0 | 797 | 121 | 209 | 0 | 0 | 0 | 0.4 |
+| Naive | 0 | 2.1 | 0.4 | 0.4 | 0 | 389 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+Per game (four nations): 4.9 trade agreements, 1.8 Favoured Nation pairs made and still in place at the end, none cancelled, 1,117 gold traded at each other's colonies, 270 units sold at partners' colonies and 787 in partners' ports, 0.1 triangle trades, 0.25 wars declared (0.19 on trade partners, none on a Favoured Nation), 1.4 tax raises refused. Without proposals: no agreements, 0.19 wars, 0.8 tax raises refused. The step-1 code: 0.06 wars, no refusals (every raise accepted).
+
+What the numbers say:
+
+- **The feature is used.** Every advanced level ends most games with one Favoured Nation partner. Agreements come early, often within the first 50 turns; Favoured Nation follows once routes between the two reach the hidden threshold.
+- **No war on a Favoured Nation, ever, and no cancellation** in 16 games. The few wars are Combative's, on nations it had only a trade agreement with (it proposes agreements to all its neighbours, including the weak ones it may attack later; the agreement simply ends with the war).
+- **Partners' ports are used about twice a game per nation** (1–1.6 trips), when the cargo fetches clearly more there. Sales there never bring a tax raise, so the advanced levels accept fewer raises (6.0–6.3 a game, against 6.4–7.5 without proposals).
+- **Triangle trades are rare** (31 units bought a game by Creative, one completed trade in 16 games): the markets drift back to their starting prices and the nations sell raw goods that sit near their lowest price everywhere, so gaps of 10% after tax seldom appear.
+- **Tax refusals** went from 0 (step 1) to 0.3–0.6 a game. The first rule (refuse any raise on a good under 10% of exports) refused 1.3–2.5 a game and cost points, so the rule became a break-even one: refuse only when losing the good's sales costs less than 70% of what the raise costs on everything else.
+- **Scores.** Combative gains (+8) and Competent is unchanged. Creative loses about 14 points a game (two standard errors). Its losses are not where it trades most: in game 2 (seed 1001) it lost 38 points with no trade at all, so part of it is the games simply taking another course. Earlier versions lost more and were fixed: routes that passed the same goods back and forth between partners and drained their treasuries (every level lost 10–30 points); ships going to partners' ports too readily, so colonists waited and gold sat idle (Creative's gold doubled); wagon trains taken from native trade in the early game. Naive's code did not change; it loses a little against stronger opponents.
+- **Runtime** did not grow: 21 min 10 s with Favoured Nation against 21 min 2 s without proposals (+0.7%), two runs side by side on the same machine; the step-1 code took 22 min 35 s when run beside them.
+
+Features still never used: buying a ship in a partner's port (prices are the same for every computer nation, so home is never dearer), and paying arrears (refusals are now rare and only for minor goods).
 
 ## Appendix: full feature tables (seeds 1000–1005, 6 games, 300 turns, medium)
 

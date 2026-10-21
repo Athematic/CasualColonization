@@ -79,16 +79,18 @@ npm run tournament -- --games 8 --turns 330 --size medium --levels naive,compete
 npm run tournament -- --games 6 --turns 300 --size medium --features   # feature-usage audit
 ```
 
-With those options, the current results are as follows. Creative has the best average and plays head starts.
+With those options, the current results (0.4, with Favoured Nation) are as follows. Creative has the best average and plays head starts.
 
 | Level | Wins | Score | Colonies | Colonists | Goods spoiled |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Creative | 2 | 476 | 21.0 | 138 | 10,037 |
-| Competent | 4 | 460 | 21.1 | 138 | 9,628 |
-| Combative | 2 | 417 | 22.5 | 139 | 8,082 |
-| Naive | 0 | 208 | 19.8 | 77 | 15,042 |
+| Creative | 2 | 517 | 23.3 | 154 | 10,537 |
+| Combative | 2 | 479 | 22.8 | 155 | 10,107 |
+| Competent | 4 | 439 | 19.6 | 132 | 11,644 |
+| Naive | 0 | 215 | 20.4 | 80 | 13,383 |
 
 Add `--difficulty <level>` (`discoverer`, `explorer`, `conquistador`, `governor`, `viceroy`) to play every arena nation at that level's economics, as if each were a person; without it, games use the standard rules (Conquistador), and `--difficulty conquistador` gives exactly the same results.
+
+Every run also prints relations and trade between the European nations: proposals, trade agreements and Favoured Nation statuses made and held, cancellations, gold traded at each other's colonies, goods sold at partners' colonies and in partners' ports, triangle trades, wars declared (and how many on trade partners or Favoured Nations) and tax raises refused, per level and per game. Add `--no-favoured` to stop the computer players proposing trade agreements and Favoured Nation, to measure what the feature brings (see the Favoured Nation section of [docs/AI_FEATURE_AUDIT.md](docs/AI_FEATURE_AUDIT.md)).
 
 Add `--features` to also count how often each level uses each game feature (commands, roads, ships bought, buildings, schools, missions, trade, wars and more), with a table that flags features the advanced levels never or hardly use. The findings so far, and the fixes they led to, are in [docs/AI_FEATURE_AUDIT.md](docs/AI_FEATURE_AUDIT.md).
 

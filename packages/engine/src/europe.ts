@@ -149,8 +149,9 @@ function maybeRaiseTax(s: GameState, p: Player, gross: number, good: GoodId): vo
   const chance = Math.min(0.12, 0.015 + s.turn / 3000) * rules.taxChance;
   if (random(s) >= chance) return;
   const rate = Math.min(rules.taxCeiling, p.tax + Math.max(1, Math.round((1 + randInt(s, 4)) * rules.taxRaise)));
-  if (p.human) {
-    // People decide: accept, or refuse and hold a party with the goods.
+  if (p.human || (p.ai && p.ai !== 'naive')) {
+    // People decide: accept, or refuse and hold a party with the goods. The advanced computer
+    // levels decide too, at the start of their next turn (ai/foreign.ts); Naive always accepts.
     p.pendingTax = { rate, good };
   } else {
     p.tax = rate;
@@ -392,7 +393,10 @@ export function sailToEurope(s: GameState, carrierId: string, port?: NationId): 
   if (problem) fail(problem);
   player(s, ship.owner).entry = { x: ship.loc.x, y: ship.loc.y };
   ship.loc = { kind: 'sailing', to: 'europe', turnsLeft: sailTurns(s, ship.owner) };
-  if (target !== ship.owner) ship.loc.port = target;
+  if (target !== ship.owner) {
+    ship.loc.port = target;
+    track(ship.owner, 'europe:sailed to a partner port');
+  }
   ship.moves = 0;
   delete ship.dest;
   track(ship.owner, 'cmd:sailToEurope');

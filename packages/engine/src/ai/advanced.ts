@@ -18,8 +18,8 @@ import {
 } from '../colony.js';
 import { attack, cashTreasure, defencePower, offencePower } from '../combat.js';
 import { proposePeace, startWar } from '../diplomacy.js';
-import { hasTradeAgreement, HOSTILE_AGGRESSION, HOSTILITY_WEIGHT, isFavoured, isHostile } from '../relations.js';
-import { boardInEurope, buyGoods, buyPrice, recruit, recruitPrice, sailToAmerica, sellGoods, train, trainPrice } from '../europe.js';
+import { favouredPartners, hasTradeAgreement, isHostile } from '../relations.js';
+import { boardInEurope, buyGoods, buyPrice, inHomePort, portOf, recruit, recruitPrice, sailToAmerica, sellGoods, train, trainPrice } from '../europe.js';
 import { canDeclareIndependence, declareIndependence, rebelShare } from '../independence.js';
 import { canImprove, findPath, setDestination, startImprovement } from '../movement.js';
 import { buyLand, establishMission, giftToTribe, landPrice, learnSkill, nativeLandOwner, speakToChief, takeLand, tensionOf } from '../natives.js';
@@ -46,6 +46,7 @@ import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import type { BuildTarget, Colony, GameState, Job, Player, Unit } from '../types.js';
 import { aiFight, disembarkAll, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
 import { buyShips, shipToBuild } from './fleet.js';
+import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { equippedPrice, trainEquipped } from './outfit.js';
 import type { AiProfile } from './profiles.js';
@@ -57,6 +58,10 @@ const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
 /** Plays one turn with the given profile. */
 export function runAdvanced(s: GameState, p: Player, prof: AiProfile): void {
   turnShare = rebelShare(s, p.id);
+  safely(() => {
+    const army = spareArmy(s, p, prof);
+    foreignAffairs(s, p, prof, army.reduce((n, u) => n + offencePower(s, u), 0), army.length);
+  });
   safely(() => diplomacy(s, p, prof));
   for (const c of ownColonies(s, p)) safely(() => manageColony(s, p, c, prof));
   safely(() => manageLogistics(s, p));
@@ -82,12 +87,6 @@ const isArmed = (u: Unit) => u.role === 'soldier' || u.role === 'dragoon' || UNI
 
 function armedAt(s: GameState, p: Player, x: number, y: number): Unit[] {
   return unitsAt(s, x, y).filter((u) => u.owner === p.id && isArmed(u));
-}
-
-function colonyDefence(s: GameState, c: Colony): number {
-  return unitsAt(s, c.x, c.y)
-    .filter((u) => u.owner === c.owner && !isShip(u))
-    .reduce((sum, u) => sum + defencePower(s, u), 0);
 }
 
 /** Armed units not needed for garrison duty. */
@@ -601,8 +600,18 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
     disembarkAll(s, ship);
     return;
   }
+  // Goods boycotted at home and with no partner port to sell them in stay in the colonies.
+  const outlet = favouredPartners(s, p.id).length > 0;
+  const shippable = (g: GoodId) => outlet || !p.boycotts[g];
   // Deliver supplies bought in Europe.
   if (mine) {
+    for (const g of SELLABLE) {
+      const n = shippable(g) ? 0 : Math.min(ship.cargo?.[g] ?? 0, Math.max(0, warehouseCapacity(mine) - mine.goods[g]));
+      if (n > 0) {
+        ship.cargo![g]! -= n;
+        mine.goods[g] += n;
+      }
+    }
     // Only what the warehouse holds: the rest goes on to a port with room, rather than spoil.
     for (const g of SUPPLIES) {
       const n = Math.min(ship.cargo?.[g] ?? 0, Math.max(0, warehouseCapacity(mine) - mine.goods[g]));
@@ -612,7 +621,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
       }
     }
     for (const g of SELLABLE) {
-      if (mine.goods[g] >= 50 && cargoFree(s, ship) + (ship.cargo?.[g] ? 1 : 0) > 0) {
+      if (shippable(g) && mine.goods[g] >= 50 && cargoFree(s, ship) + (ship.cargo?.[g] ? 1 : 0) > 0) {
         const amount = Math.min(mine.goods[g], cargoRoomFor(s, ship, g));
         if (amount <= 0) continue;
         mine.goods[g] -= amount;
@@ -639,7 +648,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
   if (carrying < capacity * 0.5) {
     const pickup = ownColonies(s, p)
       .filter((c) => isCoastal(s, c.x, c.y) && c.id !== mine?.id)
-      .map((c) => ({ c, goods: SELLABLE.reduce((n, g) => n + (c.goods[g] >= 50 ? c.goods[g] : 0), 0) }))
+      .map((c) => ({ c, goods: SELLABLE.reduce((n, g) => n + (c.goods[g] >= 50 && shippable(g) ? c.goods[g] : 0), 0) }))
       .filter((r) => r.goods >= 100)
       .sort((a, b) => b.goods - a.goods)[0];
     if (pickup && findPath(s, ship, pickup.c.x, pickup.c.y)) {
@@ -649,7 +658,8 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
   }
   const docks = Object.values(s.units).some((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u));
   if (p.independence === 'none' && (carrying > 0 || docks || p.gold > prof.reserve + recruitPrice(p))) {
-    if (!ship.dest) setDestination(s, ship.id, { europe: true });
+    // Home, or a Favoured Nation partner's port where the cargo fetches more (foreign.ts).
+    if (!ship.dest) setDestination(s, ship.id, { europe: true, port: choosePort(s, p, ship) });
     return;
   }
   if (!mine) {
@@ -692,15 +702,29 @@ function countOwned(s: GameState, p: Player, test: (u: Unit) => boolean): number
 
 function europe(s: GameState, p: Player, prof: AiProfile): void {
   if (p.independence !== 'none') return;
-  const ships = Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && isShip(u) && !u.repair && !u.route);
+  const inEurope = () => Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && isShip(u) && !u.repair && !u.route);
+  const ships = inEurope();
   // Ships on routes that call at Europe pick up colonists from the docks as they pass.
   const liners = countOwned(s, p, (u) => isShip(u) && !!u.route && !!s.routes?.[u.route.id]?.stops.some((st) => st.passengers));
   if (!ships.length && !liners) return;
-  for (const ship of ships) for (const g of GOODS) if ((ship.cargo?.[g] ?? 0) > 0 && !SUPPLIES.includes(g)) safely(() => sellGoods(s, ship.id, g, ship.cargo![g]!));
+  // Sell everything but supplies, in whichever port the ship is in; goods bought for a triangle
+  // trade wait for the port they were bought for (foreign.ts).
+  for (const ship of ships) {
+    for (const g of GOODS) {
+      if ((ship.cargo?.[g] ?? 0) <= 0 || SUPPLIES.includes(g) || !sellHere(s, p, ship, g)) continue;
+      safely(() => {
+        sellGoods(s, ship.id, g, ship.cargo![g]!);
+        noteSale(p, ship, g);
+      });
+    }
+  }
 
   const colonies = ownColonies(s, p);
   const docks = () => Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u));
-  const room = () => ships.filter((sh) => UNIT_TYPES[sh.type].offence === 0).reduce((n, sh) => n + cargoFree(s, sh), 0) + liners * 2 - docks().length;
+  // Colonists board only in the home port, so only ships there count as room for them. A ship in
+  // a partner's port lets two wait on the docks for the next ship home (port choice brings it).
+  const abroad = ships.some((sh) => !inHomePort(sh)) ? 2 : 0;
+  const room = () => ships.filter((sh) => UNIT_TYPES[sh.type].offence === 0 && inHomePort(sh)).reduce((n, sh) => n + cargoFree(s, sh), 0) + liners * 2 + abroad - docks().length;
   const afford = (price: number) => p.gold >= prof.reserve + price;
   const buyUnit = (type: UnitTypeId) => {
     if (room() > 0 && afford(equippedPrice(p, type))) safely(() => trainEquipped(s, p, type));
@@ -728,16 +752,20 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
     safely(() => recruit(s, p.id, slot));
   }
 
-  for (const ship of Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && isShip(u) && !u.repair && !u.route)) {
+  // Ships bought this turn sail too; a ship in a partner's port buys there, at that port's prices.
+  for (const ship of inEurope()) {
     const warship = UNIT_TYPES[ship.type].offence > 0;
-    if (!warship) for (const u of docks()) if (cargoFree(s, ship) > 0) safely(() => boardInEurope(s, u.id, ship.id));
+    const market = portOf(ship) === p.id ? p : s.players.find((o) => o.id === portOf(ship)) ?? p;
+    if (!warship && inHomePort(ship)) for (const u of docks()) if (cargoFree(s, ship) > 0) safely(() => boardInEurope(s, u.id, ship.id));
     // Supplies: tools for builds and pioneers, muskets when war or independence is coming.
     const toolsNeeded = colonies.reduce((n, c) => (c.build ? n + Math.max(0, buildTargetCost(c.build, c).tools - c.goods.tools) : n), 0) + pioneerToolsWanted(s, p);
-    if (toolsNeeded > 0 && afford(buyPrice(p, 'tools') * 100)) safely(() => buyGoods(s, ship.id, 'tools', Math.min(100, Math.ceil(toolsNeeded / 10) * 10)));
+    if (toolsNeeded > 0 && afford(buyPrice(market, 'tools') * 100)) safely(() => buyGoods(s, ship.id, 'tools', Math.min(100, Math.ceil(toolsNeeded / 10) * 10)));
     const preparing = !!prof.independence && turnShare >= prof.independence.minShare - 15;
     const muskets = colonies.reduce((n, c) => n + c.goods.muskets, 0);
-    if ((preparing || militant(prof)) && muskets < colonies.length * 50 && afford(buyPrice(p, 'muskets') * 100 + 300)) safely(() => buyGoods(s, ship.id, 'muskets', 100));
-    if (!colonies.some((c) => c.goods.horses >= 2) && colonies.length && afford(buyPrice(p, 'horses') * 50)) safely(() => buyGoods(s, ship.id, 'horses', 50));
+    if ((preparing || militant(prof)) && muskets < colonies.length * 50 && afford(buyPrice(market, 'muskets') * 100 + 300)) safely(() => buyGoods(s, ship.id, 'muskets', 100));
+    if (!colonies.some((c) => c.goods.horses >= 2) && colonies.length && afford(buyPrice(market, 'horses') * 50)) safely(() => buyGoods(s, ship.id, 'horses', 50));
+    // Creative: holds left over carry goods that another port pays clearly more for.
+    if (!warship) safely(() => triangleBuy(s, p, ship, prof));
     sailToAmerica(s, ship.id);
   }
 }
@@ -780,27 +808,17 @@ function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
   }
 
   // Start a war against a weak neighbour when it pays. Never against a Favoured Nation; a nation
-  // that broke a Favoured Nation agreement is a likely target, even for peaceful levels.
+  // that broke a Favoured Nation agreement is a likely target, even for peaceful levels. After
+  // cancelling Favoured Nation to go to war (foreign.ts), the war waits until the planned turn.
   const hostileTo = s.players.filter((o) => isHostile(s, p.id, o.id)).map((o) => o.id);
+  if (memory.warPlan && (s.turn > memory.warPlan.turn + 20 || p.stance[memory.warPlan.nation] === 'war')) delete memory.warPlan;
   if ((prof.aggression > 0 || hostileTo.length) && p.independence === 'none' && s.turn - (memory.lastWar ?? -100) > 40 && s.turn > 50) {
-    let best: { c: Colony; score: number; aggression: number } | null = null;
-    for (const c of Object.values(s.colonies)) {
-      if (c.owner === p.id || c.owner === 'crown' || p.stance[c.owner] === 'war' || isFavoured(s, p.id, c.owner)) continue;
-      const enemy = s.players.find((o) => o.id === c.owner);
-      if (!enemy || enemy.independence !== 'none') continue;
-      const hostile = hostileTo.includes(c.owner);
-      const aggression = hostile ? Math.max(prof.aggression, HOSTILE_AGGRESSION) : prof.aggression;
-      if (aggression <= 0) continue;
-      const near = colonies.some((own) => distance(own.x, own.y, c.x, c.y) <= (hostile ? 14 : 10));
-      if (!near) continue;
-      const def = colonyDefence(s, c) + 1;
-      const score = (strength / def) * (hostile ? HOSTILITY_WEIGHT : 1);
-      if (!best || score / (2.5 / aggression) > best.score / (2.5 / best.aggression)) best = { c, score, aggression };
-    }
-    if (best && best.score >= 2.5 / best.aggression && army.length >= 2) {
+    const best = bestWarTarget(s, p, prof, strength);
+    if (best && best.ready && army.length >= 2) {
       startWar(s, p.id, best.c.owner);
       memory.lastWar = s.turn;
       memory.warTarget = best.c.id;
+      if (memory.warPlan?.nation === best.c.owner) delete memory.warPlan;
     }
   }
   if (memory.warTarget) {

@@ -47,6 +47,15 @@ function stream(s: GameState, a: NationId, b: NationId, purpose: string): { rng:
   return holder;
 }
 
+/**
+ * A seeded number in [0, 1) for one pair of nations and one purpose, drawn from its own stream
+ * (never `GameState.rng`). The computer players use it for decisions such as how long to wait
+ * after a refused proposal, so adding such decisions shifts no other random outcome.
+ */
+export function pairRandom(s: GameState, a: NationId, b: NationId, purpose: string): number {
+  return random(stream(s, a, b, purpose));
+}
+
 /** A whole number from base − spread to base + spread, both included. */
 function around(r: { rng: number }, v: { base: number; spread: number }): number {
   return v.base - v.spread + Math.floor(random(r) * (2 * v.spread + 1));
@@ -254,6 +263,7 @@ function propose(s: GameState, kind: ProposalKind, from: NationId, to: NationId)
   }
   const yes = kind === 'trade' ? aiAcceptsTrade(s, to, from) : aiAcceptsFavoured(s, to, from);
   if (!yes) {
+    track(from, 'diplomacy:proposal turned down');
     const text = `${nationTitleOf(to)} turns down ${KIND_NAME[kind]}.`;
     message(s, text, from);
     return text;
@@ -270,6 +280,7 @@ export function answerProposal(s: GameState, nation: NationId, from: NationId, a
   delete rel.proposal;
   track(nation, 'cmd:answerProposal');
   if (!accept) {
+    track(from, 'diplomacy:proposal turned down');
     message(s, `${nationTitleOf(nation)} turns down ${KIND_NAME[p.kind]}.`, from);
     return `You turn down ${KIND_NAME[p.kind]} with ${NATIONS[from].name}.`;
   }
@@ -368,6 +379,7 @@ export function onWar(s: GameState, by: NationId, to: NationId): void {
   if (!europeanPair(by, to) || !s.relations?.[relationKey(by, to)]) return;
   const rel = relation(s, by, to);
   delete rel.proposal;
+  if (rel.trade) track(by, rel.favoured ? 'diplomacy:war on a Favoured Nation' : 'diplomacy:war on a trade partner');
   if (rel.favoured) cancelFavoured(s, by, to, 'war');
   else if (rel.trade) {
     delete rel.trade;
