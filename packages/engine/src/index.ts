@@ -23,6 +23,7 @@ export * from './score.js';
 export * from './routes.js';
 export * from './cheats.js';
 export * from './stats.js';
+export { RIVER_DIRS, MAJOR_RIVER_LENGTH, riverLinked, riverName, parseRivers } from './rivers.js';
 export { MAP_SIZES, entryPoints, type EntrySide } from './mapgen.js';
 export { STORED_MAPS, storedMap, parseStoredMap, type StoredMap, type TribeRegion } from './maps/index.js';
 export { createWorld } from './world.js';

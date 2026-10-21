@@ -35,6 +35,18 @@ export const australia: StoredMap = {
     { tribe: 'sioux', region: [44, 49, 65, 61], count: 4 },
     { tribe: 'sioux', region: [59, 64, 67, 70], count: 2 },
   ],
+  // Main rivers first, tributaries after the river they join. Format: parseRivers in rivers.ts.
+  // Cooper Creek is left out: Lake Eyre, where it ends, is marsh on this map, not water.
+  rivers: `
+    Murray: m 65,56 M 60,53 55,51 53,54 52,57 52,58
+    Darling: m 66,37 62,42 M 58,47 55,51
+    Murrumbidgee: m 65,50 60,50 57,52
+    Hawkesbury: m 69,46 73,47 74,47
+    Brisbane: m 70,37 72,36 73,36
+    Swan: m 16,45 13,46 12,46
+    Flinders: m 58,28 55,24 54,22 53,22
+    Derwent: m 62,67 63,69 63,70 64,70
+  `,
   rows: `
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~...wwWW^h^^^^^hhh^^....~~~~~~~~~~~~
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~....wWS^^^^^hhhhhh^....~~~~~~~~~~~~

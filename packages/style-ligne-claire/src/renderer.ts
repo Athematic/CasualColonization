@@ -1,4 +1,4 @@
-import { colonyWorkers, NATIONS, TERRAIN, type GameState, type Tile } from '@cc/engine';
+import { colonyWorkers, NATIONS, RIVER_DIRS, TERRAIN, type GameState, type Tile } from '@cc/engine';
 import {
   hash2,
   isTileExplored,
@@ -9,7 +9,7 @@ import {
   type MapRenderer,
   type Scene,
 } from '@cc/render-api';
-import { FOREST, HIGHLIGHT, INK, LAND, PAPER, PAPER_WASH, ROAD, WAVE, WHITE, shade } from './palette.js';
+import { FOREST, HIGHLIGHT, INK, LAND, PAPER, PAPER_WASH, RIVER, ROAD, WAVE, WHITE, shade } from './palette.js';
 import { FONT, colonySprite, hills, inked, mountains, ruins, settlementSprite, tree, unitSprite } from './sprites.js';
 
 type Ctx = CanvasRenderingContext2D;
@@ -107,7 +107,7 @@ function drawFurrows(ctx: Ctx, px: number, py: number, z: number, color: string,
   ctx.restore();
 }
 
-function drawForest(ctx: Ctx, tile: Tile, x: number, y: number, px: number, py: number, z: number, lw: number): void {
+function drawForest(ctx: Ctx, tile: Tile, x: number, y: number, px: number, py: number, z: number, lw: number, avoid?: (sx: number, sy: number) => boolean): void {
   const style = FOREST[tile.t];
   if (!style) return;
   const spots = [
@@ -119,12 +119,149 @@ function drawForest(ctx: Ctx, tile: Tile, x: number, y: number, px: number, py: 
   ];
   const count = 3 + Math.floor(hash2(x, y, 7) * 3);
   const r = z * 0.17;
-  const chosen = spots.slice(0, count).sort((a, b) => a[1] - b[1]);
+  const chosen = spots.slice(0, count).filter(([sx, sy]) => !avoid?.(sx, sy)).sort((a, b) => a[1] - b[1]);
   for (const [i, [sx, sy]] of chosen.entries()) {
     const jx = (hash2(x, y, 10 + i) - 0.5) * z * 0.1;
     const jy = (hash2(x, y, 20 + i) - 0.5) * z * 0.1;
     tree(ctx, px + sx * z + jx, py + sy * z + jy, r, style.color, style.shape, lw);
   }
+}
+
+/** Where a tile's river runs: towards each linked neighbour, with the width of that stretch. */
+interface RiverLink {
+  dx: number;
+  dy: number;
+  /** Width of the water in tile units. */
+  w: number;
+  mouth: boolean;
+}
+
+const riverWidth = (size: number) => (size >= 2 ? 0.2 : 0.11);
+
+function riverLinks(s: Readonly<GameState>, x: number, y: number): RiverLink[] {
+  const tile = s.map.tiles[y * s.map.width + x];
+  if (!tile.rv || !tile.rd) return [];
+  const out: RiverLink[] = [];
+  RIVER_DIRS.forEach(([dx, dy], i) => {
+    if (!(tile.rd! & (1 << i))) return;
+    const nx = x + dx;
+    const ny = y + dy;
+    const n = nx >= 0 && ny >= 0 && nx < s.map.width && ny < s.map.height ? s.map.tiles[ny * s.map.width + nx] : undefined;
+    const mouth = !n || TERRAIN[n.t].water;
+    // Where a minor river joins a major one, the stretch between them keeps the minor width.
+    out.push({ dx, dy, w: riverWidth(mouth ? tile.rv! : Math.min(tile.rv!, n!.rv ?? tile.rv!)), mouth });
+  });
+  return out;
+}
+
+/** Whether a point (in tile fractions) lies on the river, so trees keep off it. */
+function nearRiver(links: RiverLink[], sx: number, sy: number): boolean {
+  return links.some((l) => {
+    const ex = l.dx / 2;
+    const ey = l.dy / 2;
+    const px = sx - 0.5;
+    const py = sy - 0.5;
+    const t = Math.max(0, Math.min(1, (px * ex + py * ey) / (ex * ex + ey * ey)));
+    return Math.hypot(px - ex * t, py - ey * t) < l.w / 2 + 0.17;
+  });
+}
+
+/**
+ * A river across one tile, drawn in two passes over all river tiles (ink banks, then water) so
+ * that stretches join without seams.
+ * Each link runs from the tile's centre to the middle of the shared edge (or the shared corner for a
+ * diagonal), so the curves of neighbouring tiles meet end to end with the same direction. Two links
+ * make one smooth curve; at a confluence the side branches curve into the main stream; a source
+ * ends in a rounded spring. At a mouth the water runs on over the coastline into the sea.
+ */
+function drawRiver(ctx: Ctx, links: RiverLink[], px: number, py: number, z: number, lw: number, ink: boolean): void {
+  if (!links.length) return;
+  const cx = px + z / 2;
+  const cy = py + z / 2;
+  const end = (l: RiverLink) => [cx + (l.dx * z) / 2, cy + (l.dy * z) / 2] as const;
+  type Piece = { from: RiverLink; to?: RiverLink; mid?: readonly [number, number] };
+  const pieces: Piece[] = [];
+  let spring: RiverLink | undefined;
+  if (links.length === 1) {
+    pieces.push({ from: links[0] });
+    spring = links[0];
+  } else {
+    // The main stream: the widest pair of links, the straightest of those.
+    let best: [RiverLink, RiverLink] = [links[0], links[1]];
+    let bestScore = -Infinity;
+    for (let i = 0; i < links.length; i++)
+      for (let j = i + 1; j < links.length; j++) {
+        const a = links[i];
+        const b = links[j];
+        const straight = -(a.dx * b.dx + a.dy * b.dy) / (Math.hypot(a.dx, a.dy) * Math.hypot(b.dx, b.dy));
+        const score = (a.w + b.w) * 10 + straight;
+        if (score > bestScore) {
+          bestScore = score;
+          best = [a, b];
+        }
+      }
+    const [a, b] = best;
+    const [ax, ay] = end(a);
+    const [bx, by] = end(b);
+    const mid = [(ax + 2 * cx + bx) / 4, (ay + 2 * cy + by) / 4] as const;
+    pieces.push({ from: a, to: b, mid });
+    for (const l of links) if (l !== a && l !== b) pieces.push({ from: l, mid });
+  }
+  const stroke = (ink: boolean) => {
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = ink ? INK : RIVER;
+    ctx.fillStyle = ink ? INK : RIVER;
+    const width = (l: RiverLink) => l.w * z + (ink ? lw * 2.2 : 0);
+    // Out past the coastline, so the water covers the coast's ink where the river meets the sea.
+    const overhang = (l: RiverLink, x: number, y: number) => {
+      if (ink || !l.mouth) return;
+      const k = (lw * 2.5) / Math.hypot(l.dx, l.dy);
+      ctx.lineTo(x + l.dx * k, y + l.dy * k);
+    };
+    for (const p of pieces) {
+      const [fx, fy] = end(p.from);
+      if (!p.to) {
+        // A side branch or a spring: from the edge into the stream (or the spring at the centre).
+        const [mx, my] = p.mid ?? [cx, cy];
+        ctx.beginPath();
+        ctx.moveTo(mx, my);
+        ctx.quadraticCurveTo(cx, cy, fx, fy);
+        overhang(p.from, fx, fy);
+        ctx.lineWidth = width(p.from);
+        ctx.stroke();
+        continue;
+      }
+      const [tx, ty] = end(p.to);
+      if (p.from.w === p.to.w) {
+        ctx.beginPath();
+        const k = !ink && p.from.mouth ? (lw * 2.5) / Math.hypot(p.from.dx, p.from.dy) : 0;
+        ctx.moveTo(fx + p.from.dx * k, fy + p.from.dy * k);
+        ctx.lineTo(fx, fy);
+        ctx.quadraticCurveTo(cx, cy, tx, ty);
+        overhang(p.to, tx, ty);
+        ctx.lineWidth = width(p.from);
+        ctx.stroke();
+      } else {
+        // Two widths: split the curve at its middle, each half with its own width.
+        const [mx, my] = p.mid!;
+        for (const [l, x, y] of [[p.from, fx, fy], [p.to, tx, ty]] as const) {
+          ctx.beginPath();
+          ctx.moveTo(mx, my);
+          ctx.quadraticCurveTo((x + cx) / 2, (y + cy) / 2, x, y);
+          overhang(l, x, y);
+          ctx.lineWidth = width(l);
+          ctx.stroke();
+        }
+      }
+    }
+    if (spring) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, width(spring) / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  };
+  stroke(ink);
 }
 
 function hasRoad(s: Readonly<GameState>, x: number, y: number): boolean {
@@ -284,14 +421,22 @@ export class LigneClaireMapRenderer implements MapRenderer {
       if (t.tile.p) drawFurrows(ctx, t.px, t.py, z, LAND[t.tile.t], lw);
       if (hasRoad(s, t.x, t.y)) drawRoads(ctx, s, t.x, t.y, t.px, t.py, z, lw);
     }
+    const rivers: { t: (typeof tiles)[number]; links: RiverLink[] }[] = [];
     for (const t of tiles) {
       const cx = t.px + z / 2;
       const cy = t.py + z / 2;
+      const river = t.tile.rv ? riverLinks(s, t.x, t.y) : [];
       if (t.tile.t === 'hills') hills(ctx, cx, cy, z * 0.9, LAND.hills, lw);
       else if (t.tile.t === 'mountains') mountains(ctx, cx, cy, z * 0.95, LAND.mountains, lw);
-      else if (t.tile.f) drawForest(ctx, t.tile, t.x, t.y, t.px, t.py, z, lw);
+      else if (t.tile.f) drawForest(ctx, t.tile, t.x, t.y, t.px, t.py, z, lw, river.length ? (sx, sy) => nearRiver(river, sx, sy) : undefined);
+      if (river.length) rivers.push({ t, links: river });
+    }
+    // Rivers over the landscape (trees keep clear of them), roads crossing on bridges.
+    for (const ink of [true, false]) for (const r of rivers) drawRiver(ctx, r.links, r.t.px, r.t.py, z, lw, ink);
+    for (const { t } of rivers) if (hasRoad(s, t.x, t.y)) drawRoads(ctx, s, t.x, t.y, t.px, t.py, z, lw);
+    for (const t of tiles) {
       if (t.tile.b) drawBonus(ctx, t.px, t.py, z, lw);
-      if (t.tile.lcr) ruins(ctx, cx, cy, z * 0.7, lw);
+      if (t.tile.lcr) ruins(ctx, t.px + z / 2, t.py + z / 2, z * 0.7, lw);
     }
 
     // 4. A light paper wash over what we know but cannot currently see.

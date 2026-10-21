@@ -36,6 +36,13 @@ export interface Tile {
   b?: boolean;
   /** Lost City Rumour. */
   lcr?: boolean;
+  /** River: 1 minor, 2 major. A fixed map feature on land; absent means no river. See rivers.ts. */
+  rv?: 1 | 2;
+  /**
+   * Where the river runs: one bit per neighbour in `DIRECTIONS` order (n 1, ne 2, e 4, se 8, s 16,
+   * sw 32, w 64, nw 128). A bit towards a water tile is the river's mouth.
+   */
+  rd?: number;
   /** European nation that bought or took this land from the natives. */
   claim?: NationId;
 }

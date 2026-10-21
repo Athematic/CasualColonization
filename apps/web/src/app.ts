@@ -24,6 +24,7 @@ import {
   settlementName,
   serialize,
   tileAt,
+  tileDescription,
   unitPosition,
   unitsAboard,
   unitsAt,
@@ -692,6 +693,9 @@ export class App {
         const t = this.tileAtEvent(e);
         if (!this.hover || t.x !== this.hover.x || t.y !== this.hover.y) {
           this.hover = t;
+          // Tile info on hover: terrain, river, road.
+          const tile = tileAt(this.state, t.x, t.y);
+          c.title = tile && this.knows(t.y * this.state.map.width + t.x) ? tileDescription(tile) : '';
           this.requestRender(true);
         }
       }

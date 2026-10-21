@@ -12,6 +12,10 @@
  *   d  desert       D  scrub forest       t  tundra      T  boreal forest
  *   a  arctic       h  hills              ^  mountains
  *
+ * Rivers are an optional list of courses in tile coordinates, one river per line, from the
+ * source to the water it runs into (or the river it joins); the format is described at
+ * `parseRivers` in rivers.ts.
+ *
  * Native settlements are placed by region rules: each tribe lists rectangles of the
  * map and how many settlements it should have there. The game seed picks the exact
  * spots, and also sprinkles bonus resources and Lost City Rumours.
@@ -19,6 +23,7 @@
 import type { TribeId } from '../rules/nations.js';
 import { TERRAIN, type TerrainId } from '../rules/terrain.js';
 import { randInt } from '../rng.js';
+import { parseRivers } from '../rivers.js';
 import { entryPoints, newSettlement, sprinkleExtras, type EntrySide, type GeneratedWorld } from '../mapgen.js';
 import type { GameMap, Settlement, Tile } from '../types.js';
 import { americas } from './americas.js';
@@ -40,6 +45,8 @@ export interface StoredMap {
   description: string;
   /** Rows of terrain characters, see the legend above. Blank lines at either end are ignored. */
   rows: string;
+  /** River courses, one per line, see `parseRivers` in rivers.ts. Optional. */
+  rivers?: string;
   tribes: TribeRegion[];
   /** Rows (inclusive) along the arrival edge where European expeditions arrive. Defaults to the whole height. */
   entryRows?: [number, number];
@@ -79,7 +86,9 @@ export function parseStoredMap(def: StoredMap): GameMap {
       tiles.push(forest ? { t, f: true } : { t });
     }
   });
-  return { width, height: lines.length, tiles };
+  const map = { width, height: lines.length, tiles };
+  if (def.rivers) parseRivers(map, def.rivers, def.id);
+  return map;
 }
 
 /** Builds the world for a stored map. The rng only places settlements, bonuses and rumours. */
