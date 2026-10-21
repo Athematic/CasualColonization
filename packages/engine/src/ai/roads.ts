@@ -2,11 +2,13 @@
  * Road building for the advanced computer levels. Once a pioneer has nothing left to plow or
  * clear, it lays roads: first along the worked tiles that a road makes richer (lumber, ore,
  * silver, furs), then along routes joining each colony to its nearest neighbour and inland
- * colonies to the nearest port, so troops, colonists and wagon trains move faster.
+ * colonies to the nearest port, so troops, colonists and wagon trains move faster. Stretches a
+ * river already makes fast are left without a road.
  */
 import { buildTargetCost, equipInColony, leaveColony } from '../colony.js';
 import { canImprove, findPath, setDestination, startImprovement } from '../movement.js';
 import { colonyAt, colonyWorkers, distance, isCoastal, isWater, neighbours, settlementAt, tileAt, unitPosition } from '../queries.js';
+import { riverLinked } from '../rivers.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
 import { ownColonies } from './common.js';
@@ -57,7 +59,12 @@ export function roadTargets(s: GameState, p: Player): Spot[] {
       const id = c.id < o.id ? `${c.id}-${o.id}` : `${o.id}-${c.id}`;
       if (links.has(id)) continue;
       links.add(id);
-      for (const t of roadRoute(s, p, c, o) ?? []) add(t);
+      // A tile reached and left along the river moves as fast as a road already.
+      const full = [c, ...(roadRoute(s, p, c, o) ?? []), o];
+      for (let k = 1; k < full.length - 1; k++) {
+        const along = (a: Spot, b: Spot) => riverLinked(s.map, a.x, a.y, b.x, b.y);
+        if (!along(full[k - 1], full[k]) || !along(full[k], full[k + 1])) add(full[k]);
+      }
     }
   }
   byNation.set(key, out);
@@ -90,7 +97,7 @@ export function roadRoute(s: GameState, p: Player, from: Spot, to: Spot): Spot[]
       if (isWater(tile) || settlementAt(s, n.x, n.y)) continue;
       const colony = colonyAt(s, n.x, n.y);
       if (colony && j !== goal && colony.owner !== p.id) continue;
-      const step = tile.r || colony ? 0.25 : tile.t === 'mountains' ? 3 : 1;
+      const step = tile.r || colony || riverLinked(s.map, x, y, n.x, n.y) ? 0.25 : tile.t === 'mountains' ? 3 : 1;
       const c = cost.get(i)! + step;
       if (c < (cost.get(j) ?? Infinity)) {
         cost.set(j, c);

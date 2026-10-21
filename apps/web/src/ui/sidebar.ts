@@ -22,7 +22,8 @@ import {
   recruitPrice,
   serialize,
   tileAt,
-  tileName,
+  tileDescription,
+  RIVER_DIRS,
   unitName,
   unitPosition,
   unitsAboard,
@@ -223,7 +224,7 @@ export class Sidebar {
           h('div', { class: 'unit-name' }, unitName(u)),
           h('div', { class: 'muted' }, `Moves ${movesText(u, s)}${u.role === 'pioneer' ? ` · Tools ${u.tools}` : ''}`),
           h('div', { class: 'muted' }, orders),
-          tile ? h('div', { class: 'muted' }, `${tileName(tile)}${tile.p ? ', plowed' : ''}${tile.r ? ', road' : ''}`) : null)),
+          tile ? h('div', { class: 'muted' }, tileDescription(tile)) : null)),
       aboard.length || cargo.length
         ? h('div', { class: 'cargo' },
             aboard.map((p) => h('button', { class: 'chip', title: `Select ${unitName(p)}`, onclick: () => app.select(p.id) }, icon({ kind: 'unit', type: p.type, role: p.role, nation: p.owner }, 28), unitName(p))),
@@ -288,6 +289,23 @@ export class Sidebar {
         ctx.fillStyle = style.tileColor(s.map.tiles[i]);
         ctx.fillRect(x * scale, y * scale, scale, scale);
       }
+    }
+    // Rivers as thin lines in the style's water colour.
+    ctx.strokeStyle = style.tileColor({ t: 'ocean' });
+    ctx.lineCap = 'round';
+    for (let i = 0; i < s.map.tiles.length; i++) {
+      const tile = s.map.tiles[i];
+      if (!tile.rv || !tile.rd || !this.app.knows(i)) continue;
+      const cx = (i % s.map.width) * scale + scale / 2;
+      const cy = Math.floor(i / s.map.width) * scale + scale / 2;
+      ctx.lineWidth = tile.rv === 2 ? 1.6 : 1;
+      ctx.beginPath();
+      RIVER_DIRS.forEach(([dx, dy], d) => {
+        if (!(tile.rd! & (1 << d))) return;
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + (dx * scale) / 2, cy + (dy * scale) / 2);
+      });
+      ctx.stroke();
     }
     for (const col of Object.values(s.colonies)) {
       if (!this.app.knows(col.y * s.map.width + col.x)) continue;

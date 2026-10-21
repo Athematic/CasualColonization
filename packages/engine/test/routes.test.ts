@@ -83,7 +83,8 @@ describe('trade routes', () => {
       { at: port.id, load: [], unload: [{ good: 'furs' }, { good: 'ore' }] },
     ]);
     const wagon = createUnit(s, 'england', 'wagonTrain', { kind: 'map', x: inland.x, y: inland.y });
-    wagon.moves = 6;
+    // No moves left this turn, so it waits loaded (a river could take it all the way at once).
+    wagon.moves = 0;
     expect(applyCommand(s, { type: 'assignRoute', unitId: wagon.id, routeId }).ok).toBe(true);
     // Loaded on the spot: all furs, and ore above the 50 kept back.
     expect(inland.goods.furs).toBe(0);

@@ -2,7 +2,7 @@
  * A deliberately plain board-game style. It exists to show (and test) that the game
  * shell works with any style plugin, and is a starting point for new styles.
  */
-import { NATIONS, TERRAIN, TRIBES, UNIT_TYPES, colonyWorkers, type GameState, type Tile, type TerrainId } from '@cc/engine';
+import { NATIONS, RIVER_DIRS, TERRAIN, TRIBES, UNIT_TYPES, colonyWorkers, type GameState, type Tile, type TerrainId } from '@cc/engine';
 import {
   isTileExplored,
   isTileVisible,
@@ -88,6 +88,24 @@ class SchematicRenderer implements MapRenderer {
           ctx.fillStyle = 'rgba(17,20,24,0.35)';
           ctx.fillRect(p.x, p.y, z, z);
         }
+      }
+    }
+    // Rivers: plain blue lines from each tile's centre towards the neighbours the river links.
+    ctx.lineCap = 'round';
+    for (let y = r.y0; y <= r.y1; y++) {
+      for (let x = r.x0; x <= r.x1; x++) {
+        const tile = s.map.tiles[y * s.map.width + x];
+        if (!tile?.rv || !tile.rd || !isTileExplored(scene, x, y)) continue;
+        const p = tileToScreen(scene, x, y);
+        ctx.strokeStyle = isTileVisible(scene, x, y) ? '#4aa3df' : '#3a7fae';
+        ctx.lineWidth = Math.max(1.5, z * (tile.rv === 2 ? 0.16 : 0.08));
+        ctx.beginPath();
+        RIVER_DIRS.forEach(([dx, dy], i) => {
+          if (!(tile.rd! & (1 << i))) return;
+          ctx.moveTo(p.x + z / 2, p.y + z / 2);
+          ctx.lineTo(p.x + z / 2 + (dx * z) / 2, p.y + z / 2 + (dy * z) / 2);
+        });
+        ctx.stroke();
       }
     }
     for (const st of Object.values(s.settlements)) {

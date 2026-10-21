@@ -21,7 +21,7 @@ import {
   PRODUCT_NAMES,
   ROLES,
   tileAt,
-  tileName,
+  tileDescription,
   tileYield,
   unitName,
   unitsAboard,
@@ -145,7 +145,7 @@ export class ColonyScreen implements Screen {
         }
         if (dx === 0 && dy === 0) {
           const out = centreProduction(s, colony);
-          cells.push(h('div', { class: 'cell centre', style, title: `${tileName(tile)} (colony square)` },
+          cells.push(h('div', { class: 'cell centre', style, title: `${tileDescription(tile)} (colony square)` },
             h('div', { class: 'yields' }, (Object.entries(out) as [GoodId, number][]).map(([g, n]) => h('span', { class: 'yield' }, icon({ kind: 'product', product: g }, 18), n)))));
           continue;
         }
@@ -157,7 +157,7 @@ export class ColonyScreen implements Screen {
         cells.push(h('button', {
           class: `cell${worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}${native ? ' native' : ''}`,
           style,
-          title: `${tileName(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : native ? ` (land of the ${TRIBES[native.tribe].name})` : ''}`,
+          title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : native ? ` (land of the ${TRIBES[native.tribe].name})` : ''}`,
           onclick: () => this.clickTile(colony, x, y, worker),
         },
         worker ? icon({ kind: 'unit', type: worker.type, role: 'none', nation: worker.owner }, 40, unitName(worker)) : null,

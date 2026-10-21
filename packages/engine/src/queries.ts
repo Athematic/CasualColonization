@@ -48,6 +48,12 @@ export function tileName(tile: Tile): string {
   return tile.f && def.forest ? def.forest.name : def.name;
 }
 
+/** The tile's name with its river, road and plowing, for tile info in the interface. */
+export function tileDescription(tile: Tile): string {
+  const river = tile.rv === 2 ? 'major river' : tile.rv === 1 ? 'minor river' : '';
+  return [tileName(tile), river, tile.p ? 'plowed' : '', tile.r ? 'road' : ''].filter(Boolean).join(', ');
+}
+
 export function tileDefence(tile: Tile): number {
   return tile.f ? FOREST_DEFENCE : TERRAIN[tile.t].defence;
 }

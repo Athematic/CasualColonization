@@ -46,6 +46,9 @@ export function siteScore(s: GameState, x: number, y: number): number {
     for (const g of GOODS) if (g !== 'food') best = Math.max(best, baseTileYield(tile, g));
     score += best * 0.6;
   }
+  // A river through the centre: road-speed travel inland, and its yield bonus counted above.
+  const centre = tileAt(s, x, y)!;
+  if (centre.rv) score += 2 * centre.rv;
   if (water > 0 && water < 6) score += 8;
   if (water >= 6) score -= 10;
   return score;

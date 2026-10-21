@@ -1,6 +1,7 @@
 import { TRIBES, TRIBE_ORDER, type TribeId } from './rules/nations.js';
 import { TERRAIN, type TerrainId } from './rules/terrain.js';
 import { random, randInt, pick } from './rng.js';
+import { generateRivers } from './rivers.js';
 import type { GameMap, MapSize, Settlement, Tile } from './types.js';
 
 export const MAP_SIZES: Record<MapSize, { width: number; height: number }> = {
@@ -117,6 +118,9 @@ export function generateMap(rng: { rng: number }, size: MapSize): GeneratedWorld
   }
 
   const map = { width, height, tiles };
+  // Rivers draw on their own generator, seeded from this one without advancing it, so the rest of
+  // the world (bonuses, rumours, settlements) stays what the seed has always made.
+  generateRivers({ rng: (rng.rng ^ 0x2c1b3c6d) | 0 }, map, elev, wet);
   sprinkleExtras(rng, map);
   const settlements = placeSettlements(rng, tiles, width, height);
   for (const st of settlements) {

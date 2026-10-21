@@ -42,6 +42,8 @@ export const FOREST: Partial<Record<TerrainId, { color: string; shape: TreeShape
 };
 
 export const ROAD = '#b9844c';
+/** River water: the sea's colour, so a river opens into the sea at its mouth. */
+export const RIVER = '#8ed0ec';
 export const TRUNK = '#8a5a32';
 export const ROOF = '#d23c2a';
 export const WALL = '#fbf3df';
