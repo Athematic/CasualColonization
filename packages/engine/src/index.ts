@@ -21,7 +21,7 @@ export * from './diplomacy.js';
 export * from './independence.js';
 export * from './score.js';
 export * from './cheats.js';
-export { MAP_SIZES, entryPoints } from './mapgen.js';
+export { MAP_SIZES, entryPoints, type EntrySide } from './mapgen.js';
 export { STORED_MAPS, storedMap, parseStoredMap, type StoredMap, type TribeRegion } from './maps/index.js';
 export { createWorld } from './world.js';
 export { RuleError } from './errors.js';

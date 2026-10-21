@@ -73,7 +73,7 @@ export class EuropeScreen implements Screen {
         this.market(ship),
         h('div', { class: 'card' },
           h('h3', null, 'Ships in port'),
-          ships.length ? ships.map((x) => this.shipCard(x)) : h('p', { class: 'muted small' }, 'No ships in port. Send a ship east onto the high seas and choose “Sail to Europe”.'),
+          ships.length ? ships.map((x) => this.shipCard(x)) : h('p', { class: 'muted small' }, 'No ships in port. Send a ship out onto the high seas and choose “Sail to Europe”.'),
           sailing.length ? h('h3', null, 'At sea') : null,
           sailing.map((x) => h('div', { class: 'muted small' }, `${unitName(x)} — ${x.loc.kind === 'sailing' ? `${x.loc.to === 'europe' ? 'to Europe' : 'to the New World'}, ${x.loc.turnsLeft} turn${x.loc.turnsLeft === 1 ? '' : 's'}` : ''}`)),
           h('h3', null, 'On the docks'),
