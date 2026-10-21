@@ -1,6 +1,8 @@
 import {
   canFoundColony,
   canImprove,
+  canUseRoutes,
+  routeStopName,
   colonyAt,
   AI_LEVEL_INFO,
   colonyWorkers,
@@ -101,6 +103,7 @@ export class Sidebar {
       h('div', { class: 'row' },
         h('button', { class: 'btn', onclick: () => app.openEurope(), title: 'Europe (E)' }, 'Europe'),
         h('button', { class: 'btn', onclick: () => app.openDiplomacy(), title: 'Foreign affairs (D)' }, 'Affairs'),
+        h('button', { class: 'btn', onclick: () => app.openRoutes(), title: 'Trade routes (T)' }, 'Routes'),
         h('button', { class: 'btn', onclick: () => app.selectNext(), title: 'Next unit (W)', disabled: !awaiting }, `Next unit${awaiting ? ` (${awaiting})` : ''}`),
       ),
       h('button', { class: `btn primary end-turn${myTurn && !awaiting ? ' pulse' : ''}`, onclick: () => void app.endTurn(), disabled: !myTurn, title: 'End turn (Enter)' }, 'End turn'),
@@ -172,7 +175,8 @@ export class Sidebar {
     const def = UNIT_TYPES[u.type];
     const aboard = unitsAboard(s, u);
     const cargo = GOODS.filter((g) => (u.cargo?.[g] ?? 0) > 0);
-    const orders = u.repair ? `Under repair (${u.repair} turns)` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? 'Sailing for Europe' : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
+    const route = u.route && s.routes?.[u.route.id];
+    const orders = u.repair ? `Under repair (${u.repair} turns)` : route ? `Trade route: ${route.name}${route.stops.length ? `, next ${routeStopName(s, route.stops[u.route!.stop % route.stops.length])}` : ''}` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? 'Sailing for Europe' : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
     const mine = u.owner === app.viewer;
     const can = (fn: () => string | null) => mine && app.isMyTurn() && fn() === null;
     const terrain = tile?.f ? 'clear' : 'plow';
@@ -189,12 +193,13 @@ export class Sidebar {
         app.gotoMode = true;
         toast('Click where the unit should go.');
       });
+      if (canUseRoutes(u)) btn(u.route ? 'Change route…' : 'Trade route…', 'T', () => app.openRoutes(u.id));
       if (isShip(u)) btn('Sail to Europe', '', () => app.unitCommand('gotoEurope'));
       if (u.type === 'treasure') btn('Ship treasure home', '', () => { if (app.dispatch({ type: 'cashTreasure', unitId: u.id })) app.afterUnitAction(); });
       btn('Fortify', 'F', () => app.unitCommand('fortify'), !isShip(u));
       btn('Sentry', 'S', () => app.unitCommand('sentry'));
       btn('Skip', 'Space', () => app.unitCommand('skip'));
-      if (u.state !== 'active' || u.dest || u.work) btn('Clear orders', '', () => app.unitCommand('clearOrders'));
+      if (u.state !== 'active' || u.dest || u.work || u.route) btn('Clear orders', '', () => app.unitCommand('clearOrders'));
       const colony = pos && colonyAt(s, pos.x, pos.y);
       if (colony && colony.owner === app.viewer) btn('Open colony', '', () => app.openColony(colony.id));
       btn('Disband', '', () => app.unitCommand('disband'));
@@ -244,7 +249,7 @@ export class Sidebar {
         h('button', { class: 'btn small', onclick: () => toast(saveManual(serialize(app.state)) ? 'Game saved in this browser.' : 'Could not save here.') }, 'Save'),
         h('button', { class: 'btn small', onclick: () => downloadSave(serialize(app.state), `casual-colonization-${app.state.turn}.json`) }, 'Export save'),
         h('button', { class: 'btn small', onclick: () => app.exitToMenu() }, 'Main menu')),
-      h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · D foreign affairs · Enter end turn · Right-click or Shift-click to send a unit.'));
+      h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · D foreign affairs · T trade routes · Enter end turn · Right-click or Shift-click to send a unit.'));
     details.addEventListener('toggle', () => (this.menuOpen = details.open));
     return details;
   }

@@ -5,6 +5,7 @@ import { advanceWork, continueOrders, placeOnMap } from './movement.js';
 import { processNatives } from './natives.js';
 import { processCongress } from './fathers.js';
 import { processIndependence } from './independence.js';
+import { processRoutes } from './routes.js';
 import { formatDate, maxMoves, message, unitName, unitPosition } from './queries.js';
 import { checkTimeLimit } from './score.js';
 import type { GameState, Player, Unit } from './types.js';
@@ -30,8 +31,10 @@ export function beginPlayerTurn(s: GameState, p: Player): void {
     if (u.work) advanceWork(s, u);
   }
   for (const u of Object.values(s.units)) {
-    if (u.owner === p.id && u.dest && s.units[u.id]) continueOrders(s, u);
+    if (u.owner === p.id && u.dest && !u.route && s.units[u.id]) continueOrders(s, u);
   }
+  // Trade routes run here, before the player or the computer gives any orders this turn.
+  processRoutes(s, p.id);
 }
 
 /** Ends the current player's turn, runs AI players, and advances the year when everyone has moved. */
@@ -76,7 +79,7 @@ function advance(s: GameState): void {
 /** Units of a player that still want orders this turn. */
 export function unitsAwaitingOrders(s: GameState, nation: Player['id']): string[] {
   return Object.values(s.units)
-    .filter((u) => u.owner === nation && u.moves > 0 && u.state === 'active' && !u.work && !u.dest)
+    .filter((u) => u.owner === nation && u.moves > 0 && u.state === 'active' && !u.work && !u.dest && !u.route)
     .filter((u) => u.loc.kind === 'map')
     .map((u) => u.id);
 }

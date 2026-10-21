@@ -1155,3 +1155,103 @@ button.good:not(:disabled):hover {
     max-width: none;
   }
 }
+
+/* ---- Trade routes ---- */
+
+.routes-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 0.7rem;
+  margin-top: 0.6rem;
+  align-items: start;
+}
+
+.route-items,
+.route-units,
+.stops {
+  list-style: none;
+  margin: 0.3rem 0 0.6rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.route-items li {
+  padding: 0.35rem 0.45rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+}
+
+.route-items li.selected {
+  border-style: solid;
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+
+.route-name {
+  font-weight: 600;
+}
+
+.field.grow {
+  flex: 1 1 12rem;
+}
+
+.stop {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.stop-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.6rem;
+}
+
+.stop-tools {
+  margin-left: auto;
+  display: flex;
+  gap: 0.2rem;
+}
+
+.cargo-rules {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.rule-label {
+  min-width: 3.2rem;
+}
+
+.rule-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.rule-amount input {
+  width: 4.2rem;
+}
+
+.route-units li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.assign {
+  align-items: center;
+}
+
+@media (max-width: 1000px) {
+  .routes-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

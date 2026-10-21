@@ -33,6 +33,8 @@ export interface ArenaEntry {
   gold: number;
   fathers: number;
   independence: string;
+  /** Units of goods spoiled in full warehouses over the game. */
+  spoiled: number;
   /** Highest score in its game (ties count for all). */
   won: boolean;
 }
@@ -48,6 +50,7 @@ export interface ArenaSummary {
   fathers: number;
   independenceWon: number;
   independenceLost: number;
+  spoiled: number;
 }
 
 /** Plays one computer-only game and reports every nation's standing at the end. */
@@ -73,6 +76,7 @@ export function standing(s: GameState, seed: number, nation: NationId, level: Ai
     gold: p.gold,
     fathers: p.fathers.length,
     independence: p.independence,
+    spoiled: p.goodsSpoiled ?? 0,
   };
 }
 
@@ -111,6 +115,7 @@ export function summarise(entries: ArenaEntry[]): ArenaSummary[] {
         fathers: mean((e) => e.fathers),
         independenceWon: rows.filter((e) => e.independence === 'won').length,
         independenceLost: rows.filter((e) => e.independence === 'lost').length,
+        spoiled: mean((e) => e.spoiled),
       };
     })
     .sort((a, b) => b.score - a.score);
@@ -118,10 +123,10 @@ export function summarise(entries: ArenaEntry[]): ArenaSummary[] {
 
 /** A Markdown table of a summary. */
 export function formatArena(summary: ArenaSummary[]): string {
-  const head = '| Level | Nations | Wins | Score | Colonies | Colonists | Gold | Fathers | Independence won / lost |';
-  const rule = '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
+  const head = '| Level | Nations | Wins | Score | Colonies | Colonists | Gold | Fathers | Independence won / lost | Goods spoiled |';
+  const rule = '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
   const rows = summary.map((r) =>
-    `| ${AI_LEVEL_INFO[r.level].name} | ${r.entries} | ${r.wins} | ${r.score} | ${r.colonies} | ${r.population} | ${r.gold} | ${r.fathers} | ${r.independenceWon} / ${r.independenceLost} |`,
+    `| ${AI_LEVEL_INFO[r.level].name} | ${r.entries} | ${r.wins} | ${r.score} | ${r.colonies} | ${r.population} | ${r.gold} | ${r.fathers} | ${r.independenceWon} / ${r.independenceLost} | ${r.spoiled} |`,
   );
   return [head, rule, ...rows].join('\n');
 }

@@ -19,6 +19,7 @@ export * from './fathers.js';
 export * from './diplomacy.js';
 export * from './independence.js';
 export * from './score.js';
+export * from './routes.js';
 export { MAP_SIZES, entryPoints } from './mapgen.js';
 export { STORED_MAPS, storedMap, parseStoredMap, type StoredMap, type TribeRegion } from './maps/index.js';
 export { createWorld } from './world.js';

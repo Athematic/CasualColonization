@@ -25,7 +25,8 @@ import type { GoodId } from './rules/goods.js';
 import type { NationId, TribeId } from './rules/nations.js';
 import type { RoleId, UnitTypeId } from './rules/units.js';
 import { endTurn } from './turn.js';
-import type { BuildTarget, GameState, ImprovementKind, Job } from './types.js';
+import { assignRoute, createRoute, deleteRoute, editRoute, unassignRoute } from './routes.js';
+import type { BuildTarget, GameState, ImprovementKind, Job, RouteStop } from './types.js';
 
 export type Command =
   | { type: 'move'; unitId: string; dir: Direction }
@@ -70,9 +71,15 @@ export type Command =
   | { type: 'proposePeace'; nation: NationId }
   | { type: 'giftTribe'; tribe: TribeId; gold: number }
   | { type: 'declareIndependence' }
+  | { type: 'createRoute'; name: string; stops?: RouteStop[] }
+  | { type: 'editRoute'; routeId: string; name?: string; stops?: RouteStop[] }
+  | { type: 'deleteRoute'; routeId: string }
+  | { type: 'assignRoute'; unitId: string; routeId: string }
+  | { type: 'unassignRoute'; unitId: string }
   | { type: 'endTurn' };
 
-export type CommandResult = { ok: true; text?: string } | { ok: false; error: string };
+/** `id` names what the command created (a new trade route). */
+export type CommandResult = { ok: true; text?: string; id?: string } | { ok: false; error: string };
 
 function ownUnit(s: GameState, nation: NationId, unitId: string) {
   const u = s.units[unitId];
@@ -113,6 +120,7 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
   const nation = currentPlayer(s).id;
   try {
     let text: string | undefined;
+    let id: string | undefined;
     switch (cmd.type) {
       case 'move':
         ownUnit(s, nation, cmd.unitId);
@@ -130,6 +138,7 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         const u = ownUnit(s, nation, cmd.unitId);
         delete u.dest;
         delete u.work;
+        delete u.route;
         u.state = 'active';
         break;
       }
@@ -294,6 +303,26 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
       case 'declareIndependence':
         text = declareIndependence(s, nation);
         break;
+      case 'createRoute': {
+        const route = createRoute(s, nation, cmd.name, cmd.stops);
+        id = route.id;
+        text = `The ${route.name} route has been set up.`;
+        break;
+      }
+      case 'editRoute':
+        editRoute(s, nation, cmd.routeId, { name: cmd.name, stops: cmd.stops });
+        break;
+      case 'deleteRoute':
+        deleteRoute(s, nation, cmd.routeId);
+        break;
+      case 'assignRoute':
+        ownUnit(s, nation, cmd.unitId);
+        assignRoute(s, cmd.unitId, cmd.routeId);
+        break;
+      case 'unassignRoute':
+        ownUnit(s, nation, cmd.unitId);
+        unassignRoute(s, cmd.unitId);
+        break;
       case 'endTurn':
         endTurn(s);
         break;
@@ -302,7 +331,7 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         fail(`Unknown command ${(never as { type: string }).type}`);
       }
     }
-    return { ok: true, text };
+    return id ? { ok: true, text, id } : { ok: true, text };
   } catch (e) {
     if (e instanceof RuleError) return { ok: false, error: e.message };
     throw e;

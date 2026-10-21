@@ -1,5 +1,6 @@
 import {
   canFoundColony,
+  canUseRoutes,
   canImprove,
   colonyAt,
   describeMove,
@@ -40,6 +41,7 @@ import { ColonyScreen } from './ui/colony.js';
 import { choose, confirmDialog, promptDialog, toast } from './ui/dialogs.js';
 import { DiplomacyScreen } from './ui/diplomacy.js';
 import { EuropeScreen } from './ui/europe.js';
+import { RoutesScreen } from './ui/routes.js';
 import { Sidebar } from './ui/sidebar.js';
 
 export interface Screen {
@@ -575,6 +577,11 @@ export class App {
     this.showScreen(new DiplomacyScreen(this));
   }
 
+  /** Trade routes; with a ship or wagon train, ready to assign it. */
+  openRoutes(unitId?: string): void {
+    this.showScreen(new RoutesScreen(this, unitId));
+  }
+
   private showScreen(screen: Screen): void {
     this.closeScreen();
     this.screen = screen;
@@ -779,6 +786,10 @@ export class App {
       },
       e: () => this.openEurope(),
       d: () => this.openDiplomacy(),
+      t: () => {
+        const u = this.selectedUnit();
+        this.openRoutes(u && u.owner === this.viewer && canUseRoutes(u) ? u.id : undefined);
+      },
       enter: () => void this.endTurn(),
       escape: () => {
         this.gotoMode = false;

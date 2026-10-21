@@ -93,6 +93,8 @@ export interface Player {
   warSince: Partial<Record<string, number>>;
   /** Colonies held when independence was declared. */
   coloniesAtDeclaration?: number;
+  /** Units of goods lost to full warehouses over the game; missing means none. */
+  goodsSpoiled?: number;
 }
 
 export type Job =
@@ -132,6 +134,37 @@ export interface Unit {
   against?: NationId;
   dest?: { x: number; y: number } | { europe: true };
   cargo?: Partial<Record<GoodId, number>>;
+  /** The trade route a ship or wagon train follows, and the index of the stop it is heading for. */
+  route?: { id: string; stop: number };
+}
+
+/** What a carrier loads or unloads of one good at a trade route stop. */
+export interface RouteCargo {
+  good: GoodId;
+  /**
+   * Loading in a colony: units left in the warehouse (default 0). Loading in Europe: units to
+   * have aboard after buying (default 100). Unloading in a colony: fill the warehouse up to this
+   * (default its capacity, so nothing spoils). Unloading in Europe: ignored, all of it is sold.
+   */
+  amount?: number;
+}
+
+/** One stop of a trade route: a colony, or Europe for ships. */
+export interface RouteStop {
+  /** Colony id, or 'europe'. */
+  at: string;
+  load: RouteCargo[];
+  unload: RouteCargo[];
+  /** In Europe: take aboard the colonists waiting on the docks. They go ashore at the next colony stop. */
+  passengers?: boolean;
+}
+
+/** A named, ordered round trip that ships and wagon trains follow on their own. */
+export interface TradeRoute {
+  id: string;
+  owner: NationId;
+  name: string;
+  stops: RouteStop[];
 }
 
 export type BuildTarget = { kind: 'building'; id: BuildingKind } | { kind: 'unit'; id: UnitTypeId };
@@ -202,5 +235,7 @@ export interface GameState {
   tribes: Tribe[];
   settlements: Record<string, Settlement>;
   messages: GameMessage[];
+  /** Trade routes by id; missing means none. */
+  routes?: Record<string, TradeRoute>;
   gameOver?: { turn: number; reason: string; winner?: NationId; scores: Partial<Record<NationId, number>> };
 }

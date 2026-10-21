@@ -421,6 +421,7 @@ export function processColony(s: GameState, colony: Colony): void {
     if (g === 'food') continue;
     if (colony.goods[g] > cap) {
       message(s, `${colony.goods[g] - cap} ${GOOD_DEFS[g].name.toLowerCase()} spoiled in ${colony.name}'s warehouse.`, colony.owner, colony);
+      p.goodsSpoiled = (p.goodsSpoiled ?? 0) + colony.goods[g] - cap;
       colony.goods[g] = cap;
     }
     if (colony.goods[g] < 0) colony.goods[g] = 0;
