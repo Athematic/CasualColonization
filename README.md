@@ -16,7 +16,7 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-Or build a static site with `npm run build` (output in `apps/web/dist`), or a single self-contained HTML file with `npm run build:single`. The GitHub Pages workflow publishes it automatically once Pages is enabled for the repository (*Settings → Pages → Source: GitHub Actions*).
+Or build a static site with `npm run build` (output in `apps/web/dist`), or a single self-contained HTML file with `npm run build:single`. The GitHub Pages workflow builds and publishes it on every push. In *Settings → Pages → Build and deployment*, set **Source** to **GitHub Actions**; "Deploy from a branch" would publish the raw repository files (the README) instead of the built game.
 
 ### Controls
 
