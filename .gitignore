@@ -7,3 +7,7 @@ scripts/.*.mjs
 
 # image generator output (tools/image-gen)
 tools/image-gen/output/
+
+# sprite pipeline output and download cache (tools/sprite-pipeline)
+tools/sprite-pipeline/out/
+tools/sprite-pipeline/cache/

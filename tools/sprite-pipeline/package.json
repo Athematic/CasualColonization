@@ -1,0 +1,17 @@
+{
+  "name": "cc-sprite-pipeline",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Offline build step: sprite masters to per-size runtime sprites (smooth and pixel-art), a manifest and a contact sheet.",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "sharp": "0.34.3"
+  }
+}
