@@ -66,7 +66,7 @@ export const OUTLET_SAVES = 0.5;
 /** A raise is refused only when the boycott is reckoned to cost less than this share of what the raise costs. */
 export const REFUSAL_MARGIN = 0.7;
 /** Gold a trip to a partner's port costs per colonist waiting on the home docks (colonists board only at home). */
-export const COLONIST_TRIP_COST = 100;
+export const COLONIST_TRIP_COST = 250;
 /** Gold the partner's port must bring above the home port before a ship goes there. */
 export const PORT_MARGIN = 25;
 /** Triangle trading: least gain per unit, as a share of the buying price (and at least 1 gold). */
@@ -345,7 +345,7 @@ function colonistsForTrip(s: GameState, p: Player): number {
   let n = 0;
   for (const u of Object.values(s.units)) if (u.owner === p.id && u.loc.kind === 'europe' && !isShip(u)) n++;
   const price = recruitPrice(p);
-  return n + Math.min(3, Math.floor(Math.max(0, p.gold - 300) / price));
+  return n + Math.min(4, Math.floor(Math.max(0, p.gold - 300) / price));
 }
 
 /** What a ship's cargo fetches in a port, after the port's tax. Supplies are not for sale. */

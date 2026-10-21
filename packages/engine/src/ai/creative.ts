@@ -1,6 +1,7 @@
 import { defencePower } from '../combat.js';
 import { rebelShare } from '../independence.js';
 import { colonyAt, distance, isShip, unitsAt } from '../queries.js';
+import { isFavoured } from '../relations.js';
 import { random } from '../rng.js';
 import type { GameState, Player } from '../types.js';
 import { ownColonies } from './common.js';
@@ -40,13 +41,14 @@ function chooseFocus(s: GameState, p: Player, base: AiProfile): AiFocus {
   return 'develop';
 }
 
-/** A foreign colony close to ours with nobody armed inside. */
+/** A foreign colony close to ours with nobody armed inside (not a Favoured Nation's). */
 function opening(s: GameState, p: Player): boolean {
   const ours = ownColonies(s, p);
   const spare = Object.values(s.units).filter((u) => u.owner === p.id && (u.role === 'soldier' || u.role === 'dragoon')).length - ours.length;
   if (spare < 2) return false;
   return Object.values(s.colonies).some((c) => {
-    if (c.owner === p.id || c.owner === 'crown') return false;
+    // A Favoured Nation's colonies are no opening: it will not be attacked.
+    if (c.owner === p.id || c.owner === 'crown' || isFavoured(s, p.id, c.owner)) return false;
     if (!ours.some((o) => distance(o.x, o.y, c.x, c.y) <= 7)) return false;
     const armed = unitsAt(s, c.x, c.y).filter((u) => u.owner === c.owner && !isShip(u) && (u.role === 'soldier' || u.role === 'dragoon'));
     return armed.reduce((n, u) => n + defencePower(s, u), 0) === 0 && !!colonyAt(s, c.x, c.y);

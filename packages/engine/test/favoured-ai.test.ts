@@ -230,13 +230,15 @@ describe('ports', () => {
     makeFavoured(s, 'england', 'france');
     const ship = createUnit(s, 'france', 'merchantman', { kind: 'map', x: 0, y: 0 });
     ship.cargo = { cigars: 100 };
+    // No gold for recruits, so the trip home brings no colonists.
+    fr.gold = 0;
     fr.tax = 40;
     en.tax = 0;
     expect(choosePort(s, fr, ship)).toBe('england');
     fr.tax = 0;
     en.tax = 40;
     expect(choosePort(s, fr, ship)).toBe('france');
-    // Colonists board only at home: six waiting outweigh the better price.
+    // Colonists board only at home: those waiting outweigh the better price.
     fr.tax = 40;
     en.tax = 0;
     for (let i = 0; i < 6; i++) createUnit(s, 'france', 'freeColonist', { kind: 'europe' });
