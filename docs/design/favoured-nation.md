@@ -21,7 +21,7 @@ Peaceful nations that trade with each other can become **Favoured Nations**. The
 3. **Trade routes between nations.** A trade route can stop at a foreign colony once that nation agrees to trade there (a trade agreement). Goods sold there pay that colony's prices. Until there are colony markets, a simple valuation such as a share of the port nation's price would do.
 4. **Relations.** Track for each pair of nations: years of peace (turns since the last war), the number of active trade routes between them, trade volume, attitude, and favoured status.
 5. **Computer players.** They need rules for proposing and accepting Favoured Nation, the "never declare war" rule, and port choice and triangle-trade planning (Creative level).
-6. **Saving.** This is a breaking change to the state. It is the moment to bump `SAVE_VERSION` to 3, with a migration that gives each nation the current shared prices.
+6. **Saving.** This is a breaking change to the state. `SAVE_VERSION` goes to 3 and **older saves are not converted**: loading one shows a clear message that saves from before 0.4 can't be loaded. This was agreed, since there is a single player so far. Migration code returns once others play.
 
 ## Decided details
 
