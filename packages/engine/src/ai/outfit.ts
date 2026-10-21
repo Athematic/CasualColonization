@@ -4,7 +4,7 @@
  * muskets. Without that the computer kept buying the same specialist over and over, because it
  * never saw a pioneer, scout or soldier arrive.
  */
-import { buyPrice, equipInEurope, train } from '../europe.js';
+import { buyPrice, equipInEurope, train, trainPrice } from '../europe.js';
 import type { GoodId } from '../rules/goods.js';
 import { PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from '../rules/units.js';
 import type { GameState, Player, Unit } from '../types.js';
@@ -21,7 +21,7 @@ export function outfitPrice(p: Player, role: RoleId): number {
 /** Price of a unit bought in Europe together with the equipment its speciality needs. */
 export function equippedPrice(p: Player, type: UnitTypeId): number {
   const def = UNIT_TYPES[type];
-  return (def.price ?? Infinity) + (def.expertRole ? outfitPrice(p, def.expertRole) : 0);
+  return trainPrice(p, type) + (def.expertRole ? outfitPrice(p, def.expertRole) : 0);
 }
 
 /** Trains a unit in Europe and equips it for its speciality. Returns the unit. */

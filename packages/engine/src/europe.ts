@@ -14,6 +14,7 @@ import {
 } from './queries.js';
 import { random, randInt, weightedPick } from './rng.js';
 import { noteTrade } from './stats.js';
+import { difficultyRules } from './rules/difficulty.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import { IMMIGRANT_WEIGHTS, PIONEER_MAX_TOOLS, PURCHASABLE, ROLES, TRAINABLE, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
 import type { GameState, MarketEntry, Player, Unit } from './types.js';
@@ -43,19 +44,27 @@ export function sellPrice(p: Player, good: GoodId): number {
 }
 
 export function buyPrice(p: Player, good: GoodId): number {
-  return p.market[good].price + GOOD_DEFS[good].spread;
+  return p.market[good].price + priceSpread(p, good);
+}
+
+/** Gap between buy and sell price, widened or narrowed by the nation's difficulty (at least 1). */
+export function priceSpread(p: Player, good: GoodId): number {
+  const spread = GOOD_DEFS[good].spread;
+  const m = difficultyRules(p).priceSpread;
+  return m === 1 ? spread : Math.max(1, Math.round(spread * m));
 }
 
 function adjustMarket(p: Player, good: GoodId, sold: number): void {
   const def = GOOD_DEFS[good];
   const m = p.market[good];
+  const elasticity = Math.max(1, Math.round(def.elasticity * difficultyRules(p).priceElasticity));
   m.volume += sold;
-  while (m.volume >= def.elasticity) {
-    m.volume -= def.elasticity;
+  while (m.volume >= elasticity) {
+    m.volume -= elasticity;
     m.price = Math.max(def.minPrice, m.price - 1);
   }
-  while (m.volume <= -def.elasticity) {
-    m.volume += def.elasticity;
+  while (m.volume <= -elasticity) {
+    m.volume += elasticity;
     // A price above the maximum (after the double-prices cheat) does not jump back down on a purchase.
     if (m.price < def.maxPrice) m.price += 1;
   }
@@ -63,7 +72,15 @@ function adjustMarket(p: Player, good: GoodId, sold: number): void {
 
 export function recruitPrice(p: Player): number {
   const progress = Math.min(1, p.crosses / p.crossesRequired);
-  return Math.max(80, Math.round((300 + 40 * p.recruited) * (1 - progress * 0.6)));
+  const cost = difficultyRules(p).recruitCost;
+  return Math.max(Math.round(80 * cost), Math.round((300 + 40 * p.recruited) * (1 - progress * 0.6) * cost));
+}
+
+/** Price of training an expert, or buying a ship or artillery, in Europe. */
+export function trainPrice(p: Player, type: UnitTypeId): number {
+  const price = UNIT_TYPES[type].price;
+  if (price === undefined) return Infinity;
+  return Math.round(price * difficultyRules(p).trainCost);
 }
 
 export function randomImmigrant(s: GameState, nation?: Player['id']): UnitTypeId {
@@ -88,10 +105,11 @@ export function sellToMarket(s: GameState, p: Player, good: GoodId, amount: numb
 }
 
 function maybeRaiseTax(s: GameState, p: Player, gross: number, good: GoodId): void {
-  if (p.tax >= 70 || gross < 100 || p.pendingTax) return;
-  const chance = Math.min(0.12, 0.015 + s.turn / 3000);
+  const rules = difficultyRules(p);
+  if (p.tax >= rules.taxCeiling || gross < 100 || p.pendingTax) return;
+  const chance = Math.min(0.12, 0.015 + s.turn / 3000) * rules.taxChance;
   if (random(s) >= chance) return;
-  const rate = Math.min(70, p.tax + 1 + randInt(s, 4));
+  const rate = Math.min(rules.taxCeiling, p.tax + Math.max(1, Math.round((1 + randInt(s, 4)) * rules.taxRaise)));
   if (p.human) {
     // People decide: accept, or refuse and hold a party with the goods.
     p.pendingTax = { rate, good };
@@ -209,7 +227,7 @@ export function train(s: GameState, nation: Player['id'], type: UnitTypeId): Uni
   const def = UNIT_TYPES[type];
   if (p.independence !== 'none') fail('Europe does not trade with rebels.');
   if (!TRAINABLE.includes(type) && !PURCHASABLE.includes(type)) fail(`${def.name} cannot be bought in Europe.`);
-  const price = def.price!;
+  const price = trainPrice(p, type);
   if (p.gold < price) fail(`${def.name} costs ${price} gold.`);
   p.gold -= price;
   track(nation, 'cmd:train');
@@ -221,7 +239,7 @@ export function train(s: GameState, nation: Player['id'], type: UnitTypeId): Uni
 export function processImmigration(s: GameState, p: Player): void {
   if (p.crosses < p.crossesRequired || p.independence !== 'none') return;
   p.crosses -= p.crossesRequired;
-  p.crossesRequired += p.id === 'england' ? 12 : 20;
+  p.crossesRequired += Math.round((p.id === 'england' ? 12 : 20) * difficultyRules(p).crosses);
   // Brewster lets the colony pick the best candidate; otherwise chance decides.
   const slot = hasFather(s, p.id, 'williamBrewster')
     ? p.recruitPool.reduce((best, t, i) => (UNIT_TYPES[t].skill > UNIT_TYPES[p.recruitPool[best]].skill ? i : best), 0)
@@ -333,7 +351,7 @@ export function unboardInEurope(s: GameState, unitId: string): void {
 /** Drifts prices back toward their starting value. */
 export function recoverMarkets(s: GameState): void {
   for (const p of s.players) {
-    const chance = (p.id === 'netherlands' ? 0.2 : 0.1) * (hasFather(s, p.id, 'janDeWitt') ? 2 : 1);
+    const chance = (p.id === 'netherlands' ? 0.2 : 0.1) * (hasFather(s, p.id, 'janDeWitt') ? 2 : 1) * difficultyRules(p).priceRecovery;
     for (const g of GOODS) {
       if (random(s) >= chance) continue;
       const m = p.market[g];

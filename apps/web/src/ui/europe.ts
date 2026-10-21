@@ -8,6 +8,7 @@ import {
   NATIONS,
   PURCHASABLE,
   recruitPrice,
+  trainPrice,
   ROLES,
   sellPrice,
   TRAINABLE,
@@ -157,7 +158,7 @@ export class EuropeScreen implements Screen {
         me.recruitPool.map((type, slot) => this.offer(type, price, () => this.dispatch({ type: 'recruit', slot }))));
     } else {
       const list = this.tab === 'train' ? TRAINABLE : PURCHASABLE;
-      content = h('div', { class: 'offers' }, list.map((type) => this.offer(type, UNIT_TYPES[type].price!, () => this.dispatch({ type: 'train', unitType: type }))));
+      content = h('div', { class: 'offers' }, list.map((type) => this.offer(type, trainPrice(me, type), () => this.dispatch({ type: 'train', unitType: type }))));
     }
     return h('div', { class: 'card recruit' }, tabs, content);
   }

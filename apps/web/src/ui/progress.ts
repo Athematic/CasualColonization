@@ -1,4 +1,4 @@
-import { formatDate, NATIONS, nationTitle, STAT_INFO, STAT_KEYS, statsHistory, yearOf, type NationId, type StatKey, type StatsSeries } from '@cc/engine';
+import { DIFFICULTY, formatDate, NATIONS, resolveDifficulty, nationTitle, STAT_INFO, STAT_KEYS, statsHistory, yearOf, type NationId, type StatKey, type StatsSeries } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
 import { activeStyle } from '../styles.js';
@@ -175,8 +175,10 @@ export class ProgressScreen implements Screen {
 
   private gameOverCard(over: GameOverInfo): HTMLElement {
     const rows = (Object.entries(over.scores) as [NationId, number][]).sort((a, b) => b[1] - a[1]);
+    const level = DIFFICULTY[resolveDifficulty(this.app.state.difficulty)];
     return h('div', { class: 'card progress-over' },
       h('p', null, over.reason),
+      h('p', { class: 'muted small', title: level.description }, `Difficulty: ${level.name}`),
       this.app.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used'), ` since ${formatDate(this.app.state.cheated.turn)}.`) : null,
       over.winner ? h('p', null, h('strong', null, `${nationTitle(over.winner)} ${over.winner === over.viewer ? '(you) ' : ''}wins.`)) : null,
       h('table', { class: 'scores' }, rows.map(([n, score]) => h('tr', null,

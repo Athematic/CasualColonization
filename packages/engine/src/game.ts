@@ -3,6 +3,7 @@ import { initialMarket, randomImmigrant } from './europe.js';
 import { placeOnMap } from './movement.js';
 import { createUnit, message, reveal } from './queries.js';
 import { NATIONS, TRIBE_ORDER, type NationId } from './rules/nations.js';
+import { DEFAULT_DIFFICULTY, DIFFICULTY, resolveDifficulty } from './rules/difficulty.js';
 import { beginPlayerTurn, runAiUntilHuman } from './turn.js';
 import type { GameConfig, GameState, Player } from './types.js';
 import { offerFathers } from './fathers.js';
@@ -32,6 +33,7 @@ export function createGame(config: GameConfig): GameState {
     tribes: TRIBE_ORDER.map((id) => ({ id, stance: {} })),
     settlements: Object.fromEntries(world.settlements.map((st) => [st.id, st])),
     messages: [],
+    difficulty: resolveDifficulty(config.difficulty),
   };
 
   const entries = entryPoints(s.map, config.nations.length, world.entryRows, world.entrySide);
@@ -39,6 +41,14 @@ export function createGame(config: GameConfig): GameState {
     const entry = entries[i];
     const p = newPlayer(s, nation, config.humans.includes(nation), entry);
     if (!p.human) p.ai = config.ai?.[nation] ?? 'naive';
+    // The difficulty sets the economics of the people's nations, also while the computer plays
+    // them during a head start; other computer players stay at Conquistador (see rules/difficulty.ts).
+    if (p.human || config.headStart?.humans.includes(nation) || config.difficultyForAll) {
+      p.difficulty = s.difficulty;
+      const rules = DIFFICULTY[s.difficulty!];
+      p.gold = rules.startingGold;
+      p.crossesRequired = Math.round(p.crossesRequired * rules.crosses);
+    }
     s.players.push(p);
     p.recruitPool = [randomImmigrant(s), randomImmigrant(s), randomImmigrant(s)];
     offerFathers(s, p);
@@ -120,6 +130,8 @@ export function migrate(raw: { version: number }): GameState {
     s.version = 2;
   }
   if (s.version !== SAVE_VERSION) throw new Error(`Unsupported save version ${s.version}.`);
+  // Saves from before difficulty levels played by the standard rules.
+  s.difficulty = s.difficulty ?? DEFAULT_DIFFICULTY;
   return s;
 }
 

@@ -20,6 +20,7 @@ import {
   unitPosition,
   unitsAt,
 } from './queries.js';
+import { difficultyRules } from './rules/difficulty.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { finalScores } from './score.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
@@ -70,8 +71,7 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   p.boycotts = {};
   p.pendingTax = null;
   p.coloniesAtDeclaration = colonies.length;
-  const n = colonies.length;
-  p.ref = { regulars: 4 + 2 * n, dragoons: 2 + n, artillery: 1 + Math.floor(n / 2), menOfWar: 2 };
+  p.ref = royalForce(p, colonies.length);
   ensureCrown(s);
   declareWar(s, nation, 'crown');
 
@@ -97,6 +97,16 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   const text = `${NATIONS[nation].name}'s colonies have declared independence! The Crown sends ${p.ref.regulars} regulars, ${p.ref.dragoons} dragoons and ${p.ref.artillery} artillery to crush the rebellion.`;
   message(s, text);
   return text;
+}
+
+/**
+ * The Royal Expeditionary Force sent against a nation that declares with `n` colonies: a fixed
+ * part plus a part per colony, each scaled by the nation's difficulty.
+ */
+export function royalForce(p: Player, n: number): Player['ref'] {
+  const { refBase: base, refPerColony: per } = difficultyRules(p);
+  const size = (fixed: number, perColony: number) => Math.max(1, Math.round(fixed * base + perColony * per));
+  return { regulars: size(4, 2 * n), dragoons: size(2, n), artillery: size(1, Math.floor(n / 2)), menOfWar: size(2, 0) };
 }
 
 function colonyStrength(s: GameState, c: Colony): number {

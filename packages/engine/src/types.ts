@@ -1,6 +1,7 @@
 import type { AiLevel, AiMemory } from './ai/profiles.js';
 import type { CheatId } from './cheats.js';
 import type { BuildingKind } from './rules/buildings.js';
+import type { DifficultyId } from './rules/difficulty.js';
 import type { FatherCategory, FatherId } from './rules/fathers.js';
 import type { GoodId } from './rules/goods.js';
 import type { NationId, TribeId } from './rules/nations.js';
@@ -22,6 +23,10 @@ export interface GameConfig {
   ai?: Partial<Record<NationId, AiLevel>>;
   /** While a head start runs: the people's nations, played by the computer until hand-over. */
   headStart?: { humans: NationId[]; level: AiLevel; turn: number };
+  /** Difficulty level (see rules/difficulty.ts); missing means Conquistador, the standard rules. */
+  difficulty?: DifficultyId;
+  /** Give computer players the chosen difficulty's economics too (tournaments); by default only people get it. */
+  difficultyForAll?: boolean;
 }
 
 export interface Tile {
@@ -96,6 +101,8 @@ export interface Player {
   coloniesAtDeclaration?: number;
   /** Units of goods lost to full warehouses over the game; missing means none. */
   goodsSpoiled?: number;
+  /** Difficulty whose economics this nation plays at; missing means Conquistador (computer players). */
+  difficulty?: DifficultyId;
 }
 
 export type Job =
@@ -236,6 +243,8 @@ export interface GameState {
   tribes: Tribe[];
   settlements: Record<string, Settlement>;
   messages: GameMessage[];
+  /** The game's difficulty level, resolved from the config; missing (older saves) means Conquistador. */
+  difficulty?: DifficultyId;
   /** Trade routes by id; missing means none. */
   routes?: Record<string, TradeRoute>;
   gameOver?: { turn: number; reason: string; winner?: NationId; scores: Partial<Record<NationId, number>> };

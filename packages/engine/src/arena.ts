@@ -8,6 +8,7 @@ import { applyCommand } from './commands.js';
 import { endStateFeatures, type FeatureCounts } from './features.js';
 import { createGame } from './game.js';
 import { colonyWorkers } from './queries.js';
+import type { DifficultyId } from './rules/difficulty.js';
 import { NATION_ORDER, type NationId } from './rules/nations.js';
 import { score } from './score.js';
 import { setFeatureSink } from './telemetry.js';
@@ -25,6 +26,12 @@ export interface ArenaOptions {
   map?: string;
   /** Count how often each nation uses each game feature (see features.ts). Off by default. */
   features?: boolean;
+  /**
+   * Difficulty level. Arena nations are all computers, which normally play at Conquistador
+   * economics, so a level given here applies to every nation (`difficultyForAll`), as if each
+   * were a person. Missing means Conquistador, the standard rules.
+   */
+  difficulty?: DifficultyId;
 }
 
 export interface ArenaEntry {
@@ -74,9 +81,18 @@ export function playArenaGame(
   mapSize: MapSize,
   map?: string,
   features = false,
+  difficulty?: DifficultyId,
 ): { state: GameState; entries: Omit<ArenaEntry, 'game' | 'won'>[] } {
   const ai = Object.fromEntries(line.map((l) => [l.nation, l.level]));
-  const config = { seed, mapSize, nations: line.map((l) => l.nation), humans: [], ai, ...(map ? { map } : {}) };
+  const config = {
+    seed,
+    mapSize,
+    nations: line.map((l) => l.nation),
+    humans: [],
+    ai,
+    ...(map ? { map } : {}),
+    ...(difficulty ? { difficulty, difficultyForAll: true } : {}),
+  };
   const counts = new Map<string, FeatureCounts>();
   const previous = features
     ? setFeatureSink((nation, feature, n) => {
@@ -127,7 +143,7 @@ export function runArena(opts: ArenaOptions, onGame?: (entries: ArenaEntry[], ga
     const seed = (opts.firstSeed ?? 1000) + g;
     const nations = [...NATION_ORDER.slice(g % 8), ...NATION_ORDER.slice(0, g % 8)].slice(0, n);
     const line = nations.map((nation, i) => ({ nation, level: opts.levels[(i + g) % n] }));
-    const { entries: game } = playArenaGame(seed, line, opts.turns, opts.mapSize, opts.map, opts.features);
+    const { entries: game } = playArenaGame(seed, line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty);
     const best = Math.max(...game.map((e) => e.score));
     const rows = game.map((e) => ({ ...e, game: g, won: e.score === best }));
     entries.push(...rows);

@@ -6,6 +6,8 @@ import {
   colonyAt,
   AI_LEVEL_INFO,
   colonyWorkers,
+  DIFFICULTY,
+  resolveDifficulty,
   FATHERS,
   formatDate,
   rebelShare,
@@ -255,10 +257,16 @@ export class Sidebar {
         h('button', { class: 'btn small', onclick: () => downloadSave(serialize(app.state), `casual-colonization-${app.state.turn}.json`) }, 'Export save'),
         h('button', { class: 'btn small', onclick: () => app.exitToMenu() }, 'Main menu'),
         h('button', { class: 'btn small', onclick: () => app.openCheats(), title: 'Cheats for testing (Ctrl+Shift+C)' }, 'Cheats…')),
+      this.difficultyLine(),
       app.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used')) : null,
       h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · D foreign affairs · H progress graphs · T trade routes · Enter end turn · Right-click or Shift-click to send a unit.'));
     details.addEventListener('toggle', () => (this.menuOpen = details.open));
     return details;
+  }
+
+  private difficultyLine(): HTMLElement {
+    const level = DIFFICULTY[resolveDifficulty(this.app.state.difficulty)];
+    return h('p', { class: 'small', title: level.description }, 'Difficulty: ', h('strong', null, level.name));
   }
 
   drawMinimap(): void {

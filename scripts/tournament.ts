@@ -1,8 +1,10 @@
 // Plays computer-only games and compares AI levels.
-// Usage: npm run tournament -- [--games 8] [--turns 300] [--size medium] [--levels naive,competent,combative,creative] [--seed 1000] [--map id] [--features] [--json]
+// Usage: npm run tournament -- [--games 8] [--turns 300] [--size medium] [--levels naive,competent,combative,creative] [--seed 1000] [--map id] [--difficulty conquistador] [--features] [--json]
+// --difficulty plays every nation at that level's economics, as if each were a person (computer
+// players normally stay at Conquistador). Without it, games use the standard rules (Conquistador).
 // --features also counts how often each level uses each game feature and prints a table of
 // features against levels, flagging the ones the advanced levels never or hardly use.
-import { AI_LEVELS, formatArena, formatFeatures, runArena, type AiLevel, type MapSize } from '../packages/engine/src/index.ts';
+import { AI_LEVELS, DIFFICULTY_LEVELS, formatArena, formatFeatures, runArena, type AiLevel, type DifficultyId, type MapSize } from '../packages/engine/src/index.ts';
 
 const args = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
@@ -12,6 +14,8 @@ const opt = (name: string, fallback: string) => {
 const levels = opt('levels', AI_LEVELS.join(',')).split(',') as AiLevel[];
 for (const l of levels) if (!AI_LEVELS.includes(l)) throw new Error(`Unknown level "${l}". Use ${AI_LEVELS.join(', ')}.`);
 const features = args.includes('--features');
+const difficulty = args.includes('--difficulty') ? (opt('difficulty', '') as DifficultyId) : undefined;
+if (difficulty && !DIFFICULTY_LEVELS.includes(difficulty)) throw new Error(`Unknown difficulty "${difficulty}". Use ${DIFFICULTY_LEVELS.join(', ')}.`);
 const options = {
   games: Number(opt('games', '8')),
   turns: Number(opt('turns', '300')),
@@ -20,10 +24,11 @@ const options = {
   firstSeed: Number(opt('seed', '1000')),
   map: args.includes('--map') ? opt('map', '') : undefined,
   features,
+  difficulty,
 };
 
 const started = Date.now();
-console.error(`Playing ${options.games} games of ${options.turns} turns: ${levels.join(' vs ')} on a ${options.mapSize} map...`);
+console.error(`Playing ${options.games} games of ${options.turns} turns: ${levels.join(' vs ')} on a ${options.mapSize} map${difficulty ? ` at ${difficulty}` : ''}...`);
 const result = runArena(options, (rows, g) => {
   const line = rows.map((r) => `${r.level}:${r.score}`).join('  ');
   console.error(`  game ${g + 1}/${options.games} (seed ${rows[0].seed}): ${line}`);

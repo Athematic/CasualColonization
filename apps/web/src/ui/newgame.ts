@@ -1,6 +1,9 @@
 import {
   AI_LEVEL_INFO,
   AI_LEVELS,
+  DEFAULT_DIFFICULTY,
+  DIFFICULTY,
+  DIFFICULTY_LEVELS,
   MAP_SIZES,
   NATION_ORDER,
   NATIONS,
@@ -9,6 +12,7 @@ import {
   formatDate,
   nationTitle,
   type AiLevel,
+  type DifficultyId,
   type GameConfig,
   type GameState,
   type MapSize,
@@ -74,6 +78,7 @@ export function newGameScreen(
   /** Year to take over in; 0 starts at the beginning. */
   let headYear = 0;
   let watchHeadStart = true;
+  let difficulty: DifficultyId = DEFAULT_DIFFICULTY;
 
   const el = h('main', { class: 'menu-screen' });
   const render = () => {
@@ -114,8 +119,11 @@ export function newGameScreen(
             h('span', { class: 'muted small bonus' }, NATIONS[slot.nation].bonus));
         })),
         h('div', { class: 'row wrap' },
-          plannedSelect('Difficulty', '0.3', ['Conquistador (today\'s rules)', 'Discoverer', 'Explorer', 'Governor', 'Viceroy'],
-            'Prices, taxes, native tension, the size of the royal army and how hard the computer players push.'),
+          h('label', { class: 'field', title: `${DIFFICULTY[difficulty].description} Applies to the players; computer players use the standard (Conquistador) economics.` },
+            h('span', null, 'Difficulty'),
+            h('select', { 'aria-label': 'Difficulty', onchange: (e: Event) => { difficulty = (e.target as HTMLSelectElement).value as DifficultyId; render(); } },
+              DIFFICULTY_LEVELS.map((d) => h('option', { value: d, selected: d === difficulty || undefined, title: DIFFICULTY[d].description },
+                `${DIFFICULTY[d].name}${d === DEFAULT_DIFFICULTY ? ' (standard)' : ''}`)))),
           plannedSelect('Players', 'Later', ['On this device (hot seat)', 'Online'])),
         humans > 1 ? h('p', { class: 'muted small' }, 'Several players take turns on this device (hot seat).') : null,
         humans === 0 ? h('p', { class: 'muted small' }, 'No players: you watch the computer nations play each other, with a live scoreboard.') : null,
@@ -169,6 +177,7 @@ export function newGameScreen(
               nations: chosen.map((s) => s.nation),
               humans: chosen.filter((s) => s.controller === 'human').map((s) => s.nation),
               ai: Object.fromEntries(chosen.flatMap((s) => (s.controller === 'human' ? [] : [[s.nation, s.controller]]))),
+              difficulty,
             }, humans > 0 && headYear ? { turn: turnOfYear(headYear), watch: watchHeadStart } : undefined),
           }, humans === 0 ? 'Watch the computers play' : 'Set sail'),
           h('button', {

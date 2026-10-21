@@ -3,6 +3,7 @@ import { track } from './telemetry.js';
 import { randInt, weightedPick } from './rng.js';
 import { randomImmigrant } from './europe.js';
 import { hasFather } from './fathers.js';
+import { difficultyRules } from './rules/difficulty.js';
 import type { GameState, Unit } from './types.js';
 
 type Outcome = 'nothing' | 'tales' | 'smallTreasure' | 'colonist' | 'treasure' | 'fountain' | 'lost';
@@ -13,16 +14,18 @@ export function resolveRumour(s: GameState, u: Unit): void {
   const scout = u.role === 'scout';
   const expert = u.type === 'seasonedScout';
   const deSoto = hasFather(s, u.owner, 'hernandoDeSoto');
+  const p = player(s, u.owner);
+  // Harder levels make the bad results likelier and the best ones rarer.
+  const { rumourBad: bad, rumourGood: good } = difficultyRules(p);
   const outcome = weightedPick<Outcome>(s, [
-    ['nothing', deSoto ? 0 : 30],
+    ['nothing', (deSoto ? 0 : 30) * bad],
     ['tales', 14],
     ['smallTreasure', 26],
-    ['colonist', 10],
-    ['treasure', scout ? 10 : 5],
-    ['fountain', scout ? 4 : 2],
-    ['lost', expert || deSoto ? 0 : scout ? 3 : 6],
+    ['colonist', 10 * good],
+    ['treasure', (scout ? 10 : 5) * good],
+    ['fountain', (scout ? 4 : 2) * good],
+    ['lost', (expert || deSoto ? 0 : scout ? 3 : 6) * bad],
   ]);
-  const p = player(s, u.owner);
   track(u.owner, 'explore:rumour explored');
   if (outcome === 'lost') track(u.owner, 'explore:expedition lost');
   switch (outcome) {

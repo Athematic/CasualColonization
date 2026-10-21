@@ -22,7 +22,7 @@ The one plan for Casual Colonization. We decide the priorities here together. Ne
 | Next computer-player gaps from the audit: Combative's idle army, missions and native trade, schools and custom houses earlier, buying experts, declaring independence, refusing taxes | M | P2 | planned |
 | New game screen previews planned options | S | P3 | done |
 | Rivers (minor and major): road-like movement, production bonus, in generated and stored maps, drawn in both styles, valued by the computer players | M | P1 | planned (after the current agents) |
-| Difficulty levels (prices, taxes, native tension, size of the Royal Expeditionary Force, computer-player strength) | M | P2 | planned (after the above) |
+| Difficulty levels (prices, taxes, native tension, size of the Royal Expeditionary Force, computer-player strength) | M | P2 | done (five levels in one `DIFFICULTY` table; they apply to the people's nations, computer players keep standard economics and their chosen level) |
 
 ## 0.4: Favoured Nation (the first thing the original could not do)
 

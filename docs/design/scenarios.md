@@ -36,6 +36,7 @@ Every setting the game can be played in is a **scenario**: a data package the en
 ## Engine work
 - Move the hard-coded tables (`TRIBES`, the goods, `NATIONS`, years, Founding Fathers, independence rules, `mapgen` settings) behind a `Scenario` interface.
 - Store the scenario's id (and version) in the `GameState`.
+- Let a scenario adjust or replace the difficulty table (`DIFFICULTY` in `rules/difficulty.ts`: named multipliers and values per level).
 - Show a choice of scenario on the New game screen.
 - Run tournaments for each scenario.
 - Tests run for every scenario.

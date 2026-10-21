@@ -18,7 +18,7 @@ import {
 } from '../colony.js';
 import { attack, cashTreasure, defencePower, offencePower } from '../combat.js';
 import { proposePeace, startWar } from '../diplomacy.js';
-import { boardInEurope, buyGoods, buyPrice, recruit, recruitPrice, sailToAmerica, sellGoods, train } from '../europe.js';
+import { boardInEurope, buyGoods, buyPrice, recruit, recruitPrice, sailToAmerica, sellGoods, train, trainPrice } from '../europe.js';
 import { canDeclareIndependence, declareIndependence, rebelShare } from '../independence.js';
 import { canImprove, findPath, setDestination, startImprovement } from '../movement.js';
 import { buyLand, establishMission, giftToTribe, landPrice, learnSkill, nativeLandOwner, speakToChief, takeLand, tensionOf } from '../natives.js';
@@ -714,7 +714,7 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
   const armed = countOwned(s, p, isArmed);
   if (armed < colonies.length * garrisonFor(p, prof) && (armed === 0 || (militant(prof) && p.gold > prof.reserve + 4000))) buyUnit('veteranSoldier');
   if (militant(prof) && s.turn > 80 && countOwned(s, p, (u) => u.type === 'artillery') < Math.ceil(colonies.length / 2)) {
-    if (room() >= 0 && afford(UNIT_TYPES.artillery.price!)) safely(() => train(s, p.id, 'artillery'));
+    if (room() >= 0 && afford(trainPrice(p, 'artillery'))) safely(() => train(s, p.id, 'artillery'));
   }
   const fishable = colonies.some((c) => c.buildings.docks > 0) && !countOwned(s, p, (u) => u.type === 'expertFisherman');
   if (fishable) buyUnit('expertFisherman');

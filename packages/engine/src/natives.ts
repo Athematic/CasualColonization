@@ -9,6 +9,7 @@ import { noteTrade } from './stats.js';
 import { BUILDINGS, type BuildingKind } from './rules/buildings.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import { NATIONS, TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import { difficultyRules } from './rules/difficulty.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES } from './rules/units.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
@@ -164,9 +165,10 @@ export function takeLand(s: GameState, nation: NationId, x: number, y: number): 
   const st = nativeLandOwner(s, x, y);
   if (!st) fail('Nobody claims that land.');
   tileAt(s, x, y)!.claim = nation;
-  addTension(st, nation, 250);
+  const anger = difficultyRules(player(s, nation)).nativeTension;
+  addTension(st, nation, Math.round(250 * anger));
   track(nation, 'cmd:takeLand');
-  for (const other of Object.values(s.settlements)) if (other.tribe === st.tribe && other.id !== st.id) addTension(other, nation, 60);
+  for (const other of Object.values(s.settlements)) if (other.tribe === st.tribe && other.id !== st.id) addTension(other, nation, Math.round(60 * anger));
   const text = `You take the land. The ${TRIBES[st.tribe].name} are ${tensionLabel(tensionOf(st, nation))}.`;
   message(s, text, nation, st);
   return text;
@@ -174,9 +176,10 @@ export function takeLand(s: GameState, nation: NationId, x: number, y: number): 
 
 /** New colonies unsettle the natives nearby. */
 export function onColonyFounded(s: GameState, colony: { owner: NationId; x: number; y: number }): void {
+  const anger = colony.owner === 'crown' ? 1 : difficultyRules(player(s, colony.owner)).nativeTension;
   for (const st of Object.values(s.settlements)) {
     const d = distance(st.x, st.y, colony.x, colony.y);
-    if (d <= 3) addTension(st, colony.owner, d <= 2 ? 150 : 80);
+    if (d <= 3) addTension(st, colony.owner, Math.round((d <= 2 ? 150 : 80) * anger));
   }
 }
 
@@ -273,6 +276,7 @@ function raid(s: GameState, st: Settlement, colony: Colony): void {
 /** Once per round: trade gold recovers, tension drifts, missions convert and angry tribes raid. */
 export function processNatives(s: GameState): void {
   const nations = s.players.filter((p) => p.id !== 'crown').map((p) => p.id);
+  const rules = new Map(s.players.map((p) => [p.id, difficultyRules(p)]));
   for (const st of Object.values(s.settlements)) {
     st.gold += st.capital ? 6 : 3;
     const tribe = tribeOf(s, st);
@@ -282,7 +286,8 @@ export function processNatives(s: GameState): void {
         .filter((c) => c.owner === nation && distance(c.x, c.y, st.x, st.y) <= 3)
         .reduce((sum, c) => sum + 3 + Math.floor(colonyWorkers(s, c).length / 2), 0);
       const mission = st.mission === nation;
-      addTension(st, nation, pressure - 4 - (mission ? 5 : 0));
+      const r = rules.get(nation)!;
+      addTension(st, nation, Math.round(pressure * r.nativeTension) - 4 - (mission ? 5 : 0));
       const t = tensionOf(st, nation);
       const atWar = tribe.stance[nation] === 'war';
       if (!atWar && t >= 800) {
@@ -295,7 +300,7 @@ export function processNatives(s: GameState): void {
       }
       if (t > 600 || tribe.stance[nation] === 'war') {
         const target = nearestColony(s, nation, st.x, st.y, 6);
-        if (target && random(s) < (tribe.stance[nation] === 'war' ? 0.2 : 0.08)) raid(s, st, target);
+        if (target && random(s) < (tribe.stance[nation] === 'war' ? 0.2 : 0.08) * r.raidChance) raid(s, st, target);
       } else if (t < 150 && random(s) < 0.015) {
         const target = nearestColony(s, nation, st.x, st.y, 5);
         if (target) {
