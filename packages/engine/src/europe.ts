@@ -1,4 +1,5 @@
 import { fail } from './errors.js';
+import { track } from './telemetry.js';
 import { hasFather } from './fathers.js';
 import {
   cargoFree,
@@ -54,7 +55,8 @@ function adjustMarket(p: Player, good: GoodId, sold: number): void {
   }
   while (m.volume <= -def.elasticity) {
     m.volume += def.elasticity;
-    m.price = Math.min(def.maxPrice, m.price + 1);
+    // A price above the maximum (after the double-prices cheat) does not jump back down on a purchase.
+    if (m.price < def.maxPrice) m.price += 1;
   }
 }
 
@@ -93,6 +95,7 @@ function maybeRaiseTax(s: GameState, p: Player, gross: number, good: GoodId): vo
     p.pendingTax = { rate, good };
   } else {
     p.tax = rate;
+    track(p.id, 'tax:raise accepted');
     message(s, `The Crown has raised the tax rate to ${p.tax}%.`, p.id);
   }
 }
@@ -103,6 +106,8 @@ export function answerTax(s: GameState, nation: Player['id'], accept: boolean): 
   const pending = p.pendingTax;
   if (!pending) fail('There is no tax raise to answer.');
   p.pendingTax = null;
+  track(nation, 'cmd:answerTax');
+  track(nation, accept ? 'tax:raise accepted' : 'tax:refused (boycott)');
   if (accept) {
     p.tax = pending.rate;
     const text = `The tax rate is now ${p.tax}%.`;
@@ -131,6 +136,7 @@ export function payArrears(s: GameState, nation: Player['id'], good: GoodId): vo
   if (p.gold < cost) fail(`The arrears are ${cost} gold.`);
   p.gold -= cost;
   delete p.boycotts[good];
+  track(nation, 'cmd:payArrears');
 }
 
 /** End-of-turn sales by a colony's custom house; keeps 50 of each exported good. */
@@ -147,6 +153,7 @@ export function runCustomHouse(s: GameState, colonyId: string): void {
     colony.goods[g] -= amount;
     total += sellToMarket(s, p, g, amount);
   }
+  if (total > 0) track(colony.owner, 'trade:custom house sales');
   if (total > 0) message(s, `The custom house in ${colony.name} sold goods for ${total} gold.`, colony.owner, colony);
 }
 
@@ -159,6 +166,7 @@ export function sellGoods(s: GameState, carrierId: string, good: GoodId, amount:
   const p = player(s, ship.owner);
   requireTrade(p, good);
   ship.cargo![good] = have - amount;
+  track(p.id, 'cmd:sellGoods');
   return sellToMarket(s, p, good, amount);
 }
 
@@ -176,6 +184,8 @@ export function buyGoods(s: GameState, carrierId: string, good: GoodId, amount: 
   ship.cargo = ship.cargo ?? {};
   ship.cargo[good] = (ship.cargo[good] ?? 0) + amount;
   adjustMarket(p, good, -amount);
+  track(p.id, 'cmd:buyGoods');
+  track(p.id, `europe:bought ${GOOD_DEFS[good].name.toLowerCase()}`);
 }
 
 export function recruit(s: GameState, nation: Player['id'], slot: number): Unit {
@@ -188,6 +198,7 @@ export function recruit(s: GameState, nation: Player['id'], slot: number): Unit 
   p.recruited++;
   const type = p.recruitPool[slot];
   p.recruitPool[slot] = randomImmigrant(s, nation);
+  track(nation, 'cmd:recruit');
   return createUnit(s, nation, type, { kind: 'europe' });
 }
 
@@ -199,6 +210,8 @@ export function train(s: GameState, nation: Player['id'], type: UnitTypeId): Uni
   const price = def.price!;
   if (p.gold < price) fail(`${def.name} costs ${price} gold.`);
   p.gold -= price;
+  track(nation, 'cmd:train');
+  track(nation, `${def.kind === 'colonist' ? 'trained expert' : 'bought unit'}:${def.name}`);
   return createUnit(s, nation, type, { kind: 'europe' });
 }
 
@@ -214,6 +227,7 @@ export function processImmigration(s: GameState, p: Player): void {
   const type = p.recruitPool[slot];
   p.recruitPool[slot] = randomImmigrant(s, p.id);
   createUnit(s, p.id, type, { kind: 'europe' });
+  track(p.id, 'europe:immigrant (crosses)');
   message(s, `Religious unrest in Europe: a ${UNIT_TYPES[type].name} has arrived on the docks.`, p.id);
 }
 
@@ -236,6 +250,8 @@ export function equipInEurope(s: GameState, unitId: string, role: RoleId): void 
   for (const [g, n] of Object.entries(want) as [GoodId, number][]) adjustMarket(p, g, -n);
   u.role = role;
   u.tools = role === 'pioneer' ? PIONEER_MAX_TOOLS : 0;
+  track(u.owner, 'cmd:equip');
+  track(u.owner, `equip:${role}`);
 }
 
 export function boardInEurope(s: GameState, unitId: string, carrierId: string): void {
@@ -248,6 +264,7 @@ export function boardInEurope(s: GameState, unitId: string, carrierId: string): 
   if (ship.repair) fail(`${unitName(ship)} is under repair.`);
   u.loc = { kind: 'carrier', carrierId };
   u.state = 'sentry';
+  track(u.owner, 'cmd:board');
 }
 
 export function sailToAmerica(s: GameState, carrierId: string): void {
@@ -257,6 +274,7 @@ export function sailToAmerica(s: GameState, carrierId: string): void {
   if (ship.repair) fail(`${unitName(ship)} is under repair for ${ship.repair} more turns.`);
   ship.loc = { kind: 'sailing', to: 'america', turnsLeft: sailTurns(s, ship.owner) };
   ship.moves = 0;
+  track(ship.owner, 'cmd:sailToAmerica');
 }
 
 export function sailToEurope(s: GameState, carrierId: string): void {
@@ -271,6 +289,7 @@ export function sailToEurope(s: GameState, carrierId: string): void {
   ship.loc = { kind: 'sailing', to: 'europe', turnsLeft: sailTurns(s, ship.owner) };
   ship.moves = 0;
   delete ship.dest;
+  track(ship.owner, 'cmd:sailToEurope');
 }
 
 /** Ships at sea between the continents advance one turn. */
@@ -289,6 +308,7 @@ export function advanceSailing(s: GameState, ship: Unit): void {
         const net = gross - Math.floor((gross * p.tax) / 100);
         p.gold += net;
         delete s.units[u.id];
+        track(p.id, 'treasure:shipped by galleon');
         message(s, `The treasure reaches Europe safely: ${net} gold after tax.`, ship.owner);
       }
     }
@@ -305,6 +325,7 @@ export function unboardInEurope(s: GameState, unitId: string): void {
   requireInEurope(ship);
   u.loc = { kind: 'europe' };
   u.state = 'active';
+  track(u.owner, 'cmd:unboard');
 }
 
 /** Drifts prices back toward their starting value. */

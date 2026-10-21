@@ -1,4 +1,5 @@
 import { fail } from './errors.js';
+import { track } from './telemetry.js';
 import { hasFather } from './fathers.js';
 import { canAttack } from './movement.js';
 import { addTension, settlementName } from './natives.js';
@@ -94,6 +95,7 @@ export function declareWar(s: GameState, a: string, b: string): void {
   pb.stance[a] = 'war';
   pa.warSince[b] = s.turn;
   pb.warSince[a] = s.turn;
+  if (b !== 'crown') track(a, 'diplomacy:war started');
   if (a !== 'crown' && b !== 'crown') message(s, `${NATIONS[pa.id].name} has declared war on ${NATIONS[pb.id].name}!`);
 }
 
@@ -193,6 +195,8 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
   u.moves = 0;
   u.state = 'active';
   delete u.dest;
+  track(u.owner, 'cmd:attack');
+  if (u.type === 'privateer') track(u.owner, 'combat:privateer attack');
 
   if (target.settlementId) return attackSettlement(s, u, target.settlementId);
 
@@ -236,6 +240,8 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
 
 function captureColony(s: GameState, attacker: Unit, colony: Colony): string {
   const previous = colony.owner;
+  track(attacker.owner, 'combat:colony captured');
+  track(previous, 'combat:colony lost');
   colony.owner = attacker.owner;
   colony.build = null;
   if (attacker.owner === 'crown') colony.takenFrom = previous;
@@ -283,6 +289,7 @@ function destroySettlement(s: GameState, u: Unit, settlementId: string): string 
   const pos = unitPosition(s, u)!;
   const def = TRIBES[st.tribe];
   delete s.settlements[st.id];
+  track(u.owner, 'combat:settlement burned');
   const cortes = hasFather(s, u.owner, 'hernanCortes');
   const plunder = st.gold;
   player(s, u.owner).gold += plunder;
@@ -292,6 +299,7 @@ function destroySettlement(s: GameState, u: Unit, settlementId: string): string 
     const base = def.settlement === 'city' ? 1500 + randInt(s, 3500) : 300 + randInt(s, 500);
     const treasure = createUnit(s, u.owner, 'treasure', { kind: 'map', x: pos.x, y: pos.y });
     treasure.treasure = Math.round(base * (cortes ? 1.5 : 1));
+    track(u.owner, 'treasure:found');
     text += ` A treasure worth ${treasure.treasure} gold has been found.`;
   }
   if (hasFather(s, u.owner, 'juanDeSepulveda')) {
@@ -317,6 +325,7 @@ export function cashTreasure(s: GameState, unitId: string): string {
   const net = afterFee - Math.floor((afterFee * p.tax) / 100);
   p.gold += net;
   delete s.units[u.id];
+  track(u.owner, 'cmd:cashTreasure');
   const text = `The Crown carries the treasure to Europe${fee ? ` for half its value` : ''}: ${net} gold after tax.`;
   message(s, text, u.owner, colony);
   return text;

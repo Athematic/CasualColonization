@@ -19,9 +19,10 @@
 import type { TribeId } from '../rules/nations.js';
 import { TERRAIN, type TerrainId } from '../rules/terrain.js';
 import { randInt } from '../rng.js';
-import { entryPoints, newSettlement, sprinkleExtras, type GeneratedWorld } from '../mapgen.js';
+import { entryPoints, newSettlement, sprinkleExtras, type EntrySide, type GeneratedWorld } from '../mapgen.js';
 import type { GameMap, Settlement, Tile } from '../types.js';
 import { americas } from './americas.js';
+import { australia } from './australia.js';
 import { northAmerica } from './north-america.js';
 import { southAmerica } from './south-america.js';
 
@@ -40,11 +41,16 @@ export interface StoredMap {
   /** Rows of terrain characters, see the legend above. Blank lines at either end are ignored. */
   rows: string;
   tribes: TribeRegion[];
-  /** Rows (inclusive) along the east edge where European expeditions arrive. Defaults to the whole height. */
+  /** Rows (inclusive) along the arrival edge where European expeditions arrive. Defaults to the whole height. */
   entryRows?: [number, number];
+  /**
+   * The edge European expeditions arrive at, on the high seas one tile in from it. Defaults to the east.
+   * Ships can sail to Europe from any high seas tile either way.
+   */
+  entrySide?: EntrySide;
 }
 
-export const STORED_MAPS: StoredMap[] = [northAmerica, southAmerica, americas];
+export const STORED_MAPS: StoredMap[] = [northAmerica, southAmerica, americas, australia];
 
 export function storedMap(id: string): StoredMap {
   const def = STORED_MAPS.find((m) => m.id === id);
@@ -83,10 +89,10 @@ export function storedWorld(rng: { rng: number }, id: string): GeneratedWorld {
   sprinkleExtras(rng, map);
   const entryRows = def.entryRows ?? [0, map.height - 1];
   // Keep clear of every arrival point any number of nations could use.
-  const arrivals = Array.from({ length: 8 }, (_, i) => entryPoints(map, i + 1, entryRows)).flat();
+  const arrivals = Array.from({ length: 8 }, (_, i) => entryPoints(map, i + 1, entryRows, def.entrySide)).flat();
   const settlements = placeRegionSettlements(rng, map, def.tribes, arrivals);
   for (const st of settlements) delete map.tiles[st.y * map.width + st.x].lcr;
-  return { map, settlements, entryRows };
+  return def.entrySide ? { map, settlements, entryRows, entrySide: def.entrySide } : { map, settlements, entryRows };
 }
 
 const distance = (ax: number, ay: number, bx: number, by: number) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));

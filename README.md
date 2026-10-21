@@ -37,7 +37,7 @@ In a colony, click a colonist and then a field or building to put them to work. 
 
 ## What is in the alpha
 
-- **Map**: generated from a seed, or one of three hand-made stored maps (North America, South America, The Americas; see `packages/engine/src/maps/`), with 13 terrain types and their forested variants, hills, mountains, bonus resources and Lost City Rumours. High seas to the east lead to Europe. Fog of war shows explored land and what your units can currently see.
+- **Map**: generated from a seed, or one of four hand-made stored maps (North America, South America, The Americas, and Australia as a geography-only preview with placeholder peoples; see `packages/engine/src/maps/`), with 13 terrain types and their forested variants, hills, mountains, bonus resources and Lost City Rumours. High seas lead to Europe: expeditions arrive from the east, or from the west on the Australia map (via the Cape of Good Hope). Fog of war shows explored land and what your units can currently see.
 - **Colonies**: worked fields and buildings with the classic production chains (lumber → hammers, ore → tools → muskets, sugar → rum, and so on). Also food growth and starvation, warehouse limits, horse breeding, a build queue with hurry-buying, and 15 building types with upgrades.
 - **Liberty**: Sons of Liberty bonuses and the Tory penalty for colonies with many royalists.
 - **Schools**: a schoolhouse, college or university lets experts teach. Criminals become servants, servants become free colonists, and free colonists become experts.
@@ -58,6 +58,7 @@ In a colony, click a colonist and then a field or building to put them to work. 
   - **Creative** plays like a person. It reviews the game every few turns and shifts focus between exploring, expanding, developing, liberty, defence, war and independence. It reacts to threats at once and takes openings when a rival leaves a colony undefended.
 - **Head start**: start in 1550, 1600, 1650, 1700, 1750 or 1800 instead of 1492. The strongest computer level (Creative) plays your nation until then and hands it over in a developed position. Watch the run as a speedrun on the map (at least 250 ms per turn, following your newest colony), or skip ahead without drawing for a much faster start.
 - **Computer-only games**: choose no players to watch the computers play each other in observer mode, with play/pause, speed, stepping, a live scoreboard and a choice of whose view to show.
+- **Cheats** (for testing the computer players): *Cheats…* in the Game menu, or `Ctrl+Shift+C`. Add 10,000 gold, double a nation's home-port prices, force peace between all European nations (tribes and the Crown are not affected), double all terrain yields (toggle) and reveal the map in a nation's view (toggle). Each cheat is an engine command, so games stay deterministic. The first use marks the game as cheated for good; the mark is kept in saves and shown on the score screen and in tournament tables.
 - **Saving**: an autosave every turn, a manual save slot, and export or import of save files. Saves from Alpha 0.1 are upgraded on load.
 
 ### Measuring the computer players
@@ -66,16 +67,19 @@ In a colony, click a colonist and then a field or building to put them to work. 
 
 ```sh
 npm run tournament -- --games 8 --turns 330 --size medium --levels naive,competent,combative,creative
+npm run tournament -- --games 6 --turns 300 --size medium --features   # feature-usage audit
 ```
 
-With those options, the current results are as follows. The three advanced levels are close; Creative has the best average and plays head starts.
+With those options, the current results are as follows. Creative has the best average and plays head starts.
 
 | Level | Wins | Score | Colonies | Colonists |
 | --- | ---: | ---: | ---: | ---: |
-| Creative | 2 | 343 | 21.9 | 102 |
-| Combative | 2 | 339 | 22.4 | 116 |
-| Competent | 4 | 337 | 19.1 | 101 |
-| Naive | 0 | 204 | 20.0 | 75 |
+| Creative | 3 | 510 | 21.8 | 148 |
+| Competent | 2 | 435 | 20.3 | 131 |
+| Combative | 3 | 415 | 21.9 | 140 |
+| Naive | 0 | 190 | 20.5 | 71 |
+
+Add `--features` to also count how often each level uses each game feature (commands, roads, ships bought, buildings, schools, missions, trade, wars and more), with a table that flags features the advanced levels never or hardly use. The findings so far, and the fixes they led to, are in [docs/AI_FEATURE_AUDIT.md](docs/AI_FEATURE_AUDIT.md).
 
 Simplifications in this alpha:
 - Native braves are not shown as units; their raids and gifts happen as events.
@@ -104,6 +108,8 @@ npm run build
 ```
 
 ## Roadmap
+
+The full plan is in [docs/ROADMAP.md](docs/ROADMAP.md). In short:
 
 1. **Alpha (now)**: a faithful clone of the classic game, with a configurable number of nations.
 2. **Alpha+**: visible native units, a smarter computer opponent, and balance passes.

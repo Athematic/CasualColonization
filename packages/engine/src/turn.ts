@@ -1,4 +1,5 @@
 import { runAi } from './ai/index.js';
+import { track } from './telemetry.js';
 import { processColony } from './colony.js';
 import { advanceSailing, processImmigration, recoverMarkets } from './europe.js';
 import { advanceWork, continueOrders, placeOnMap } from './movement.js';
@@ -55,6 +56,7 @@ export function runAiUntilHuman(s: GameState): void {
 }
 
 function finishPlayerTurn(s: GameState, p: Player): void {
+  track(p.id, 'cmd:endTurn');
   for (const c of Object.values(s.colonies)) {
     if (c.owner === p.id) processColony(s, c);
   }

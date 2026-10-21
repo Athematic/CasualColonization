@@ -1,4 +1,5 @@
 import { fail } from './errors.js';
+import { track } from './telemetry.js';
 import { buildingCapacityPerWorker, colonyReport, foodToGrow, libertyBonus, tileYield, type ColonyReport } from './production.js';
 import {
   colonyAt,
@@ -110,6 +111,7 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
   if (!canBuild(s, colony, colony.build)) colony.build = { kind: 'building', id: 'warehouse' };
   reveal(s, u.owner, x, y, 2);
   onColonyFounded(s, colony);
+  track(u.owner, 'cmd:foundColony');
   message(s, `${colony.name} has been founded.`, u.owner, { x, y });
   return colony;
 }
@@ -239,6 +241,7 @@ export function assignJob(s: GameState, unitId: string, colonyId: string, job?: 
   u.loc = { kind: 'colony', colonyId, job: chosen };
   u.state = 'active';
   u.moves = 0;
+  track(u.owner, 'cmd:assignJob');
   delete u.dest;
   delete u.work;
 }
@@ -251,6 +254,7 @@ export function leaveColony(s: GameState, unitId: string): void {
   u.loc = { kind: 'map', x: colony.x, y: colony.y };
   u.moves = maxMoves(u, s);
   delete u.teach;
+  track(u.owner, 'cmd:leaveColony');
 }
 
 /** Equips a unit standing in one of its colonies with a role, using goods from the warehouse. */
@@ -283,6 +287,8 @@ export function equipInColony(s: GameState, unitId: string, role: RoleId): void 
     for (const [g, n] of Object.entries(ROLES[role].goods) as [GoodId, number][]) colony.goods[g] -= n;
   }
   u.role = role;
+  track(u.owner, 'cmd:equip');
+  track(u.owner, `equip:${role}`);
 }
 
 export function buildTargetCost(target: BuildTarget, colony: Colony): { hammers: number; tools: number; name: string } {
@@ -331,6 +337,7 @@ export function setBuild(s: GameState, colonyId: string, target: BuildTarget | n
   const colony = s.colonies[colonyId];
   if (target && !canBuild(s, colony, target)) fail('That cannot be built here yet.');
   colony.build = target;
+  track(colony.owner, 'cmd:setBuild');
 }
 
 export function hurryPrice(s: GameState, colony: Colony): number {
@@ -351,6 +358,7 @@ export function hurryBuild(s: GameState, colonyId: string): void {
   if (p.gold < price) fail(`You need ${price} gold.`);
   const cost = buildTargetCost(colony.build, colony);
   p.gold -= price;
+  track(p.id, 'cmd:hurry');
   colony.hammers = Math.max(colony.hammers, cost.hammers);
   colony.goods.tools = Math.max(colony.goods.tools, cost.tools);
 }
@@ -370,6 +378,7 @@ export function processColony(s: GameState, colony: Colony): void {
   if (colony.goods.food >= foodToGrow(colony)) {
     colony.goods.food -= foodToGrow(colony);
     createUnit(s, colony.owner, 'freeColonist', { kind: 'map', x: colony.x, y: colony.y });
+    track(colony.owner, 'colony:colonist born');
     message(s, `A new colonist has been born in ${colony.name}.`, colony.owner, colony);
   } else if (colony.goods.food < 0) {
     colony.goods.food = 0;
@@ -377,6 +386,7 @@ export function processColony(s: GameState, colony: Colony): void {
     if (workers.length > 1) {
       const victim = workers[workers.length - 1];
       delete s.units[victim.id];
+      track(colony.owner, 'colony:colonist starved');
       message(s, `${unitName(victim)} has starved to death in ${colony.name}.`, colony.owner, colony);
     } else {
       message(s, `${colony.name} is starving!`, colony.owner, colony);
@@ -402,10 +412,12 @@ export function processColony(s: GameState, colony: Colony): void {
         colony.hammers -= cost.hammers;
         if (colony.build.kind === 'building') {
           colony.buildings[colony.build.id]++;
+          track(colony.owner, `built:${cost.name}`);
           message(s, `${colony.name} has completed the ${cost.name}.`, colony.owner, colony);
           if (!canBuild(s, colony, colony.build)) colony.build = null;
         } else {
           createUnit(s, colony.owner, colony.build.id, { kind: 'map', x: colony.x, y: colony.y });
+          track(colony.owner, `built unit:${cost.name}`);
           message(s, `${colony.name} has built a ${cost.name}.`, colony.owner, colony);
         }
       }
@@ -420,6 +432,7 @@ export function processColony(s: GameState, colony: Colony): void {
   for (const g of GOODS) {
     if (g === 'food') continue;
     if (colony.goods[g] > cap) {
+      track(colony.owner, 'colony:goods spoiled', colony.goods[g] - cap);
       message(s, `${colony.goods[g] - cap} ${GOOD_DEFS[g].name.toLowerCase()} spoiled in ${colony.name}'s warehouse.`, colony.owner, colony);
       p.goodsSpoiled = (p.goodsSpoiled ?? 0) + colony.goods[g] - cap;
       colony.goods[g] = cap;
@@ -447,6 +460,7 @@ function processSchool(s: GameState, colony: Colony): void {
     const before = UNIT_TYPES[student.type].name;
     student.type = student.type === 'pettyCriminal' ? 'indenturedServant' : student.type === 'indenturedServant' ? 'freeColonist' : teacher.type;
     teacher.teach = 0;
+    track(colony.owner, 'school:colonist taught');
     message(s, `In ${colony.name}, a ${before} has been taught to be a ${UNIT_TYPES[student.type].name}.`, colony.owner, colony);
   }
 }

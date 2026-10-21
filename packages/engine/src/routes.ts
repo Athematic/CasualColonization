@@ -12,6 +12,7 @@ import { cargoFree, cargoRoomFor, isCoastal, isShip, message, newId, player, rev
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import type { NationId } from './rules/nations.js';
 import { UNIT_TYPES } from './rules/units.js';
+import { track } from './telemetry.js';
 import type { GameState, RouteCargo, RouteStop, TradeRoute, Unit } from './types.js';
 
 export const EUROPE_STOP = 'europe';
@@ -89,6 +90,7 @@ export function createRoute(s: GameState, nation: NationId, name: string, stops?
   const route: TradeRoute = { id: newId(s, 'r'), owner: nation, name: cleanName(name), stops: cleanStops(s, nation, stops) };
   s.routes = s.routes ?? {};
   s.routes[route.id] = route;
+  track(nation, 'cmd:createRoute');
   return route;
 }
 
@@ -146,6 +148,7 @@ export function assignRoute(s: GameState, unitId: string, routeId: string): void
   // Start at the stop the unit is at, if any; otherwise at the first.
   const here = route.stops.findIndex((stop) => atStop(s, u, stop));
   u.route = { id: route.id, stop: Math.max(0, here) };
+  track(u.owner, 'cmd:assignRoute');
   u.state = 'active';
   delete u.dest;
   delete u.work;
@@ -201,7 +204,10 @@ function serveStop(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop): v
     if (have <= 0) continue;
     const limit = r.amount ?? (r.good === 'food' ? Infinity : warehouseCapacity(colony));
     const n = Math.min(have, Math.max(0, limit - colony.goods[r.good]));
-    if (n > 0) move(u.cargo, colony.goods, r.good, n);
+    if (n > 0) {
+      move(u.cargo, colony.goods, r.good, n);
+      track(u.owner, 'route:goods delivered to a colony', n);
+    }
   }
   // The goods with most to spare are loaded first, so a small hold carries what matters most.
   const spare = (r: RouteCargo) => colony.goods[r.good] - (r.amount ?? 0);
@@ -220,6 +226,7 @@ function serveEurope(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop):
     const have = u.cargo?.[r.good] ?? 0;
     if (have <= 0 || p.boycotts[r.good]) continue;
     earned += sellGoods(s, u.id, r.good, have);
+    track(u.owner, 'route:goods sold in Europe', have);
   }
   // Colonists before goods: a person takes a whole hold.
   let boarded = 0;
@@ -227,6 +234,7 @@ function serveEurope(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop):
     for (const o of Object.values(s.units)) {
       if (o.owner !== u.owner || o.loc.kind !== 'europe' || isShip(o) || cargoFree(s, u) <= 0) continue;
       boardInEurope(s, o.id, u.id);
+      track(u.owner, 'route:colonists carried');
       boarded++;
     }
   }

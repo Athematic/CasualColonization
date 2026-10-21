@@ -1,4 +1,5 @@
 import { attack, declareWar, defencePower } from './combat.js';
+import { track } from './telemetry.js';
 import { fail, RuleError } from './errors.js';
 import { newPlayer } from './game.js';
 import { findPath, setDestination } from './movement.js';
@@ -64,6 +65,7 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   const p = player(s, nation);
   const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
   p.independence = 'declared';
+  track(nation, 'cmd:declareIndependence');
   p.tax = 0;
   p.boycotts = {};
   p.pendingTax = null;
@@ -164,6 +166,7 @@ function checkOutcome(s: GameState, p: Player): void {
   const royalsLeft = Object.values(s.units).some((u) => u.owner === 'crown' && u.against === p.id && !isShip(u));
   if (ref.regulars + ref.dragoons + ref.artillery === 0 && !royalsLeft) {
     p.independence = 'won';
+    track(p.id, 'independence:won');
     for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === p.id) delete s.units[u.id];
     const text = `${NATIONS[p.id].name} has won the War of Independence! A new nation is born.`;
     message(s, text);
@@ -174,6 +177,7 @@ function checkOutcome(s: GameState, p: Player): void {
   const lost = Object.values(s.colonies).filter((c) => c.owner === 'crown' && c.takenFrom === p.id).length;
   if (lost > 0 && held <= Math.floor((p.coloniesAtDeclaration ?? 1) / 2)) {
     p.independence = 'lost';
+    track(p.id, 'independence:lost');
     const text = `The rebellion in ${NATIONS[p.id].name}'s colonies has been crushed.`;
     message(s, text);
     const humansLeft = s.players.some((o) => o.human && o.independence !== 'lost');

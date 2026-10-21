@@ -1,4 +1,5 @@
 import type { AiLevel, AiMemory } from './ai/profiles.js';
+import type { CheatId } from './cheats.js';
 import type { BuildingKind } from './rules/buildings.js';
 import type { FatherCategory, FatherId } from './rules/fathers.js';
 import type { GoodId } from './rules/goods.js';
@@ -238,4 +239,13 @@ export interface GameState {
   /** Trade routes by id; missing means none. */
   routes?: Record<string, TradeRoute>;
   gameOver?: { turn: number; reason: string; winner?: NationId; scores: Partial<Record<NationId, number>> };
+  /** Set the first time a cheat is used and never cleared. Missing means the game is not cheated. */
+  cheated?: { turn: number; cheats: CheatId[] };
+  /** Game-wide modifiers set by cheats. Missing fields mean the normal rules. */
+  modifiers?: {
+    /** Multiplier on terrain yields (missing means 1). */
+    yieldMultiplier?: number;
+    /** Nations whose view shows the whole map without fog. */
+    reveal?: NationId[];
+  };
 }

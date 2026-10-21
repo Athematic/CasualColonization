@@ -1,4 +1,5 @@
 import { fail } from './errors.js';
+import { track } from './telemetry.js';
 import { colonyWorkers, createUnit, message, player, reveal } from './queries.js';
 import { weightedPick } from './rng.js';
 import { FATHER_CATEGORIES, FATHERS, fatherCost, type FatherCategory, type FatherId } from './rules/fathers.js';
@@ -29,6 +30,7 @@ export function chooseFather(s: GameState, nation: Player['id'], id: FatherId): 
   const p = player(s, nation);
   if (!Object.values(p.fatherOffer).includes(id)) fail(`${FATHERS[id].name} is not among the candidates.`);
   p.currentFather = id;
+  track(nation, 'cmd:chooseFather');
 }
 
 /** AI players pick a father by simple preference. */
@@ -54,6 +56,7 @@ export function processCongress(s: GameState, p: Player): void {
 export function joinCongress(s: GameState, p: Player, id: FatherId): void {
   p.fathers.push(id);
   p.currentFather = null;
+  track(p.id, 'fathers:joined');
   const def = FATHERS[id];
   message(s, `${def.name} joins the Continental Congress of ${NATIONS[p.id].name}. ${def.effect}`, p.id);
   for (const other of s.players) {

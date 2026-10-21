@@ -1,4 +1,5 @@
 import { createUnit, message, player, reveal, unitPosition } from './queries.js';
+import { track } from './telemetry.js';
 import { randInt, weightedPick } from './rng.js';
 import { randomImmigrant } from './europe.js';
 import { hasFather } from './fathers.js';
@@ -22,6 +23,8 @@ export function resolveRumour(s: GameState, u: Unit): void {
     ['lost', expert || deSoto ? 0 : scout ? 3 : 6],
   ]);
   const p = player(s, u.owner);
+  track(u.owner, 'explore:rumour explored');
+  if (outcome === 'lost') track(u.owner, 'explore:expedition lost');
   switch (outcome) {
     case 'nothing':
       message(s, 'The rumour proves to be nothing more than tall tales.', u.owner, pos);

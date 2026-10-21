@@ -119,20 +119,6 @@ function cartingNeeds(s: GameState, p: Player): { served: Set<string>; waiting: 
   return entry;
 }
 
-/** Cargo ships the nation should have for the goods its ports (and the wagons feeding them) gather. */
-export function fleetWanted(s: GameState, p: Player): number {
-  const colonies = ownColonies(s, p);
-  const fed = wagonServed(s, p);
-  let surplus = 0;
-  for (const c of colonies) {
-    if (!isCoastal(s, c.x, c.y) && !fed.has(c.id)) continue;
-    const report = colonyReport(s, c);
-    for (const g of TRADE_GOODS) surplus += Math.max(0, report.net[g]);
-  }
-  // A ship carries roughly 25 goods a turn on a round trip to Europe.
-  return Math.max(Math.ceil(colonies.length / 3), Math.min(8, 1 + Math.floor(surplus / 25)));
-}
-
 /** Plays the nation's logistics for one turn. */
 export function manageLogistics(s: GameState, p: Player): void {
   const review = s.turn % REVIEW_EVERY === 0;

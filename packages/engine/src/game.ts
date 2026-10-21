@@ -34,7 +34,7 @@ export function createGame(config: GameConfig): GameState {
     messages: [],
   };
 
-  const entries = entryPoints(s.map, config.nations.length, world.entryRows);
+  const entries = entryPoints(s.map, config.nations.length, world.entryRows, world.entrySide);
   config.nations.forEach((nation, i) => {
     const entry = entries[i];
     const p = newPlayer(s, nation, config.humans.includes(nation), entry);
@@ -44,7 +44,8 @@ export function createGame(config: GameConfig): GameState {
     offerFathers(s, p);
     reveal(s, nation, entry.x, entry.y, 1);
     startingUnits(s, nation, entry);
-    message(s, `Your Majesty's expedition for ${NATIONS[nation].name} has reached the New World. Sail west to find land!`, nation, entry);
+    const heading = world.entrySide === 'west' ? 'east' : 'west';
+    message(s, `Your Majesty's expedition for ${NATIONS[nation].name} has reached the New World. Sail ${heading} to find land!`, nation, entry);
   });
 
   beginPlayerTurn(s, s.players[0]);
