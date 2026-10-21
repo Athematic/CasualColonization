@@ -1,0 +1,120 @@
+import { applyCommand, type Command, type CommandResult } from './commands.js';
+import { initialMarket, randomImmigrant } from './europe.js';
+import { generateMap } from './mapgen.js';
+import { placeOnMap } from './movement.js';
+import { createUnit, message, reveal } from './queries.js';
+import { NATIONS, TRIBE_ORDER, type NationId } from './rules/nations.js';
+import { beginPlayerTurn, runAiUntilHuman } from './turn.js';
+import type { GameConfig, GameState, Player } from './types.js';
+
+export const SAVE_VERSION = 1;
+
+export function createGame(config: GameConfig): GameState {
+  if (config.nations.length < 1 || config.nations.length > 8) throw new Error('Between 1 and 8 nations can take part.');
+  if (new Set(config.nations).size !== config.nations.length) throw new Error('Each nation can only take part once.');
+  for (const h of config.humans) if (!config.nations.includes(h)) throw new Error(`${h} is not taking part.`);
+
+  const rngHolder = { rng: config.seed | 0 };
+  const world = generateMap(rngHolder, config.mapSize);
+  const s: GameState = {
+    version: SAVE_VERSION,
+    config,
+    turn: 0,
+    current: 0,
+    rng: rngHolder.rng,
+    nextId: 1,
+    map: world.map,
+    players: [],
+    units: {},
+    colonies: {},
+    tribes: TRIBE_ORDER.map((id) => ({ id, stance: {} })),
+    settlements: Object.fromEntries(world.settlements.map((st) => [st.id, st])),
+    messages: [],
+  };
+
+  const { width, height } = s.map;
+  config.nations.forEach((nation, i) => {
+    const y = Math.round(((i + 1) * height) / (config.nations.length + 1));
+    const entry = { x: width - 2, y };
+    const p: Player = {
+      id: nation,
+      human: config.humans.includes(nation),
+      gold: 1000,
+      tax: 0,
+      market: initialMarket(),
+      crosses: 0,
+      crossesRequired: 30,
+      recruitPool: [],
+      recruited: 0,
+      explored: new Array(width * height).fill(0),
+      entry,
+      stance: {},
+      coloniesFounded: 0,
+      bells: 0,
+    };
+    s.players.push(p);
+    p.recruitPool = [randomImmigrant(s), randomImmigrant(s), randomImmigrant(s)];
+    reveal(s, nation, entry.x, entry.y, 1);
+    startingUnits(s, nation, entry);
+    message(s, `Your Majesty's expedition for ${NATIONS[nation].name} has reached the New World. Sail west to find land!`, nation, entry);
+  });
+
+  beginPlayerTurn(s, s.players[0]);
+  runAiUntilHuman(s);
+  return s;
+}
+
+function startingUnits(s: GameState, nation: NationId, at: { x: number; y: number }): void {
+  const ship = createUnit(s, nation, 'caravel', { kind: 'map', x: at.x, y: at.y });
+  placeOnMap(s, ship, at.x, at.y);
+  const aboard = { kind: 'carrier' as const, carrierId: ship.id };
+  const soldier = createUnit(s, nation, 'veteranSoldier', aboard);
+  soldier.role = 'soldier';
+  const pioneer = createUnit(s, nation, 'hardyPioneer', aboard);
+  pioneer.role = 'pioneer';
+  pioneer.tools = 60;
+  createUnit(s, nation, nation === 'sweden' ? 'expertLumberjack' : 'freeColonist', aboard);
+  for (const u of [soldier, pioneer]) u.state = 'sentry';
+}
+
+export function serialize(s: GameState): string {
+  return JSON.stringify(s);
+}
+
+export function deserialize(json: string): GameState {
+  const s = JSON.parse(json) as GameState;
+  if (s.version !== SAVE_VERSION) throw new Error(`Unsupported save version ${s.version}.`);
+  return s;
+}
+
+type Listener = (state: GameState) => void;
+
+/** Owns a game state, applies commands and notifies listeners (renderers, UI) of changes. */
+export class Game {
+  private listeners = new Set<Listener>();
+
+  constructor(public state: GameState) {}
+
+  static create(config: GameConfig): Game {
+    return new Game(createGame(config));
+  }
+
+  dispatch(cmd: Command): CommandResult {
+    const result = applyCommand(this.state, cmd);
+    if (result.ok) this.emit();
+    return result;
+  }
+
+  subscribe(fn: Listener): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  emit(): void {
+    for (const fn of this.listeners) fn(this.state);
+  }
+
+  get current(): Player {
+    return this.state.players[this.state.current];
+  }
+}

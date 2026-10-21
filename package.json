@@ -1,0 +1,22 @@
+{
+  "name": "casual-colonization",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @cc/web",
+    "build": "npm run build -w @cc/web",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}
