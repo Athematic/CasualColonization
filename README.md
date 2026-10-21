@@ -14,7 +14,7 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-Or build a static site with `npm run build` (output in `apps/web/dist`). The GitHub Pages workflow publishes it automatically once Pages is enabled for the repository (*Settings → Pages → Source: GitHub Actions*).
+Or build a static site with `npm run build` (output in `apps/web/dist`), or a single self-contained HTML file with `npm run build:single`. The GitHub Pages workflow publishes it automatically once Pages is enabled for the repository (*Settings → Pages → Source: GitHub Actions*).
 
 ### Controls
 

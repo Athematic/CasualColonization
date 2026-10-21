@@ -12,7 +12,8 @@
     "build": "npm run build -w @cc/web",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run build",
+    "build:single": "npm run build && node scripts/single-file.mjs apps/web/dist/casual-colonization.html"
   },
   "devDependencies": {
     "typescript": "5.9.3",

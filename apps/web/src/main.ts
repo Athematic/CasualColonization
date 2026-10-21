@@ -1,4 +1,4 @@
-import { Game, type GameConfig, type GameState } from '@cc/engine';
+import { deserialize, Game, serialize, type GameConfig, type GameState } from '@cc/engine';
 import { App } from './app.js';
 import { savedStyle, setStyle } from './styles.js';
 import './style.css';
@@ -30,5 +30,28 @@ function run(game: Game): void {
 // Debug handle for the browser console and automated play-tests.
 (window as unknown as { cc: object }).cc = { get app() { return app; } };
 
-setStyle(savedStyle());
-showMenu();
+interface HotHook {
+  data?: { save?: string | null };
+  ready?: (start: (data: HotHook['data']) => void) => void;
+  snapshot?: (take: () => HotHook['data']) => void;
+}
+
+// When hosted somewhere that hot-swaps new versions (a claude.ai artifact), keep the game in progress.
+const hot = (window as unknown as { claude?: { hot?: HotHook } }).claude?.hot;
+hot?.snapshot?.(() => ({ save: app ? serialize(app.game.state) : null }));
+
+function boot(data: HotHook['data']): void {
+  setStyle(savedStyle());
+  if (data?.save) {
+    try {
+      resumeGame(deserialize(data.save));
+      return;
+    } catch {
+      // Fall through to the menu if the snapshot cannot be read.
+    }
+  }
+  showMenu();
+}
+
+if (hot?.ready) hot.ready(boot);
+else boot(hot?.data ?? {});
