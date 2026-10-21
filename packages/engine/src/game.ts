@@ -73,8 +73,8 @@ function startingUnits(s: GameState, nation: NationId, at: { x: number; y: numbe
   const pioneer = createUnit(s, nation, 'hardyPioneer', aboard);
   pioneer.role = 'pioneer';
   pioneer.tools = 60;
-  createUnit(s, nation, nation === 'sweden' ? 'expertLumberjack' : 'freeColonist', aboard);
   for (const u of [soldier, pioneer]) u.state = 'sentry';
+  if (nation === 'sweden') createUnit(s, nation, 'expertLumberjack', { kind: 'europe' });
 }
 
 export function serialize(s: GameState): string {

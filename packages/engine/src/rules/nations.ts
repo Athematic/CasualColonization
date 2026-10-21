@@ -40,7 +40,7 @@ export const NATIONS: Record<NationId, NationDef> = {
   },
   sweden: {
     id: 'sweden', name: 'Sweden', adjective: 'Swedish', color: '#3d8fd1',
-    bonus: 'Expertise: colonists start with an expert lumberjack.',
+    bonus: 'Expertise: an expert lumberjack waits on the docks in Europe from the start.',
     colonyNames: ['Fort Christina', 'Nya Göteborg', 'Fort Nya Elfsborg', 'Upland', 'Finland', 'Kristinehamn', 'Mölndal', 'Nya Vasa', 'Sveaborg', 'Torne', 'Nya Uppsala', 'Kalmar'],
   },
   denmark: {

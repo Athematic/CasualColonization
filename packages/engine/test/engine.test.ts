@@ -3,6 +3,7 @@ import {
   applyCommand,
   colonyReport,
   createGame,
+  createUnit,
   deserialize,
   findPath,
   foundColony,
@@ -34,7 +35,7 @@ function landTile(s: GameState): { x: number; y: number } {
 }
 
 function colonistOf(s: GameState): Unit {
-  return Object.values(s.units).find((u) => u.owner === 'england' && u.type === 'freeColonist')!;
+  return createUnit(s, 'england', 'freeColonist', { kind: 'map', x: 0, y: 0 });
 }
 
 describe('new game', () => {
@@ -60,10 +61,10 @@ describe('new game', () => {
     expect(Object.keys(s.settlements).length).toBeGreaterThanOrEqual(8);
   });
 
-  it('starts each nation with a caravel carrying three colonists', () => {
+  it('starts each nation with a caravel carrying a soldier and a pioneer', () => {
     const s = game();
     const ship = Object.values(s.units).find((u) => u.owner === 'england' && u.type === 'caravel')!;
-    expect(unitsAboard(s, ship).map((u) => u.type).sort()).toEqual(['freeColonist', 'hardyPioneer', 'veteranSoldier']);
+    expect(unitsAboard(s, ship).map((u) => u.type).sort()).toEqual(['hardyPioneer', 'veteranSoldier']);
   });
 });
 
@@ -169,5 +170,44 @@ describe('simulation', () => {
     // The state stays serialisable.
     const copy = deserialize(serialize(s));
     expect(copy.turn).toBe(s.turn);
+  });
+});
+
+describe('europe round trip', () => {
+  it('sails to Europe, recruits, boards and returns to the entry point', () => {
+    const s = game();
+    const ship = Object.values(s.units).find((u) => u.owner === 'england' && u.type === 'caravel')!;
+    const entry = { ...s.players[0].entry };
+    expect(applyCommand(s, { type: 'sailToEurope', unitId: ship.id })).toEqual({ ok: true, text: undefined });
+    for (let i = 0; i < 2; i++) applyCommand(s, { type: 'endTurn' });
+    expect(ship.loc.kind).toBe('europe');
+    // Passengers stay aboard; send one ashore and recruit another in their place.
+    const passenger = unitsAboard(s, ship)[0];
+    expect(applyCommand(s, { type: 'unboard', unitId: passenger.id }).ok).toBe(true);
+    const recruit = applyCommand(s, { type: 'recruit', slot: 1 });
+    expect(recruit.ok).toBe(true);
+    const docks = Object.values(s.units).filter((u) => u.owner === 'england' && u.loc.kind === 'europe' && u.type !== 'caravel');
+    expect(docks.length).toBe(2);
+    const newcomer = docks.find((u) => u.id !== passenger.id)!;
+    expect(applyCommand(s, { type: 'board', unitId: newcomer.id, carrierId: ship.id }).ok).toBe(true);
+    expect(applyCommand(s, { type: 'board', unitId: passenger.id, carrierId: ship.id })).toEqual({ ok: false, error: 'The ship is full.' });
+    expect(applyCommand(s, { type: 'buyGoods', carrierId: ship.id, good: 'tools', amount: 100 }).ok).toBe(false);
+    expect(applyCommand(s, { type: 'sailToAmerica', unitId: ship.id }).ok).toBe(true);
+    for (let i = 0; i < 2; i++) applyCommand(s, { type: 'endTurn' });
+    expect(ship.loc).toEqual({ kind: 'map', ...entry });
+    expect(unitsAboard(s, ship)).toHaveLength(2);
+  });
+
+  it('only lets ships sail for Europe from the high seas', () => {
+    const s = game();
+    const ship = Object.values(s.units).find((u) => u.owner === 'england' && u.type === 'caravel')!;
+    for (let x = 0; x < s.map.width; x++) {
+      if (tileAt(s, x, 10)!.t === 'ocean') {
+        ship.loc = { kind: 'map', x, y: 10 };
+        break;
+      }
+    }
+    const r = applyCommand(s, { type: 'sailToEurope', unitId: ship.id });
+    expect(r.ok).toBe(false);
   });
 });
