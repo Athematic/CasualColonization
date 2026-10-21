@@ -1,4 +1,4 @@
-import { colonyWorkers, NATIONS, RIVER_DIRS, TERRAIN, type GameState, type Tile } from '@cc/engine';
+import { colonyWorkers, NATIONS, RIVER_DIRS, TERRAIN, type Colony, type GameState, type Settlement, type Tile } from '@cc/engine';
 import {
   hash2,
   isTileExplored,
@@ -6,7 +6,10 @@ import {
   tileToScreen,
   unitStacks,
   visibleRange,
+  type LayerTile,
+  type MapLayerHooks,
   type MapRenderer,
+  type MapUnitStack,
   type Scene,
 } from '@cc/render-api';
 import { FOREST, HIGHLIGHT, INK, LAND, PAPER, PAPER_WASH, RIVER, ROAD, WAVE, WHITE, shade } from './palette.js';
@@ -128,7 +131,7 @@ function drawForest(ctx: Ctx, tile: Tile, x: number, y: number, px: number, py: 
 }
 
 /** Where a tile's river runs: towards each linked neighbour, with the width of that stretch. */
-interface RiverLink {
+export interface RiverLink {
   dx: number;
   dy: number;
   /** Width of the water in tile units. */
@@ -331,10 +334,23 @@ export function caption(ctx: Ctx, text: string, cx: number, top: number, z: numb
   ctx.fillText(text, x + bw + pad, top + h / 2 + 1);
 }
 
-export class LigneClaireMapRenderer implements MapRenderer {
-  private ctx: Ctx;
+/** One explored tile in view, with its top-left corner on screen. */
+export type MapTile = LayerTile;
 
-  constructor(private canvas: HTMLCanvasElement) {
+/**
+ * The Ligne claire map renderer. Each layer of a frame is drawn by a protected method that first
+ * offers the layer to the optional `MapLayerHooks` (see @cc/render-api), so a sprite style can
+ * paint single layers over this one and keep the rest.
+ */
+export class LigneClaireMapRenderer implements MapRenderer {
+  protected ctx: Ctx;
+  /** Tiles whose water hook drew them (their waves are part of it). */
+  private hookedWater = new Set<MapTile>();
+
+  constructor(
+    protected canvas: HTMLCanvasElement,
+    protected hooks: MapLayerHooks = {},
+  ) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D is not available.');
     this.ctx = ctx;
@@ -357,7 +373,8 @@ export class LigneClaireMapRenderer implements MapRenderer {
     const z = scene.camera.zoom;
     const lw = lineWidthFor(z);
     const range = visibleRange(scene);
-    const tiles: { x: number; y: number; px: number; py: number; tile: Tile }[] = [];
+    this.beginFrame(scene);
+    const tiles: MapTile[] = [];
     for (let y = range.y0; y <= range.y1; y++) {
       for (let x = range.x0; x <= range.x1; x++) {
         if (!isTileExplored(scene, x, y)) continue;
@@ -367,22 +384,12 @@ export class LigneClaireMapRenderer implements MapRenderer {
     }
 
     // 1. Water everywhere we know, land shapes on top.
+    for (const t of tiles) this.drawWaterBase(t, z);
     for (const t of tiles) {
-      const def = TERRAIN[t.tile.t];
-      const waterColor = t.tile.t === 'highSeas' ? LAND.highSeas : LAND.ocean;
-      ctx.fillStyle = def.water ? waterColor : LAND.ocean;
-      ctx.fillRect(t.px, t.py, z + 0.5, z + 0.5);
+      if (TERRAIN[t.tile.t].water) this.drawWaterDetail(t, z, lw);
+      else this.drawLandBase(s, t, z);
     }
-    for (const t of tiles) {
-      if (TERRAIN[t.tile.t].water) {
-        drawWaves(ctx, t.x, t.y, t.px, t.py, z, lw);
-        continue;
-      }
-      ctx.beginPath();
-      landPath(ctx, s, t.x, t.y, t.px, t.py, z);
-      ctx.fillStyle = LAND[t.tile.t];
-      ctx.fill();
-    }
+    this.drawShore(s, tiles, z, lw);
 
     // 2. Faint borders between land types, firm ink along the coast.
     ctx.beginPath();
@@ -418,25 +425,21 @@ export class LigneClaireMapRenderer implements MapRenderer {
     // 3. Landscape details, painted row by row so lower things overlap higher ones.
     for (const t of tiles) {
       if (TERRAIN[t.tile.t].water) continue;
-      if (t.tile.p) drawFurrows(ctx, t.px, t.py, z, LAND[t.tile.t], lw);
-      if (hasRoad(s, t.x, t.y)) drawRoads(ctx, s, t.x, t.y, t.px, t.py, z, lw);
+      if (t.tile.p) this.drawPlowed(t, z, lw);
+      if (hasRoad(s, t.x, t.y)) this.drawRoad(s, t, z, lw);
     }
     const rivers: { t: (typeof tiles)[number]; links: RiverLink[] }[] = [];
     for (const t of tiles) {
-      const cx = t.px + z / 2;
-      const cy = t.py + z / 2;
       const river = t.tile.rv ? riverLinks(s, t.x, t.y) : [];
-      if (t.tile.t === 'hills') hills(ctx, cx, cy, z * 0.9, LAND.hills, lw);
-      else if (t.tile.t === 'mountains') mountains(ctx, cx, cy, z * 0.95, LAND.mountains, lw);
-      else if (t.tile.f) drawForest(ctx, t.tile, t.x, t.y, t.px, t.py, z, lw, river.length ? (sx, sy) => nearRiver(river, sx, sy) : undefined);
+      this.drawRelief(t, z, lw, river);
       if (river.length) rivers.push({ t, links: river });
     }
     // Rivers over the landscape (trees keep clear of them), roads crossing on bridges.
     for (const ink of [true, false]) for (const r of rivers) drawRiver(ctx, r.links, r.t.px, r.t.py, z, lw, ink);
-    for (const { t } of rivers) if (hasRoad(s, t.x, t.y)) drawRoads(ctx, s, t.x, t.y, t.px, t.py, z, lw);
+    for (const { t } of rivers) if (hasRoad(s, t.x, t.y)) this.drawRoad(s, t, z, lw);
     for (const t of tiles) {
-      if (t.tile.b) drawBonus(ctx, t.px, t.py, z, lw);
-      if (t.tile.lcr) ruins(ctx, t.px + z / 2, t.py + z / 2, z * 0.7, lw);
+      if (t.tile.b) this.drawBonusMarker(t, z, lw);
+      if (t.tile.lcr) this.drawRumour(t, z, lw);
     }
 
     // 4. A light paper wash over what we know but cannot currently see.
@@ -450,14 +453,14 @@ export class LigneClaireMapRenderer implements MapRenderer {
     for (const st of Object.values(s.settlements)) {
       if (!isTileExplored(scene, st.x, st.y) || st.x < range.x0 - 1 || st.x > range.x1 + 1 || st.y < range.y0 - 1 || st.y > range.y1 + 1) continue;
       const p = tileToScreen(scene, st.x, st.y);
-      settlementSprite(ctx, p.x + z / 2, p.y + z / 2, z * 0.9, st.tribe, st.capital, lw);
+      this.drawSettlement(st, p.x, p.y, z, lw);
     }
     const labels: (() => void)[] = [];
     for (const c of Object.values(s.colonies)) {
       if (!isTileExplored(scene, c.x, c.y) || c.x < range.x0 - 1 || c.x > range.x1 + 1 || c.y < range.y0 - 1 || c.y > range.y1 + 1) continue;
       const p = tileToScreen(scene, c.x, c.y);
       const size = colonyWorkers(s as GameState, c).length;
-      colonySprite(ctx, p.x + z / 2, p.y + z / 2, z * 0.95, c.owner, size, c.buildings.stockade, lw);
+      this.drawColony(c, size, p.x, p.y, z, lw);
       if (scene.labels !== false) labels.push(() => caption(ctx, c.name, p.x + z / 2, p.y + z * 0.86, z, lw, { text: String(size), color: NATIONS[c.owner].color }));
     }
 
@@ -484,7 +487,7 @@ export class LigneClaireMapRenderer implements MapRenderer {
       const ux = inColony ? p.x + z * 0.78 : cx;
       const uy = inColony ? p.y + z * 0.28 : cy;
       const us = inColony ? z * 0.62 : z * 0.86;
-      unitSprite(ctx, ux, uy, us, stack.top.type, stack.top.role, stack.top.owner, lw);
+      this.drawUnit(stack, ux, uy, us, lw);
       // Pennant in the owner's colour, with the unit's standing order.
       const fx = inColony ? p.x + z * 0.55 : p.x + z * 0.06;
       const fy = p.y + z * 0.06;
@@ -538,5 +541,91 @@ export class LigneClaireMapRenderer implements MapRenderer {
 
   dispose(): void {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  // ---- Layers (override in derived styles) ----
+
+  /** Called once per frame, after the canvas is sized and cleared. */
+  protected beginFrame(scene: Scene): void {
+    this.hookedWater.clear();
+    this.hooks.beginFrame?.(this.ctx, scene);
+  }
+
+  /** Water under every known tile (land tiles get it too, for their rounded corners). */
+  protected drawWaterBase(t: MapTile, z: number): void {
+    if (this.hooks.water?.(this.ctx, t, z)) {
+      this.hookedWater.add(t);
+      return;
+    }
+    const def = TERRAIN[t.tile.t];
+    const waterColor = t.tile.t === 'highSeas' ? LAND.highSeas : LAND.ocean;
+    this.ctx.fillStyle = def.water ? waterColor : LAND.ocean;
+    this.ctx.fillRect(t.px, t.py, z + 0.5, z + 0.5);
+  }
+
+  protected drawWaterDetail(t: MapTile, z: number, lw: number): void {
+    if (this.hookedWater.has(t)) return;
+    drawWaves(this.ctx, t.x, t.y, t.px, t.py, z, lw);
+  }
+
+  /** The land shape of a tile, with rounded corners towards the water. */
+  protected drawLandBase(s: Readonly<GameState>, t: MapTile, z: number): void {
+    const ctx = this.ctx;
+    if (this.hooks.land?.(ctx, t, z, () => landPath(ctx, s, t.x, t.y, t.px, t.py, z), s)) return;
+    ctx.beginPath();
+    landPath(ctx, s, t.x, t.y, t.px, t.py, z);
+    ctx.fillStyle = LAND[t.tile.t];
+    ctx.fill();
+  }
+
+  /** Extra shoreline detail on the water, under the coastline's ink. Nothing in this style. */
+  protected drawShore(s: Readonly<GameState>, tiles: MapTile[], z: number, _lw: number): void {
+    this.hooks.shore?.(this.ctx, tiles, z, s);
+  }
+
+  protected drawPlowed(t: MapTile, z: number, lw: number): void {
+    if (this.hooks.plowed?.(this.ctx, t, z)) return;
+    drawFurrows(this.ctx, t.px, t.py, z, LAND[t.tile.t], lw);
+  }
+
+  protected drawRoad(s: Readonly<GameState>, t: MapTile, z: number, lw: number): void {
+    if (this.hooks.road?.(this.ctx, t, z, s)) return;
+    drawRoads(this.ctx, s, t.x, t.y, t.px, t.py, z, lw);
+  }
+
+  /** Hills, mountains or forest; trees keep clear of the tile's river. */
+  protected drawRelief(t: MapTile, z: number, lw: number, river: RiverLink[]): void {
+    if (this.hooks.relief?.(this.ctx, t, z)) return;
+    const cx = t.px + z / 2;
+    const cy = t.py + z / 2;
+    if (t.tile.t === 'hills') hills(this.ctx, cx, cy, z * 0.9, LAND.hills, lw);
+    else if (t.tile.t === 'mountains') mountains(this.ctx, cx, cy, z * 0.95, LAND.mountains, lw);
+    else if (t.tile.f) drawForest(this.ctx, t.tile, t.x, t.y, t.px, t.py, z, lw, river.length ? (sx, sy) => nearRiver(river, sx, sy) : undefined);
+  }
+
+  protected drawBonusMarker(t: MapTile, z: number, lw: number): void {
+    if (this.hooks.bonus?.(this.ctx, t, z)) return;
+    drawBonus(this.ctx, t.px, t.py, z, lw);
+  }
+
+  protected drawRumour(t: MapTile, z: number, lw: number): void {
+    if (this.hooks.rumour?.(this.ctx, t, z)) return;
+    ruins(this.ctx, t.px + z / 2, t.py + z / 2, z * 0.7, lw);
+  }
+
+  protected drawSettlement(st: Readonly<Settlement>, px: number, py: number, z: number, lw: number): void {
+    if (this.hooks.settlement?.(this.ctx, st, px, py, z)) return;
+    settlementSprite(this.ctx, px + z / 2, py + z / 2, z * 0.9, st.tribe, st.capital, lw);
+  }
+
+  protected drawColony(c: Readonly<Colony>, size: number, px: number, py: number, z: number, lw: number): void {
+    if (this.hooks.colony?.(this.ctx, c, size, px, py, z)) return;
+    colonySprite(this.ctx, px + z / 2, py + z / 2, z * 0.95, c.owner, size, c.buildings.stockade, lw);
+  }
+
+  /** The unit on top of a stack, centred at (x, y) in a box of size s. */
+  protected drawUnit(stack: MapUnitStack, x: number, y: number, s: number, lw: number): void {
+    if (this.hooks.unit?.(this.ctx, stack, x, y, s)) return;
+    unitSprite(this.ctx, x, y, s, stack.top.type, stack.top.role, stack.top.owner, lw);
   }
 }
