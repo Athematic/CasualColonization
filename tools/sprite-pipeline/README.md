@@ -52,8 +52,47 @@ node tools/sprite-pipeline/build.mjs [--in DIR|URL] [--out DIR] [--sizes 16,24,3
 | `--sharpen X` | Unsharp-mask amount for smooth sizes (default 0.35, `0` = off). |
 | `--settings FILE` | JSON overrides for any setting in [`lib/config.mjs`](lib/config.mjs), e.g. `{"pixel": {"inkKeep": 0.5}, "smooth": {"sharpen": 0.2}}`. |
 | `--no-sheet`, `--no-tuning` | Skip the contact sheet, or only its tuning section. |
+| `--grid-in DIR` | A folder of pixel-grid redraws from `Edit-Images.ps1 -Mode pixel`, e.g. `tools/image-gen/output/edited/pixel-32`. Repeatable. The grid size N comes from the folder name (`pixel-N`) or `--grid`. Size N is then snapped from the grid instead of reduced from `--in`. See [Redraws](#redraws-from-edit-imagesps1). |
+| `--grid N` | With `--grid-in`: the size for folders not named `pixel-N`. Without `--grid-in`, it starts a grid-only run: `--in` is the pixel-grid folder, and only the N×N sprites (and their upscales) are made. |
+| `--upscales LIST` | Nearest-neighbour integer upscales written next to every grid sprite (`<id>@32x2.png`, ...). Default `2,4`; `""` for none. |
+| `--grid-place layout\|none` | `layout` (default) moves a grid sprite by whole pixels so it sits on its category's baseline and centre, like the normalised masters. `none` keeps it where the model drew it. |
+| `--compare-in DIR` | Original masters for the contact sheet's "Original vs redraws" section. Default `tools/image-gen/output/sprites` whenever `--in` or `--grid-in` points somewhere else. |
+| `--no-compare` | No comparison section. |
 
 The output is deterministic: the same masters and settings give byte-identical PNGs, manifest and contact sheet on every machine.
+
+## Redraws from `Edit-Images.ps1`
+
+[`tools/image-gen/Edit-Images.ps1`](../image-gen/README.md#small-size-redraws-edit-imagesps1) uses the OpenAI image edit API to redraw every master as a version designed to be small. The image models cannot output tiny images, so the redraws are still about 1024 px, and this pipeline still does the downscale. The redraws keep the generator's layout under `tools/image-gen/output/edited/<mode>[-N]/`, with the same category rules:
+
+```sh
+# smooth sizes and 16/24 from the bold redraws, 32 from the pixel grid, with the three-way comparison
+node tools/sprite-pipeline/build.mjs --in tools/image-gen/output/edited/bold --grid-in tools/image-gen/output/edited/pixel-32
+# only the bold redraws, through the normal pipeline
+node tools/sprite-pipeline/build.mjs --in tools/image-gen/output/edited/bold
+# only the pixel grids: exact 32x32 sprites, upscales and the fidelity report
+node tools/sprite-pipeline/build.mjs --in tools/image-gen/output/edited/pixel-32 --grid 32
+```
+
+On Windows, the same commands work with `\` or `/`. Pointing `--in` at `edited/` itself is refused with a hint, because its subfolders are modes, not categories.
+
+**Grid snapping** ([`lib/grid.mjs`](lib/grid.mjs)), for an N-cell grid on a W-px image:
+
+1. **Phase.** The colour change between neighbouring columns (and rows) is summed into an edge profile. The grid offset is the one whose lines, every W/N px, catch the most of it. Whole-pixel steps are tried for whole-pixel cells, half pixels otherwise. A grid the model drew a few pixels off is still read correctly.
+2. **Cells.** Only the middle 60 % of each cell is sampled (soft or anti-aliased block edges are ignored). Alpha is decided by majority. The colour is the **dominant** one, not the mean: pixels are bucketed at 4 bits per channel, the largest bucket wins, and the result is the average of the pixels within an RGB distance of 40 of it. A stray edge, a speck or noise does not tint the cell.
+3. **Palette.** Each cell colour snaps to the nearest bible colour (the `--palette`, OKLab with the hue weighting the pixel sizes use) when it is within 0.1. `--no-snap` turns this off. A distinctive colour far from every bible colour is kept.
+4. **Placement.** The N×N sprite is moved by whole pixels onto its layout's baseline and centred on its core (`--grid-place none` turns this off). There is never any resampling.
+5. **Grid fidelity.** A cell's fidelity is the share of its sampled pixels that agree with the chosen colour (or alpha). The sprite's score is the mean over the cells that contain the sprite. A grid sprite is **flagged** when the score is below 0.9, or when more than 10 % of its cells are below 0.8. The pipeline also estimates the cell count the image was really drawn with: a model that drew 29 cells instead of 32 shows up as "looks like a 29x29 grid".
+
+The run prints every flagged sprite, plus the command to redraw them, for example `pwsh ./tools/image-gen/Edit-Images.ps1 -Mode pixel -Grid 32 -Only 'units/expert-lumberjack__none' -Force`. It writes `_sheet/grid-report.json` with the bad cells' coordinates. The thresholds are in `GRID_DEFAULTS` in `lib/grid.mjs`; override them with `--settings`, e.g. `{"grid": {"minFidelity": 0.85, "colorTol": 48}}`. On the synthetic test images, a clean grid scores 1.0, and so does a grid with ±10 noise per channel and 3-px soft edges. A grid drawn with 29 to 36 cells and read as 32 scores 0.73 to 0.77.
+
+**Manifest.** A grid size has `"mode": "grid"` and its `fidelity` in `files`. A `grid` object per size holds the source file and hash, the score, the bad-cell count, the phase, the detected cell count, the placement shift, the flag and its reasons, and the upscale files. Grid sprites are pixel art like the `pixel` sizes, with alpha 0 or 255, and are drawn the same way, at integer scales with smoothing off. A sprite that exists only in a grid folder gets only its grid size.
+
+**Contact sheet.** Every grid size shows its fidelity in the runtime rows. A **Grid fidelity** table lists every grid sprite, worst first. The **Original vs redraws** section shows, for each sprite and at the same sizes (the pixel sizes and the first smooth size), 1:1 on paper and grass and enlarged:
+
+- the original master through this pipeline (`--compare-in`);
+- the redraw given as `--in` through this pipeline (labelled "bold redraw" for `edited/bold`);
+- each pixel-grid snap, with its fidelity.
 
 ### Masters on a web server
 
@@ -232,7 +271,7 @@ cd tools/sprite-pipeline
 npm test
 ```
 
-`node:test`, on synthetic images (no generated art needed): normalising (bounding box, core box, baseline and scale, centring, margins), palette quantisation, alpha binarisation, the outline and orphan passes, thin-line detection, byte-identical output across runs, the `--pixel-max` boundary, and the remote source against a local HTTP server (download, conditional re-checks with ETag, Last-Modified or size, the 455 User-Agent fallback, id lists from the image-gen manifest, the docs and `--ids`). The real server was also tested by hand: a first run downloads, a second gets `304 Not Modified` for every file.
+`node:test`, on synthetic images (no generated art needed). Grid snapping is tested on a perfect grid (exact N×N recovery, fidelity 1) at 16, 24 (on 1008 px) and 32 cells, and on a noisy grid with soft block edges (still exact, fidelity above 0.97). Other cases: mode beats mean, alpha by majority, a grid offset by 12 px (found by the phase search), a grid drawn with 29 cells (low fidelity, flagged, 29 detected), and a blurred non-pixel image (flagged). Placement, upscales, `--grid` and `--grid-in` runs with `--compare-in`, and the refusal of the `edited/` root are tested as well. The other tests cover normalising (bounding box, core box, baseline and scale, centring, margins), palette quantisation, alpha binarisation, the outline and orphan passes, thin-line detection, byte-identical output across runs, the `--pixel-max` boundary, and the remote source against a local HTTP server (download, conditional re-checks with ETag, Last-Modified or size, the 455 User-Agent fallback, id lists from the image-gen manifest, the docs and `--ids`). The real server was also tested by hand: a first run downloads, a second gets `304 Not Modified` for every file.
 
 ## Files
 
@@ -245,6 +284,7 @@ lib/normalise.mjs  bounding boxes, layouts, placement transform
 lib/ink.mjs        ink detection, line width, distance transform, thickening
 lib/smooth.mjs     smooth sizes: downscale, unsharp mask
 lib/pixel.mjs      pixel sizes: simplify, reduce, quantise, binarise, clean up, outline
+lib/grid.mjs       pixel-grid redraws: phase, cell mode, alpha majority, fidelity, placement, upscales
 lib/process.mjs    one sprite end to end
 lib/source.mjs     local folder or remote server with a download cache
 lib/sheet.mjs      contact sheet

@@ -1,6 +1,6 @@
 #Requires -Version 7.0
-# Helpers for Generate-Images.ps1: prompt parsing, manifest, OpenAI Images API calls, PNG checks
-# and the contact sheet. Nothing in here reads, stores or prints the API key: it is passed in as a
+# Shared helpers for Generate-Images.ps1 (images/generations) and Edit-Images.ps1 (images/edits):
+# prompt parsing, manifest, the run loop, OpenAI Images API calls, PNG checks and the contact sheets. Nothing in here reads, stores or prints the API key: it is passed in as a
 # SecureString and handed straight to Invoke-WebRequest -Token.
 
 $ErrorActionPreference = 'Stop'
@@ -11,6 +11,7 @@ if (-not ('ImageGenTool.PngInspector' -as [type])) {
 
 $script:Utf8NoBom = [Text.UTF8Encoding]::new($false)
 $script:StandardSizes = @('1024x1024', '1536x1024', '1024x1536')
+$script:FileHashCache = @{}
 
 # ---------------------------------------------------------------------------------------------
 # Parsing
@@ -24,7 +25,7 @@ function ConvertTo-Slug {
 }
 
 function New-ImageJob {
-    param($Doc, $Id, $Section, $Category, $Size, $Background, $Prompt, $Notes)
+    param($Doc, $Id, $Section, $Category, $Size, $Background, $Prompt, $Notes, $Subject)
     [pscustomobject]@{
         Doc        = $Doc
         Id         = $Id
@@ -38,6 +39,7 @@ function New-ImageJob {
         Prompt     = $Prompt
         OutputRel  = "$Doc/$Id.png"
         Notes      = $Notes
+        Subject    = $Subject
     }
 }
 
@@ -88,7 +90,7 @@ function Get-SpriteJobs {
             $parts += "SUBJECT: $subject"
             $sectionName = if ($sub) { "$section > $sub" } else { $section }
             $jobs.Add((New-ImageJob -Doc 'sprites' -Id $id -Section $sectionName -Category $category `
-                        -Size $size -Background $bg -Prompt ($parts -join "`n`n") -Notes $null))
+                        -Size $size -Background $bg -Prompt ($parts -join "`n`n") -Notes $null -Subject $subject))
         }
     }
     return , $jobs.ToArray()
@@ -151,7 +153,7 @@ function Get-BoxArtJobs {
         }
         $section = if ($c.H3) { "$($c.H2) > $($c.H3)" } else { $c.H2 }
         $jobs.Add((New-ImageJob -Doc 'boxart' -Id $id -Section $section -Category 'cover' -Size $size `
-                    -Background 'opaque' -Prompt "$style`n`n$($c.Body)" -Notes $notes))
+                    -Background 'opaque' -Prompt "$style`n`n$($c.Body)" -Notes $notes -Subject $c.Body))
         if ($IncludeTitle -and $isFront -and $title) {
             # Section 6: remove "any text, letters" from the DO NOT INCLUDE line for this one run.
             $titledStyle = $style -replace 'any text, letters, ', '' -replace ' \(the title is added later\)', ''
@@ -183,6 +185,24 @@ function Expand-JobVariants {
     return , $out.ToArray()
 }
 
+function Select-JobsByPattern {
+    <# -Only: wildcards matched against the job id or key; a pattern without * ? [ matches anywhere. #>
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Jobs, [string[]]$Only)
+    if (-not $Only) { return , $Jobs }
+    $patterns = @(foreach ($p in $Only) {
+            foreach ($q in ($p -split ',')) {
+                $q = $q.Trim()
+                if (-not $q) { continue }
+                if ($q -match '[\*\?\[]') { $q } else { "*$q*" }
+            }
+        })
+    if ($patterns.Count -eq 0) { return , $Jobs }
+    return , @($Jobs | Where-Object {
+            $j = $_
+            @($patterns | Where-Object { $j.Id -like $_ -or $j.Key -like $_ }).Count -gt 0
+        })
+}
+
 function Get-ImageJobs {
     param(
         [Parameter(Mandatory)][string]$SpriteDoc,
@@ -195,19 +215,7 @@ function Get-ImageJobs {
     $jobs = @()
     if ($Doc -in 'sprites', 'all') { $jobs += Get-SpriteJobs -Path $SpriteDoc }
     if ($Doc -in 'boxart', 'all') { $jobs += Get-BoxArtJobs -Path $BoxArtDoc -IncludeTitle:$IncludeTitle }
-    if ($Only) {
-        $patterns = foreach ($p in $Only) {
-            foreach ($q in ($p -split ',')) {
-                $q = $q.Trim()
-                if (-not $q) { continue }
-                if ($q -match '[\*\?\[]') { $q } else { "*$q*" }
-            }
-        }
-        $jobs = @($jobs | Where-Object {
-                $j = $_
-                @($patterns | Where-Object { $j.Id -like $_ -or $j.Key -like $_ }).Count -gt 0
-            })
-    }
+    $jobs = Select-JobsByPattern -Jobs $jobs -Only $Only
     return , (Expand-JobVariants -Jobs $jobs -Variants $Variants)
 }
 
@@ -216,13 +224,31 @@ function Get-ImageJobs {
 # ---------------------------------------------------------------------------------------------
 
 function Get-PromptHash {
-    <# SHA-256 of size, background and the assembled prompt: any change makes the job pending again. #>
+    <#
+    SHA-256 of size, background and the assembled prompt: any change makes the job pending again.
+    Edit jobs carry their own HashInput (mode, grid, size, background, prompt and the SHA-256 of every
+    reference image), so a new master, style bible or anchor re-queues them too.
+    #>
     param([Parameter(Mandatory)]$Job)
+    $text = if ($Job.PSObject.Properties['HashInput'] -and $Job.HashInput) { [string]$Job.HashInput }
+            else { "$($Job.Size)|$($Job.Background)|$($Job.Prompt)" }
+    return Get-Sha256Hex -Bytes ($script:Utf8NoBom.GetBytes($text))
+}
+
+function Get-Sha256Hex {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][byte[]]$Bytes)
     $sha = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $bytes = $sha.ComputeHash($script:Utf8NoBom.GetBytes("$($Job.Size)|$($Job.Background)|$($Job.Prompt)"))
-    } finally { $sha.Dispose() }
-    return ([BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
+    try { $h = $sha.ComputeHash($Bytes) } finally { $sha.Dispose() }
+    return ([BitConverter]::ToString($h) -replace '-', '').ToLowerInvariant()
+}
+
+function Get-FileSha256 {
+    <# SHA-256 of a file, cached per path + length + write time for the run. #>
+    param([Parameter(Mandatory)][string]$Path)
+    $fi = [IO.FileInfo]::new($Path)
+    $k = "$($fi.FullName)|$($fi.Length)|$($fi.LastWriteTimeUtc.Ticks)"
+    if (-not $script:FileHashCache.ContainsKey($k)) { $script:FileHashCache[$k] = Get-Sha256Hex -Bytes ([IO.File]::ReadAllBytes($fi.FullName)) }
+    return $script:FileHashCache[$k]
 }
 
 function Get-UtcStamp { (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ') }
@@ -366,31 +392,118 @@ function New-ImageRequestBody {
     return $body
 }
 
+function Test-InputFidelitySupport {
+    <#
+    input_fidelity per the OpenAI Python SDK 3.35.1 (ImageEditParams): "high" and "low" on gpt-image-1 and
+    gpt-image-1.5, only "low" on gpt-image-1-mini, and "omit this parameter" for gpt-image-2. The SDK does
+    not list it for the gpt-image-2.5 models either, so it is omitted for them. Returns the value to send,
+    or $null to leave the field out.
+    #>
+    param([string]$Model, [ValidateSet('auto', 'high', 'low', 'omit')][string]$Requested = 'auto')
+    if ($Requested -eq 'omit') { return $null }
+    $m = "$Model".ToLowerInvariant()
+    if ($m -match '^gpt-image-1-mini') {
+        if ($Requested -eq 'auto') { return $null }
+        return 'low'
+    }
+    if ($m -match '^gpt-image-1(\.5)?(-\d{4}-\d{2}-\d{2})?$') {
+        if ($Requested -eq 'auto') { return 'high' }
+        return $Requested
+    }
+    return $null
+}
+
+function New-ImageEditForm {
+    <#
+    .SYNOPSIS
+    The multipart/form-data fields for POST /images/edits, as a list of parts: text fields have Value,
+    file parts have FileName, ContentType and Bytes. The images go as repeated "image[]" parts (the SDK's
+    "brackets" array format for a list of images), the master first.
+    #>
+    param([Parameter(Mandatory)]$Job, [Parameter(Mandatory)]$Settings)
+    $parts = [System.Collections.Generic.List[object]]::new()
+    $fields = [ordered]@{
+        model         = $Settings.Model
+        prompt        = $Job.Prompt
+        n             = '1'
+        size          = Resolve-ImageSize -Size $Job.Size -Model $Settings.Model
+        quality       = $Settings.Quality
+        background    = $Job.Background
+        output_format = 'png'
+    }
+    $wanted = 'auto'
+    if ($Settings.PSObject.Properties['InputFidelity'] -and $Settings.InputFidelity) { $wanted = $Settings.InputFidelity }
+    $fid = Test-InputFidelitySupport -Model $Settings.Model -Requested $wanted
+    if ($fid) { $fields['input_fidelity'] = $fid }
+    foreach ($k in $fields.Keys) {
+        $parts.Add([pscustomobject]@{ Name = $k; Value = [string]$fields[$k]; FileName = $null; ContentType = $null; Bytes = $null })
+    }
+    $i = 0
+    foreach ($ref in @($Job.References)) {
+        $i++
+        $bytes = [IO.File]::ReadAllBytes($ref.Path)
+        $parts.Add([pscustomobject]@{ Name = 'image[]'; Value = $null; FileName = ('{0}-{1}.png' -f $i, $ref.Role); ContentType = 'image/png'; Bytes = $bytes })
+    }
+    return , $parts.ToArray()
+}
+
+function New-MultipartContent {
+    <# A fresh System.Net.Http.MultipartFormDataContent (one per HTTP attempt: a sent body is not reused). #>
+    param([Parameter(Mandatory)][object[]]$Parts)
+    $mp = [System.Net.Http.MultipartFormDataContent]::new()
+    foreach ($p in $Parts) {
+        $cd = [System.Net.Http.Headers.ContentDispositionHeaderValue]::new('form-data')
+        $cd.Name = '"' + $p.Name + '"'
+        if ($null -ne $p.Bytes) {
+            $c = [System.Net.Http.ByteArrayContent]::new([byte[]]$p.Bytes)
+            $cd.FileName = '"' + $p.FileName + '"'
+            # the API rejects image parts sent as application/octet-stream, so the type is always set
+            $c.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::new([string]$p.ContentType)
+        } else {
+            $c = [System.Net.Http.StringContent]::new([string]$p.Value, $script:Utf8NoBom)
+            $c.Headers.ContentType = $null
+        }
+        $c.Headers.ContentDisposition = $cd
+        $mp.Add($c)
+    }
+    return , $mp
+}
+
 function Invoke-ImageRequest {
     <#
     .SYNOPSIS
-    One POST to {ApiBase}/images/generations. Returns an object with Ok, Status, Code, Type, Message,
-    Headers (lower-case names) and Images (decoded PNG bytes). Never throws for HTTP or network errors.
+    One POST to {ApiBase}/images/generations (JSON -Body) or {ApiBase}/images/edits (multipart, -Form parts
+    from New-ImageEditForm). Returns an object with Ok, Status, Code, Type, Message, Headers (lower-case
+    names) and Images (decoded PNG bytes). Never throws for HTTP or network errors.
     #>
     param(
         [Parameter(Mandatory)][string]$ApiBase,
         [Parameter(Mandatory)][securestring]$ApiKey,
-        [Parameter(Mandatory)]$Body,
+        $Body,
+        [object[]]$Form,
+        [string]$Endpoint = 'images/generations',
         [int]$TimeoutSec = 600
     )
     $ProgressPreference = 'SilentlyContinue'   # no download progress bar from Invoke-WebRequest
-    $uri = $ApiBase.TrimEnd('/') + '/images/generations'
-    $json = ConvertTo-Json -InputObject $Body -Depth 5 -Compress
+    $uri = $ApiBase.TrimEnd('/') + '/' + $Endpoint.TrimStart('/')
     $params = @{
         Uri                = $uri
         Method             = 'Post'
-        Body               = $script:Utf8NoBom.GetBytes($json)
-        ContentType        = 'application/json'
         Authentication     = 'Bearer'
         Token              = $ApiKey
         SkipHttpErrorCheck = $true
         TimeoutSec         = $TimeoutSec
         ErrorAction        = 'Stop'
+    }
+    $multipart = $null
+    if ($Form) {
+        # Invoke-WebRequest takes the Content-Type with its boundary from the MultipartFormDataContent
+        $multipart = New-MultipartContent -Parts $Form
+        $params['Body'] = $multipart
+    } else {
+        $json = ConvertTo-Json -InputObject $Body -Depth 5 -Compress
+        $params['Body'] = $script:Utf8NoBom.GetBytes($json)
+        $params['ContentType'] = 'application/json'
     }
     # The fake test server is plain http on 127.0.0.1; PowerShell refuses to send a token over http without this.
     if ($uri -match '^http://(127\.0\.0\.1|localhost|\[::1\])[:/]') { $params['AllowUnencryptedAuthentication'] = $true }
@@ -401,6 +514,8 @@ function Invoke-ImageRequest {
         $result.Code = 'network'
         $result.Message = "request failed: $($_.Exception.Message)"
         return $result
+    } finally {
+        if ($multipart) { $multipart.Dispose() }
     }
     $result.Status = [int]$resp.StatusCode
     $headers = @{}
@@ -542,11 +657,18 @@ function Invoke-JobGeneration {
         [Parameter(Mandatory)]$Settings,
         [Parameter(Mandatory)][securestring]$ApiKey
     )
-    $body = New-ImageRequestBody -Job $Job -Settings $Settings
+    $req = @{ ApiBase = $Settings.ApiBase; ApiKey = $ApiKey; TimeoutSec = $Settings.RequestTimeoutSec }
+    if (Test-EditJob $Job) {
+        $req['Endpoint'] = 'images/edits'
+        $req['Form'] = New-ImageEditForm -Job $Job -Settings $Settings   # reads the reference images once per job
+    } else {
+        $req['Endpoint'] = 'images/generations'
+        $req['Body'] = New-ImageRequestBody -Job $Job -Settings $Settings
+    }
     $r = $null
     for ($attempt = 1; $attempt -le $Settings.MaxRetries; $attempt++) {
         $Entry['attempts'] = [int]$Entry['attempts'] + 1
-        $r = Invoke-ImageRequest -ApiBase $Settings.ApiBase -ApiKey $ApiKey -Body $body -TimeoutSec $Settings.RequestTimeoutSec
+        $r = Invoke-ImageRequest @req
         if ($r.Ok) { $r.Class = 'ok'; return $r }
         $r.Class = Get-ErrorClass -Status $r.Status -Code $r.Code -Type $r.Type -Message $r.Message -Headers $r.Headers
         if ($r.Class -notin 'rate_limit', 'server', 'network') { return $r }
@@ -621,6 +743,217 @@ function Save-BytesAtomic {
 }
 
 # ---------------------------------------------------------------------------------------------
+# Shared command-line plumbing and the run loop (Generate-Images.ps1 and Edit-Images.ps1)
+# ---------------------------------------------------------------------------------------------
+
+function Test-EditJob {
+    param($Job)
+    return [bool]($Job -and $Job.PSObject.Properties['Endpoint'] -and $Job.Endpoint -eq 'edits')
+}
+
+function Get-ResumeCommand {
+    <# The command to print when a run stops, rebuilt from the script's bound parameters. #>
+    param([Parameter(Mandatory)][string]$ScriptPath, [Parameter(Mandatory)][System.Collections.IDictionary]$BoundParameters)
+    $parts = @('pwsh', '-File', "'$ScriptPath'")
+    foreach ($k in $BoundParameters.Keys) {
+        $v = $BoundParameters[$k]
+        if ($v -is [switch]) { if ($v.IsPresent) { $parts += "-$k" } }
+        elseif ($v -is [array]) { $parts += "-$k"; $parts += (($v | ForEach-Object { "'$_'" }) -join ',') }
+        else { $parts += "-$k"; $parts += "'$v'" }
+    }
+    return ($parts -join ' ')
+}
+
+function Get-ApiKeySecure {
+    <#
+    Asks for the key with hidden input, or uses OPENAI_API_KEY after confirming (-UseEnvKey: without asking).
+    Returns a SecureString; the key is never written or printed.
+    #>
+    param([switch]$UseEnvKey)
+    if ($env:OPENAI_API_KEY) {
+        $use = [bool]$UseEnvKey
+        if (-not $use) {
+            $ans = Read-Host 'OPENAI_API_KEY is set in this environment. Use it for this run? [Y/n]'
+            $use = ($ans -eq '' -or $ans -match '^(y|yes)$')
+        }
+        if ($use) { return (ConvertTo-SecureString -String $env:OPENAI_API_KEY -AsPlainText -Force) }
+    } elseif ($UseEnvKey) {
+        throw '-UseEnvKey was given, but OPENAI_API_KEY is not set.'
+    }
+    $sec = Read-Host -Prompt 'OpenAI API key (hidden; kept in memory for this run only)' -AsSecureString
+    if ($null -eq $sec -or $sec.Length -eq 0) { throw 'No API key entered.' }
+    return $sec
+}
+
+function Add-PlanToManifest {
+    <#
+    Records every selected job in the manifest, so it shows the whole picture before the run. Jobs with a
+    ManifestExtra dictionary (edit jobs: mode, grid, source, references) get those fields refreshed.
+    #>
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Plan, [Parameter(Mandatory)]$Manifest)
+    foreach ($p in $Plan) {
+        $key = $p.Job.Key
+        if ($null -eq $Manifest['jobs'][$key]) {
+            $Manifest['jobs'][$key] = [ordered]@{
+                doc = $p.Job.Doc; id = $p.Job.Id; section = $p.Job.Section; size = $p.Job.Size; background = $p.Job.Background
+                output = $p.Job.OutputRel; status = 'pending'; attempts = 0; lastError = $null; promptHash = $p.Hash
+                createdAt = Get-UtcStamp; startedAt = $null; finishedAt = $null; model = $null; check = $null
+            }
+            if ($p.Action -eq 'skip') {
+                $Manifest['jobs'][$key]['status'] = 'skipped'
+                $Manifest['jobs'][$key]['lastError'] = $p.Reason
+            }
+        }
+        if ($p.Job.PSObject.Properties['ManifestExtra'] -and $p.Job.ManifestExtra -and $p.Action -eq 'run') {
+            foreach ($k in $p.Job.ManifestExtra.Keys) { $Manifest['jobs'][$key][$k] = $p.Job.ManifestExtra[$k] }
+        }
+    }
+}
+
+function Invoke-ImageJobRun {
+    <#
+    .SYNOPSIS
+    The run loop shared by both scripts: one job after the other with a progress bar, the manifest saved
+    atomically before and after every job, PNG checks, the quota/auth/access stop, the consecutive-failure
+    stop, the summary and the contact sheet. Returns @{ StopReason; Failed; Done; Flagged }.
+    An interrupted run (Ctrl+C) still saves the manifest and prints the summary in the finally block.
+    #>
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$ToRun,
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Jobs,
+        [Parameter(Mandatory)]$Manifest,
+        [Parameter(Mandatory)][string]$ManifestPath,
+        [Parameter(Mandatory)][string]$OutDir,
+        [Parameter(Mandatory)]$Settings,
+        [Parameter(Mandatory)][securestring]$ApiKey,
+        [int]$MaxConsecutiveFailures = 5,
+        [string]$ResumeCommand = '',
+        [string]$Activity = 'Generating images',
+        [ValidateSet('generate', 'edit')][string]$SheetKind = 'generate',
+        [hashtable]$SheetOptions = @{},
+        [switch]$NoContactSheet
+    )
+    $stopReason = $null
+    $completed = $false
+    $consecutiveFailures = 0
+    $ran = [System.Collections.Generic.List[string]]::new()
+    $runFailed = [System.Collections.Generic.List[string]]::new()
+    $runDone = [System.Collections.Generic.List[string]]::new()
+    $runFlagged = [System.Collections.Generic.List[string]]::new()
+    $t0 = Get-Date
+    try {
+        for ($i = 0; $i -lt $ToRun.Count; $i++) {
+            $p = $ToRun[$i]
+            $job = $p.Job
+            $entry = $Manifest['jobs'][$job.Key]
+            $pct = [int](100 * $i / $ToRun.Count)
+            $eta = ''
+            if ($i -gt 0) {
+                $per = ((Get-Date) - $t0).TotalSeconds / $i
+                $eta = ', about {0:0} min left' -f ($per * ($ToRun.Count - $i) / 60)
+            }
+            Write-Progress -Activity "$Activity ($($Settings.Model), $($Settings.Quality))" -Status "$($i + 1)/$($ToRun.Count): $($job.Key)$eta" -PercentComplete $pct
+            Write-Host "[$($i + 1)/$($ToRun.Count)] $($job.Key) ($($job.Size), $($job.Background)) - $($p.Reason)"
+
+            $entry['status'] = 'pending'
+            $entry['startedAt'] = Get-UtcStamp
+            $entry['promptHash'] = $p.Hash
+            $entry['model'] = $Settings.Model
+            $entry['quality'] = $Settings.Quality
+            $entry['output'] = $job.OutputRel
+            Save-Manifest -Manifest $Manifest -Path $ManifestPath
+
+            $r = Invoke-JobGeneration -Job $job -Entry $entry -Settings $Settings -ApiKey $ApiKey
+            $ran.Add($job.Key)
+            if ($r.Ok) {
+                $bytes = $r.Images[0]
+                $check = Test-ImageResult -Bytes $bytes -Background $job.Background -Size (Resolve-ImageSize -Size $job.Size -Model $Settings.Model)
+                if (-not $check['isPng']) {
+                    $entry['status'] = 'failed'
+                    $entry['lastError'] = "response was not a PNG: $(@($check['issues']) -join '; ')"
+                    $runFailed.Add($job.Key)
+                    $consecutiveFailures++
+                } else {
+                    if ((Test-Path -LiteralPath $p.File) -and $p.PromptChanged) {
+                        # keep the old take of a changed prompt instead of silently overwriting it
+                        $old = Join-Path $OutDir ('_replaced/' + $job.OutputRel -replace '\.png$', ('.' + (Get-Date).ToString('yyyyMMdd-HHmmss') + '.png'))
+                        $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $old)
+                        Move-Item -LiteralPath $p.File -Destination $old -Force
+                    }
+                    Save-BytesAtomic -Path $p.File -Bytes $bytes
+                    $entry['status'] = 'done'
+                    $entry['lastError'] = $null
+                    $entry['check'] = $check
+                    $runDone.Add($job.Key)
+                    $consecutiveFailures = 0
+                    if ($check['ok']) {
+                        Write-Host "  saved $($job.OutputRel) ($($check['colorTypeName']), $($check['width'])x$($check['height']))" -ForegroundColor Green
+                    } else {
+                        $runFlagged.Add($job.Key)
+                        Write-Host "  saved $($job.OutputRel), but CHECK FAILED: $(@($check['issues']) -join '; ')" -ForegroundColor Yellow
+                    }
+                }
+            } else {
+                $msg = "[$($r.Class)] HTTP $($r.Status)$(if ($r.Code) { " $($r.Code)" }): $($r.Message)"
+                $entry['status'] = 'failed'
+                $entry['lastError'] = $msg
+                $runFailed.Add($job.Key)
+                $consecutiveFailures++
+                Write-Host "  FAILED $msg" -ForegroundColor Red
+                switch ($r.Class) {
+                    'fatal_quota' { $stopReason = "insufficient quota or billing limit: $($r.Message). Add credit or raise the limit at platform.openai.com (Settings > Billing / Limits)." }
+                    'fatal_auth' { $stopReason = "the API key was rejected (HTTP 401): $($r.Message)" }
+                    'fatal_access' { $stopReason = "access denied (HTTP 403): $($r.Message). Image models can require organization verification." }
+                }
+                if ($r.Class -like 'fatal_*') {
+                    # the job itself was not at fault: leave it pending so the next run retries it
+                    $entry['status'] = 'pending'
+                    $runFailed.Remove($job.Key) | Out-Null
+                }
+            }
+            $entry['finishedAt'] = Get-UtcStamp
+            Save-Manifest -Manifest $Manifest -Path $ManifestPath
+            if ($stopReason) { break }
+            if ($consecutiveFailures -ge $MaxConsecutiveFailures) {
+                $stopReason = "$consecutiveFailures jobs in a row failed; check the errors above before spending more."
+                break
+            }
+        }
+        if (-not $stopReason) { $completed = $true }
+    } finally {
+        Write-Progress -Activity $Activity -Completed
+        if (-not $completed -and -not $stopReason) { $stopReason = 'interrupted (Ctrl+C)' }
+        $Manifest['lastRun']['finishedAt'] = Get-UtcStamp
+        $Manifest['lastRun']['stopReason'] = $stopReason
+        Save-Manifest -Manifest $Manifest -Path $ManifestPath
+
+        $statuses = foreach ($j in $Jobs) { $e = $Manifest['jobs'][$j.Key]; if ($e) { $e['status'] } else { 'pending' } }
+        $counts = $statuses | Group-Object | ForEach-Object { "$($_.Name) $($_.Count)" }
+        Write-Host ''
+        Write-Host '==================== Summary ====================' -ForegroundColor Cyan
+        Write-Host "This run: $($ran.Count) jobs attempted, $($runDone.Count) succeeded, $($runFailed.Count) failed, $($runFlagged.Count) flagged by the PNG check."
+        Write-Host "All selected jobs: $($counts -join ', ')"
+        foreach ($k in $runFailed) { Write-Host "  failed:  $k  $($Manifest['jobs'][$k]['lastError'])" -ForegroundColor Red }
+        foreach ($k in $runFlagged) { Write-Host "  flagged: $k  $(@($Manifest['jobs'][$k]['check']['issues']) -join '; ')" -ForegroundColor Yellow }
+        Write-Host "Output:   $OutDir"
+        Write-Host "Manifest: $ManifestPath"
+        if (-not $NoContactSheet) {
+            try {
+                $sheet = if ($SheetKind -eq 'edit') { Write-EditContactSheet -OutDir $OutDir -Manifest $Manifest -Jobs $Jobs @SheetOptions }
+                         else { Write-ContactSheet -OutDir $OutDir -Manifest $Manifest -Jobs $Jobs }
+                Write-Host "Contact sheet: $sheet"
+            } catch { Write-Warning "Could not write the contact sheet: $($_.Exception.Message)" }
+        }
+        if ($stopReason) {
+            Write-Host "Stopped: $stopReason" -ForegroundColor Red
+            Write-Host 'The manifest is saved. Run the same command again to resume; done jobs are skipped:'
+            Write-Host "  $ResumeCommand"
+        }
+    }
+    return [pscustomobject]@{ StopReason = $stopReason; Failed = $runFailed.Count; Done = $runDone.Count; Flagged = $runFlagged.Count }
+}
+
+# ---------------------------------------------------------------------------------------------
 # Cost and contact sheet
 # ---------------------------------------------------------------------------------------------
 
@@ -629,10 +962,19 @@ function Get-CostEstimate {
     Very rough USD estimate, from the per-image prices quoted in docs/SPRITE_PROMPTS.md for
     1024x1024 (low 0.01, medium 0.04, high 0.17); non-square sizes cost about 1.5x. Check current pricing.
     #>
-    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Jobs, [string]$Quality = 'medium')
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Jobs,
+        [string]$Quality = 'medium',
+        # Edits: rough USD per input (reference) image. Input images are billed as image input tokens;
+        # high input fidelity uses more of them. See Edit-Images.ps1 / README for the assumption.
+        [double]$PerInputImage = 0.0
+    )
     $per = switch ($Quality) { 'low' { 0.011 } 'medium' { 0.042 } 'high' { 0.167 } default { 0.25 } }
     $sum = 0.0
-    foreach ($j in $Jobs) { $sum += if ($j.Size -eq '1024x1024') { $per } else { $per * 1.5 } }
+    foreach ($j in $Jobs) {
+        $sum += if ($j.Size -eq '1024x1024') { $per } else { $per * 1.5 }
+        if ($PerInputImage -gt 0 -and $j.PSObject.Properties['References']) { $sum += $PerInputImage * @($j.References).Count }
+    }
     return [Math]::Round($sum, 2)
 }
 
@@ -680,7 +1022,363 @@ function Write-ContactSheet {
     return $path
 }
 
-Export-ModuleMember -Function ConvertTo-Slug, Get-SpriteJobs, Get-BoxArtJobs, Expand-JobVariants, Get-ImageJobs,
-    Get-PromptHash, Get-UtcStamp, New-Manifest, Read-Manifest, Save-Manifest, Get-JobPlan, Resolve-ImageSize,
-    New-ImageRequestBody, Invoke-ImageRequest, Get-ErrorClass, ConvertFrom-RateLimitDuration, Get-RetryDelaySeconds,
-    Invoke-JobGeneration, Test-ImageResult, Save-BytesAtomic, Get-CostEstimate, Write-ContactSheet
+# ---------------------------------------------------------------------------------------------
+# Edits (Edit-Images.ps1): prompt templates, job list, contact sheet
+# ---------------------------------------------------------------------------------------------
+
+function Read-EditPrompts {
+    <#
+    .SYNOPSIS
+    Reads tools/image-gen/edit-prompts.md. Only fenced blocks count; everything else is documentation.
+      ```modes                      lines "category: bold, pixel" or "category: skip" (folder categories)
+      ```mode bold|pixel            the main template of a redraw mode
+      ```background transparent|opaque
+      ```reference master|style|anchor   how each attached image is described ({INDEX} = its position)
+      ```category <name> [mode]     added for jobs of that prompt-doc category (units, ships, goods, ...)
+      ```match <pattern>[,...] [mode]    added for sprite ids matching the wildcard(s)
+    Placeholders in any block: {N} {CELL} {WIDTH} {HEIGHT} {OUTLINE} {PALETTE}.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+    $text = [IO.File]::ReadAllText($Path)
+    $r = [pscustomobject]@{
+        Path       = $Path
+        Modes      = [ordered]@{}
+        Templates  = @{}
+        Background = @{}
+        Reference  = @{}
+        Category   = [System.Collections.Generic.List[object]]::new()
+        Match      = [System.Collections.Generic.List[object]]::new()
+    }
+    $lines = $text -split '\r?\n'
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -notmatch '^```([a-z][a-z-]*)(?:[ \t]+(.+?))?[ \t]*$') { continue }
+        $kind = $Matches[1]
+        $argText = if ($Matches.Count -gt 2 -and $Matches[2]) { $Matches[2].Trim() } else { '' }
+        $body = [System.Collections.Generic.List[string]]::new()
+        $i++
+        while ($i -lt $lines.Count -and -not $lines[$i].StartsWith('```')) { $body.Add($lines[$i]); $i++ }
+        $b = ($body -join "`n").Trim()
+        $words = @($argText -split '\s+' | Where-Object { $_ })
+        switch ($kind) {
+            'modes' {
+                foreach ($l in $body) {
+                    $l = ($l -replace '#.*$', '').Trim()
+                    if ($l -notmatch '^([a-z0-9-]+)\s*:\s*(.*)$') { continue }
+                    $cat = $Matches[1]
+                    $ms = @($Matches[2] -split '[,\s]+' | Where-Object { $_ -and $_ -ne 'skip' })
+                    foreach ($m in $ms) { if ($m -notin 'bold', 'pixel') { throw "${Path}: unknown mode '$m' for category '$cat' (bold | pixel | skip)" } }
+                    $r.Modes[$cat] = $ms
+                }
+            }
+            'mode' {
+                if ($words.Count -lt 1 -or $words[0] -notin 'bold', 'pixel') { throw "${Path}: ``````mode needs 'bold' or 'pixel'" }
+                $r.Templates[$words[0]] = $b
+            }
+            'background' {
+                if ($words.Count -lt 1 -or $words[0] -notin 'transparent', 'opaque') { throw "${Path}: ``````background needs 'transparent' or 'opaque'" }
+                $r.Background[$words[0]] = $b
+            }
+            'reference' {
+                if ($words.Count -lt 1 -or $words[0] -notin 'master', 'style', 'anchor') { throw "${Path}: ``````reference needs master, style or anchor" }
+                $r.Reference[$words[0]] = $b
+            }
+            'category' {
+                if ($words.Count -lt 1) { throw "${Path}: ``````category needs a name" }
+                $mode = if ($words.Count -gt 1) { $words[1] } else { $null }
+                $r.Category.Add([pscustomobject]@{ Name = $words[0]; Mode = $mode; Text = $b })
+            }
+            'match' {
+                if ($words.Count -lt 1) { throw "${Path}: ``````match needs a pattern" }
+                $mode = if ($words.Count -gt 1) { $words[1] } else { $null }
+                $pats = @($words[0] -split ',' | Where-Object { $_ })
+                $r.Match.Add([pscustomobject]@{ Patterns = $pats; Mode = $mode; Text = $b })
+            }
+        }
+    }
+    foreach ($m in 'bold', 'pixel') { if (-not $r.Templates.ContainsKey($m)) { throw "${Path}: no ``````mode $m block" } }
+    if ($r.Modes.Count -eq 0) { throw "${Path}: no ``````modes block" }
+    return $r
+}
+
+function Get-PixelGridSize {
+    <#
+    Output edge for an N-cell pixel grid: N * cell, a multiple of 16 (gpt-image-2 / 2.5 accept any edge
+    divisible by 16), as close to the master's edge as possible. 16 -> 1024 (64-px cells), 24 -> 1008
+    (42-px cells), 32 -> 1024 (32-px cells).
+    #>
+    param([Parameter(Mandatory)][int]$N, [int]$Edge = 1024)
+    $best = 0
+    $c0 = [Math]::Max(1, [int][Math]::Floor($Edge / $N) - 20)
+    for ($c = $c0; $c -le $c0 + 40; $c++) {
+        $s = $N * $c
+        if ($s % 16 -ne 0) { continue }
+        if ($best -eq 0 -or [Math]::Abs($s - $Edge) -lt [Math]::Abs($best - $Edge) -or
+            ([Math]::Abs($s - $Edge) -eq [Math]::Abs($best - $Edge) -and $s -lt $best)) { $best = $s }
+    }
+    return $best
+}
+
+function Expand-EditPlaceholders {
+    param([string]$Text, [hashtable]$Values)
+    if (-not $Text) { return $Text }
+    $t = $Text
+    foreach ($k in $Values.Keys) { $t = $t.Replace('{' + $k + '}', [string]$Values[$k]) }
+    return $t
+}
+
+function Get-EditJobs {
+    <#
+    .SYNOPSIS
+    Edit jobs from the generator manifest: every entry with status "done" whose master file exists, in the
+    modes its category allows (edit-prompts.md ```modes, or -Category to include more), one job per mode
+    and grid size. Returns @{ Jobs; Warnings }.
+    #>
+    param(
+        [Parameter(Mandatory)]$SourceManifest,
+        [Parameter(Mandatory)][string]$InDir,
+        [Parameter(Mandatory)]$Prompts,
+        [System.Collections.IDictionary]$DocJobs = @{},
+        [string[]]$Mode = @('bold', 'pixel'),
+        [int[]]$Grid = @(32),
+        [string]$Model = 'gpt-image-2.5-flare',
+        [string]$StyleRef,
+        [string]$AnchorDir,
+        [ValidateSet('sprites', 'boxart', 'all')][string]$Doc = 'sprites',
+        [string[]]$Category,
+        [string[]]$Only,
+        [int]$Variants = 1
+    )
+    $warnings = [System.Collections.Generic.List[string]]::new()
+    $jobs = [System.Collections.Generic.List[object]]::new()
+    $palette = '#1b1a17 (ink), #fffdf6 (white), #f3c9a0 (skin), #d23c2a (red), #3a6fb0 (slate blue), #fbf3df (cream), #a8743f (wood), #b9b2a6 (stone), #9a5b2e (hull brown), #ffd23f (gold), #8ed0ec (light blue), #58a548 (green)'
+    $wantCats = @($Category | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $styleOk = $false
+    if ($StyleRef) {
+        if (Test-Path -LiteralPath $StyleRef) { $styleOk = $true }
+        else { $warnings.Add("Style reference $StyleRef not found: the edits run without it.") }
+    }
+    # document order (DocJobs is ordered like the prompt docs), then manifest key, so the list is stable
+    $order = @{}
+    $idx = 0
+    foreach ($k in $DocJobs.Keys) { $order[$k] = $idx; $idx++ }
+    $srcKeys = @($SourceManifest['jobs'].Keys | Sort-Object { if ($order.ContainsKey($_)) { $order[$_] } else { [int]::MaxValue } }, { $_ })
+    foreach ($srcKey in $srcKeys) {
+        $e = $SourceManifest['jobs'][$srcKey]
+        if ($null -eq $e -or $e['status'] -ne 'done' -or -not $e['id']) { continue }
+        $entryDoc = [string]$e['doc']
+        if ($Doc -ne 'all' -and $entryDoc -ne $Doc) { continue }
+        $id = [string]$e['id']
+        $folderCat = if ($entryDoc -eq 'boxart') { 'boxart' } else { ($id -split '/')[0] }
+        if ($folderCat -eq 'bible') { if ($wantCats -notcontains 'bible') { continue } }
+        $bg = [string]$e['background']
+        $allowed = @()
+        if ($Prompts.Modes.Contains($folderCat)) { $allowed = @($Prompts.Modes[$folderCat] | Where-Object { $_ }) }
+        if ($wantCats.Count -gt 0) {
+            if ($wantCats -notcontains $folderCat) { continue }
+            # a category named in -Category but skipped in the rules: bold, plus pixel for transparent sprites
+            if ($allowed.Count -eq 0) { $allowed = if ($bg -eq 'transparent') { @('bold', 'pixel') } else { @('bold') } }
+        }
+        $modes = @($Mode | Where-Object { $allowed -contains $_ })
+        if ($modes.Count -eq 0) { continue }
+        $master = Join-Path $InDir ([string]$e['output'])
+        if (-not (Test-Path -LiteralPath $master)) {
+            $warnings.Add("Master for $entryDoc/$id not found at $master (done in the manifest): skipped.")
+            continue
+        }
+        $dj = $DocJobs["$entryDoc/$id"]
+        $docCat = if ($dj -and $dj.Category) { [string]$dj.Category } else { $folderCat }
+        $subject = if ($dj -and $dj.Subject) { [string]$dj.Subject } else { 'not described in the prompt document; redraw exactly what image 1 shows.' }
+        $section = if ($dj) { $dj.Section } else { [string]$e['section'] }
+        if ([string]$e['size'] -notmatch '^(\d+)x(\d+)$') { $warnings.Add("$entryDoc/${id}: unknown size '$($e['size'])': skipped."); continue }
+        $mw = [int]$Matches[1]; $mh = [int]$Matches[2]
+        $masterSha = Get-FileSha256 -Path $master
+
+        foreach ($m in $modes) {
+            $gridList = if ($m -eq 'pixel') { @($Grid) } else { @(0) }
+            foreach ($n in $gridList) {
+                if ($m -eq 'pixel' -and $mw -ne $mh) { $warnings.Add("$entryDoc/${id}: pixel mode needs a square master ($mw x $mh): skipped."); continue }
+                $modeDir = if ($m -eq 'pixel') { "pixel-$n" } else { 'bold' }
+                $size = if ($m -eq 'pixel') { $edge = Get-PixelGridSize -N $n -Edge $mw; "${edge}x${edge}" } else { "${mw}x${mh}" }
+                $size = Resolve-ImageSize -Size $size -Model $Model
+                $null = $size -match '^(\d+)x(\d+)$'
+                $w = [int]$Matches[1]; $h = [int]$Matches[2]
+                $cell = if ($n -gt 0) { $w / [double]$n } else { 0 }
+                $cellText = if ($n -gt 0) { if ([Math]::Abs($cell - [Math]::Round($cell)) -lt 1e-9) { '{0}' -f [int]$cell } else { '{0:0.##}' -f $cell } } else { '' }
+                $vals = @{
+                    N = $n; CELL = $cellText; WIDTH = $w; HEIGHT = $h; PALETTE = $palette
+                    OUTLINE = ('{0} to {1}' -f [int][Math]::Round($w * 0.03), [int][Math]::Round($w * 0.04))
+                }
+
+                # reference images: the master first, then the style bible, then this category's anchor
+                $refs = [System.Collections.Generic.List[object]]::new()
+                $refs.Add([pscustomobject]@{ Role = 'master'; Path = $master; Sha256 = $masterSha })
+                if ($styleOk -and ([IO.Path]::GetFullPath($StyleRef) -ne [IO.Path]::GetFullPath($master))) {
+                    $refs.Add([pscustomobject]@{ Role = 'style'; Path = $StyleRef; Sha256 = (Get-FileSha256 -Path $StyleRef) })
+                }
+                if ($AnchorDir) {
+                    foreach ($cand in @(@($docCat, $folderCat) | Select-Object -Unique)) {
+                        $a = Join-Path (Join-Path $AnchorDir $modeDir) "$cand.png"
+                        if (Test-Path -LiteralPath $a) {
+                            $refs.Add([pscustomobject]@{ Role = 'anchor'; Path = $a; Sha256 = (Get-FileSha256 -Path $a) })
+                            break
+                        }
+                    }
+                }
+
+                $parts = [System.Collections.Generic.List[string]]::new()
+                $parts.Add((Expand-EditPlaceholders -Text ($Prompts.Templates[$m]) -Values $vals))
+                $bgText = $Prompts.Background[$bg]
+                if ($bgText) { $parts.Add((Expand-EditPlaceholders $bgText $vals)) }
+                $catTexts = @($Prompts.Category | Where-Object { $_.Name -eq $docCat -and (-not $_.Mode -or $_.Mode -eq $m) } | ForEach-Object { Expand-EditPlaceholders $_.Text $vals })
+                if ($catTexts.Count) { $parts.Add(($catTexts -join "`n")) }
+                $matchTexts = @($Prompts.Match | Where-Object {
+                        $mt = $_
+                        (-not $mt.Mode -or $mt.Mode -eq $m) -and @($mt.Patterns | Where-Object { $id -like $_ }).Count -gt 0
+                    } | ForEach-Object { Expand-EditPlaceholders $_.Text $vals })
+                if ($matchTexts.Count) { $parts.Add(($matchTexts -join "`n")) }
+                $refLines = [System.Collections.Generic.List[string]]::new()
+                for ($k = 0; $k -lt $refs.Count; $k++) {
+                    $t = $Prompts.Reference[$refs[$k].Role]
+                    if (-not $t) { $t = "Image {INDEX}: $($refs[$k].Role) reference." }
+                    $refLines.Add((Expand-EditPlaceholders $t ($vals + @{ INDEX = $k + 1 })))
+                }
+                $parts.Add(($refLines -join "`n"))
+                $parts.Add("SUBJECT OF IMAGE 1 (from its original prompt): $subject")
+                $prompt = $parts -join "`n`n"
+
+                $hashInput = "edit-v1|mode=$m|grid=$n|size=$size|background=$bg|" + (($refs | ForEach-Object { "ref:$($_.Role):$($_.Sha256)" }) -join '|') + "|prompt=$prompt"
+                $extra = [ordered]@{
+                    mode       = $m
+                    grid       = $(if ($n -gt 0) { $n } else { $null })
+                    sourceId   = "$entryDoc/$id"
+                    source     = [string]$e['output']
+                    references = @($refs | ForEach-Object { [ordered]@{ role = $_.Role; file = $_.Path; sha256 = $_.Sha256 } })
+                }
+                $notes = if ($m -eq 'pixel' -and [Math]::Abs($cell - [Math]::Round($cell)) -gt 1e-9) { "cells are $cellText px (not whole pixels) at $size; use a gpt-image-2 / 2.5 model for exact cells" } else { $null }
+                $jobs.Add([pscustomobject]@{
+                        Doc           = $modeDir
+                        Id            = $id
+                        BaseId        = $id
+                        Variant       = 1
+                        Key           = "$modeDir/$id"
+                        Section       = "$modeDir < $section"
+                        Category      = $folderCat
+                        DocCategory   = $docCat
+                        Size          = $size
+                        Background    = $bg
+                        Prompt        = $prompt
+                        OutputRel     = "$modeDir/$id.png"
+                        Notes         = $notes
+                        Subject       = $subject
+                        Endpoint      = 'edits'
+                        Mode          = $m
+                        Grid          = $n
+                        SourceId      = "$entryDoc/$id"
+                        SourceFile    = $master
+                        References    = $refs.ToArray()
+                        HashInput     = $hashInput
+                        ManifestExtra = $extra
+                    })
+            }
+        }
+    }
+    $sel = Select-JobsByPattern -Jobs $jobs.ToArray() -Only $Only
+    return [pscustomobject]@{ Jobs = (Expand-JobVariants -Jobs $sel -Variants $Variants); Warnings = $warnings.ToArray() }
+}
+
+function Write-EditContactSheet {
+    <#
+    Writes index.html in the edited folder: one row per master with the original, then every redraw
+    (bold, pixel-N, variants), each also shown small (browser-scaled; the exact grid snap and the real
+    downscale are in the sprite pipeline's contact sheet).
+    #>
+    param(
+        [Parameter(Mandatory)][string]$OutDir,
+        [Parameter(Mandatory)]$Manifest,
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Jobs
+    )
+    $enc = { param($s) [System.Net.WebUtility]::HtmlEncode([string]$s) }
+    $rel = {
+        param($from, $to)
+        $r = [IO.Path]::GetRelativePath($from, $to) -replace '\\', '/'
+        ($r -split '/' | ForEach-Object { if ($_ -eq '..') { $_ } else { [uri]::EscapeDataString($_) } }) -join '/'
+    }
+    $sb = [System.Text.StringBuilder]::new()
+    $null = $sb.AppendLine('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">')
+    $null = $sb.AppendLine('<title>Redraw Contact Sheet</title><style>')
+    $null = $sb.AppendLine(':root{--bg:#f5eedc;--card:#fffdf6;--ink:#1b1a17;--muted:#6b665c;--bad:#b3261e;--ok:#2e7d32;--chk1:#2b4a6f;--chk2:#36597f;--grass:#a6d878}')
+    $null = $sb.AppendLine('@media (prefers-color-scheme: dark){:root{--bg:#1c1b19;--card:#262522;--ink:#f1ece0;--muted:#a9a395}}')
+    $null = $sb.AppendLine('body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,sans-serif}h1{font-size:20px;margin:0 0 4px}p.meta{color:var(--muted);margin:0 0 16px;max-width:980px}')
+    $null = $sb.AppendLine('.row{background:var(--card);border-radius:8px;padding:8px;margin:0 0 12px;box-shadow:0 1px 2px rgba(0,0,0,.15)}.row h2{font-size:15px;margin:0 0 6px;word-break:break-all}')
+    $null = $sb.AppendLine('.cols{display:flex;flex-wrap:wrap;gap:12px}.col{width:220px;min-width:0}.thumb{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:4px;background:repeating-conic-gradient(var(--chk1) 0 25%,var(--chk2) 0 50%) 0 0/24px 24px}')
+    $null = $sb.AppendLine('.thumb img{max-width:100%;max-height:100%}.small{color:var(--muted);font-size:12px}.bad{color:var(--bad)}.okc{color:var(--ok)}.key{font-weight:600}')
+    $null = $sb.AppendLine('.minis{display:flex;gap:4px;align-items:flex-end;margin-top:4px;flex-wrap:wrap}.minis span{background:var(--grass);padding:2px;line-height:0;border-radius:2px}.px{image-rendering:pixelated}')
+    $null = $sb.AppendLine('details{font-size:12px;margin-top:4px}details pre{white-space:pre-wrap;word-break:break-word;max-height:240px;overflow:auto}.empty{color:#dfe6ee;font-size:12px}</style></head><body>')
+    $null = $sb.AppendLine("<h1>Redraw Contact Sheet</h1><p class=""meta"">$(& $enc ((Get-Date).ToString('yyyy-MM-dd HH:mm'))) &middot; $($Jobs.Count) jobs. Each row: the original master, then each redraw. The small images are scaled by the browser (pixel redraws with nearest-neighbour, which samples about one point per cell), only for a first impression: for the real comparison run the sprite pipeline with <code>--in</code> on the bold folder and <code>--grid-in</code> on a pixel folder, whose contact sheet puts original, bold and pixel-grid side by side.</p>")
+    $groups = [ordered]@{}
+    foreach ($j in $Jobs) {
+        $k = if ($j.PSObject.Properties['SourceId']) { $j.SourceId } else { $j.Key }
+        if (-not $groups.Contains($k)) { $groups[$k] = [System.Collections.Generic.List[object]]::new() }
+        $groups[$k].Add($j)
+    }
+    foreach ($k in $groups.Keys) {
+        $list = $groups[$k]
+        $first = $list[0]
+        $null = $sb.Append("<section class=""row""><h2>$(& $enc $k)</h2><div class=""cols"">")
+        if ($first.PSObject.Properties['SourceFile'] -and (Test-Path -LiteralPath $first.SourceFile)) {
+            $src = & $rel $OutDir $first.SourceFile
+            $null = $sb.Append("<div class=""col""><div class=""thumb""><img loading=""lazy"" src=""$src"" alt=""""></div><div class=""key"">original</div><div class=""minis"">")
+            foreach ($n in 32, 48, 64) { $null = $sb.Append("<span><img loading=""lazy"" src=""$src"" width=""$n"" height=""$n"" alt=""""></span>") }
+            $null = $sb.Append('</div></div>')
+        }
+        foreach ($j in $list) {
+            $e = $Manifest['jobs'][$j.Key]
+            $status = if ($e) { $e['status'] } else { 'pending' }
+            $file = Join-Path $OutDir $j.OutputRel
+            $null = $sb.Append('<div class="col"><div class="thumb">')
+            $has = Test-Path -LiteralPath $file
+            $src = $null
+            if ($has) {
+                $src = ($j.OutputRel -split '/' | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/'
+                $null = $sb.Append("<img loading=""lazy"" src=""$src"" alt=""$(& $enc $j.Key)"">")
+            } else {
+                $null = $sb.Append("<span class=""empty"">$(& $enc $status)</span>")
+            }
+            $label = $j.Doc
+            if ($j.Variant -gt 1) { $label += " v$($j.Variant)" }
+            $null = $sb.Append("</div><div class=""key"">$(& $enc $label)</div><div class=""small"">$(& $enc $j.Size) &middot; $(& $enc $j.Background) &middot; $(& $enc $status)</div>")
+            if ($has) {
+                $null = $sb.Append('<div class="minis">')
+                if ($j.PSObject.Properties['Mode'] -and $j.Mode -eq 'pixel') {
+                    $n = [int]$j.Grid
+                    foreach ($z in 1, 2, 4) { $null = $sb.Append("<span><img class=""px"" loading=""lazy"" src=""$src"" width=""$($n * $z)"" height=""$($n * $z)"" alt=""""></span>") }
+                } else {
+                    foreach ($n in 32, 48, 64) { $null = $sb.Append("<span><img loading=""lazy"" src=""$src"" width=""$n"" height=""$n"" alt=""""></span>") }
+                }
+                $null = $sb.Append('</div>')
+            }
+            if ($e -and $e['check'] -is [System.Collections.IDictionary]) {
+                $chk = $e['check']
+                if ($chk['ok']) { $null = $sb.Append("<div class=""small okc"">PNG check ok ($(& $enc $chk['colorTypeName']))</div>") }
+                else { $null = $sb.Append("<div class=""small bad"">$(& $enc (@($chk['issues']) -join '; '))</div>") }
+            }
+            if ($e -and $e['status'] -eq 'failed' -and $e['lastError']) { $null = $sb.Append("<div class=""small bad"">$(& $enc $e['lastError'])</div>") }
+            $null = $sb.Append("<details><summary>prompt</summary><pre>$(& $enc $j.Prompt)</pre></details></div>")
+        }
+        $null = $sb.AppendLine('</div></section>')
+    }
+    $null = $sb.AppendLine('</body></html>')
+    if (-not (Test-Path -LiteralPath $OutDir)) { $null = New-Item -ItemType Directory -Path $OutDir -Force }
+    $path = Join-Path $OutDir 'index.html'
+    $tmp = "$path.tmp-$PID"
+    [IO.File]::WriteAllText($tmp, $sb.ToString(), $script:Utf8NoBom)
+    [IO.File]::Move($tmp, $path, $true)
+    return $path
+}
+
+Export-ModuleMember -Function ConvertTo-Slug, Get-SpriteJobs, Get-BoxArtJobs, Expand-JobVariants, Select-JobsByPattern, Get-ImageJobs,
+    Get-PromptHash, Get-Sha256Hex, Get-FileSha256, Get-UtcStamp, New-Manifest, Read-Manifest, Save-Manifest, Get-JobPlan, Resolve-ImageSize,
+    New-ImageRequestBody, Test-InputFidelitySupport, New-ImageEditForm, New-MultipartContent, Invoke-ImageRequest, Get-ErrorClass,
+    ConvertFrom-RateLimitDuration, Get-RetryDelaySeconds, Invoke-JobGeneration, Test-ImageResult, Save-BytesAtomic,
+    Test-EditJob, Get-ResumeCommand, Get-ApiKeySecure, Add-PlanToManifest, Invoke-ImageJobRun, Get-CostEstimate, Write-ContactSheet,
+    Read-EditPrompts, Get-PixelGridSize, Expand-EditPlaceholders, Get-EditJobs, Write-EditContactSheet

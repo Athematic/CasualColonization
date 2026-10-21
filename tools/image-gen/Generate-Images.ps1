@@ -87,30 +87,7 @@ if ($Model -match '^dall-e') {
 }
 
 # The command to print when a run stops, built from this script's own bound parameters.
-$resumeParts = @('pwsh', '-File', "'$PSCommandPath'")
-foreach ($k in $PSBoundParameters.Keys) {
-    $v = $PSBoundParameters[$k]
-    if ($v -is [switch]) { if ($v.IsPresent) { $resumeParts += "-$k" } }
-    elseif ($v -is [array]) { $resumeParts += "-$k"; $resumeParts += (($v | ForEach-Object { "'$_'" }) -join ',') }
-    else { $resumeParts += "-$k"; $resumeParts += "'$v'" }
-}
-$resumeCommand = $resumeParts -join ' '
-
-function Get-ApiKeySecure {
-    if ($env:OPENAI_API_KEY) {
-        $use = [bool]$UseEnvKey
-        if (-not $use) {
-            $ans = Read-Host 'OPENAI_API_KEY is set in this environment. Use it for this run? [Y/n]'
-            $use = ($ans -eq '' -or $ans -match '^(y|yes)$')
-        }
-        if ($use) { return (ConvertTo-SecureString -String $env:OPENAI_API_KEY -AsPlainText -Force) }
-    } elseif ($UseEnvKey) {
-        throw '-UseEnvKey was given, but OPENAI_API_KEY is not set.'
-    }
-    $sec = Read-Host -Prompt 'OpenAI API key (hidden; kept in memory for this run only)' -AsSecureString
-    if ($null -eq $sec -or $sec.Length -eq 0) { throw 'No API key entered.' }
-    return $sec
-}
+$resumeCommand = Get-ResumeCommand -ScriptPath $PSCommandPath -BoundParameters $PSBoundParameters
 
 # ------------------------------------------------------------------------- jobs
 $jobs = Get-ImageJobs -SpriteDoc $SpriteDoc -BoxArtDoc $BoxArtDoc -Doc $Doc -Only $Only -Variants $Variants -IncludeTitle:$IncludeTitle
@@ -167,20 +144,7 @@ Write-Host "Selected $($jobs.Count) jobs ($countText). Already done or skipped: 
 foreach ($g in ($plan | Where-Object Action -eq 'run' | Group-Object Reason)) { Write-Host "  $($g.Count) x $($g.Name)" }
 
 # Record every selected job, so the manifest shows the whole picture even before it runs.
-foreach ($p in $plan) {
-    $key = $p.Job.Key
-    if ($null -eq $manifest['jobs'][$key]) {
-        $manifest['jobs'][$key] = [ordered]@{
-            doc = $p.Job.Doc; id = $p.Job.Id; section = $p.Job.Section; size = $p.Job.Size; background = $p.Job.Background
-            output = $p.Job.OutputRel; status = 'pending'; attempts = 0; lastError = $null; promptHash = $p.Hash
-            createdAt = Get-UtcStamp; startedAt = $null; finishedAt = $null; model = $null; check = $null
-        }
-        if ($p.Action -eq 'skip') {
-            $manifest['jobs'][$key]['status'] = 'skipped'
-            $manifest['jobs'][$key]['lastError'] = $p.Reason
-        }
-    }
-}
+Add-PlanToManifest -Plan $plan -Manifest $manifest
 
 if ($toRun.Count -eq 0) {
     Save-Manifest -Manifest $manifest -Path $manifestPath
@@ -201,7 +165,7 @@ if (-not $Yes) {
     if ($ans -notmatch '^(y|yes)$') { Write-Host 'Cancelled; nothing was sent.'; exit 3 }
 }
 
-$apiKey = Get-ApiKeySecure
+$apiKey = Get-ApiKeySecure -UseEnvKey:$UseEnvKey
 
 # ------------------------------------------------------------------------- run
 $manifest['lastRun'] = [ordered]@{
@@ -210,122 +174,15 @@ $manifest['lastRun'] = [ordered]@{
 }
 Save-Manifest -Manifest $manifest -Path $manifestPath
 
-$stopReason = $null
-$completed = $false
-$consecutiveFailures = 0
-$ran = [System.Collections.Generic.List[string]]::new()
-$runFailed = [System.Collections.Generic.List[string]]::new()
-$runDone = [System.Collections.Generic.List[string]]::new()
-$runFlagged = [System.Collections.Generic.List[string]]::new()
-$t0 = Get-Date
+$result = $null
 try {
-    for ($i = 0; $i -lt $toRun.Count; $i++) {
-        $p = $toRun[$i]
-        $job = $p.Job
-        $entry = $manifest['jobs'][$job.Key]
-        $pct = [int](100 * $i / $toRun.Count)
-        $eta = ''
-        if ($i -gt 0) {
-            $per = ((Get-Date) - $t0).TotalSeconds / $i
-            $eta = ', about {0:0} min left' -f ($per * ($toRun.Count - $i) / 60)
-        }
-        Write-Progress -Activity "Generating images ($Model, $Quality)" -Status "$($i + 1)/$($toRun.Count): $($job.Key)$eta" -PercentComplete $pct
-        Write-Host "[$($i + 1)/$($toRun.Count)] $($job.Key) ($($job.Size), $($job.Background)) - $($p.Reason)"
-
-        $entry['status'] = 'pending'
-        $entry['startedAt'] = Get-UtcStamp
-        $entry['promptHash'] = $p.Hash
-        $entry['model'] = $Model
-        $entry['quality'] = $Quality
-        $entry['output'] = $job.OutputRel
-        Save-Manifest -Manifest $manifest -Path $manifestPath
-
-        $r = Invoke-JobGeneration -Job $job -Entry $entry -Settings $settings -ApiKey $apiKey
-        $ran.Add($job.Key)
-        if ($r.Ok) {
-            $bytes = $r.Images[0]
-            $check = Test-ImageResult -Bytes $bytes -Background $job.Background -Size $job.Size
-            if (-not $check['isPng']) {
-                $entry['status'] = 'failed'
-                $entry['lastError'] = "response was not a PNG: $(@($check['issues']) -join '; ')"
-                $runFailed.Add($job.Key)
-                $consecutiveFailures++
-            } else {
-                if ((Test-Path -LiteralPath $p.File) -and $p.PromptChanged) {
-                    # keep the old take of a changed prompt instead of silently overwriting it
-                    $old = Join-Path $OutDir ('_replaced/' + $job.OutputRel -replace '\.png$', ('.' + (Get-Date).ToString('yyyyMMdd-HHmmss') + '.png'))
-                    $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $old)
-                    Move-Item -LiteralPath $p.File -Destination $old -Force
-                }
-                Save-BytesAtomic -Path $p.File -Bytes $bytes
-                $entry['status'] = 'done'
-                $entry['lastError'] = $null
-                $entry['check'] = $check
-                $runDone.Add($job.Key)
-                $consecutiveFailures = 0
-                if ($check['ok']) {
-                    Write-Host "  saved $($job.OutputRel) ($($check['colorTypeName']), $($check['width'])x$($check['height']))" -ForegroundColor Green
-                } else {
-                    $runFlagged.Add($job.Key)
-                    Write-Host "  saved $($job.OutputRel), but CHECK FAILED: $(@($check['issues']) -join '; ')" -ForegroundColor Yellow
-                }
-            }
-        } else {
-            $msg = "[$($r.Class)] HTTP $($r.Status)$(if ($r.Code) { " $($r.Code)" }): $($r.Message)"
-            $entry['status'] = 'failed'
-            $entry['lastError'] = $msg
-            $runFailed.Add($job.Key)
-            $consecutiveFailures++
-            Write-Host "  FAILED $msg" -ForegroundColor Red
-            switch ($r.Class) {
-                'fatal_quota' { $stopReason = "insufficient quota or billing limit: $($r.Message). Add credit or raise the limit at platform.openai.com (Settings > Billing / Limits)." }
-                'fatal_auth' { $stopReason = "the API key was rejected (HTTP 401): $($r.Message)" }
-                'fatal_access' { $stopReason = "access denied (HTTP 403): $($r.Message). Image models can require organization verification." }
-            }
-            if ($r.Class -like 'fatal_*') {
-                # the job itself was not at fault: leave it pending so the next run retries it
-                $entry['status'] = 'pending'
-                $runFailed.Remove($job.Key) | Out-Null
-            }
-        }
-        $entry['finishedAt'] = Get-UtcStamp
-        Save-Manifest -Manifest $manifest -Path $manifestPath
-        if ($stopReason) { break }
-        if ($consecutiveFailures -ge $MaxConsecutiveFailures) {
-            $stopReason = "$consecutiveFailures jobs in a row failed; check the errors above before spending more."
-            break
-        }
-    }
-    if (-not $stopReason) { $completed = $true }
+    $result = Invoke-ImageJobRun -ToRun $toRun -Jobs $jobs -Manifest $manifest -ManifestPath $manifestPath -OutDir $OutDir `
+        -Settings $settings -ApiKey $apiKey -MaxConsecutiveFailures $MaxConsecutiveFailures -ResumeCommand $resumeCommand `
+        -Activity 'Generating images' -SheetKind generate -NoContactSheet:$NoContactSheet
 } finally {
-    Write-Progress -Activity 'Generating images' -Completed
-    if (-not $completed -and -not $stopReason) { $stopReason = 'interrupted (Ctrl+C)' }
-    $manifest['lastRun']['finishedAt'] = Get-UtcStamp
-    $manifest['lastRun']['stopReason'] = $stopReason
-    Save-Manifest -Manifest $manifest -Path $manifestPath
     $apiKey = $null
-
-    $statuses = foreach ($j in $jobs) { $e = $manifest['jobs'][$j.Key]; if ($e) { $e['status'] } else { 'pending' } }
-    $counts = $statuses | Group-Object | ForEach-Object { "$($_.Name) $($_.Count)" }
-    Write-Host ''
-    Write-Host '==================== Summary ====================' -ForegroundColor Cyan
-    Write-Host "This run: $($ran.Count) jobs attempted, $($runDone.Count) succeeded, $($runFailed.Count) failed, $($runFlagged.Count) flagged by the PNG check."
-    Write-Host "All selected jobs: $($counts -join ', ')"
-    foreach ($k in $runFailed) { Write-Host "  failed:  $k  $($manifest['jobs'][$k]['lastError'])" -ForegroundColor Red }
-    foreach ($k in $runFlagged) { Write-Host "  flagged: $k  $(@($manifest['jobs'][$k]['check']['issues']) -join '; ')" -ForegroundColor Yellow }
-    Write-Host "Output:   $OutDir"
-    Write-Host "Manifest: $manifestPath"
-    if (-not $NoContactSheet) {
-        try { $sheet = Write-ContactSheet -OutDir $OutDir -Manifest $manifest -Jobs $jobs; Write-Host "Contact sheet: $sheet" }
-        catch { Write-Warning "Could not write the contact sheet: $($_.Exception.Message)" }
-    }
-    if ($stopReason) {
-        Write-Host "Stopped: $stopReason" -ForegroundColor Red
-        Write-Host 'The manifest is saved. Run the same command again to resume; done jobs are skipped:'
-        Write-Host "  $resumeCommand"
-    }
 }
 
-if ($stopReason) { exit 2 }
-if ($runFailed.Count -gt 0) { exit 1 }
+if ($result.StopReason) { exit 2 }
+if ($result.Failed -gt 0) { exit 1 }
 exit 0
