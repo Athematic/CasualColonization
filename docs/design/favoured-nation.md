@@ -39,12 +39,12 @@ Either side can cancel at any time. Starting values, to be tuned with tournament
 - Both sides suffer, whoever cancels. The exact lengths are random and hidden, so players can't time around them.
 
 ### 3. Independence
-- **First release:** no special rule. When a nation declares independence, it loses its home port, and with it the Favoured Nation status. This lapse does not count as a cancellation, so no penalties apply.
+- **First release:** no special rule. When a nation declares independence, it loses its home port, and with it the Favoured Nation status. This lapse does not count as a cancellation, so no penalties apply (confirmed).
 - **Later:** the outcome can depend on the history between the two nations. For example, France might keep its relationship with English colonies that rebel.
 
 ### 4. People in a hot-seat game
 - Two nations played by people can become favoured nations **at any time**, without the thresholds, if both people agree.
-- Either person can revoke it at any time. *Assumption, to confirm:* the cancellation consequences above (seized goods, waiting period) still apply, but not the computer hostility.
+- Either person can revoke it at any time. Goods are still seized when it is revoked. The waiting period and computer hostility do not apply: between two people they can't be enforced, so they can agree again straight away.
 
 ## How we measure it
 Run tournaments with and without the feature. They should show more trade, fewer wars between favoured nations, and no drop in score.
