@@ -13,9 +13,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm test && npm run build",
-    "release": "npm run build -w @cc/web -- --outDir ../../site --emptyOutDir",
+    "release": "npm run build -w @cc/web -- --outDir ../../site --emptyOutDir && node scripts/copy-runtime.mjs site",
     "build:single": "SINGLE_FILE=1 npm run build && node scripts/single-file.mjs apps/web/dist/casual-colonization.html",
-    "tournament": "rolldown scripts/tournament.ts --file scripts/.tournament.mjs --format esm --platform node --log-level warn && node scripts/.tournament.mjs"
+    "tournament": "rolldown scripts/tournament.ts --file scripts/.tournament.mjs --format esm --platform node --log-level warn && node scripts/.tournament.mjs",
+    "sprites:copy": "node scripts/copy-runtime.mjs"
   },
   "devDependencies": {
     "typescript": "5.9.3",

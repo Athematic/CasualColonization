@@ -1,16 +1,20 @@
 import { getStyle, listStyles, registerStyle, type IconRequest, type StylePlugin } from '@cc/render-api';
 import ligneClaire from '@cc/style-ligne-claire';
+import ligneClairePainted from '@cc/style-sprites/packs/ligne-claire-painted';
 import schematic from '@cc/style-schematic';
 
 // Built-in styles. A new style only needs to implement StylePlugin and be registered here.
 registerStyle(ligneClaire);
+registerStyle(ligneClairePainted);
 registerStyle(schematic);
 
 export const DEFAULT_STYLE = ligneClaire.id;
 
 let active: StylePlugin = ligneClaire;
 const listeners = new Set<(s: StylePlugin) => void>();
+const assetListeners = new Set<() => void>();
 const iconCache = new Map<string, string>();
+let stopAssets: (() => void) | undefined;
 
 export function activeStyle(): StylePlugin {
   return active;
@@ -23,6 +27,13 @@ export function availableStyles(): StylePlugin[] {
 export function setStyle(id: string): void {
   const style = getStyle(id) ?? ligneClaire;
   active = style;
+  // Styles that load images in the background tell us when more have arrived: redraw the icons.
+  stopAssets?.();
+  stopAssets = style.onAssetsChanged?.(() => {
+    if (active !== style) return;
+    iconCache.clear();
+    for (const fn of assetListeners) fn();
+  });
   const root = document.documentElement;
   for (const [k, v] of Object.entries(style.theme)) root.style.setProperty(k, v);
   root.dataset.style = style.id;
@@ -54,6 +65,12 @@ export function savedStyle(): string {
 export function onStyleChange(fn: (s: StylePlugin) => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
+}
+
+/** Calls `fn` when the active style's background assets change (icons were dropped from the cache). */
+export function onStyleAssetsChanged(fn: () => void): () => void {
+  assetListeners.add(fn);
+  return () => assetListeners.delete(fn);
 }
 
 /** An <img> of an icon drawn by the active style. */

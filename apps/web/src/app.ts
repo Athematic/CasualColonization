@@ -43,7 +43,7 @@ import {
 import { computeVisibility, screenToTile, type Camera, type MapRenderer, type Point, type Scene } from '@cc/render-api';
 import { h } from './dom.js';
 import { saveAuto } from './save.js';
-import { activeStyle, onStyleChange } from './styles.js';
+import { activeStyle, onStyleAssetsChanged, onStyleChange } from './styles.js';
 import { ColonyScreen } from './ui/colony.js';
 import { openCheats } from './ui/cheats.js';
 import { choose, confirmDialog, promptDialog, toast } from './ui/dialogs.js';
@@ -141,6 +141,7 @@ export class App {
         this.renderer = style.createMapRenderer(this.canvas);
         this.requestRender();
       }),
+      onStyleAssetsChanged(() => this.requestRender()),
     );
     this.bindInput();
     const ro = new ResizeObserver(() => this.requestRender());

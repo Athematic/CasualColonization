@@ -13,11 +13,13 @@ import {
   sightRadius,
   unitPosition,
   type BuildingKind,
+  type Colony,
   type GameState,
   type GoodId,
   type NationId,
   type ProductId,
   type RoleId,
+  type Settlement,
   type Tile,
   type UnitTypeId,
 } from '@cc/engine';
@@ -68,6 +70,49 @@ export interface MapRenderer {
   dispose(): void;
 }
 
+// ---- Layer hooks: letting another style paint some layers of a procedural map ----
+
+/** One explored tile in view, with its top-left corner on screen (CSS px). */
+export interface LayerTile {
+  x: number;
+  y: number;
+  px: number;
+  py: number;
+  tile: Tile;
+}
+
+type Ctx2D = CanvasRenderingContext2D;
+
+/**
+ * Optional per-layer overrides a map renderer may accept (`createMapRenderer(canvas, hooks)`).
+ * A layered renderer calls the hook for a layer first; when it returns true, the layer is done and
+ * the renderer's own drawing for it is skipped, otherwise the renderer draws it as usual. This is
+ * how a sprite style paints the ground, units and towns over a procedural style and falls back to
+ * it for anything it cannot draw (yet). Renderers that do not support hooks simply ignore them.
+ * Everything else (coastline ink, rivers, fog, captions, markers) stays with the renderer.
+ */
+export interface MapLayerHooks {
+  /** Once per frame, before any layer. */
+  beginFrame?(ctx: Ctx2D, scene: Scene): void;
+  /** Water under a tile (land tiles get it too, under their rounded corners), with its details. */
+  water?(ctx: Ctx2D, t: LayerTile, z: number): boolean;
+  /** The ground of a land tile. `shape` traces the renderer's outline of the tile (rounded towards water) as a path. */
+  land?(ctx: Ctx2D, t: LayerTile, z: number, shape: () => void, state: Readonly<GameState>): boolean;
+  /** Extra shore detail on the water, under the coastline. */
+  shore?(ctx: Ctx2D, tiles: readonly LayerTile[], z: number, state: Readonly<GameState>): void;
+  /** Plowed fields on a land tile (true also when `land` already showed them). */
+  plowed?(ctx: Ctx2D, t: LayerTile, z: number): boolean;
+  road?(ctx: Ctx2D, t: LayerTile, z: number, state: Readonly<GameState>): boolean;
+  /** Hills, mountains or forest. */
+  relief?(ctx: Ctx2D, t: LayerTile, z: number): boolean;
+  bonus?(ctx: Ctx2D, t: LayerTile, z: number): boolean;
+  rumour?(ctx: Ctx2D, t: LayerTile, z: number): boolean;
+  settlement?(ctx: Ctx2D, settlement: Readonly<Settlement>, px: number, py: number, z: number): boolean;
+  colony?(ctx: Ctx2D, colony: Readonly<Colony>, size: number, px: number, py: number, z: number): boolean;
+  /** The unit on top of a stack, centred at (x, y) in a box of size s (nation pennants stay with the renderer). */
+  unit?(ctx: Ctx2D, stack: MapUnitStack, x: number, y: number, s: number): boolean;
+}
+
 export type IconRequest =
   | { kind: 'unit'; type: UnitTypeId; role: RoleId; nation: NationId }
   | { kind: 'product'; product: ProductId }
@@ -97,11 +142,18 @@ export interface StylePlugin {
   theme: StyleTheme;
   /** Optional stylesheet URLs (for example web fonts) the style wants loaded. */
   stylesheets?: string[];
-  createMapRenderer(canvas: HTMLCanvasElement): MapRenderer;
+  /** `hooks` lets another style paint some layers (see MapLayerHooks); a renderer may ignore it. */
+  createMapRenderer(canvas: HTMLCanvasElement, hooks?: MapLayerHooks): MapRenderer;
   /** Draws an icon centred in a size×size box at the origin of the context. */
   drawIcon(ctx: CanvasRenderingContext2D, icon: IconRequest, size: number): void;
   /** Flat colour for a tile, used by the minimap. */
   tileColor(tile: Tile): string;
+  /**
+   * Optional, for styles that load images in the background. Calls `listener` whenever more of
+   * the style's assets have arrived, so the shell can drop cached icons and draw again. Returns an
+   * unsubscribe function. Map renderers redraw themselves; this is for `drawIcon` results.
+   */
+  onAssetsChanged?(listener: () => void): () => void;
 }
 
 // ---- Registry ----

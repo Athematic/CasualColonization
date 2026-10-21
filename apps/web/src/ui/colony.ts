@@ -259,7 +259,7 @@ export class ColonyScreen implements Screen {
           : `Experts teach colonists here (${level === 1 ? 'farming and crafts' : level === 2 ? 'up to trades and soldiering' : 'every skill'}).`)
         : null;
       cards.push(h('button', { class: 'card building', onclick: () => this.clickBuilding(colony, kind) },
-        h('div', { class: 'building-name' }, name),
+        h('div', { class: 'building-name' }, icon({ kind: 'building', building: kind, level }, 28), name),
         h('div', { class: 'slots' }, slots),
         production,
         teaching));
