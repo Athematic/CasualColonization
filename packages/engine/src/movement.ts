@@ -1,6 +1,6 @@
 import { fail } from './errors.js';
 import { track } from './telemetry.js';
-import { sailToEurope } from './europe.js';
+import { portProblem, sailToEurope } from './europe.js';
 import { resolveRumour } from './rumours.js';
 import {
   cargoFree,
@@ -336,6 +336,13 @@ export function setDestination(s: GameState, unitId: string, dest: Unit['dest'])
   const u = s.units[unitId];
   if (u.loc.kind !== 'map') fail('Only units on the map can be given orders.');
   if (dest && 'europe' in dest && !isShip(u)) fail('Only ships can sail to Europe.');
+  if (dest && 'europe' in dest && dest.port) {
+    if (dest.port === u.owner) dest = { europe: true };
+    else {
+      const problem = portProblem(s, u.owner, dest.port);
+      if (problem) fail(problem);
+    }
+  }
   if (dest && 'x' in dest && !findPath(s, u, dest.x, dest.y)) fail('There is no known route there.');
   u.dest = dest;
   u.state = 'active';
@@ -351,7 +358,7 @@ export function continueOrders(s: GameState, u: Unit): void {
     if ('europe' in u.dest) {
       const tile = tileAt(s, u.loc.x, u.loc.y)!;
       if (tile.t === 'highSeas' && !colonyAt(s, u.loc.x, u.loc.y)) {
-        sailToEurope(s, u.id);
+        sailToEurope(s, u.id, u.dest.port && !portProblem(s, u.owner, u.dest.port) ? u.dest.port : undefined);
         return;
       }
       target = nearestHighSeas(s, u);

@@ -20,6 +20,7 @@ import {
   unitPosition,
   unitsAt,
 } from './queries.js';
+import { lapseFavoured } from './relations.js';
 import { difficultyRules } from './rules/difficulty.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { finalScores } from './score.js';
@@ -74,6 +75,8 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   p.ref = royalForce(p, colonies.length);
   ensureCrown(s);
   declareWar(s, nation, 'crown');
+  // The home port is lost, and with it every Favoured Nation status (no penalties).
+  lapseFavoured(s, nation);
 
   // Everything left in Europe is confiscated.
   for (const u of Object.values(s.units)) {

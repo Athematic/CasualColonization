@@ -18,6 +18,7 @@ import {
 } from '../colony.js';
 import { attack, cashTreasure, defencePower, offencePower } from '../combat.js';
 import { proposePeace, startWar } from '../diplomacy.js';
+import { hasTradeAgreement, HOSTILE_AGGRESSION, HOSTILITY_WEIGHT, isFavoured, isHostile } from '../relations.js';
 import { boardInEurope, buyGoods, buyPrice, recruit, recruitPrice, sailToAmerica, sellGoods, train, trainPrice } from '../europe.js';
 import { canDeclareIndependence, declareIndependence, rebelShare } from '../independence.js';
 import { canImprove, findPath, setDestination, startImprovement } from '../movement.js';
@@ -660,7 +661,8 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
 /** Privateers hunt foreign merchant ships; their attacks start no wars. */
 function privateer(s: GameState, p: Player, ship: Unit): boolean {
   const pos = unitPosition(s, ship)!;
-  const prey = (o: Unit) => o.owner !== p.id && isShip(o) && UNIT_TYPES[o.type].offence === 0 && o.owner !== 'crown';
+  // Never a Favoured Nation's ships, nor a trade partner's.
+  const prey = (o: Unit) => o.owner !== p.id && isShip(o) && UNIT_TYPES[o.type].offence === 0 && o.owner !== 'crown' && !hasTradeAgreement(s, p.id, o.owner);
   for (const n of neighbours(s, pos.x, pos.y)) {
     const target = unitsAt(s, n.x, n.y).find(prey);
     if (target && ship.moves > 0 && offencePower(s, ship) > defencePower(s, target)) {
@@ -777,20 +779,25 @@ function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
     }
   }
 
-  // Start a war against a weak neighbour when it pays.
-  if (prof.aggression > 0 && p.independence === 'none' && s.turn - (memory.lastWar ?? -100) > 40 && s.turn > 50) {
-    let best: { c: Colony; score: number } | null = null;
+  // Start a war against a weak neighbour when it pays. Never against a Favoured Nation; a nation
+  // that broke a Favoured Nation agreement is a likely target, even for peaceful levels.
+  const hostileTo = s.players.filter((o) => isHostile(s, p.id, o.id)).map((o) => o.id);
+  if ((prof.aggression > 0 || hostileTo.length) && p.independence === 'none' && s.turn - (memory.lastWar ?? -100) > 40 && s.turn > 50) {
+    let best: { c: Colony; score: number; aggression: number } | null = null;
     for (const c of Object.values(s.colonies)) {
-      if (c.owner === p.id || c.owner === 'crown' || p.stance[c.owner] === 'war') continue;
+      if (c.owner === p.id || c.owner === 'crown' || p.stance[c.owner] === 'war' || isFavoured(s, p.id, c.owner)) continue;
       const enemy = s.players.find((o) => o.id === c.owner);
       if (!enemy || enemy.independence !== 'none') continue;
-      const near = colonies.some((own) => distance(own.x, own.y, c.x, c.y) <= 10);
+      const hostile = hostileTo.includes(c.owner);
+      const aggression = hostile ? Math.max(prof.aggression, HOSTILE_AGGRESSION) : prof.aggression;
+      if (aggression <= 0) continue;
+      const near = colonies.some((own) => distance(own.x, own.y, c.x, c.y) <= (hostile ? 14 : 10));
       if (!near) continue;
       const def = colonyDefence(s, c) + 1;
-      const score = strength / def;
-      if (!best || score > best.score) best = { c, score };
+      const score = (strength / def) * (hostile ? HOSTILITY_WEIGHT : 1);
+      if (!best || score / (2.5 / aggression) > best.score / (2.5 / best.aggression)) best = { c, score, aggression };
     }
-    if (best && best.score >= 2.5 / prof.aggression && army.length >= 2) {
+    if (best && best.score >= 2.5 / best.aggression && army.length >= 2) {
       startWar(s, p.id, best.c.owner);
       memory.lastWar = s.turn;
       memory.warTarget = best.c.id;

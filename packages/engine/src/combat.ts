@@ -21,6 +21,7 @@ import {
   unitsAt,
 } from './queries.js';
 import { random, randInt } from './rng.js';
+import { isFavoured, onWar } from './relations.js';
 import { STOCKADE_DEFENCE } from './rules/buildings.js';
 import { NATIONS, TRIBES } from './rules/nations.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
@@ -91,6 +92,8 @@ export function declareWar(s: GameState, a: string, b: string): void {
   const pa = s.players.find((p) => p.id === a);
   const pb = s.players.find((p) => p.id === b);
   if (!pa || !pb || pa.stance[b] === 'war') return;
+  // A trade agreement ends; Favoured Nation status is cancelled by the nation that declares war.
+  onWar(s, pa.id, pb.id);
   pa.stance[b] = 'war';
   pb.stance[a] = 'war';
   pa.warSince[b] = s.turn;
@@ -213,6 +216,7 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
     defender = chooseDefender(s, unitsAt(s, tp.x, tp.y).filter((o) => o.owner === t.owner));
   }
   if (!defender) fail('There is nothing to attack.');
+  if (!player(s, u.owner).human && isFavoured(s, u.owner, defender.owner)) fail('Computer players never attack a Favoured Nation.');
   // Privateers sail under no flag, so their attacks do not start wars.
   if (u.type !== 'privateer') declareWar(s, u.owner, defender.owner);
 

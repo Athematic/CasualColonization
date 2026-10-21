@@ -63,6 +63,12 @@ NATIONS.crown = {
   colonyNames: ['Royal Colony'],
 };
 
+/** Each nation's home port in Europe, where its ships trade (and, for Favoured Nations, its partners' ships). */
+export const HOME_PORTS: Record<NationId, string> = {
+  england: 'London', france: 'La Rochelle', netherlands: 'Amsterdam', spain: 'Seville',
+  portugal: 'Lisbon', sweden: 'Gothenburg', denmark: 'Copenhagen', russia: 'Saint Petersburg', crown: 'London',
+};
+
 export const NATION_ORDER: NationId[] = ['england', 'france', 'netherlands', 'spain', 'portugal', 'sweden', 'denmark', 'russia'];
 
 export type TribeId = 'iroquois' | 'cherokee' | 'sioux' | 'apache' | 'aztec' | 'arawak' | 'tupi' | 'inca';

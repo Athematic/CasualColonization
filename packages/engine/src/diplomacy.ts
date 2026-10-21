@@ -4,6 +4,7 @@ import { fail } from './errors.js';
 import { hasFather } from './fathers.js';
 import { message, player } from './queries.js';
 import { NATIONS, type NationId } from './rules/nations.js';
+import { isFavoured, onPeace } from './relations.js';
 import type { GameState } from './types.js';
 
 /** Turns of war after which a computer nation is willing to talk peace. */
@@ -14,6 +15,7 @@ export function startWar(s: GameState, nation: NationId, other: NationId): strin
   if (other === 'crown') fail('Declare independence to fight the Crown.');
   const p = player(s, nation);
   if (p.stance[other] === 'war') fail(`You are already at war with ${NATIONS[other].name}.`);
+  if (!p.human && isFavoured(s, nation, other)) fail('Computer players never declare war on a Favoured Nation.');
   track(nation, 'cmd:declareWar');
   declareWar(s, nation, other);
   return `You are now at war with ${NATIONS[other].name}.`;
@@ -41,6 +43,7 @@ export function makePeace(s: GameState, a: NationId, b: NationId): void {
   pb.stance[a] = 'peace';
   delete pa.warSince[b];
   delete pb.warSince[a];
+  onPeace(s, a, b);
   track(a, 'diplomacy:peace made');
   track(b, 'diplomacy:peace made');
   message(s, `${NATIONS[a].name} and ${NATIONS[b].name} have made peace.`);

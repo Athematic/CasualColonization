@@ -8,9 +8,22 @@ import { beginPlayerTurn, runAiUntilHuman } from './turn.js';
 import type { GameConfig, GameState, Player } from './types.js';
 import { offerFathers } from './fathers.js';
 import { createWorld } from './world.js';
+import { initRelations } from './relations.js';
 import { entryPoints } from './mapgen.js';
 
-export const SAVE_VERSION = 2;
+/** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
+export const SAVE_VERSION = 3;
+
+/** Shown when a save from before Alpha 0.4 is loaded. */
+export const OLD_SAVE_MESSAGE = "Saves from before version 0.4 can't be loaded.";
+
+/** Thrown by deserialize for a save in a format this version cannot read. */
+export class SaveVersionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SaveVersionError';
+  }
+}
 
 export function createGame(config: GameConfig): GameState {
   if (config.nations.length < 1 || config.nations.length > 8) throw new Error('Between 1 and 8 nations can take part.');
@@ -34,7 +47,9 @@ export function createGame(config: GameConfig): GameState {
     settlements: Object.fromEntries(world.settlements.map((st) => [st.id, st])),
     messages: [],
     difficulty: resolveDifficulty(config.difficulty),
+    relations: {},
   };
+  initRelations(s);
 
   const entries = entryPoints(s.map, config.nations.length, world.entryRows, world.entrySide);
   config.nations.forEach((nation, i) => {
@@ -112,26 +127,18 @@ export function deserialize(json: string): GameState {
   return migrate(JSON.parse(json));
 }
 
-/** Brings saves from older versions up to date. */
+/**
+ * Checks a loaded save. Alpha 0.4 changed the state for Favoured Nation, and older saves are not
+ * converted (agreed in docs/design/favoured-nation.md): they fail with OLD_SAVE_MESSAGE.
+ */
 export function migrate(raw: { version: number }): GameState {
   const s = raw as GameState;
-  if (raw.version === 1) {
-    for (const p of s.players) {
-      const fresh = newPlayer(s, p.id, p.human, p.entry);
-      for (const [k, v] of Object.entries(fresh)) if (!(k in p)) (p as unknown as Record<string, unknown>)[k] = v;
-      offerFathers(s, p);
-    }
-    for (const c of Object.values(s.colonies)) {
-      c.exports = c.exports ?? {};
-      c.buildings.schoolhouse = c.buildings.schoolhouse ?? 0;
-      c.buildings.customHouse = c.buildings.customHouse ?? 0;
-    }
-    for (const st of Object.values(s.settlements)) st.tension = st.tension ?? {};
-    s.version = 2;
-  }
-  if (s.version !== SAVE_VERSION) throw new Error(`Unsupported save version ${s.version}.`);
+  if (!s || typeof s.version !== 'number') throw new SaveVersionError('That file is not a Casual Colonization save.');
+  if (s.version < SAVE_VERSION) throw new SaveVersionError(OLD_SAVE_MESSAGE);
+  if (s.version !== SAVE_VERSION) throw new SaveVersionError(`This save is from a newer version of the game (format ${s.version}).`);
   // Saves from before difficulty levels played by the standard rules.
   s.difficulty = s.difficulty ?? DEFAULT_DIFFICULTY;
+  s.relations = s.relations ?? {};
   return s;
 }
 

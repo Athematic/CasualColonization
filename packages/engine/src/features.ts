@@ -27,10 +27,11 @@ const COMMANDS = [
   'activate', 'skip', 'improve', 'assignJob', 'leaveColony', 'equip', 'board', 'unboard', 'loadGoods', 'unloadGoods', 'setBuild',
   'hurry', 'sellGoods', 'buyGoods', 'recruit', 'train', 'sailToEurope', 'sailToAmerica', 'disband', 'chooseFather', 'buyLand',
   'takeLand', 'mission', 'cashTreasure', 'answerTax', 'payArrears', 'setExport', 'declareWar', 'proposePeace', 'giftTribe',
-  'declareIndependence', 'createRoute', 'assignRoute', 'endTurn',
+  'declareIndependence', 'createRoute', 'assignRoute', 'proposeTrade', 'proposeFavoured', 'answerProposal', 'cancelTrade',
+  'cancelFavoured', 'endTurn',
 ];
 /** Commands the AI performs by changing the state itself, or that only people need. */
-const DIRECT = new Set(['clearOrders', 'fortify', 'sentry', 'activate', 'skip', 'loadGoods', 'unloadGoods', 'disband', 'setExport', 'chooseFather', 'answerTax']);
+const DIRECT = new Set(['answerProposal', 'clearOrders', 'fortify', 'sentry', 'activate', 'skip', 'loadGoods', 'unloadGoods', 'disband', 'setExport', 'chooseFather', 'answerTax']);
 
 /** Every feature the audit lists, in display order, whether used or not. */
 export const FEATURE_CATALOG: { id: string; kind: FeatureKind }[] = [
@@ -61,6 +62,15 @@ export const FEATURE_CATALOG: { id: string; kind: FeatureKind }[] = [
   { id: 'tax:refused (boycott)', kind: 'direct' },
   { id: 'diplomacy:war started', kind: 'use' },
   { id: 'diplomacy:peace made', kind: 'use' },
+  { id: 'diplomacy:trade agreement made', kind: 'use' },
+  { id: 'diplomacy:favoured nation made', kind: 'use' },
+  { id: 'diplomacy:favoured nation cancelled', kind: 'event' },
+  { id: 'diplomacy:goods seized', kind: 'event' },
+  { id: 'trade:foreign stop sales', kind: 'use' },
+  { id: 'trade:foreign stop purchases', kind: 'use' },
+  { id: 'europe:partner port sales', kind: 'use' },
+  { id: 'europe:partner port purchases', kind: 'use' },
+  { id: 'europe:partner port ship bought', kind: 'use' },
   { id: 'combat:privateer attack', kind: 'use' },
   { id: 'combat:settlement burned', kind: 'use' },
   { id: 'combat:colony captured', kind: 'use' },

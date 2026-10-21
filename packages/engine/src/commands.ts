@@ -20,6 +20,7 @@ import { boardShip, leaveShip, moveUnit, setDestination, startImprovement } from
 import { buyLand, establishMission, giftToTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
 import { chooseFather } from './fathers.js';
 import { proposePeace, startWar } from './diplomacy.js';
+import { answerProposal, cancelFavoured, cancelTrade, proposeFavoured, proposeTrade } from './relations.js';
 import { declareIndependence } from './independence.js';
 import type { FatherId } from './rules/fathers.js';
 import { cargoRoomFor, colonyAt, currentPlayer, type Direction } from './queries.js';
@@ -33,7 +34,8 @@ import type { BuildTarget, GameState, ImprovementKind, Job, RouteStop } from './
 export type Command =
   | { type: 'move'; unitId: string; dir: Direction }
   | { type: 'goto'; unitId: string; x: number; y: number }
-  | { type: 'gotoEurope'; unitId: string }
+  /** `port`: a Favoured Nation partner's home port to sail to; missing means the ship's own. */
+  | { type: 'gotoEurope'; unitId: string; port?: NationId }
   | { type: 'clearOrders'; unitId: string }
   | { type: 'foundColony'; unitId: string; name?: string }
   | { type: 'attack'; unitId: string; target: { unitId?: string; colonyId?: string; settlementId?: string } }
@@ -57,8 +59,9 @@ export type Command =
   | { type: 'sellGoods'; carrierId: string; good: GoodId; amount: number }
   | { type: 'buyGoods'; carrierId: string; good: GoodId; amount: number }
   | { type: 'recruit'; slot: number }
-  | { type: 'train'; unitType: UnitTypeId }
-  | { type: 'sailToEurope'; unitId: string }
+  /** `port`: buy a merchant ship in a Favoured Nation partner's port, where one of your ships is. */
+  | { type: 'train'; unitType: UnitTypeId; port?: NationId }
+  | { type: 'sailToEurope'; unitId: string; port?: NationId }
   | { type: 'sailToAmerica'; unitId: string }
   | { type: 'disband'; unitId: string }
   | { type: 'chooseFather'; father: FatherId }
@@ -71,6 +74,12 @@ export type Command =
   | { type: 'setExport'; colonyId: string; good: GoodId; on: boolean }
   | { type: 'declareWar'; nation: NationId }
   | { type: 'proposePeace'; nation: NationId }
+  | { type: 'proposeTrade'; nation: NationId }
+  | { type: 'proposeFavoured'; nation: NationId }
+  /** Answers the proposal (trade agreement or Favoured Nation) that `nation` made. */
+  | { type: 'answerProposal'; nation: NationId; accept: boolean }
+  | { type: 'cancelTrade'; nation: NationId }
+  | { type: 'cancelFavoured'; nation: NationId }
   | { type: 'giftTribe'; tribe: TribeId; gold: number }
   | { type: 'declareIndependence' }
   | { type: 'createRoute'; name: string; stops?: RouteStop[] }
@@ -141,7 +150,7 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'gotoEurope':
         ownUnit(s, nation, cmd.unitId);
-        setDestination(s, cmd.unitId, { europe: true });
+        setDestination(s, cmd.unitId, cmd.port ? { europe: true, port: cmd.port } : { europe: true });
         break;
       case 'clearOrders': {
         const u = ownUnit(s, nation, cmd.unitId);
@@ -254,11 +263,11 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         recruit(s, nation, cmd.slot);
         break;
       case 'train':
-        train(s, nation, cmd.unitType);
+        train(s, nation, cmd.unitType, cmd.port);
         break;
       case 'sailToEurope':
         ownUnit(s, nation, cmd.unitId);
-        sailToEurope(s, cmd.unitId);
+        sailToEurope(s, cmd.unitId, cmd.port);
         break;
       case 'sailToAmerica':
         ownUnit(s, nation, cmd.unitId);
@@ -305,6 +314,21 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'proposePeace':
         text = proposePeace(s, nation, cmd.nation);
+        break;
+      case 'proposeTrade':
+        text = proposeTrade(s, nation, cmd.nation);
+        break;
+      case 'proposeFavoured':
+        text = proposeFavoured(s, nation, cmd.nation);
+        break;
+      case 'answerProposal':
+        text = answerProposal(s, nation, cmd.nation, cmd.accept);
+        break;
+      case 'cancelTrade':
+        text = cancelTrade(s, nation, cmd.nation);
+        break;
+      case 'cancelFavoured':
+        text = cancelFavoured(s, nation, cmd.nation);
         break;
       case 'giftTribe':
         text = giftToTribe(s, nation, cmd.tribe, cmd.gold);

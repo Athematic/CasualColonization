@@ -22,6 +22,7 @@ export * from './diplomacy.js';
 export * from './independence.js';
 export * from './score.js';
 export * from './routes.js';
+export * from './relations.js';
 export * from './cheats.js';
 export * from './stats.js';
 export { RIVER_DIRS, MAJOR_RIVER_LENGTH, riverLinked, riverName, parseRivers } from './rivers.js';

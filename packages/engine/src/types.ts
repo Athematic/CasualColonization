@@ -120,8 +120,9 @@ export type UnitLocation =
   | { kind: 'map'; x: number; y: number }
   | { kind: 'colony'; colonyId: string; job: Job }
   | { kind: 'carrier'; carrierId: string }
-  | { kind: 'europe' }
-  | { kind: 'sailing'; to: 'europe' | 'america'; turnsLeft: number };
+  /** In a home port in Europe. `port` is a Favoured Nation partner whose port the ship visits; missing means the owner's own. */
+  | { kind: 'europe'; port?: NationId }
+  | { kind: 'sailing'; to: 'europe' | 'america'; turnsLeft: number; port?: NationId };
 
 export type UnitState = 'active' | 'fortified' | 'sentry';
 
@@ -147,7 +148,8 @@ export interface Unit {
   repair?: number;
   /** For Royal troops: the rebel nation they were sent against. */
   against?: NationId;
-  dest?: { x: number; y: number } | { europe: true };
+  /** Where the unit is going; for Europe, `port` is a Favoured Nation partner's port (missing: its own). */
+  dest?: { x: number; y: number } | { europe: true; port?: NationId };
   cargo?: Partial<Record<GoodId, number>>;
   /** The trade route a ship or wagon train follows, and the index of the stop it is heading for. */
   route?: { id: string; stop: number };
@@ -164,9 +166,9 @@ export interface RouteCargo {
   amount?: number;
 }
 
-/** One stop of a trade route: a colony, or Europe for ships. */
+/** One stop of a trade route: a colony (own, or a trade partner's), or Europe for ships. */
 export interface RouteStop {
-  /** Colony id, or 'europe'. */
+  /** Colony id, or 'europe' (always the owner's own home port). */
   at: string;
   load: RouteCargo[];
   unload: RouteCargo[];
@@ -235,8 +237,40 @@ export interface GameMessage {
   at?: { x: number; y: number };
 }
 
+export type ProposalKind = 'trade' | 'favoured';
+
+/**
+ * Relations between two European nations (see relations.ts and docs/design/favoured-nation.md).
+ * Turn numbers, not years; the thresholds are hidden from players.
+ */
+export interface Relation {
+  /** The pair, in the order of `GameConfig.nations`. */
+  a: NationId;
+  b: NationId;
+  /** Turn the current run of peace began: game start, the last peace treaty, or the last cancellation. */
+  peaceSince: number;
+  /** Hidden: years of continuous peace needed for Favoured Nation (8–12, from the seed). */
+  peaceNeeded: number;
+  /** Hidden: active trade routes between the two needed for Favoured Nation (2–4, from the seed). */
+  routesNeeded: number;
+  /** A trade agreement: route stops at each other's colonies are allowed. */
+  trade?: boolean;
+  /** Favoured Nation status (implies a trade agreement). */
+  favoured?: boolean;
+  /** Gold that has changed hands at each other's colonies, both ways, over the game. */
+  volume: number;
+  /** After a cancellation: no new agreements or foreign stops before this turn. */
+  waitUntil?: number;
+  /** After a cancellation: computer players on both sides treat the other as a target until this turn. */
+  hostileUntil?: number;
+  /** Cancellations so far; seeds the next waiting and hostility draws. */
+  cancels?: number;
+  /** A proposal waiting for the other side (a person) to answer. */
+  proposal?: { kind: ProposalKind; from: NationId; turn: number };
+}
+
 export interface GameState {
-  version: 2;
+  version: 3;
   config: GameConfig;
   turn: number;
   /** Index into players of the nation whose turn it is. */
@@ -252,6 +286,8 @@ export interface GameState {
   messages: GameMessage[];
   /** The game's difficulty level, resolved from the config; missing (older saves) means Conquistador. */
   difficulty?: DifficultyId;
+  /** Relations between each pair of European nations, keyed by relationKey(a, b). */
+  relations: Record<string, Relation>;
   /** Trade routes by id; missing means none. */
   routes?: Record<string, TradeRoute>;
   gameOver?: { turn: number; reason: string; winner?: NationId; scores: Partial<Record<NationId, number>> };

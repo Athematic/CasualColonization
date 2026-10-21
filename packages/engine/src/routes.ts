@@ -1,16 +1,19 @@
 /**
  * Trade routes, as in the original game: a named round trip of stops (the player's colonies,
- * or Europe for ships), each saying which goods to unload and which to load. Ships and wagon
+ * or Europe for ships), each saying which goods to unload and which to load. With a trade
+ * agreement (relations.ts), a stop can also be a trade partner's colony: the unit stops next to
+ * it, sells what it unloads to the colony and buys what it loads. Ships and wagon
  * trains assigned to a route move on their own at the start of their owner's turn, after
  * ships at sea have advanced and before the player (or the computer) gives any orders. A
  * routed unit is never "awaiting orders"; clearing its orders takes it off the route.
  */
 import { fail, RuleError } from './errors.js';
-import { boardInEurope, buyGoods, buyPrice, sailToAmerica, sellGoods } from './europe.js';
+import { boardInEurope, buyGoods, buyPrice, inHomePort, sailToAmerica, sellGoods } from './europe.js';
 import { continueOrders, findPath } from './movement.js';
-import { cargoFree, cargoRoomFor, isCoastal, isShip, message, newId, player, reveal, unitName, unitPosition, unitsAboard, warehouseCapacity } from './queries.js';
+import { cargoFree, cargoRoomFor, isCoastal, isShip, isWater, message, neighbours, newId, player, reveal, tileAt, unitName, unitPosition, unitsAboard, warehouseCapacity } from './queries.js';
+import { atPeace, besideColony, hasTradeAgreement, inWaitingPeriod, tradeAtForeignColony } from './relations.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
-import type { NationId } from './rules/nations.js';
+import { NATIONS, type NationId } from './rules/nations.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { track } from './telemetry.js';
 import type { GameState, RouteCargo, RouteStop, TradeRoute, Unit } from './types.js';
@@ -30,9 +33,23 @@ export function routeUnits(s: GameState, routeId: string): Unit[] {
   return Object.values(s.units).filter((u) => u.route?.id === routeId);
 }
 
-export function routeStopName(s: GameState, stop: RouteStop): string {
+/** A stop's name; with `owner` (the route's owner), a foreign colony's name carries its nation, e.g. "Québec (French)". */
+export function routeStopName(s: GameState, stop: RouteStop, owner?: NationId): string {
   if (stop.at === EUROPE_STOP) return 'Europe';
-  return s.colonies[stop.at]?.name ?? 'a lost colony';
+  const c = s.colonies[stop.at];
+  if (!c) return 'a lost colony';
+  return owner && c.owner !== owner ? `${c.name} (${NATIONS[c.owner].adjective})` : c.name;
+}
+
+/** Whether a stop is at a colony of another nation (a trade partner's). */
+export function isForeignStop(s: GameState, stop: RouteStop, owner: NationId): boolean {
+  const c = stop.at === EUROPE_STOP ? undefined : s.colonies[stop.at];
+  return !!c && c.owner !== owner;
+}
+
+/** Colonies of other nations a nation's routes may stop at: those of its trade partners. */
+export function foreignStopColonies(s: GameState, nation: NationId) {
+  return Object.values(s.colonies).filter((c) => c.owner !== nation && c.owner !== 'crown' && hasTradeAgreement(s, nation, c.owner) && atPeace(s, nation, c.owner));
 }
 
 /** Ships and wagon trains can follow routes. */
@@ -65,7 +82,13 @@ function cleanStops(s: GameState, nation: NationId, stops: RouteStop[] | undefin
   return list.map((stop) => {
     if (stop.at !== EUROPE_STOP) {
       const c = s.colonies[stop.at];
-      if (!c || c.owner !== nation) fail('Route stops must be your own colonies or Europe.');
+      if (!c) fail('No such colony.');
+      if (c.owner !== nation) {
+        if (inWaitingPeriod(s, nation, c.owner) && !player(s, c.owner).human) fail(`${NATIONS[c.owner].name} will not let your routes call at its colonies for now.`);
+        if (!hasTradeAgreement(s, nation, c.owner) || !atPeace(s, nation, c.owner)) {
+          fail(`Route stops must be your own colonies, Europe, or colonies of a nation you have a trade agreement with.`);
+        }
+      }
     }
     const clean: RouteStop = { at: stop.at, load: cleanCargo(stop.load), unload: cleanCargo(stop.unload) };
     if (stop.passengers && stop.at === EUROPE_STOP) clean.passengers = true;
@@ -138,6 +161,18 @@ export function routeProblem(s: GameState, u: Unit, route: TradeRoute): string |
   return null;
 }
 
+/** The tile next to a foreign colony from which a unit can trade with it most quickly, or null. */
+function approach(s: GameState, u: Unit, colonyId: string): { x: number; y: number } | null {
+  const c = s.colonies[colonyId];
+  let best: { x: number; y: number; d: number } | null = null;
+  for (const n of neighbours(s, c.x, c.y)) {
+    if (isWater(tileAt(s, n.x, n.y)) !== isShip(u)) continue;
+    const path = findPath(s, u, n.x, n.y);
+    if (path && (!best || path.length < best.d)) best = { ...n, d: path.length };
+  }
+  return best;
+}
+
 /** Puts a ship or wagon train on a route and sets it moving with the moves it has left. */
 export function assignRoute(s: GameState, unitId: string, routeId: string): void {
   const u = s.units[unitId];
@@ -163,9 +198,12 @@ export function unassignRoute(s: GameState, unitId: string): void {
 }
 
 function atStop(s: GameState, u: Unit, stop: RouteStop): boolean {
-  if (stop.at === EUROPE_STOP) return u.loc.kind === 'europe';
+  // Routes call at the owner's own home port only, never at a Favoured Nation partner's.
+  if (stop.at === EUROPE_STOP) return inHomePort(u);
   const c = s.colonies[stop.at];
-  return !!c && u.loc.kind === 'map' && u.loc.x === c.x && u.loc.y === c.y;
+  if (!c) return false;
+  if (c.owner !== u.owner) return besideColony(s, u, c.id) && isWater(tileAt(s, (u.loc as { x: number }).x, (u.loc as { y: number }).y)) === isShip(u);
+  return u.loc.kind === 'map' && u.loc.x === c.x && u.loc.y === c.y;
 }
 
 /** Why a routed unit has to pass a stop by this turn, or null. */
@@ -176,7 +214,8 @@ function stopProblem(s: GameState, u: Unit, stop: RouteStop): string | null {
     return null;
   }
   const c = s.colonies[stop.at];
-  if (!c || c.owner !== u.owner) return 'the colony is no longer ours';
+  if (!c) return 'the colony is gone';
+  if (c.owner !== u.owner && (!hasTradeAgreement(s, u.owner, c.owner) || !atPeace(s, u.owner, c.owner))) return `we have no trade agreement with ${NATIONS[c.owner].name}`;
   if (isShip(u) && !isCoastal(s, c.x, c.y)) return `${c.name} has no harbour`;
   return null;
 }
@@ -191,6 +230,7 @@ function serveStop(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop): v
   u.cargo = u.cargo ?? {};
   if (stop.at === EUROPE_STOP) return serveEurope(s, u, route, stop);
   const colony = s.colonies[stop.at];
+  if (colony.owner !== u.owner) return serveForeign(s, u, route, stop);
   // Passengers from Europe go ashore at the first colony.
   if (isShip(u)) {
     for (const p of unitsAboard(s, u)) {
@@ -216,6 +256,26 @@ function serveStop(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop): v
     if (n > 0) move(colony.goods, u.cargo, r.good, n);
   }
   for (const g of GOODS) if (u.cargo[g] === 0) delete u.cargo[g];
+}
+
+/** Sells to, and buys from, a trade partner's colony, and reports to both nations. */
+function serveForeign(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop): void {
+  const colony = s.colonies[stop.at];
+  const t = tradeAtForeignColony(s, u, colony.id, stop.unload, stop.load);
+  const them = NATIONS[colony.owner].adjective;
+  const us = NATIONS[u.owner].adjective;
+  const parts = [
+    t.sold ? `sold ${t.sold} goods for ${t.earned} gold` : '',
+    t.bought ? `bought ${t.bought} goods for ${t.spent} gold` : '',
+  ].filter(Boolean);
+  if (parts.length) {
+    message(s, `${unitName(u)} on the ${route.name} route ${parts.join(' and ')} at ${colony.name} (${them}).`, u.owner, colony);
+    const theirs = [t.sold ? `bought ${t.sold} goods for ${t.earned} gold` : '', t.bought ? `sold ${t.bought} goods for ${t.spent} gold` : ''].filter(Boolean);
+    message(s, `${colony.name} traded with a visiting ${us} ${isShip(u) ? 'ship' : 'wagon train'}: ${theirs.join(' and ')}.`, colony.owner, colony);
+  }
+  if (t.short) {
+    message(s, `${colony.name} (${them}) could not pay for ${t.sold ? 'all ' : ''}the goods ${unitName(u)} brought${t.sold ? '' : '; the stop was skipped'}.`, u.owner, colony);
+  }
 }
 
 function serveEurope(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop): void {
@@ -300,6 +360,15 @@ export function runRoute(s: GameState, u: Unit): void {
       continue;
     }
     if (stop.at === EUROPE_STOP) {
+      // A ship in a partner's port first sails back out.
+      if (u.loc.kind === 'europe') {
+        try {
+          sailToAmerica(s, u.id);
+        } catch (e) {
+          if (!(e instanceof RuleError)) throw e;
+        }
+        return;
+      }
       if (u.moves <= 0) return;
       u.dest = { europe: true };
       continueOrders(s, u);
@@ -315,13 +384,15 @@ export function runRoute(s: GameState, u: Unit): void {
       return;
     }
     if (u.moves <= 0) return;
-    if (!findPath(s, u, c.x, c.y)) {
+    // A foreign colony is served from a tile next to it; one's own from the colony itself.
+    const goal = c.owner === u.owner ? (findPath(s, u, c.x, c.y) ? { x: c.x, y: c.y } : null) : approach(s, u, c.id);
+    if (!goal) {
       // Blocked or unknown: try the next stop rather than stand still.
       if (++passed >= n) return;
       next();
       continue;
     }
-    u.dest = { x: c.x, y: c.y };
+    u.dest = goal;
     continueOrders(s, u);
     if (!atStop(s, u, stop)) return;
   }

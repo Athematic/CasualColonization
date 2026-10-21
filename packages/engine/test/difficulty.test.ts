@@ -235,7 +235,7 @@ describe('difficulty levels', () => {
     delete raw.config.difficulty;
     for (const p of raw.players) delete p.difficulty;
     const loaded = deserialize(JSON.stringify(raw));
-    expect(loaded.version).toBe(2);
+    expect(loaded.version).toBe(3);
     expect(loaded.difficulty).toBe('conquistador');
     for (const p of loaded.players) expect(difficultyRules(p)).toBe(DIFFICULTY.conquistador);
     // A save with a difficulty keeps it.

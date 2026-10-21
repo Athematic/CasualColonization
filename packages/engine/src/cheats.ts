@@ -6,6 +6,7 @@ import { fail } from './errors.js';
 import { message, player } from './queries.js';
 import { GOODS } from './rules/goods.js';
 import { NATIONS, type NationId } from './rules/nations.js';
+import { onPeace } from './relations.js';
 import type { GameState } from './types.js';
 
 export type CheatId = 'gold' | 'doublePrices' | 'peace' | 'doubleYields' | 'reveal';
@@ -89,6 +90,7 @@ export function applyCheat(s: GameState, cheat: CheatId, nation: NationId, on?: 
           if (a === b || a.stance[b.id] !== 'war') continue;
           a.stance[b.id] = 'peace';
           delete a.warSince[b.id];
+          onPeace(s, a.id, b.id);
         }
       }
       text = 'All European nations are at peace.';
