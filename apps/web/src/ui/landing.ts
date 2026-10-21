@@ -58,7 +58,8 @@ function titleLettering(): SVGSVGElement {
 export function landingScreen(host: HTMLElement, actions: LandingActions): HTMLElement {
   const loaded = loadAuto();
   const saved = loaded?.state;
-  const cover = COVERS[Math.floor(Math.random() * COVERS.length)];
+  let shown = Math.floor(Math.random() * COVERS.length);
+  const cover = COVERS[shown];
   const img = h('img', {
     class: 'cover-image',
     src: cover.src,
@@ -68,8 +69,28 @@ export function landingScreen(host: HTMLElement, actions: LandingActions): HTMLE
     width: 1024,
     height: 1536,
   });
+  /** Swaps in a different cover, never the one already showing. */
+  const nextCover = () => {
+    shown = (shown + 1 + Math.floor(Math.random() * (COVERS.length - 1))) % COVERS.length;
+    const next = COVERS[shown];
+    img.setAttribute('srcset', `${next.small} 512w, ${next.src} 1024w`);
+    img.setAttribute('src', next.src);
+    img.setAttribute('alt', next.alt);
+  };
   const el = h('main', { class: 'landing' },
-    h('figure', { class: 'cover' }, img, titleLettering()),
+    h('figure', {
+      class: 'cover',
+      role: 'button',
+      tabindex: 0,
+      title: 'Show another cover',
+      'aria-label': 'Show another cover',
+      onclick: () => nextCover(),
+      onkeydown: (e: KeyboardEvent) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        nextCover();
+      },
+    }, img, titleLettering()),
     h('section', { class: 'landing-panel' },
       h('p', { class: 'eyebrow' }, 'A game of the New World, 1492–1850'),
       h('h1', { class: 'landing-heading' }, 'Found colonies. Trade with Europe. Win your independence.'),

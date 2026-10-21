@@ -1252,6 +1252,15 @@ button.good:not(:disabled):hover {
   max-width: calc((100vh - 32px) * 2 / 3);
 }
 
+.cover[role='button'] {
+  cursor: pointer;
+}
+
+.cover:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
 .cover-image {
   display: block;
   width: 100%;
