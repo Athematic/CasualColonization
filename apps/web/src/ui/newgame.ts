@@ -5,6 +5,7 @@ import {
   NATION_ORDER,
   NATIONS,
   STORED_MAPS,
+  parseStoredMap,
   formatDate,
   nationTitle,
   type AiLevel,
@@ -27,6 +28,14 @@ interface Slot {
 /** Years a head start can jump to, as turns (one per year until 1600, then two). */
 const HEAD_START_YEARS = [1550, 1600, 1650, 1700, 1750, 1800];
 const turnOfYear = (year: number) => (year <= 1600 ? year - 1492 : 108 + (year - 1600) * 2);
+
+/** "Fixed (W×H)" for a stored map. */
+function storedMapSize(id: string): string {
+  const def = STORED_MAPS.find((m) => m.id === id);
+  if (!def) return 'Fixed';
+  const { width, height } = parseStoredMap(def);
+  return `Fixed (${width}×${height})`;
+}
 
 /** A "Planned" badge naming the roadmap release (docs/ROADMAP.md) that brings the option. */
 const planned = (release: string) => h('span', { class: 'planned', title: `Planned for ${release}; see docs/ROADMAP.md` }, `Planned · ${release}`);
@@ -116,9 +125,12 @@ export function newGameScreen(
               h('option', { value: '', selected: !map || undefined }, 'Random (generated)'),
               STORED_MAPS.map((m) => h('option', { value: m.id, selected: m.id === map || undefined, title: m.description }, m.name)))),
           h('label', { class: 'field' }, h('span', null, 'Map size'),
-            h('select', { disabled: !!map || undefined, title: map ? 'Stored maps have a fixed size.' : undefined, onchange: (e: Event) => (mapSize = (e.target as HTMLSelectElement).value as MapSize) },
-              (Object.keys(MAP_SIZES) as MapSize[]).map((m) => h('option', { value: m, selected: m === mapSize || undefined }, `${m[0].toUpperCase()}${m.slice(1)} (${MAP_SIZES[m].width}×${MAP_SIZES[m].height})`)))),
-          h('label', { class: 'field' }, h('span', null, 'Map seed'),
+            map
+              ? h('select', { disabled: true, title: 'Stored maps have a fixed size.' }, h('option', null, storedMapSize(map)))
+              : h('select', { onchange: (e: Event) => (mapSize = (e.target as HTMLSelectElement).value as MapSize) },
+                  (Object.keys(MAP_SIZES) as MapSize[]).map((m) => h('option', { value: m, selected: m === mapSize || undefined }, `${m[0].toUpperCase()}${m.slice(1)} (${MAP_SIZES[m].width}×${MAP_SIZES[m].height})`)))),
+          h('label', { class: 'field', title: 'Starts the random number generator for the whole game: the generated map, where native settlements, bonus resources and rumours go, and every roll during play. The same seed and the same choices give the same game.' },
+            h('span', null, 'Game seed'),
             h('input', { type: 'number', value: seed, onchange: (e: Event) => (seed = Number((e.target as HTMLInputElement).value) || 0) })),
           h('label', { class: 'field' }, h('span', null, 'Graphics style'),
             h('select', { onchange: (e: Event) => { setStyle((e.target as HTMLSelectElement).value); render(); } },
