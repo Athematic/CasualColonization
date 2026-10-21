@@ -3,6 +3,7 @@ import {
   canImprove,
   canUseRoutes,
   routeStopName,
+  portName,
   colonyAt,
   AI_LEVEL_INFO,
   colonyWorkers,
@@ -184,7 +185,7 @@ export class Sidebar {
     const aboard = unitsAboard(s, u);
     const cargo = GOODS.filter((g) => (u.cargo?.[g] ?? 0) > 0);
     const route = u.route && s.routes?.[u.route.id];
-    const orders = u.repair ? `Under repair (${u.repair} turns)` : route ? `Trade route: ${route.name}${route.stops.length ? `, next ${routeStopName(s, route.stops[u.route!.stop % route.stops.length])}` : ''}` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? 'Sailing for Europe' : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
+    const orders = u.repair ? `Under repair (${u.repair} turns)` : route ? `Trade route: ${route.name}${route.stops.length ? `, next ${routeStopName(s, route.stops[u.route!.stop % route.stops.length], route.owner)}` : ''}` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? (u.dest.port ? `Sailing for ${portName(u.dest.port)}` : 'Sailing for Europe') : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
     const mine = u.owner === app.viewer;
     const can = (fn: () => string | null) => mine && app.isMyTurn() && fn() === null;
     const terrain = tile?.f ? 'clear' : 'plow';

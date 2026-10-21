@@ -32,13 +32,13 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| A market for every nation's home port, with supply and demand like the player's | L | P1 | planned |
-| Taxes for every nation: computer nations raise and accept taxes, and boycott | M | P1 | planned |
-| Trading with other Europeans: trade routes with stops at a foreign colony, by agreement | M | P1 | planned |
-| Favoured Nation status: unlocked by years of peace plus trade routes, agreed by both sides, refusable by computer players, cancellable with consequences | L | P1 | planned |
-| Trading and buying ships (not warships) in a favoured nation's home port, at its prices and taxes | M | P1 | planned |
+| A market for every nation's home port, with supply and demand like the player's | L | P1 | done (each nation already had its own market; ships in a partner's port trade in, and move, the partner's market) |
+| Taxes for every nation: computer nations raise and accept taxes, and boycott | M | P1 | in progress (every nation has a tax rate and computer nations get raises; the port nation's rate applies in its port; computer players refusing raises and boycotting comes with the AI step) |
+| Trading with other Europeans: trade routes with stops at a foreign colony, by agreement | M | P1 | done for people (trade agreements, foreign stops that sell to and buy from the colony); computer players only answer proposals so far: in progress |
+| Favoured Nation status: unlocked by years of peace plus trade routes, agreed by both sides, refusable by computer players, cancellable with consequences | L | P1 | done in the engine and for people (seeded hidden thresholds, cancellation with seizure, waiting and hostility, independence lapse, hot-seat rules, save format 3); computer players proposing it and building trade routes towards it: in progress |
+| Trading and buying ships (not warships) in a favoured nation's home port, at its prices and taxes | M | P1 | done for people (port choice when sailing, a Europe screen per port); computer players choosing ports: in progress |
 | Triangle trading by the Creative computer players when prices allow | M | P2 | idea |
-| Diplomacy screen shows relations, years of peace, trade volume, and progress towards Favoured Nation | S | P1 | idea |
+| Diplomacy screen shows relations, years of peace, trade volume, and progress towards Favoured Nation | S | P1 | done (in words only, never the hidden thresholds) |
 
 ## 0.5: The classic game, part 1 (natives and the Crown)
 

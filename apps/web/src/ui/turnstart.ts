@@ -1,4 +1,4 @@
-import { FATHERS, formatDate, GOOD_DEFS, nationTitle, nextFatherCost, type FatherId, type GameMessage } from '@cc/engine';
+import { FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
 
@@ -18,7 +18,7 @@ const ROUTINE = [
   /custom house in .* sold goods/,
   /has been taught to be/,
   /has been repaired\./,
-  /has arrived in (Europe|the New World)\./,
+  /has arrived in (Europe|the New World)\b/,
   /Religious unrest in Europe/,
   /Clearing the forest brought/,
   /has used up all of their tools/,
@@ -46,6 +46,8 @@ export function sortNews(messages: GameMessage[]): TurnNews {
 
 interface Decision {
   id: string;
+  /** Heading; missing means TITLES[id]. */
+  title?: string;
   /** Must be answered before the turn can go on. */
   required: boolean;
   answered?: string;
@@ -68,6 +70,27 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
           h('div', { class: 'decision-actions' },
             h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerTax', accept: true }) && done(`Accepted: the tax is now ${tax.rate}%.`) }, `Accept ${tax.rate}% tax`),
             h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerTax', accept: false }) && done(`Refused: ${good} is boycotted.`) }, `Refuse and hold a ${good} party`))),
+    });
+  }
+  // Proposals from other nations: a trade agreement or Favoured Nation status.
+  for (const rel of Object.values(app.state.relations ?? {}) as Relation[]) {
+    const p = rel.proposal;
+    if (!p || p.from === me.id || (rel.a !== me.id && rel.b !== me.id)) continue;
+    const from = p.from;
+    const name = NATIONS[from].name;
+    const text = p.kind === 'trade'
+      ? `${nationTitle(from)} proposes a trade agreement. Your trade routes may then call at each other's colonies: goods unloaded there are sold to the colony at its owner's home-market prices, and its surplus can be bought.`
+      : `${nationTitle(from)} proposes Favoured Nation status. Your ships may then trade, and buy merchant ships, in each other's home ports, and computer players never declare war on a Favoured Nation. Either side can cancel later, but goods near the other side's colonies are then seized and the trade routes between you end.`;
+    list.push({
+      id: `proposal-${from}`,
+      title: p.kind === 'trade' ? `A trade agreement with ${name}` : `Favoured Nation status with ${name}`,
+      required: false,
+      render: (done) =>
+        h('div', { class: 'decision-body' },
+          h('p', null, text, ' You can also answer later in Foreign Affairs.'),
+          h('div', { class: 'decision-actions' },
+            h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerProposal', nation: from, accept: true }, true) && done(p.kind === 'trade' ? `Agreed: you now trade with ${name}.` : `Agreed: ${name} is now a Favoured Nation.`) }, 'Accept'),
+            h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerProposal', nation: from, accept: false }, true) && done('Turned down.') }, 'Turn down'))),
     });
   }
   const offer = Object.values(me.fatherOffer) as FatherId[];
@@ -169,7 +192,7 @@ export function showTurnStart(app: App, news: TurnNews, opts: { father?: boolean
             h('h3', null, todo.length > 1 ? 'Decisions' : 'Decision'),
             todo.map((d) =>
               h('div', { class: `decision${d.answered ? ' answered' : ''}${d.required ? ' required' : ''}` },
-                h('h4', null, TITLES[d.id] ?? d.id, d.required && !d.answered ? h('span', { class: 'pill bad' }, 'Answer needed') : null),
+                h('h4', null, d.title ?? TITLES[d.id] ?? d.id, d.required && !d.answered ? h('span', { class: 'pill bad' }, 'Answer needed') : null),
                 d.answered
                   ? h('p', { class: 'answer' }, '✓ ', d.answered)
                   : d.render((summary) => {

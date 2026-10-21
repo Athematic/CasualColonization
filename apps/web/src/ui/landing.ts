@@ -34,7 +34,8 @@ function titleLettering(): SVGSVGElement {
 }
 
 export function landingScreen(host: HTMLElement, actions: LandingActions): HTMLElement {
-  const saved = loadAuto();
+  const loaded = loadAuto();
+  const saved = loaded?.state;
   const img = h('img', {
     class: 'cover-image',
     src: cover,
@@ -53,6 +54,7 @@ export function landingScreen(host: HTMLElement, actions: LandingActions): HTMLE
         'Sail west, land your first colonists and build a nation: work the land, run the market, meet the native peoples, bring Founding Fathers into Congress, and decide when to break with the Crown. Play against up to seven nations, each led by a person or a computer.'),
       h('div', { class: 'landing-actions' },
         saved ? h('button', { class: 'btn primary big', onclick: () => actions.resume(saved) }, `Continue (${formatDate(saved.turn)})`) : null,
+        loaded?.error ? h('p', { class: 'save-error', role: 'status' }, `Your autosaved game can't be continued: ${loaded.error}`) : null,
         h('button', { class: `btn big${saved ? '' : ' primary'}`, onclick: actions.quickGame, title: 'England against three Competent computer nations on a random map' }, 'Quick game'),
         h('button', { class: 'btn big', onclick: actions.newGame }, 'New game…'),
         h('div', { class: 'row wrap' },

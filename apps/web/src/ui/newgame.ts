@@ -83,8 +83,12 @@ export function newGameScreen(
   const el = h('main', { class: 'menu-screen' });
   const render = () => {
     clear(el);
-    const auto = loadAuto();
-    const manual = loadManual();
+    const autoSave = loadAuto();
+    const manualSave = loadManual();
+    const auto = autoSave?.state;
+    const manual = manualSave?.state;
+    // Saves this version cannot read (from before 0.4) are named, not hidden.
+    const unreadable = [autoSave?.error && `Your autosaved game can't be continued: ${autoSave.error}`, manualSave?.error && `Your saved game can't be loaded: ${manualSave.error}`].filter(Boolean) as string[];
     const chosen = slots.slice(0, count);
     const humans = chosen.filter((s) => s.controller === 'human').length;
     el.append(
@@ -98,6 +102,7 @@ export function newGameScreen(
               auto ? h('button', { class: 'btn primary', onclick: () => resume(auto) }, `Continue (${formatDate(auto.turn)})`) : null,
               manual ? h('button', { class: 'btn', onclick: () => resume(manual) }, `Load saved game (${formatDate(manual.turn)})`) : null)
           : null,
+        unreadable.map((text) => h('p', { class: 'save-error', role: 'status' }, text)),
         h('h2', null, 'New game'),
         h('div', { class: 'row wrap' },
           plannedSelect('Scenario', 'Scenarios', ['The Americas, 1492–1850', 'Australia, 1788–1901', 'Vinland, around 1000'],
@@ -183,9 +188,9 @@ export function newGameScreen(
           h('button', {
             class: 'btn',
             onclick: async () => {
-              const state = await pickSaveFile();
-              if (state) resume(state);
-              else toast('That file is not a Casual Colonization save.', 'error');
+              const loaded = await pickSaveFile();
+              if (loaded?.state) resume(loaded.state);
+              else if (loaded) toast(loaded.error, 'error');
             },
           }, 'Load from file'))),
     );

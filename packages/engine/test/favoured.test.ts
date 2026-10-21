@@ -193,6 +193,25 @@ describe('trade agreements and foreign colony stops', () => {
     expect(routesBetween(s, 'england', 'france')).toBe(1);
   });
 
+  it('lets a ship sell at a partner’s coastal colony from the water next to it', () => {
+    const s = game();
+    const [home, quebec] = neighbours(s);
+    makeTradeAgreement(s, 'england', 'france');
+    s.players[1].gold = 10_000;
+    quebec.goods.cloth = 0;
+    let water: { x: number; y: number } | undefined;
+    for (let dy = -1; dy <= 1 && !water; dy++) for (let dx = -1; dx <= 1 && !water; dx++) if ((dx || dy) && isWater(tileAt(s, quebec.x + dx, quebec.y + dy))) water = { x: quebec.x + dx, y: quebec.y + dy };
+    const ship = createUnit(s, 'england', 'caravel', { kind: 'map', ...water! });
+    ship.cargo = { cloth: 60 };
+    ship.moves = 12;
+    const id = route(s, 'Cloth run', [{ at: quebec.id, unload: [{ good: 'cloth' }], load: [] }, { at: home.id, unload: [], load: [] }]);
+    const gold = s.players[0].gold;
+    const price = sellPrice(s.players[1], 'cloth');
+    ok(s, { type: 'assignRoute', unitId: ship.id, routeId: id });
+    expect(quebec.goods.cloth).toBe(60);
+    expect(s.players[0].gold).toBe(gold + 60 * price);
+  });
+
   it('skips the sale with a report when the colony’s owner cannot pay', () => {
     const s = game();
     const [home, quebec] = neighbours(s);

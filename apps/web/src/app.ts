@@ -12,7 +12,10 @@ import {
   Game,
   handOver,
   nationTitle,
+  portName,
+  portsFor,
   tensionLabel,
+  unitName,
   isShip,
   isWater,
   mapRevealed,
@@ -552,7 +555,24 @@ export class App {
       this.requestRender();
       return;
     }
+    if (type === 'gotoEurope' || type === 'sailToEurope') {
+      void this.sailForEurope(u, type);
+      return;
+    }
     if (this.dispatch({ type, unitId: u.id } as Command)) this.afterUnitAction();
+  }
+
+  /** Sends a ship to Europe; with Favoured Nation partners, first asks which home port. */
+  private async sailForEurope(u: Unit, type: 'gotoEurope' | 'sailToEurope'): Promise<void> {
+    const ports = portsFor(this.state, u.owner);
+    let port: NationId | undefined;
+    if (ports.length > 1) {
+      const choice = await choose<NationId>('Sail to which port?', `${unitName(u)} can sail to your own home port or to a Favoured Nation's. In a partner's port you trade at its prices and tax and can buy merchant ships; colonists are recruited and go ashore only at home.`,
+        ports.map((p, i) => ({ label: `${portName(p)}${i === 0 ? ' (home)' : ` (${NATIONS[p].adjective})`}`, value: p, primary: i === 0 })));
+      if (!choice) return;
+      port = choice === u.owner ? undefined : choice;
+    }
+    if (this.dispatch(port ? { type, unitId: u.id, port } : { type, unitId: u.id })) this.afterUnitAction();
   }
 
   buildRoad(): void {
@@ -605,8 +625,9 @@ export class App {
     this.showScreen(new ColonyScreen(this, colonyId));
   }
 
-  openEurope(): void {
-    this.showScreen(new EuropeScreen(this));
+  /** Europe; `port` opens a Favoured Nation partner's port where the viewer has ships. */
+  openEurope(port?: NationId): void {
+    this.showScreen(new EuropeScreen(this, port));
   }
 
   openDiplomacy(): void {

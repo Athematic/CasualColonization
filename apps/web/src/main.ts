@@ -29,9 +29,9 @@ function showLanding(): void {
     watch: () =>
       startGame({ seed: randomSeed(), mapSize: 'medium', nations: ['england', 'france', 'netherlands', 'spain'], humans: [], ai: { england: 'naive', france: 'competent', netherlands: 'combative', spain: 'creative' } }),
     load: async () => {
-      const state = await pickSaveFile();
-      if (state) resumeGame(state);
-      else toast('That file is not a Casual Colonization save.', 'error');
+      const loaded = await pickSaveFile();
+      if (loaded?.state) resumeGame(loaded.state);
+      else if (loaded) toast(loaded.error, 'error');
     },
   });
 }

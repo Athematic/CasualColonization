@@ -2,11 +2,16 @@ import {
   canUseRoutes,
   describeStop,
   EUROPE_STOP,
+  foreignStopColonies,
   GOOD_DEFS,
   GOODS,
   isCoastal,
+  isForeignStop,
   isShip,
   MAX_ROUTE_STOPS,
+  NATIONS,
+  portName,
+  portOf,
   ROUTE_NAME_MAX,
   routeProblem,
   routesOf,
@@ -28,7 +33,7 @@ import { confirmDialog } from './dialogs.js';
 /** Where a unit on a route is: its position, or Europe / at sea. */
 function whereIs(app: App, u: Unit): string {
   const s = app.state;
-  if (u.loc.kind === 'europe') return 'in Europe';
+  if (u.loc.kind === 'europe') return portOf(u) === u.owner ? 'in Europe' : `in ${portName(portOf(u))}`;
   if (u.loc.kind === 'sailing') return u.loc.to === 'europe' ? 'sailing to Europe' : 'sailing to the New World';
   const pos = unitPosition(s, u);
   const colony = pos && Object.values(s.colonies).find((c) => c.x === pos.x && c.y === pos.y);
@@ -80,7 +85,7 @@ export class RoutesScreen implements Screen {
             const problem = unit ? routeProblem(s, unit, r) : null;
             return h('li', { class: r.id === this.routeId ? 'selected' : undefined },
               h('button', { class: 'link route-name', onclick: () => this.pick(r.id) }, r.name),
-              h('div', { class: 'muted small' }, r.stops.map((st) => routeStopName(s, st)).join(' → ') || 'No stops yet'),
+              h('div', { class: 'muted small' }, r.stops.map((st) => routeStopName(s, st, r.owner)).join(' → ') || 'No stops yet'),
               h('div', { class: 'muted small' }, units.length ? `${units.length} unit${units.length > 1 ? 's' : ''}: ${units.map(unitName).join(', ')}` : 'No units assigned'),
               unit && unit.route?.id !== r.id
                 ? h('button', { class: 'btn tiny', disabled: !!problem || !this.app.isMyTurn(), title: problem ?? undefined, onclick: () => this.assign(unit.id, r.id) }, `Assign ${unitName(unit)}`)
@@ -94,7 +99,8 @@ export class RoutesScreen implements Screen {
     return h('div', { class: 'card' },
       h('h3', null, 'How trade routes work'),
       h('p', { class: 'small' }, 'A route is a round trip of stops: your colonies, and Europe for ships. At each stop a ship or wagon train first unloads, then loads, the goods you choose. Units on a route move by themselves at the start of each of your turns and never wait for orders.'),
-      h('p', { class: 'small' }, 'Goods unloaded in Europe are sold at market prices, less tax; boycotted goods stay aboard. Unloading in a colony stops when its warehouse is full, so nothing spoils.'));
+      h('p', { class: 'small' }, 'Goods unloaded in Europe are sold at market prices, less tax; boycotted goods stay aboard. Unloading in a colony stops when its warehouse is full, so nothing spoils.'),
+      h('p', { class: 'small' }, 'With a trade agreement (Foreign Affairs), a route can also call at the other nation’s colonies, marked with its flag. The ship or wagon train stops next to the colony: unloading sells goods to it at its nation’s home-market prices, as far as its warehouse has room and its treasury can pay; loading buys what it has above 50 of each good.'));
   }
 
   private editor(route: TradeRoute, unit: Unit | undefined): HTMLElement {
@@ -104,6 +110,7 @@ export class RoutesScreen implements Screen {
       onchange: (e: Event) => this.edit(route, { name: (e.target as HTMLInputElement).value }) }) as HTMLInputElement;
     const units = routeUnits(s, route.id);
     const colonies = Object.values(s.colonies).filter((c) => c.owner === this.app.viewer).sort((a, b) => a.name.localeCompare(b.name));
+    const foreign = foreignStopColonies(s, this.app.viewer).sort((a, b) => a.owner.localeCompare(b.owner) || a.name.localeCompare(b.name));
     const free = Object.values(s.units).filter((u) => u.owner === this.app.viewer && canUseRoutes(u) && u.route?.id !== route.id && (u.loc.kind === 'map' || u.loc.kind === 'europe' || u.loc.kind === 'sailing'));
     return h('div', { class: 'card route-editor' },
       h('div', { class: 'row wrap' },
@@ -118,13 +125,15 @@ export class RoutesScreen implements Screen {
         } },
           h('option', { value: '' }, route.stops.length >= MAX_ROUTE_STOPS ? 'No more stops' : 'Add a stop…'),
           colonies.map((c) => h('option', { value: c.id }, `${c.name}${isCoastal(s, c.x, c.y) ? '' : ' (inland)'}`)),
-          h('option', { value: EUROPE_STOP }, 'Europe (ships only)'))),
+          h('option', { value: EUROPE_STOP }, 'Europe (ships only)'),
+          [...new Set(foreign.map((c) => c.owner))].map((owner) => h('optgroup', { label: `${NATIONS[owner].adjective} colonies (trade agreement)` },
+            foreign.filter((c) => c.owner === owner).map((c) => h('option', { value: c.id }, `⚑ ${c.name} (${NATIONS[owner].adjective})${isCoastal(s, c.x, c.y) ? '' : ' (inland)'}`)))))),
       h('h3', null, 'Units on this route'),
       units.length
         ? h('ul', { class: 'route-units' }, units.map((u) => h('li', null,
             icon({ kind: 'unit', type: u.type, role: u.role, nation: u.owner }, 28),
             h('button', { class: 'link', onclick: () => this.show(u) }, unitName(u)),
-            h('span', { class: 'muted small' }, ` ${whereIs(this.app, u)}, next: ${route.stops.length ? routeStopName(s, route.stops[u.route!.stop % route.stops.length]) : '—'}`),
+            h('span', { class: 'muted small' }, ` ${whereIs(this.app, u)}, next: ${route.stops.length ? routeStopName(s, route.stops[u.route!.stop % route.stops.length], route.owner) : '—'}`),
             h('button', { class: 'btn tiny', disabled: !my, onclick: () => this.app.dispatch({ type: 'unassignRoute', unitId: u.id }) }, 'Take off'))))
         : h('p', { class: 'muted small' }, route.stops.length < 2 ? 'Add at least two stops, then assign a ship or wagon train.' : 'No units follow this route yet.'),
       free.length ? h('div', { class: 'row wrap assign' },
@@ -148,16 +157,19 @@ export class RoutesScreen implements Screen {
       this.setStops(route, stops);
     };
     const update = (change: Partial<RouteStop>) => this.setStops(route, route.stops.map((st, k) => (k === i ? { ...st, ...change } : st)));
-    return h('li', { class: 'stop' },
+    const foreign = isForeignStop(s, stop, route.owner);
+    const owner = foreign ? s.colonies[stop.at].owner : undefined;
+    return h('li', { class: `stop${foreign ? ' foreign' : ''}` },
       h('div', { class: 'stop-head' },
-        h('strong', null, routeStopName(s, stop)),
+        h('strong', null, owner ? h('span', { class: 'foreign-flag', style: `background:${NATIONS[owner].color}`, title: `${NATIONS[owner].adjective} colony` }) : null, routeStopName(s, stop, route.owner)),
         h('span', { class: 'muted small' }, describeStop(stop)),
         h('span', { class: 'stop-tools' },
           h('button', { class: 'btn tiny', disabled: !my || i === 0, 'aria-label': 'Move stop up', onclick: () => move(-1) }, '↑'),
           h('button', { class: 'btn tiny', disabled: !my || i === route.stops.length - 1, 'aria-label': 'Move stop down', onclick: () => move(1) }, '↓'),
           h('button', { class: 'btn tiny', disabled: !my, 'aria-label': 'Remove stop', onclick: () => this.setStops(route, route.stops.filter((_, k) => k !== i)) }, '✕'))),
-      this.cargoRules('Unload', stop.unload, europe ? null : 'up to', europe ? 'sold' : 'fill', (unload) => update({ unload })),
-      this.cargoRules('Load', stop.load, europe ? 'buy to' : 'keep', europe ? '100' : '0', (load) => update({ load })),
+      foreign ? h('div', { class: 'muted small' }, `Trading stop: goods unloaded are sold to the colony, goods loaded are bought from it, at ${NATIONS[owner!].adjective} prices.`) : null,
+      this.cargoRules(foreign ? 'Sell' : 'Unload', stop.unload, europe ? null : 'up to', europe ? 'sold' : 'fill', (unload) => update({ unload })),
+      this.cargoRules(foreign ? 'Buy' : 'Load', stop.load, europe ? 'buy to' : 'keep', europe ? '100' : foreign ? '50' : '0', (load) => update({ load })),
       europe ? h('label', { class: 'small passengers' },
         h('input', { type: 'checkbox', checked: !!stop.passengers, disabled: !my, onchange: (e: Event) => update({ passengers: (e.target as HTMLInputElement).checked || undefined }) }),
         ' Take colonists waiting on the docks (they go ashore at the next colony)') : null);
