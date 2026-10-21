@@ -76,6 +76,15 @@ Builds on 0.4.
 
 Each beta gets design notes first.
 
+## Scenarios: Australia
+
+Design: [design/australia.md](design/australia.md). Comes after the cooperation betas, so Federation can be a peaceful way to win.
+
+| Item | Size | Prio | Status |
+| --- | --- | --- | --- |
+| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | idea |
+| Australia, 1788–1901: map, Aboriginal nations and Country, wool, wheat, gold and whaling, convict colonists, the long sea route, drought, Federation | XL | P1 | idea |
+
 ## Later
 
 - More graphical styles as plugins.
