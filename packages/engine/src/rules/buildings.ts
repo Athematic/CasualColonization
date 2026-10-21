@@ -1,3 +1,4 @@
+import type { FatherId } from './fathers.js';
 import type { GoodId, ProductId } from './goods.js';
 
 export type BuildingKind =
@@ -13,7 +14,9 @@ export type BuildingKind =
   | 'docks'
   | 'warehouse'
   | 'stockade'
-  | 'printingPress';
+  | 'printingPress'
+  | 'schoolhouse'
+  | 'customHouse';
 
 export interface BuildingLevel {
   name: string;
@@ -34,6 +37,7 @@ export interface BuildingDef {
   /** Free production with no workers, per level. */
   baseOutput?: number[];
   coastalOnly?: boolean;
+  requiresFather?: FatherId;
 }
 
 const lvl = (name: string, hammers: number, tools: number, minPop: number): BuildingLevel => ({ name, hammers, tools, minPop });
@@ -72,7 +76,10 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     kind: 'church', levels: [lvl('Chapel', 0, 0, 1), lvl('Church', 64, 0, 3)],
     initialLevel: 1, workplaces: 3, output: 'crosses', baseOutput: [1, 2],
   },
-  docks: { kind: 'docks', levels: [lvl('Docks', 52, 0, 1)], initialLevel: 0, workplaces: 0, coastalOnly: true },
+  docks: {
+    kind: 'docks', levels: [lvl('Docks', 52, 0, 1), lvl('Drydock', 80, 50, 4), lvl('Shipyard', 240, 100, 8)],
+    initialLevel: 0, workplaces: 0, coastalOnly: true,
+  },
   warehouse: {
     kind: 'warehouse', levels: [lvl('Warehouse', 80, 0, 1), lvl('Warehouse Expansion', 80, 20, 1)],
     initialLevel: 0, workplaces: 0,
@@ -82,7 +89,17 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     kind: 'printingPress', levels: [lvl('Printing Press', 52, 20, 1), lvl('Newspaper', 120, 50, 4)],
     initialLevel: 0, workplaces: 0,
   },
+  schoolhouse: {
+    kind: 'schoolhouse', levels: [lvl('Schoolhouse', 64, 0, 4), lvl('College', 160, 50, 8), lvl('University', 240, 100, 10)],
+    initialLevel: 0, workplaces: 3,
+  },
+  customHouse: { kind: 'customHouse', levels: [lvl('Custom House', 150, 50, 3)], initialLevel: 0, workplaces: 0, requiresFather: 'peterStuyvesant' },
 };
+
+/** Teachers a school of each level can hold. */
+export const SCHOOL_TEACHERS = [1, 2, 3];
+/** Turns a teacher needs to train one student, by the skill's teaching level. */
+export const TEACH_TURNS = [4, 6, 8];
 
 export const BUILDING_ORDER: BuildingKind[] = Object.keys(BUILDINGS) as BuildingKind[];
 

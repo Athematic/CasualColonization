@@ -13,6 +13,11 @@ import {
   hurryPrice,
   isCarrier,
   isWater,
+  landPrice,
+  nativeLandOwner,
+  SCHOOL_TEACHERS,
+  TEACH_TURNS,
+  TRIBES,
   PRODUCT_NAMES,
   ROLES,
   tileAt,
@@ -36,7 +41,7 @@ import type { MapRenderer } from '@cc/render-api';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
 import { activeStyle, icon } from '../styles.js';
-import { toast } from './dialogs.js';
+import { choose, toast } from './dialogs.js';
 
 const TILE = 76;
 
@@ -147,11 +152,12 @@ export class ColonyScreen implements Screen {
         const worker = colonyWorkers(s, colony).find((w) => w.loc.kind === 'colony' && w.loc.job.kind === 'tile' && w.loc.job.x === x && w.loc.job.y === y);
         const other = !worker && Object.values(s.units).some((u) => u.loc.kind === 'colony' && u.loc.job.kind === 'tile' && u.loc.job.x === x && u.loc.job.y === y);
         const settlement = Object.values(s.settlements).some((st) => st.x === x && st.y === y);
+        const native = nativeLandOwner(s, x, y);
         const job = worker?.loc.kind === 'colony' ? (worker.loc.job as Extract<Job, { kind: 'tile' }>) : undefined;
         cells.push(h('button', {
-          class: `cell${worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}`,
+          class: `cell${worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}${native ? ' native' : ''}`,
           style,
-          title: `${tileName(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native land)' : ''}`,
+          title: `${tileName(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : native ? ` (land of the ${TRIBES[native.tribe].name})` : ''}`,
           onclick: () => this.clickTile(colony, x, y, worker),
         },
         worker ? icon({ kind: 'unit', type: worker.type, role: 'none', nation: worker.owner }, 40, unitName(worker)) : null,
@@ -187,6 +193,11 @@ export class ColonyScreen implements Screen {
       return;
     }
     if (sel && UNIT_TYPES[sel.type].kind === 'colonist') {
+      const native = nativeLandOwner(s, x, y);
+      if (native) {
+        void this.settleLand(colony, sel, x, y);
+        return;
+      }
       const good = this.bestGood(colony, sel, x, y);
       if (!good) return toast(isWater(tileAt(s, x, y)) && !colony.buildings.docks ? 'Fishing needs Docks.' : 'This colonist cannot work there.', 'error');
       if (this.dispatch({ type: 'assignJob', unitId: sel.id, colonyId: colony.id, job: { kind: 'tile', x, y, good } })) this.selected = sel.id;
@@ -194,6 +205,24 @@ export class ColonyScreen implements Screen {
     }
     this.selected = worker?.id;
     this.app.requestRender();
+  }
+
+  /** Native land must be bought or taken before a colonist can work it. */
+  private async settleLand(colony: Colony, u: Unit, x: number, y: number): Promise<void> {
+    const s = this.app.state;
+    const owner = nativeLandOwner(s, x, y)!;
+    const tribe = TRIBES[owner.tribe].name;
+    const price = landPrice(s, this.app.viewer, x, y);
+    const choice = await choose(`Land of the ${tribe}`, `The ${tribe} claim this land.${price ? ` They will sell it for ${price} gold.` : ' Thanks to Peter Minuit, they ask nothing for it.'} Taking it by force will anger them.`, [
+      { label: price ? `Buy for ${price} gold` : 'Accept the land', value: 'buy' as const, primary: true, disabled: price > this.app.me.gold },
+      { label: 'Take it', value: 'take' as const },
+      { label: 'Leave it', value: null },
+    ]);
+    if (!choice) return;
+    const ok = this.app.dispatch({ type: choice === 'buy' ? 'buyLand' : 'takeLand', x, y });
+    if (!ok) return;
+    const good = this.bestGood(colony, u, x, y);
+    if (good) this.dispatch({ type: 'assignJob', unitId: u.id, colonyId: colony.id, job: { kind: 'tile', x, y, good } });
   }
 
   // ---- Buildings ----
@@ -214,7 +243,8 @@ export class ColonyScreen implements Screen {
       const here = colonyWorkers(s, colony).filter((w) => w.loc.kind === 'colony' && w.loc.job.kind === 'building' && w.loc.job.building === kind);
       const out = report.buildings[kind];
       const slots: HTMLElement[] = [];
-      for (let i = 0; i < def.workplaces; i++) {
+      const places = kind === 'schoolhouse' ? SCHOOL_TEACHERS[level - 1] : def.workplaces;
+      for (let i = 0; i < places; i++) {
         const w = here[i];
         slots.push(w
           ? h('span', { class: `slot${w.id === this.selected ? ' selected' : ''}`, onclick: (e: Event) => { e.stopPropagation(); this.toggleSelect(w.id); } }, icon({ kind: 'unit', type: w.type, role: 'none', nation: w.owner }, 36, unitName(w)))
@@ -223,10 +253,16 @@ export class ColonyScreen implements Screen {
       const production = out && def.output
         ? h('span', { class: 'yield' }, icon({ kind: 'product', product: def.output }, 18), `${out.output}${out.capacity > out.output ? ` of ${out.capacity}` : ''} ${PRODUCT_NAMES[def.output as ProductId].toLowerCase()}`, def.input && out.output ? h('span', { class: 'muted' }, ` (uses ${out.output} ${GOOD_DEFS[def.input].name.toLowerCase()})`) : null)
         : null;
+      const teaching = kind === 'schoolhouse'
+        ? h('span', { class: 'muted small' }, here.length
+          ? here.map((t) => `${UNIT_TYPES[t.type].name}: ${t.teach ?? 0}/${TEACH_TURNS[(UNIT_TYPES[t.type].teach ?? 1) - 1]} turns`).join(' · ')
+          : `Experts teach colonists here (${level === 1 ? 'farming and crafts' : level === 2 ? 'up to trades and soldiering' : 'every skill'}).`)
+        : null;
       cards.push(h('button', { class: 'card building', onclick: () => this.clickBuilding(colony, kind) },
         h('div', { class: 'building-name' }, name),
         h('div', { class: 'slots' }, slots),
-        production));
+        production,
+        teaching));
     }
     return h('div', { class: 'card buildings' },
       h('h3', null, 'Buildings'),
@@ -259,6 +295,8 @@ export class ColonyScreen implements Screen {
         h('span', { class: 'yield', title: PRODUCT_NAMES[p] }, icon({ kind: 'product', product: p }, 20), p === 'food' ? signed(net.food) : report.produced[p])));
 
     const options = buildOptions(s, colony);
+    // Keep the current project listed even if the colony no longer qualifies to start it.
+    if (colony.build && !options.some((o) => targetKey(o) === targetKey(colony.build))) options.unshift(colony.build);
     const select = h('select', {
       'aria-label': 'Build',
       onchange: (e: Event) => {
@@ -292,11 +330,13 @@ export class ColonyScreen implements Screen {
       if (working) selActions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'leaveColony', unitId: sel.id }) }, 'Leave colony'));
       if (sel.loc.kind === 'map' && UNIT_TYPES[sel.type].kind === 'colonist') {
         selActions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'assignJob', unitId: sel.id, colonyId: colony.id }) }, 'Join colony'));
-        for (const role of ['soldier', 'dragoon', 'pioneer', 'scout', 'none'] as RoleId[]) {
+        for (const role of ['soldier', 'dragoon', 'pioneer', 'scout', 'missionary', 'none'] as RoleId[]) {
           if (role === sel.role) continue;
+          if (role === 'missionary' && colony.buildings.church < 2) continue;
           selActions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'equip', unitId: sel.id, role }) }, role === 'none' ? 'Unequip' : `Make ${ROLES[role].name.toLowerCase()}`));
         }
       }
+      if (sel.type === 'treasure') selActions.push(h('button', { class: 'btn small', onclick: () => this.app.dispatch({ type: 'cashTreasure', unitId: sel.id }) }, 'Ship treasure home'));
       if (sel.loc.kind === 'map' && this.carrier) selActions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'board', unitId: sel.id, carrierId: this.carrier! }) }, 'Board selected ship'));
       if (sel.loc.kind === 'carrier') selActions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'unboard', unitId: sel.id }) }, 'Go ashore'));
       if (sel.loc.kind === 'map' || sel.loc.kind === 'carrier') {
@@ -317,7 +357,7 @@ export class ColonyScreen implements Screen {
       carriers.length ? h('h3', null, 'In port') : null,
       carriers.map((c) => h('div', { class: `carrier${c.id === this.carrier ? ' selected' : ''}` },
         h('button', { class: 'chip', onclick: () => { this.carrier = this.carrier === c.id ? undefined : c.id; this.app.requestRender(); } },
-          icon({ kind: 'unit', type: c.type, role: 'none', nation: c.owner }, 36), `${unitName(c)}${c.id === this.carrier ? ' (loading)' : ''}`),
+          icon({ kind: 'unit', type: c.type, role: 'none', nation: c.owner }, 36), `${unitName(c)}${c.repair ? ` (repairing, ${c.repair} turns)` : c.id === this.carrier ? ' (loading)' : ''}`),
         h('div', { class: 'chips' },
           unitsAboard(s, c).map(chip),
           GOODS.filter((g) => (c.cargo?.[g] ?? 0) > 0).map((g) => h('button', { class: 'chip', title: 'Unload', onclick: () => this.dispatch({ type: 'unloadGoods', carrierId: c.id, good: g, amount: c.cargo![g]! }) },
@@ -327,17 +367,24 @@ export class ColonyScreen implements Screen {
 
   private warehouse(colony: Colony, net: Record<ProductId, number>): HTMLElement {
     const cap = warehouseCapacity(colony);
+    const customs = colony.buildings.customHouse > 0;
     return h('div', { class: 'card warehouse' },
       h('h3', null, this.carrier ? 'Warehouse — click a good to load 100 onto the ship' : 'Warehouse'),
+      customs ? h('p', { class: 'muted small' }, 'Custom house: ticked goods above 50 are sold in Europe at the end of each turn.') : null,
       h('div', { class: 'goods' }, GOODS.map((g) => {
         const amount = colony.goods[g];
         const over = g !== 'food' && amount > cap;
-        return h('button', {
+        const exportBox = customs && g !== 'food'
+          ? h('label', { class: 'export', title: `Export ${GOOD_DEFS[g].name.toLowerCase()}` },
+              h('input', { type: 'checkbox', checked: !!colony.exports[g], onchange: (e: Event) => this.dispatch({ type: 'setExport', colonyId: colony.id, good: g, on: (e.target as HTMLInputElement).checked }) }),
+              'sell')
+          : null;
+        return h('div', { class: 'good-wrap' }, h('button', {
           class: `good${over ? ' over' : ''}`,
           title: GOOD_DEFS[g].name,
           disabled: !this.carrier || amount <= 0,
           onclick: () => this.carrier && this.dispatch({ type: 'loadGoods', carrierId: this.carrier, good: g, amount: Math.min(100, amount) }),
-        }, icon({ kind: 'product', product: g }, 28), h('span', { class: 'amount' }, amount), net[g] ? h('span', { class: `delta ${net[g] > 0 ? 'up' : 'down'}` }, signed(net[g])) : null);
+        }, icon({ kind: 'product', product: g }, 28), h('span', { class: 'amount' }, amount), net[g] ? h('span', { class: `delta ${net[g] > 0 ? 'up' : 'down'}` }, signed(net[g])) : null), exportBox);
       })));
   }
 }

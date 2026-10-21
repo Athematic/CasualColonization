@@ -1,5 +1,8 @@
 import { assignJob, bestJob, canBuild, colonySiteProblem, foundColony, jobOptions, setBuild } from './colony.js';
+import { attack, defencePower, offencePower } from './combat.js';
 import { RuleError } from './errors.js';
+import { aiPeace } from './diplomacy.js';
+import { runCrown } from './independence.js';
 import { boardInEurope, recruit, recruitPrice, sailToAmerica, sellGoods } from './europe.js';
 import { describeMove, findPath, leaveShip, moveUnit, setDestination, startImprovement, canImprove } from './movement.js';
 import { colonyReport, baseTileYield } from './production.js';
@@ -17,6 +20,7 @@ import {
   tileAt,
   unitPosition,
   unitsAboard,
+  unitsAt,
   type Direction,
 } from './queries.js';
 import type { BuildingKind } from './rules/buildings.js';
@@ -25,7 +29,7 @@ import { UNIT_TYPES } from './rules/units.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
 
 const SELLABLE: GoodId[] = ['sugar', 'tobacco', 'cotton', 'furs', 'ore', 'silver', 'rum', 'cigars', 'cloth', 'coats'];
-const BUILD_PREFERENCE: BuildingKind[] = ['docks', 'stockade', 'warehouse', 'carpenter', 'printingPress', 'church', 'armory'];
+const BUILD_PREFERENCE: BuildingKind[] = ['docks', 'stockade', 'warehouse', 'carpenter', 'printingPress', 'church', 'schoolhouse', 'customHouse', 'armory'];
 
 /** Runs an AI action, ignoring moves the rules turn down. */
 function safely(fn: () => void): void {
@@ -38,6 +42,8 @@ function safely(fn: () => void): void {
 
 /** Plays one turn for a computer-controlled European nation. */
 export function runAi(s: GameState, p: Player): void {
+  if (p.id === 'crown') return runCrown(s);
+  aiPeace(s, p.id);
   const units = Object.values(s.units).filter((u) => u.owner === p.id);
   for (const u of units) {
     if (!s.units[u.id] || u.owner !== p.id) continue;
@@ -92,9 +98,15 @@ function ownColonies(s: GameState, p: Player): Colony[] {
 function aiUnit(s: GameState, p: Player, u: Unit): void {
   if (u.loc.kind !== 'map' || u.work) return;
   const def = UNIT_TYPES[u.type];
-  if (def.kind === 'ship') return aiShip(s, p, u);
+  if (def.kind === 'ship') {
+    if (def.offence > 0 && aiFight(s, p, u)) return;
+    return aiShip(s, p, u);
+  }
   if (def.kind === 'colonist') return aiColonist(s, p, u);
-  if (def.kind === 'artillery') return guardColony(s, p, u);
+  if (def.kind === 'artillery') {
+    if (aiFight(s, p, u)) return;
+    return guardColony(s, p, u);
+  }
 }
 
 function guardColony(s: GameState, p: Player, u: Unit): void {
@@ -108,9 +120,34 @@ function guardColony(s: GameState, p: Player, u: Unit): void {
   if (target) setDestination(s, u.id, { x: target.x, y: target.y });
 }
 
+/** Armed units strike adjacent enemies when the odds favour them. */
+function aiFight(s: GameState, p: Player, u: Unit): boolean {
+  const pos = unitPosition(s, u);
+  if (!pos || u.moves <= 0) return false;
+  const atWar = (owner: string) => p.stance[owner] === 'war';
+  for (const n of neighbours(s, pos.x, pos.y)) {
+    const colony = colonyAt(s, n.x, n.y);
+    if (colony && atWar(colony.owner)) {
+      const defenders = unitsAt(s, n.x, n.y).filter((o) => o.owner === colony.owner && !isShip(o));
+      const best = Math.max(0, ...defenders.map((d) => defencePower(s, d)));
+      if (offencePower(s, u) >= best) {
+        attack(s, u.id, { colonyId: colony.id });
+        return true;
+      }
+    }
+    const enemy = unitsAt(s, n.x, n.y).find((o) => atWar(o.owner) && isShip(o) === isShip(u));
+    if (enemy && offencePower(s, u) >= defencePower(s, enemy)) {
+      attack(s, u.id, { unitId: enemy.id });
+      return true;
+    }
+  }
+  return false;
+}
+
 function aiColonist(s: GameState, p: Player, u: Unit): void {
   if (u.loc.kind !== 'map') return;
   const { x, y } = u.loc;
+  if ((u.role === 'soldier' || u.role === 'dragoon') && aiFight(s, p, u)) return;
   if (u.role === 'soldier' || u.role === 'dragoon') {
     // Keep one guard per colony; extra soldiers settle down.
     const guarded = ownColonies(s, p).filter((c) =>
@@ -120,26 +157,29 @@ function aiColonist(s: GameState, p: Player, u: Unit): void {
   }
   if (u.role === 'pioneer' && aiPioneer(s, p, u)) return;
 
+  const colonies = ownColonies(s, p);
+  const wanted = 2 + Math.floor(s.turn / 12);
   const here = colonyAt(s, x, y);
-  if (here && here.owner === p.id) {
+  // Established colonies send settlers out until the nation has enough colonies.
+  const expand = colonies.length < wanted && (!here || colonyWorkers(s, here).length >= 3);
+  if (here && here.owner === p.id && !expand) {
     if (bestJob(s, here, u)) assignJob(s, u.id, here.id);
     return;
   }
 
-  const colonies = ownColonies(s, p);
-  const wanted = 2 + Math.floor(s.turn / 12);
-  if (colonies.length < wanted) {
+  if (expand) {
+    const radius = here ? 7 : 4;
     let best = { x, y, score: siteScore(s, x, y) };
-    for (let dy = -4; dy <= 4; dy++) {
-      for (let dx = -4; dx <= 4; dx++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
         const nx = x + dx;
         const ny = y + dy;
         if (!tileAt(s, nx, ny)) continue;
-        const score = siteScore(s, nx, ny) - distance(x, y, nx, ny) * 1.5;
+        const score = siteScore(s, nx, ny) - distance(x, y, nx, ny) * 1.2;
         if (score > best.score) best = { x: nx, y: ny, score };
       }
     }
-    if (best.score > 18) {
+    if (best.score > 15) {
       if (best.x === x && best.y === y) {
         foundColony(s, u.id);
         return;

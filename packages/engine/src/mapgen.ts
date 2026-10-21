@@ -160,6 +160,7 @@ function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, he
       visited: [],
       defenders: size + (capital ? 2 : 0) + randInt(rng, 2),
       gold: (size * 150 + randInt(rng, 200)) * (capital ? 2 : 1),
+      tension: {},
     });
   }
   return placed;

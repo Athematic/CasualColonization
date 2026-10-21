@@ -2,12 +2,15 @@ import {
   canFoundColony,
   canImprove,
   colonyAt,
+  FATHERS,
   formatDate,
+  nextFatherCost,
   GOOD_DEFS,
   GOODS,
   isShip,
   maxMoves,
   NATIONS,
+  nationTitle,
   recruitPrice,
   serialize,
   tileAt,
@@ -17,6 +20,7 @@ import {
   unitsAboard,
   unitsAwaitingOrders,
   UNIT_TYPES,
+  type GameState,
   type Unit,
 } from '@cc/engine';
 import type { App } from '../app.js';
@@ -25,12 +29,12 @@ import { downloadSave, saveManual } from '../save.js';
 import { activeStyle, availableStyles, icon, setStyle } from '../styles.js';
 import { toast } from './dialogs.js';
 
-function movesText(u: Unit): string {
+function movesText(u: Unit, s: GameState): string {
   const m = u.moves / 3;
   const whole = Math.floor(m);
   const thirds = u.moves % 3;
   const frac = thirds === 1 ? '⅓' : thirds === 2 ? '⅔' : '';
-  return `${whole || !frac ? whole : ''}${frac}/${maxMoves(u) / 3}`;
+  return `${whole || !frac ? whole : ''}${frac}/${maxMoves(u, s) / 3}`;
 }
 
 export class Sidebar {
@@ -69,9 +73,15 @@ export class Sidebar {
         h('h1', null, 'Casual Colonization'),
         h('span', { class: 'flag', style: `background:${NATIONS[app.viewer].color}`, title: NATIONS[app.viewer].name })),
       h('div', { class: 'stats' },
-        h('div', null, h('strong', null, formatDate(s.turn)), ' · ', NATIONS[app.viewer].name),
+        h('div', null, h('strong', null, formatDate(s.turn)), ' · ', nationTitle(app.viewer)),
         h('div', null, `Gold ${me.gold.toLocaleString()} · Tax ${me.tax}%`),
         h('div', { class: 'muted' }, `Crosses ${me.crosses}/${me.crossesRequired} · Recruit ${recruitPrice(me)}`),
+        h('div', { class: 'muted' },
+          h('button', { class: 'link', onclick: () => void app.chooseFather() },
+            me.currentFather ? `Congress: ${FATHERS[me.currentFather].name} ${me.fatherBells}/${nextFatherCost(s, me)}` : `Congress: choose a Founding Father (${me.fatherBells} bells)`)),
+        me.independence === 'declared' ? h('div', null, h('span', { class: 'pill bad' }, 'War of Independence')) : null,
+        me.independence === 'won' ? h('div', null, h('span', { class: 'pill good' }, 'Independent')) : null,
+        Object.values(me.stance).includes('war') && me.independence !== 'declared' ? h('div', null, h('span', { class: 'pill bad' }, 'At war')) : null,
       ),
     );
 
@@ -80,6 +90,7 @@ export class Sidebar {
     this.body.append(
       h('div', { class: 'row' },
         h('button', { class: 'btn', onclick: () => app.openEurope(), title: 'Europe (E)' }, 'Europe'),
+        h('button', { class: 'btn', onclick: () => app.openDiplomacy(), title: 'Foreign affairs (D)' }, 'Affairs'),
         h('button', { class: 'btn', onclick: () => app.selectNext(), title: 'Next unit (W)', disabled: !awaiting }, `Next unit${awaiting ? ` (${awaiting})` : ''}`),
       ),
       h('button', { class: `btn primary end-turn${myTurn && !awaiting ? ' pulse' : ''}`, onclick: () => void app.endTurn(), disabled: !myTurn, title: 'End turn (Enter)' }, 'End turn'),
@@ -100,7 +111,7 @@ export class Sidebar {
     const def = UNIT_TYPES[u.type];
     const aboard = unitsAboard(s, u);
     const cargo = GOODS.filter((g) => (u.cargo?.[g] ?? 0) > 0);
-    const orders = u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? 'Sailing for Europe' : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
+    const orders = u.repair ? `Under repair (${u.repair} turns)` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? 'Sailing for Europe' : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
     const mine = u.owner === app.viewer;
     const can = (fn: () => string | null) => mine && app.isMyTurn() && fn() === null;
     const terrain = tile?.f ? 'clear' : 'plow';
@@ -118,6 +129,7 @@ export class Sidebar {
         toast('Click where the unit should go.');
       });
       if (isShip(u)) btn('Sail to Europe', '', () => app.unitCommand('gotoEurope'));
+      if (u.type === 'treasure') btn('Ship treasure home', '', () => { if (app.dispatch({ type: 'cashTreasure', unitId: u.id })) app.afterUnitAction(); });
       btn('Fortify', 'F', () => app.unitCommand('fortify'), !isShip(u));
       btn('Sentry', 'S', () => app.unitCommand('sentry'));
       btn('Skip', 'Space', () => app.unitCommand('skip'));
@@ -136,7 +148,7 @@ export class Sidebar {
         icon({ kind: 'unit', type: u.type, role: u.role, nation: u.owner }, 56, unitName(u)),
         h('div', null,
           h('div', { class: 'unit-name' }, unitName(u)),
-          h('div', { class: 'muted' }, `Moves ${movesText(u)}${u.role === 'pioneer' ? ` · Tools ${u.tools}` : ''}`),
+          h('div', { class: 'muted' }, `Moves ${movesText(u, s)}${u.role === 'pioneer' ? ` · Tools ${u.tools}` : ''}`),
           h('div', { class: 'muted' }, orders),
           tile ? h('div', { class: 'muted' }, `${tileName(tile)}${tile.p ? ', plowed' : ''}${tile.r ? ', road' : ''}`) : null)),
       aboard.length || cargo.length
@@ -171,7 +183,7 @@ export class Sidebar {
         h('button', { class: 'btn small', onclick: () => toast(saveManual(serialize(app.state)) ? 'Game saved in this browser.' : 'Could not save here.') }, 'Save'),
         h('button', { class: 'btn small', onclick: () => downloadSave(serialize(app.state), `casual-colonization-${app.state.turn}.json`) }, 'Export save'),
         h('button', { class: 'btn small', onclick: () => app.exitToMenu() }, 'Main menu')),
-      h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · Enter end turn · Right-click or Shift-click to send a unit.'));
+      h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · D foreign affairs · Enter end turn · Right-click or Shift-click to send a unit.'));
     details.addEventListener('toggle', () => (this.menuOpen = details.open));
     return details;
   }

@@ -2,6 +2,7 @@ import { BUILDINGS, BUILDING_ORDER, BUILDING_SKILL_OUTPUT, PRINTING_BELL_BONUS, 
 import { GOODS, type GoodId, type ProductId } from './rules/goods.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
+import { hasFather } from './fathers.js';
 import { colonyWorkers, isWater, tileAt } from './queries.js';
 import type { Colony, GameState, Tile } from './types.js';
 
@@ -18,9 +19,16 @@ export function sonsOfLiberty(s: GameState, colony: Colony): number {
   return Math.min(100, Math.floor((colony.liberty / 200 / pop) * 100));
 }
 
+/** Royalists in a colony beyond these counts slow production down. */
+export const TORY_PENALTY_AT = [6, 10];
+
+/** Production bonus per worker from Sons of Liberty membership, less the Tory penalty. */
 export function libertyBonus(s: GameState, colony: Colony): number {
   const sol = sonsOfLiberty(s, colony);
-  return sol >= 100 ? 2 : sol >= 50 ? 1 : 0;
+  const pop = colonyWorkers(s, colony).length;
+  const tories = pop - Math.round((pop * sol) / 100);
+  const penalty = tories > TORY_PENALTY_AT[1] ? 2 : tories > TORY_PENALTY_AT[0] ? 1 : 0;
+  return (sol >= 100 ? 2 : sol >= 50 ? 1 : 0) - penalty;
 }
 
 /** Raw yield of a tile for a good before colonist skill. */
@@ -47,7 +55,10 @@ export function tileYield(s: GameState, colony: Colony, x: number, y: number, go
     def.expertFor === good &&
     (good !== 'food' || (unitType === 'expertFisherman') === isWater(tile));
   if (expert) amount *= 2;
-  return amount + libertyBonus(s, colony);
+  if (good === 'furs' && hasFather(s, colony.owner, 'henryHudson')) amount *= 2;
+  // Converts know the land: better at farming, fishing and trapping.
+  if (unitType === 'nativeConvert' && (good === 'food' || good === 'sugar' || good === 'tobacco' || good === 'cotton' || good === 'furs')) amount += 1;
+  return Math.max(0, amount + libertyBonus(s, colony));
 }
 
 /** Goods produced by the colony's centre tile without a worker. */
@@ -74,9 +85,9 @@ export function buildingCapacityPerWorker(s: GameState, colony: Colony, kind: Bu
   if (level === 0 || !def.output) return 0;
   const u = UNIT_TYPES[unitType];
   const expert = u.expertFor === def.output;
-  const skillIndex = expert ? 3 : Math.max(0, Math.min(2, u.skill + 2));
+  const skillIndex = expert ? 3 : unitType === 'nativeConvert' ? 1 : Math.max(0, Math.min(2, u.skill + 2));
   const levelFactor = level >= 2 ? 2 : 1;
-  return BUILDING_SKILL_OUTPUT[skillIndex] * levelFactor + libertyBonus(s, colony);
+  return Math.max(0, BUILDING_SKILL_OUTPUT[skillIndex] * levelFactor + libertyBonus(s, colony));
 }
 
 export interface ColonyReport {
@@ -133,15 +144,20 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
         workers[u.id] = n;
       }
     }
+    if (def.input && kind !== 'carpenter' && hasFather(s, colony.owner, 'adamSmith')) capacity = Math.round(capacity * 1.5);
     let output = capacity;
     if (def.input) {
       const available = colony.goods[def.input] + produced[def.input] - consumed[def.input];
       output = Math.max(0, Math.min(capacity, available));
       consumed[def.input] += output;
     }
-    if (kind === 'townHall' && colony.buildings.printingPress > 0) {
-      output = Math.round(output * (1 + PRINTING_BELL_BONUS[colony.buildings.printingPress - 1] / 100));
+    if (kind === 'townHall') {
+      let bonus = colony.buildings.printingPress > 0 ? PRINTING_BELL_BONUS[colony.buildings.printingPress - 1] : 0;
+      if (hasFather(s, colony.owner, 'thomasJefferson')) bonus += 10;
+      if (hasFather(s, colony.owner, 'thomasPaine')) bonus += s.players.find((p) => p.id === colony.owner)?.tax ?? 0;
+      output = Math.round(output * (1 + bonus / 100));
     }
+    if (kind === 'church' && hasFather(s, colony.owner, 'williamPenn')) output = Math.round(output * 1.5);
     produced[def.output] += output;
     buildings[kind] = { output, capacity };
   }

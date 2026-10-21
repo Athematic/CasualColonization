@@ -45,12 +45,12 @@ function mix(a: string, b: string): string {
   return `#${((1 << 24) | (c(16) << 16) | (c(8) << 8) | c(0)).toString(16).slice(1)}`;
 }
 
-const UNIT_LETTERS: Record<string, string> = { ship: '⛵', wagon: 'W', artillery: 'A' };
+const UNIT_LETTERS: Record<string, string> = { ship: '⛵', wagon: 'W', artillery: 'A', treasure: '$' };
 
 function unitLabel(type: keyof typeof UNIT_TYPES, role: string): string {
   const kind = UNIT_TYPES[type].kind;
   if (kind !== 'colonist') return UNIT_LETTERS[kind];
-  return { soldier: 'S', dragoon: 'D', pioneer: 'P', scout: 'Sc' }[role] ?? 'C';
+  return { soldier: 'S', dragoon: 'D', pioneer: 'P', scout: 'Sc', missionary: 'M' }[role] ?? 'C';
 }
 
 class SchematicRenderer implements MapRenderer {

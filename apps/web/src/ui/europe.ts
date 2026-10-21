@@ -1,4 +1,5 @@
 import {
+  arrears,
   buyPrice,
   cargoFree,
   GOOD_DEFS,
@@ -54,10 +55,19 @@ export class EuropeScreen implements Screen {
     const ship = this.ship ? s.units[this.ship] : undefined;
 
     clear(this.body);
+    if (me.independence !== 'none') {
+      this.body.append(
+        h('header', { class: 'screen-head' },
+          h('h2', null, 'Europe'),
+          h('button', { class: 'btn close', onclick: () => this.app.closeScreen(), 'aria-label': 'Close Europe' }, 'Close')),
+        h('p', null, me.independence === 'won' ? 'As an independent nation you trade on your own terms; European ports are not part of this alpha yet.' : 'Europe has closed its ports to the rebellious colonies.'));
+      return;
+    }
     this.body.append(
       h('header', { class: 'screen-head' },
         h('h2', null, `Europe — Port of ${PORTS[this.app.viewer]}`),
         h('span', { class: 'muted' }, `Gold ${me.gold.toLocaleString()} · Tax ${me.tax}% · ${NATIONS[this.app.viewer].bonus}`),
+        me.pendingTax ? h('button', { class: 'btn small', onclick: () => void this.app.answerPending() }, 'Answer the tax raise') : null,
         h('button', { class: 'btn close', onclick: () => this.app.closeScreen(), 'aria-label': 'Close Europe' }, 'Close')),
       h('div', { class: 'europe-grid' },
         this.market(ship),
@@ -79,6 +89,13 @@ export class EuropeScreen implements Screen {
       h('h3', null, ship ? `Market — buying for ${unitName(ship)}` : 'Market'),
       h('div', { class: 'goods market-goods' }, GOODS.map((g) => {
         const carried = ship?.cargo?.[g] ?? 0;
+        if (me.boycotts[g]) {
+          const owed = arrears(me, g);
+          return h('div', { class: 'good market-good boycott', title: `${GOOD_DEFS[g].name} is boycotted` },
+            icon({ kind: 'product', product: g }, 30, GOOD_DEFS[g].name),
+            h('span', { class: 'price' }, 'Boycott'),
+            h('button', { class: 'btn tiny', disabled: me.gold < owed, title: `Pay ${owed} gold in arrears to trade ${GOOD_DEFS[g].name.toLowerCase()} again`, onclick: () => this.dispatch({ type: 'payArrears', good: g }) }, `Pay ${owed}`));
+        }
         return h('div', { class: 'good market-good' },
           icon({ kind: 'product', product: g }, 30, GOOD_DEFS[g].name),
           h('span', { class: 'price' }, `${sellPrice(me, g)}/${buyPrice(me, g)}`),
@@ -99,11 +116,11 @@ export class EuropeScreen implements Screen {
     const active = ship.id === this.ship;
     return h('div', { class: `carrier${active ? ' selected' : ''}` },
       h('button', { class: 'chip', onclick: () => { this.ship = ship.id; this.app.requestRender(); } },
-        icon({ kind: 'unit', type: ship.type, role: 'none', nation: ship.owner }, 40), `${unitName(ship)} (${cargoFree(s, ship)} free)`),
+        icon({ kind: 'unit', type: ship.type, role: 'none', nation: ship.owner }, 40), `${unitName(ship)} (${ship.repair ? `repairing, ${ship.repair} turns` : `${cargoFree(s, ship)} free`})`),
       h('div', { class: 'chips' },
         unitsAboard(s, ship).map((u) => this.unitChip(u)),
         GOODS.filter((g) => (ship.cargo?.[g] ?? 0) > 0).map((g) => h('span', { class: 'chip' }, icon({ kind: 'product', product: g }, 22), ship.cargo![g]))),
-      h('button', { class: 'btn small primary', onclick: () => this.dispatch({ type: 'sailToAmerica', unitId: ship.id }) }, 'Sail to the New World'));
+      h('button', { class: 'btn small primary', disabled: !!ship.repair, onclick: () => this.dispatch({ type: 'sailToAmerica', unitId: ship.id }) }, 'Sail to the New World'));
   }
 
   private unitChip(u: Unit): HTMLElement {
@@ -118,11 +135,11 @@ export class EuropeScreen implements Screen {
     if (u.loc.kind === 'europe' && ship) actions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'board', unitId: u.id, carrierId: ship.id }) }, `Board ${unitName(ship)}`));
     if (u.loc.kind === 'carrier') actions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'unboard', unitId: u.id }) }, 'Go ashore'));
     if (u.loc.kind === 'europe' && UNIT_TYPES[u.type].kind === 'colonist') {
-      for (const role of ['soldier', 'dragoon', 'pioneer', 'scout', 'none'] as RoleId[]) {
+      for (const role of ['soldier', 'dragoon', 'pioneer', 'scout', 'missionary', 'none'] as RoleId[]) {
         if (role === u.role) continue;
         const goods = role === 'pioneer' ? { tools: 100 } : ROLES[role].goods;
         const cost = Object.entries(goods).reduce((sum, [g, n]) => sum + (n ?? 0) * buyPrice(this.app.me, g as GoodId), 0);
-        actions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'equip', unitId: u.id, role }) }, role === 'none' ? 'Sell equipment' : `${ROLES[role].name} (${cost})`));
+        actions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'equip', unitId: u.id, role }) }, role === 'none' ? 'Sell equipment' : cost ? `${ROLES[role].name} (${cost})` : ROLES[role].name));
       }
     }
     return h('div', { class: 'actions' }, h('div', { class: 'muted small' }, `Selected: ${unitName(u)}`), actions);

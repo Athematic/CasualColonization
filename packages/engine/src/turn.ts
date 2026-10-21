@@ -3,7 +3,10 @@ import { processColony } from './colony.js';
 import { advanceSailing, processImmigration, recoverMarkets } from './europe.js';
 import { advanceWork, continueOrders, placeOnMap } from './movement.js';
 import { processNatives } from './natives.js';
-import { formatDate, maxMoves, message } from './queries.js';
+import { processCongress } from './fathers.js';
+import { processIndependence } from './independence.js';
+import { formatDate, maxMoves, message, unitName, unitPosition } from './queries.js';
+import { checkTimeLimit } from './score.js';
 import type { GameState, Player, Unit } from './types.js';
 
 /** Resets a player's units and carries out standing orders at the start of their turn. */
@@ -15,7 +18,15 @@ export function beginPlayerTurn(s: GameState, p: Player): void {
       const loc = u.loc as Unit['loc'];
       if (loc.kind === 'map') placeOnMap(s, u, loc.x, loc.y);
     }
-    u.moves = maxMoves(u);
+    u.moves = maxMoves(u, s);
+    if (u.repair) {
+      u.repair--;
+      u.moves = 0;
+      if (!u.repair) {
+        delete u.repair;
+        message(s, `${unitName(u)} has been repaired.`, u.owner, unitPosition(s, u));
+      }
+    }
     if (u.work) advanceWork(s, u);
   }
   for (const u of Object.values(s.units)) {
@@ -45,6 +56,7 @@ function finishPlayerTurn(s: GameState, p: Player): void {
     if (c.owner === p.id) processColony(s, c);
   }
   processImmigration(s, p);
+  processCongress(s, p);
 }
 
 function advance(s: GameState): void {
@@ -53,7 +65,9 @@ function advance(s: GameState): void {
     s.current = 0;
     processNatives(s);
     recoverMarkets(s);
+    processIndependence(s);
     s.turn++;
+    checkTimeLimit(s);
     message(s, `${formatDate(s.turn)} begins.`);
   }
   beginPlayerTurn(s, s.players[s.current]);

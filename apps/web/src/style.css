@@ -588,6 +588,7 @@ summary {
 }
 
 .good {
+  min-height: 4.1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -882,5 +883,112 @@ button.good:not(:disabled):hover {
 
   .screen {
     padding: 0.6rem;
+  }
+}
+
+/* ---- Added in Alpha 0.2 ---- */
+
+.cell.native {
+  background: repeating-linear-gradient(-45deg, transparent 0 7px, rgba(168, 69, 43, 0.22) 7px 9px);
+}
+
+.good-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.export {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 0.72rem;
+}
+
+.pill {
+  display: inline-block;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.pill.good {
+  color: var(--good);
+}
+
+.pill.warn {
+  color: var(--accent);
+}
+
+.pill.bad {
+  color: var(--bad);
+}
+
+.diplomacy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.6rem;
+  align-items: start;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.table th {
+  text-align: left;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.table td,
+.table th {
+  padding: 0.25rem 0.3rem;
+  border-bottom: 1px dashed var(--line);
+  vertical-align: middle;
+}
+
+.fathers {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.scores {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.scores td {
+  padding: 0.2rem 0.4rem;
+  border-bottom: 1px dashed var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.scores td:last-child {
+  text-align: right;
+}
+
+.market-good.boycott {
+  background: repeating-linear-gradient(45deg, transparent 0 6px, rgba(179, 38, 30, 0.15) 6px 8px);
+}
+
+@media (max-width: 1000px) {
+  .diplomacy-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .diplomacy-grid .card {
+    overflow-x: auto;
   }
 }

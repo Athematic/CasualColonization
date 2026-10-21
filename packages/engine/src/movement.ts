@@ -35,7 +35,7 @@ export type MoveOption =
   | { kind: 'settlement'; settlementId: string; actions: SettlementAction[] }
   | { kind: 'blocked'; reason: string };
 
-export type SettlementAction = 'speak' | 'learn' | 'trade' | 'attack';
+export type SettlementAction = 'speak' | 'learn' | 'trade' | 'mission' | 'attack';
 
 export function canAttack(u: Unit): boolean {
   const def = UNIT_TYPES[u.type];
@@ -46,12 +46,14 @@ function isLandUnit(u: Unit): boolean {
   return !isShip(u);
 }
 
-export function moveCost(s: GameState, u: Unit, fx: number, fy: number, tx: number, ty: number): number {
+export function moveCost(s: GameState, u: Unit, fx: number, fy: number, tx: number, ty: number, index?: MapIndex): number {
   if (isShip(u)) return 3;
   const from = tileAt(s, fx, fy)!;
   const to = tileAt(s, tx, ty)!;
-  const roadFrom = from.r || !!colonyAt(s, fx, fy);
-  const roadTo = to.r || !!colonyAt(s, tx, ty);
+  const w = s.map.width;
+  const hasColony = (x: number, y: number) => (index ? index.colonies.has(y * w + x) : !!colonyAt(s, x, y));
+  const roadFrom = from.r || hasColony(fx, fy);
+  const roadTo = to.r || hasColony(tx, ty);
   if (roadFrom && roadTo) return ROAD_MOVE_COST;
   if (to.f) return FOREST_MOVE_COST;
   return TERRAIN[to.t].moveCost;
@@ -65,6 +67,7 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
   if (!pos || (u.loc.kind !== 'map' && u.loc.kind !== 'carrier')) return { kind: 'blocked', reason: 'The unit is not on the map.' };
   if (u.moves <= 0) return { kind: 'blocked', reason: `${unitName(u)} has no moves left.` };
   if (u.work) return { kind: 'blocked', reason: `${unitName(u)} is busy working.` };
+  if (u.repair) return { kind: 'blocked', reason: `${unitName(u)} is under repair for ${u.repair} more turns.` };
   const { dx, dy } = dirOffset(dir);
   const x = pos.x + dx;
   const y = pos.y + dy;
@@ -92,17 +95,20 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
 
   // Land units.
   if (isWater(tile)) {
-    const ship = unitsAt(s, x, y).find((o) => o.owner === u.owner && isShip(o) && cargoFree(s, o) > 0);
-    if (ship && UNIT_TYPES[u.type].kind !== 'wagon') return { kind: 'board', carrierId: ship.id };
-    return { kind: 'blocked', reason: ship ? 'Wagon trains cannot board ships.' : 'You need a ship to cross the water.' };
+    const ship = unitsAt(s, x, y).find((o) => o.owner === u.owner && isShip(o) && canCarry(s, o, u));
+    if (ship) return { kind: 'board', carrierId: ship.id };
+    if (UNIT_TYPES[u.type].kind === 'wagon') return { kind: 'blocked', reason: 'Wagon trains cannot board ships.' };
+    if (u.type === 'treasure') return { kind: 'blocked', reason: 'Only an empty galleon can carry treasure.' };
+    return { kind: 'blocked', reason: 'You need a ship with room to cross the water.' };
   }
   if (settlement) {
     const actions: SettlementAction[] = [];
     if (u.role === 'scout') actions.push('speak');
     if (UNIT_TYPES[u.type].kind === 'colonist' && u.role === 'none' && UNIT_TYPES[u.type].skill <= 0) actions.push('learn');
     if (UNIT_TYPES[u.type].kind === 'wagon' && hasCargo(u)) actions.push('trade');
+    if (u.role === 'missionary') actions.push('mission');
     if (canAttack(u)) actions.push('attack');
-    if (!actions.length) return { kind: 'blocked', reason: 'Only scouts, colonists, wagon trains and soldiers can visit natives.' };
+    if (!actions.length) return { kind: 'blocked', reason: 'Only scouts, colonists, missionaries, wagon trains and soldiers can visit natives.' };
     return { kind: 'settlement', settlementId: settlement.id, actions };
   }
   if (colony && colony.owner !== u.owner) {
@@ -119,14 +125,21 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
   return { kind: 'move' };
 }
 
+/** Whether a ship has room for a unit; treasure needs a whole galleon. */
+export function canCarry(s: GameState, ship: Unit, u: Unit): boolean {
+  if (UNIT_TYPES[u.type].kind === 'wagon' || isShip(u) || ship.repair) return false;
+  if (u.type === 'treasure') return ship.type === 'galleon' && cargoFree(s, ship) >= UNIT_TYPES.galleon.cargo;
+  return cargoFree(s, ship) > 0;
+}
+
 function hasCargo(u: Unit): boolean {
   return Object.values(u.cargo ?? {}).some((n) => (n ?? 0) > 0);
 }
 
 export function placeOnMap(s: GameState, u: Unit, x: number, y: number): void {
   u.loc = { kind: 'map', x, y };
-  reveal(s, u.owner, x, y, sightRadius(u));
-  for (const p of unitsAboard(s, u)) reveal(s, p.owner, x, y, sightRadius(p));
+  reveal(s, u.owner, x, y, sightRadius(u, s));
+  for (const p of unitsAboard(s, u)) reveal(s, p.owner, x, y, sightRadius(p, s));
 }
 
 export function moveUnit(s: GameState, unitId: string, dir: Direction): void {
@@ -181,7 +194,7 @@ export function boardShip(s: GameState, unitId: string, carrierId: string): void
   const up = unitPosition(s, u);
   const sp = unitPosition(s, ship);
   if (!up || !sp || up.x !== sp.x || up.y !== sp.y || u.loc.kind !== 'map') fail('The unit must be next to the ship in port.');
-  if (cargoFree(s, ship) <= 0) fail('The ship is full.');
+  if (!canCarry(s, ship, u)) fail(u.type === 'treasure' ? 'Only an empty galleon can carry treasure.' : 'The ship is full.');
   u.loc = { kind: 'carrier', carrierId };
   u.state = 'sentry';
 }
@@ -197,17 +210,42 @@ export function leaveShip(s: GameState, unitId: string): void {
 }
 
 /** Can the unit stand on this tile while pathing (ignoring move points)? */
-function passable(s: GameState, u: Unit, x: number, y: number, isGoal: boolean): boolean {
+/** Who occupies which tile, built once per search so pathfinding does not rescan every unit for every tile. */
+export interface MapIndex {
+  colonies: Map<number, string>;
+  settlements: Set<number>;
+  /** Owners of units standing on each tile. */
+  units: Map<number, Set<string>>;
+}
+
+export function buildMapIndex(s: GameState): MapIndex {
+  const w = s.map.width;
+  const index: MapIndex = { colonies: new Map(), settlements: new Set(), units: new Map() };
+  for (const c of Object.values(s.colonies)) index.colonies.set(c.y * w + c.x, c.owner);
+  for (const st of Object.values(s.settlements)) index.settlements.add(st.y * w + st.x);
+  for (const u of Object.values(s.units)) {
+    if (u.loc.kind !== 'map') continue;
+    const i = u.loc.y * w + u.loc.x;
+    let owners = index.units.get(i);
+    if (!owners) index.units.set(i, (owners = new Set()));
+    owners.add(u.owner);
+  }
+  return index;
+}
+
+function passable(s: GameState, u: Unit, x: number, y: number, isGoal: boolean, index: MapIndex): boolean {
   const tile = tileAt(s, x, y);
   if (!tile) return false;
-  const colony = colonyAt(s, x, y);
-  if (colony && colony.owner !== u.owner) return false;
-  if (settlementAt(s, x, y)) return false;
-  if (unitsAt(s, x, y).some((o) => o.owner !== u.owner)) return false;
+  const i = y * s.map.width + x;
+  const colonyOwner = index.colonies.get(i);
+  if (colonyOwner && colonyOwner !== u.owner) return false;
+  if (index.settlements.has(i)) return false;
+  const owners = index.units.get(i);
+  if (owners && [...owners].some((o) => o !== u.owner)) return false;
   // People can only route through land they have seen; the AI knows the map.
   const owner = player(s, u.owner);
-  if (owner.human && !owner.explored[y * s.map.width + x] && !isGoal) return false;
-  if (isShip(u)) return isWater(tile) || (!!colony && colony.owner === u.owner);
+  if (owner.human && !owner.explored[i] && !isGoal) return false;
+  if (isShip(u)) return isWater(tile) || colonyOwner === u.owner;
   return !isWater(tile);
 }
 
@@ -216,7 +254,8 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
   const start = unitPosition(s, u);
   if (!start) return null;
   if (start.x === tx && start.y === ty) return [];
-  if (!passable(s, u, tx, ty, true)) return null;
+  const index = buildMapIndex(s);
+  if (!passable(s, u, tx, ty, true, index)) return null;
   const w = s.map.width;
   const startIdx = start.y * w + start.x;
   const goalIdx = ty * w + tx;
@@ -236,8 +275,8 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
     for (const n of neighbours(s, cx, cy)) {
       const nIdx = n.y * w + n.x;
       if (closed.has(nIdx)) continue;
-      if (!passable(s, u, n.x, n.y, nIdx === goalIdx)) continue;
-      const c = cost.get(idx)! + moveCost(s, u, cx, cy, n.x, n.y);
+      if (!passable(s, u, n.x, n.y, nIdx === goalIdx, index)) continue;
+      const c = cost.get(idx)! + moveCost(s, u, cx, cy, n.x, n.y, index);
       if (c < (cost.get(nIdx) ?? Infinity)) {
         cost.set(nIdx, c);
         prev.set(nIdx, idx);
@@ -260,14 +299,15 @@ export function nearestHighSeas(s: GameState, ship: Unit): { x: number; y: numbe
   const start = unitPosition(s, ship);
   if (!start) return null;
   const w = s.map.width;
+  const index = buildMapIndex(s);
   const seen = new Set([start.y * w + start.x]);
   const queue = [start];
   while (queue.length) {
     const p = queue.shift()!;
-    if (s.map.tiles[p.y * w + p.x].t === 'highSeas' && !colonyAt(s, p.x, p.y)) return p;
+    if (s.map.tiles[p.y * w + p.x].t === 'highSeas' && !index.colonies.has(p.y * w + p.x)) return p;
     for (const n of neighbours(s, p.x, p.y)) {
       const i = n.y * w + n.x;
-      if (seen.has(i) || !passable(s, ship, n.x, n.y, true)) continue;
+      if (seen.has(i) || !passable(s, ship, n.x, n.y, true, index)) continue;
       seen.add(i);
       queue.push(n);
     }
@@ -386,5 +426,5 @@ export function advanceWork(s: GameState, u: Unit): void {
     u.role = 'none';
     message(s, 'A pioneer has used up all of their tools.', u.owner, at);
   }
-  u.moves = maxMoves(u);
+  u.moves = maxMoves(u, s);
 }

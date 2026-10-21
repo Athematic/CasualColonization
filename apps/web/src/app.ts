@@ -7,7 +7,12 @@ import {
   distance,
   findPath,
   formatDate,
+  FATHERS,
   Game,
+  GOOD_DEFS,
+  nationTitle,
+  nextFatherCost,
+  tensionLabel,
   isShip,
   isWater,
   NATIONS,
@@ -23,6 +28,7 @@ import {
   type Command,
   type Direction,
   type NationId,
+  type SettlementAction,
   type Unit,
 } from '@cc/engine';
 import { computeVisibility, screenToTile, type Camera, type MapRenderer, type Point, type Scene } from '@cc/render-api';
@@ -31,6 +37,7 @@ import { saveAuto } from './save.js';
 import { activeStyle, onStyleChange } from './styles.js';
 import { ColonyScreen } from './ui/colony.js';
 import { choose, confirmDialog, promptDialog, toast } from './ui/dialogs.js';
+import { DiplomacyScreen } from './ui/diplomacy.js';
 import { EuropeScreen } from './ui/europe.js';
 import { Sidebar } from './ui/sidebar.js';
 
@@ -211,7 +218,61 @@ export class App {
       return false;
     }
     if (result.text && !quiet) toast(result.text);
+    void this.answerPending();
     return true;
+  }
+
+  private asking = false;
+
+  /** Asks the player about decisions the rules left waiting: tax raises first. */
+  async answerPending(): Promise<void> {
+    if (this.asking || !this.isMyTurn()) return;
+    const tax = this.me.pendingTax;
+    if (!tax) return;
+    this.asking = true;
+    const good = GOOD_DEFS[tax.good].name.toLowerCase();
+    const accept = await choose(
+      'The Crown raises taxes',
+      `His Majesty raises the tax rate from ${this.me.tax}% to ${tax.rate}%. If you refuse, colonists will dump their ${good} in protest and ${good} will be boycotted in Europe until you pay the arrears.`,
+      [
+        { label: `Accept ${tax.rate}% tax`, value: true, primary: true },
+        { label: `Refuse and hold a ${good} party`, value: false },
+      ],
+    );
+    this.asking = false;
+    this.dispatch({ type: 'answerTax', accept: accept !== false });
+  }
+
+  async chooseFather(): Promise<void> {
+    const offer = Object.values(this.me.fatherOffer);
+    if (!offer.length || !this.isMyTurn()) return;
+    const choice = await choose(
+      'Continental Congress',
+      h('p', null, `Choose the next Founding Father to join Congress. ${this.me.fatherBells}/${nextFatherCost(this.state, this.me)} liberty bells collected.`),
+      [
+        ...offer.map((id) => ({ label: `${FATHERS[id].name} (${FATHERS[id].category}): ${FATHERS[id].effect}`, value: id, primary: id === this.me.currentFather })),
+        { label: 'Decide later', value: null },
+      ],
+    );
+    if (choice) this.dispatch({ type: 'chooseFather', father: choice }, true);
+  }
+
+  private shownGameOver = false;
+
+  private async showGameOver(): Promise<void> {
+    const over = this.state.gameOver;
+    if (!over || this.shownGameOver) return;
+    this.shownGameOver = true;
+    const rows = (Object.entries(over.scores) as [NationId, number][]).sort((a, b) => b[1] - a[1]);
+    const body = h('div', null,
+      h('p', null, over.reason),
+      over.winner ? h('p', null, h('strong', null, `${nationTitle(over.winner)} ${over.winner === this.viewer ? '(you) ' : ''}wins.`)) : null,
+      h('table', { class: 'scores' }, rows.map(([n, score]) => h('tr', null, h('td', null, nationTitle(n)), h('td', null, String(score))))));
+    const again = await choose('The game is over', body, [
+      { label: 'Keep playing', value: false },
+      { label: 'Main menu', value: true, primary: true },
+    ]);
+    if (again) this.exitToMenu();
   }
 
   /** After a unit acts, move on to the next one that needs orders. */
@@ -267,16 +328,18 @@ export class App {
     }
   }
 
-  private async visitSettlement(u: Unit, settlementId: string, actions: ('speak' | 'learn' | 'trade' | 'attack')[]): Promise<void> {
+  private async visitSettlement(u: Unit, settlementId: string, actions: SettlementAction[]): Promise<void> {
     const st = this.state.settlements[settlementId];
     const labels = {
       speak: 'Speak with the chief',
+      mission: st.mission ? `A ${NATIONS[st.mission].adjective} mission is already here` : 'Establish a mission',
       learn: st.skill ? `Live among the natives (learn: ${st.skill.replace(/([A-Z])/g, ' $1').toLowerCase()})` : 'Live among the natives (nothing left to teach)',
       trade: 'Offer goods for trade',
       attack: 'Attack the settlement',
     } as const;
-    const choice = await choose(settlementName(st), 'What will you do?', [
-      ...actions.map((a) => ({ label: labels[a], value: a, disabled: a === 'learn' && !st.skill })),
+    const mood = tensionLabel(st.tension[this.viewer] ?? 0);
+    const choice = await choose(settlementName(st), `The people here are ${mood}. What will you do?`, [
+      ...actions.map((a) => ({ label: labels[a], value: a, disabled: (a === 'learn' && !st.skill) || (a === 'mission' && !!st.mission) })),
       { label: 'Leave', value: null },
     ]);
     if (!choice) return;
@@ -284,6 +347,7 @@ export class App {
     if (choice === 'speak') ok = this.dispatch({ type: 'speak', unitId: u.id, settlementId });
     if (choice === 'learn') ok = this.dispatch({ type: 'learn', unitId: u.id, settlementId });
     if (choice === 'trade') ok = this.dispatch({ type: 'tradeNatives', unitId: u.id, settlementId });
+    if (choice === 'mission') ok = this.dispatch({ type: 'mission', unitId: u.id, settlementId });
     if (choice === 'attack' && (await confirmDialog('Attack?', `Attack the ${settlementName(st)}? Its people will never trust you again.`, 'Attack', 'Hold back'))) {
       ok = this.dispatch({ type: 'attack', unitId: u.id, target: { settlementId } });
     }
@@ -368,6 +432,9 @@ export class App {
     if (!this.selected) this.centerOnStart();
     this.sidebar.showReports();
     this.requestRender();
+    await this.showGameOver();
+    await this.answerPending();
+    if (!this.me.currentFather && Object.keys(this.me.fatherOffer).length && this.me.fatherBells > 0) await this.chooseFather();
   }
 
   private handoff(nation: NationId): Promise<void> {
@@ -375,7 +442,7 @@ export class App {
       const veil = h(
         'div',
         { class: 'handoff' },
-        h('div', { class: 'dialog' }, h('h2', null, `${NATIONS[nation].name} to move`), h('p', null, `${formatDate(this.state.turn)}. Pass the device to the player of ${NATIONS[nation].name}.`),
+        h('div', { class: 'dialog' }, h('h2', null, `${nationTitle(nation)} to move`), h('p', null, `${formatDate(this.state.turn)}. Pass the device to the player of ${NATIONS[nation].name}.`),
           h('button', { class: 'btn primary', onclick: () => { veil.remove(); resolve(); } }, 'Begin turn')),
       );
       document.body.appendChild(veil);
@@ -391,6 +458,10 @@ export class App {
 
   openEurope(): void {
     this.showScreen(new EuropeScreen(this));
+  }
+
+  openDiplomacy(): void {
+    this.showScreen(new DiplomacyScreen(this));
   }
 
   private showScreen(screen: Screen): void {
@@ -579,6 +650,7 @@ export class App {
         if (p) this.centerOn(p.x, p.y);
       },
       e: () => this.openEurope(),
+      d: () => this.openDiplomacy(),
       enter: () => void this.endTurn(),
       escape: () => {
         this.gotoMode = false;

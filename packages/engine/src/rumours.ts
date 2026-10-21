@@ -1,6 +1,7 @@
 import { createUnit, message, player, reveal, unitPosition } from './queries.js';
 import { randInt, weightedPick } from './rng.js';
 import { randomImmigrant } from './europe.js';
+import { hasFather } from './fathers.js';
 import type { GameState, Unit } from './types.js';
 
 type Outcome = 'nothing' | 'tales' | 'smallTreasure' | 'colonist' | 'treasure' | 'fountain' | 'lost';
@@ -10,14 +11,15 @@ export function resolveRumour(s: GameState, u: Unit): void {
   const pos = unitPosition(s, u)!;
   const scout = u.role === 'scout';
   const expert = u.type === 'seasonedScout';
+  const deSoto = hasFather(s, u.owner, 'hernandoDeSoto');
   const outcome = weightedPick<Outcome>(s, [
-    ['nothing', 30],
+    ['nothing', deSoto ? 0 : 30],
     ['tales', 14],
     ['smallTreasure', 26],
     ['colonist', 10],
     ['treasure', scout ? 10 : 5],
     ['fountain', scout ? 4 : 2],
-    ['lost', expert ? 0 : scout ? 3 : 6],
+    ['lost', expert || deSoto ? 0 : scout ? 3 : 6],
   ]);
   const p = player(s, u.owner);
   switch (outcome) {
@@ -45,7 +47,7 @@ export function resolveRumour(s: GameState, u: Unit): void {
       break;
     }
     case 'fountain':
-      for (let i = 0; i < 4; i++) createUnit(s, u.owner, randomImmigrant(s), { kind: 'europe' });
+      for (let i = 0; i < 4; i++) createUnit(s, u.owner, randomImmigrant(s, u.owner), { kind: 'europe' });
       message(s, 'You have found the Fountain of Youth! Four new colonists wait on the docks in Europe.', u.owner, pos);
       break;
     case 'lost':

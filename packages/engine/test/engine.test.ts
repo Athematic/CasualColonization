@@ -4,6 +4,7 @@ import {
   colonyReport,
   createGame,
   createUnit,
+  SAIL_TURNS,
   deserialize,
   findPath,
   foundColony,
@@ -179,7 +180,7 @@ describe('europe round trip', () => {
     const ship = Object.values(s.units).find((u) => u.owner === 'england' && u.type === 'caravel')!;
     const entry = { ...s.players[0].entry };
     expect(applyCommand(s, { type: 'sailToEurope', unitId: ship.id })).toEqual({ ok: true, text: undefined });
-    for (let i = 0; i < 2; i++) applyCommand(s, { type: 'endTurn' });
+    for (let i = 0; i < SAIL_TURNS; i++) applyCommand(s, { type: 'endTurn' });
     expect(ship.loc.kind).toBe('europe');
     // Passengers stay aboard; send one ashore and recruit another in their place.
     const passenger = unitsAboard(s, ship)[0];
@@ -193,7 +194,7 @@ describe('europe round trip', () => {
     expect(applyCommand(s, { type: 'board', unitId: passenger.id, carrierId: ship.id })).toEqual({ ok: false, error: 'The ship is full.' });
     expect(applyCommand(s, { type: 'buyGoods', carrierId: ship.id, good: 'tools', amount: 100 }).ok).toBe(false);
     expect(applyCommand(s, { type: 'sailToAmerica', unitId: ship.id }).ok).toBe(true);
-    for (let i = 0; i < 2; i++) applyCommand(s, { type: 'endTurn' });
+    for (let i = 0; i < SAIL_TURNS; i++) applyCommand(s, { type: 'endTurn' });
     expect(ship.loc).toEqual({ kind: 'map', ...entry });
     expect(unitsAboard(s, ship)).toHaveLength(2);
   });

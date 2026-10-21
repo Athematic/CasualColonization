@@ -157,7 +157,7 @@ export function computeVisibility(s: Readonly<GameState>, viewer: NationId): Uin
   for (const u of Object.values(s.units)) {
     if (u.owner !== viewer) continue;
     const p = unitPosition(s as GameState, u);
-    if (p && u.loc.kind !== 'colony') mark(p.x, p.y, sightRadius(u));
+    if (p && u.loc.kind !== 'colony') mark(p.x, p.y, sightRadius(u, s as GameState));
   }
   for (const c of Object.values(s.colonies)) if (c.owner === viewer) mark(c.x, c.y, 2);
   return out;

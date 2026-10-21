@@ -258,6 +258,9 @@ const COATS: Partial<Record<UnitTypeId, string>> = {
   hardyPioneer: '#9a6a3a',
   seasonedScout: '#8f6b3b',
   veteranSoldier: '#5b5b5b',
+  continentalSoldier: '#2c4f8a',
+  kingsRegular: '#b52a2a',
+  nativeConvert: '#c08a4a',
 };
 
 function horse(ctx: Ctx, x: number, y: number, s: number, lw: number): void {
@@ -305,7 +308,7 @@ function person(ctx: Ctx, x: number, y: number, s: number, coat: string, hat: 'b
 function ship(ctx: Ctx, x: number, y: number, s: number, type: UnitTypeId, nation: NationId, lw: number): void {
   const masts = type === 'caravel' || type === 'privateer' ? 2 : type === 'merchantman' ? 2 : 3;
   const sail = type === 'privateer' ? '#5a5a5a' : SAIL;
-  const hullW = type === 'galleon' || type === 'frigate' ? 0.4 : 0.34;
+  const hullW = type === 'manOfWar' ? 0.44 : type === 'galleon' || type === 'frigate' ? 0.4 : 0.34;
   const deck = y + s * 0.14;
   for (let i = 0; i < masts; i++) {
     const mx = x + (i / (masts - 1) - 0.5) * s * hullW * 1.1;
@@ -347,7 +350,7 @@ function ship(ctx: Ctx, x: number, y: number, s: number, type: UnitTypeId, natio
     ctx.quadraticCurveTo(x - s * hullW, deck + s * 0.14, x - s * hullW, deck);
     ctx.closePath();
   });
-  if (type === 'frigate' || type === 'galleon' || type === 'privateer') {
+  if (type === 'frigate' || type === 'galleon' || type === 'privateer' || type === 'manOfWar') {
     for (let i = -2; i <= 2; i++) inked(ctx, INK, lw * 0.5, () => ctx.rect(x + i * s * 0.1 - s * 0.02, deck + s * 0.05, s * 0.04, s * 0.04));
   }
 }
@@ -378,12 +381,32 @@ function cannon(ctx: Ctx, x: number, y: number, s: number, lw: number): void {
   inked(ctx, null, lw * 0.7, () => ctx.arc(x - s * 0.06, y + s * 0.16, s * 0.03, 0, Math.PI * 2));
 }
 
+function chest(ctx: Ctx, x: number, y: number, s: number, lw: number): void {
+  inked(ctx, WOOD, lw, () => ctx.rect(x - s * 0.3, y - s * 0.05, s * 0.6, s * 0.3));
+  inked(ctx, '#c58a3e', lw, () => {
+    ctx.moveTo(x - s * 0.3, y - s * 0.05);
+    ctx.quadraticCurveTo(x, y - s * 0.32, x + s * 0.3, y - s * 0.05);
+    ctx.closePath();
+  });
+  inked(ctx, '#ffd23f', lw, () => ctx.rect(x - s * 0.05, y - s * 0.08, s * 0.1, s * 0.12));
+  for (const [dx, dy] of [[-0.12, -0.2], [0.05, -0.24], [0.16, -0.17]]) inked(ctx, '#ffd23f', lw * 0.7, () => ctx.arc(x + dx * s, y + dy * s, s * 0.05, 0, Math.PI * 2));
+}
+
 /** Draws a unit centred at (x, y) inside a box of size s. */
 export function unitSprite(ctx: Ctx, x: number, y: number, s: number, type: UnitTypeId, role: RoleId, nation: NationId, lw: number): void {
   const def = UNIT_TYPES[type];
   if (def.kind === 'ship') return ship(ctx, x, y, s, type, nation, lw);
   if (def.kind === 'wagon') return wagon(ctx, x, y, s, lw);
   if (def.kind === 'artillery') return cannon(ctx, x, y, s, lw);
+  if (def.kind === 'treasure') return chest(ctx, x, y, s, lw);
+  if (role === 'missionary') {
+    person(ctx, x, y, s, '#2a2a2a', 'none', lw);
+    inked(ctx, WHITE, lw * 0.8, () => {
+      ctx.rect(x + s * 0.2, y - s * 0.24, s * 0.05, s * 0.36);
+      ctx.rect(x + s * 0.14, y - s * 0.14, s * 0.17, s * 0.05);
+    });
+    return;
+  }
   const nationColor = NATIONS[nation].color;
   const mounted = role === 'dragoon' || role === 'scout';
   if (mounted) {

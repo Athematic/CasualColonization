@@ -1,4 +1,4 @@
-import { MAP_SIZES, NATION_ORDER, NATIONS, formatDate, type GameConfig, type GameState, type MapSize, type NationId } from '@cc/engine';
+import { MAP_SIZES, NATION_ORDER, NATIONS, formatDate, nationTitle, type GameConfig, type GameState, type MapSize, type NationId } from '@cc/engine';
 import { clear, h } from '../dom.js';
 import { loadAuto, loadManual, pickSaveFile } from '../save.js';
 import { activeStyle, availableStyles, icon, setStyle } from '../styles.js';
@@ -26,7 +26,7 @@ export function newGameScreen(host: HTMLElement, start: (config: GameConfig) => 
       h('div', { class: 'menu-card' },
         h('div', { class: 'menu-title' },
           icon({ kind: 'unit', type: 'caravel', role: 'none', nation: chosen.find((s) => s.human)?.nation ?? 'england' }, 72),
-          h('div', null, h('h1', null, 'Casual Colonization'), h('p', { class: 'muted' }, 'Alpha 0.1: a clone of the classic game of colonising the New World.'))),
+          h('div', null, h('h1', null, 'Casual Colonization'), h('p', { class: 'muted' }, 'Alpha 0.2: a clone of the classic game of colonising the New World.'))),
         auto || manual
           ? h('div', { class: 'row wrap' },
               auto ? h('button', { class: 'btn primary', onclick: () => resume(auto) }, `Continue (${formatDate(auto.turn)})`) : null,
@@ -41,7 +41,7 @@ export function newGameScreen(host: HTMLElement, start: (config: GameConfig) => 
           return h('div', { class: 'slot-row' },
             h('span', { class: 'flag', style: `background:${NATIONS[slot.nation].color}` }),
             h('select', { 'aria-label': `Nation ${i + 1}`, onchange: (e: Event) => { slot.nation = (e.target as HTMLSelectElement).value as NationId; render(); } },
-              NATION_ORDER.filter((n) => !taken.has(n)).map((n) => h('option', { value: n, selected: n === slot.nation || undefined }, NATIONS[n].name.replace(/^the /, 'The ')))),
+              NATION_ORDER.filter((n) => !taken.has(n)).map((n) => h('option', { value: n, selected: n === slot.nation || undefined }, nationTitle(n)))),
             h('select', { 'aria-label': `Controller of nation ${i + 1}`, onchange: (e: Event) => { slot.human = (e.target as HTMLSelectElement).value === 'human'; render(); } },
               h('option', { value: 'human', selected: slot.human || undefined }, 'Player'),
               h('option', { value: 'ai', selected: !slot.human || undefined }, 'Computer')),

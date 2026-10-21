@@ -1,5 +1,5 @@
 import { fail } from './errors.js';
-import { buildingCapacityPerWorker, colonyReport, foodToGrow, tileYield } from './production.js';
+import { buildingCapacityPerWorker, colonyReport, foodToGrow, tileYield, type ColonyReport } from './production.js';
 import {
   colonyAt,
   colonyPopulation,
@@ -20,10 +20,13 @@ import {
   unitName,
   warehouseCapacity,
 } from './queries.js';
-import { BUILDINGS, BUILDING_ORDER, type BuildingKind } from './rules/buildings.js';
+import { BUILDINGS, BUILDING_ORDER, SCHOOL_TEACHERS, TEACH_TURNS, type BuildingKind } from './rules/buildings.js';
 import { GOOD_DEFS, GOODS, emptyGoods, type GoodId } from './rules/goods.js';
-import { NATIONS } from './rules/nations.js';
-import { PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
+import { NATIONS, TRIBES } from './rules/nations.js';
+import { COLONY_BUILDS, PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
+import { runCustomHouse } from './europe.js';
+import { hasFather } from './fathers.js';
+import { nativeLandOwner, onColonyFounded } from './natives.js';
 import type { BuildTarget, Colony, GameState, Job, Unit } from './types.js';
 
 export function canFoundColony(s: GameState, u: Unit): string | null {
@@ -89,6 +92,7 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
     hammers: 0,
     liberty: 0,
     founded: s.turn,
+    exports: {},
   };
   s.colonies[colony.id] = colony;
   const tile = tileAt(s, x, y)!;
@@ -105,6 +109,7 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
   colony.build = isCoastal(s, x, y) ? { kind: 'building', id: 'docks' } : { kind: 'building', id: 'stockade' };
   if (!canBuild(s, colony, colony.build)) colony.build = { kind: 'building', id: 'warehouse' };
   reveal(s, u.owner, x, y, 2);
+  onColonyFounded(s, colony);
   message(s, `${colony.name} has been founded.`, u.owner, { x, y });
   return colony;
 }
@@ -115,7 +120,7 @@ export function jobOptions(s: GameState, colony: Colony, u: Unit): { job: Job; a
   for (const p of neighbours(s, colony.x, colony.y)) {
     const worker = tileWorkedBy(s, p.x, p.y);
     if (worker && worker.id !== u.id) continue;
-    if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y)) continue;
+    if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y) || nativeLandOwner(s, p.x, p.y)) continue;
     for (const g of GOODS) {
       const amount = tileYield(s, colony, p.x, p.y, g, u.type);
       if (amount > 0) out.push({ job: { kind: 'tile', x: p.x, y: p.y, good: g }, amount });
@@ -130,10 +135,24 @@ export function jobOptions(s: GameState, colony: Colony, u: Unit): { job: Job; a
     if (here.length >= def.workplaces) continue;
     out.push({ job: { kind: 'building', building: kind }, amount: buildingCapacityPerWorker(s, colony, kind, u.type) });
   }
+  if (canTeachHere(s, colony, u, u.id)) out.push({ job: { kind: 'building', building: 'schoolhouse' }, amount: 0 });
   return out;
 }
 
-function jobValue(s: GameState, colony: Colony, u: Unit, job: Job, amount: number, foodNet: number): number {
+/** Whether a colonist could take a teaching place in this colony's school. */
+export function canTeachHere(s: GameState, colony: Colony, u: Unit, ignoreId?: string): boolean {
+  const level = colony.buildings.schoolhouse;
+  const teach = UNIT_TYPES[u.type].teach;
+  if (!level || !teach || teach > level) return false;
+  const teachers = colonyWorkers(s, colony).filter(
+    (w) => w.id !== ignoreId && w.loc.kind === 'colony' && w.loc.job.kind === 'building' && w.loc.job.building === 'schoolhouse',
+  );
+  return teachers.length < SCHOOL_TEACHERS[level - 1];
+}
+
+function jobValue(colony: Colony, u: Unit, job: Job, amount: number, foodNet: number, report: ColonyReport): number {
+  // Teaching is always a deliberate choice, never an automatic one.
+  if (job.kind === 'building' && job.building === 'schoolhouse') return -1;
   const product = job.kind === 'tile' ? job.good : BUILDINGS[job.building].output!;
   const expert = UNIT_TYPES[u.type].expertFor === product;
   if (product === 'food') return amount * (foodNet < 2 ? 12 : 3) + (expert ? 20 : 0);
@@ -143,14 +162,12 @@ function jobValue(s: GameState, colony: Colony, u: Unit, job: Job, amount: numbe
   if (product === 'bells') value = amount * 3;
   if (product === 'crosses') value = amount * 2;
   if (product === 'lumber') {
-    const lumberMade = colonyReport(s, colony).produced.lumber;
-    value = amount * (lumberMade === 0 ? 4 : 1.5);
+    value = amount * (report.produced.lumber === 0 ? 4 : 1.5);
   }
   if (job.kind === 'building') {
     const input = BUILDINGS[job.building].input;
     if (input) {
-      const r = colonyReport(s, colony);
-      const supply = colony.goods[input] + r.net[input];
+      const supply = colony.goods[input] + report.net[input];
       if (supply < amount) value *= supply <= 0 ? 0.1 : 0.5;
     }
   }
@@ -165,7 +182,7 @@ export function bestJob(s: GameState, colony: Colony, u: Unit): Job | null {
   const foodNet = report.net.food - (alreadyIn ? 0 : 2);
   let best: { job: Job; value: number } | null = null;
   for (const opt of jobOptions(s, colony, u)) {
-    const value = jobValue(s, colony, u, opt.job, opt.amount, foodNet);
+    const value = jobValue(colony, u, opt.job, opt.amount, foodNet, report);
     if (!best || value > best.value) best = { job: opt.job, value };
   }
   return best?.job ?? null;
@@ -177,9 +194,17 @@ function validateJob(s: GameState, colony: Colony, u: Unit, job: Job): void {
     const worker = tileWorkedBy(s, job.x, job.y);
     if (worker && worker.id !== u.id) fail('Someone already works that tile.');
     if (settlementAt(s, job.x, job.y)) fail('Natives live on that tile.');
+    const owner = nativeLandOwner(s, job.x, job.y);
+    if (owner) fail(`This land belongs to the ${TRIBES[owner.tribe].name}. Buy it or take it first.`);
     if (colonyAt(s, job.x, job.y)) fail('Another colony stands on that tile.');
     if (isWater(tileAt(s, job.x, job.y)) && colony.buildings.docks === 0) fail('Fishing needs Docks.');
     if (tileYield(s, colony, job.x, job.y, job.good, u.type) <= 0) fail('That tile produces none of that.');
+  } else if (job.building === 'schoolhouse') {
+    if (!colony.buildings.schoolhouse) fail('The colony has no school.');
+    const teach = UNIT_TYPES[u.type].teach;
+    if (!teach) fail('Only experts can teach.');
+    if (teach > colony.buildings.schoolhouse) fail(`Teaching a ${UNIT_TYPES[u.type].name} needs a ${teach === 2 ? 'college' : 'university'}.`);
+    if (!canTeachHere(s, colony, u, u.id)) fail('All teaching places are taken.');
   } else {
     const def = BUILDINGS[job.building];
     if (colony.buildings[job.building] === 0 || def.workplaces === 0) fail('Nobody can work there.');
@@ -207,6 +232,9 @@ export function assignJob(s: GameState, unitId: string, colonyId: string, job?: 
   if (!chosen) fail('There is no work available.');
   validateJob(s, colony, u, chosen);
   if (!inside) stripRole(colony, u);
+  const wasTeaching = u.loc.kind === 'colony' && u.loc.job.kind === 'building' && u.loc.job.building === 'schoolhouse';
+  const willTeach = chosen.kind === 'building' && chosen.building === 'schoolhouse';
+  if (wasTeaching !== willTeach || !willTeach) delete u.teach;
   u.loc = { kind: 'colony', colonyId, job: chosen };
   u.state = 'active';
   u.moves = 0;
@@ -220,7 +248,8 @@ export function leaveColony(s: GameState, unitId: string): void {
   const colony = s.colonies[u.loc.colonyId];
   if (colonyPopulation(s, colony) <= 1) fail('The last colonist cannot leave the colony.');
   u.loc = { kind: 'map', x: colony.x, y: colony.y };
-  u.moves = maxMoves(u);
+  u.moves = maxMoves(u, s);
+  delete u.teach;
 }
 
 /** Equips a unit standing in one of its colonies with a role, using goods from the warehouse. */
@@ -230,6 +259,8 @@ export function equipInColony(s: GameState, unitId: string, role: RoleId): void 
   if (u.loc.kind !== 'map') fail('The unit must be in the colony square.');
   const colony = colonyAt(s, u.loc.x, u.loc.y);
   if (!colony || colony.owner !== u.owner) fail('The unit must be in one of your colonies.');
+  if (role === 'missionary' && colony.buildings.church < 2) fail('Missionaries are commissioned in a colony with a church.');
+  if (role === 'missionary' && u.type === 'nativeConvert') fail('Converts cannot become missionaries.');
   const before = { ...colony.goods };
   stripRole(colony, u);
   if (role === 'pioneer') {
@@ -255,9 +286,9 @@ export function equipInColony(s: GameState, unitId: string, role: RoleId): void 
 
 export function buildTargetCost(target: BuildTarget, colony: Colony): { hammers: number; tools: number; name: string } {
   if (target.kind === 'unit') {
-    if (target.id === 'wagonTrain') return { hammers: 40, tools: 0, name: 'Wagon Train' };
-    if (target.id === 'artillery') return { hammers: 192, tools: 40, name: 'Artillery' };
-    fail('That unit cannot be built in a colony.');
+    const build = COLONY_BUILDS[target.id];
+    if (!build) fail('That unit cannot be built in a colony.');
+    return { hammers: build.hammers, tools: build.tools, name: UNIT_TYPES[target.id].name };
   }
   const level = colony.buildings[target.id];
   const def = BUILDINGS[target.id];
@@ -269,13 +300,15 @@ export function buildTargetCost(target: BuildTarget, colony: Colony): { hammers:
 export function canBuild(s: GameState, colony: Colony, target: BuildTarget): boolean {
   const pop = colonyPopulation(s, colony) || 1;
   if (target.kind === 'unit') {
-    if (target.id === 'wagonTrain') return true;
-    if (target.id === 'artillery') return colony.buildings.armory > 0;
-    return false;
+    const build = COLONY_BUILDS[target.id];
+    if (!build) return false;
+    if (build.armory && colony.buildings.armory === 0) return false;
+    return colony.buildings.docks >= (build.docks ?? 0);
   }
   const def = BUILDINGS[target.id];
   const next = def.levels[colony.buildings[target.id]];
   if (!next) return false;
+  if (def.requiresFather && !hasFather(s, colony.owner, def.requiresFather)) return false;
   if (def.coastalOnly && !isCoastal(s, colony.x, colony.y)) return false;
   return pop >= next.minPop;
 }
@@ -286,7 +319,7 @@ export function buildOptions(s: GameState, colony: Colony): BuildTarget[] {
     const t: BuildTarget = { kind: 'building', id: kind };
     if (canBuild(s, colony, t)) out.push(t);
   }
-  for (const id of ['wagonTrain', 'artillery'] as UnitTypeId[]) {
+  for (const id of Object.keys(COLONY_BUILDS) as UnitTypeId[]) {
     const t: BuildTarget = { kind: 'unit', id };
     if (canBuild(s, colony, t)) out.push(t);
   }
@@ -351,6 +384,7 @@ export function processColony(s: GameState, colony: Colony): void {
 
   colony.liberty += report.produced.bells;
   p.bells += report.produced.bells;
+  p.fatherBells += report.produced.bells;
   p.crosses += report.produced.crosses;
   colony.hammers += report.produced.hammers;
 
@@ -377,6 +411,10 @@ export function processColony(s: GameState, colony: Colony): void {
     }
   }
 
+  processSchool(s, colony);
+  if (colony.buildings.stockade === 0 && colonyWorkers(s, colony).length >= 3 && hasFather(s, colony.owner, 'laSalle')) colony.buildings.stockade = 1;
+  runCustomHouse(s, colony.id);
+
   const cap = warehouseCapacity(colony);
   for (const g of GOODS) {
     if (g === 'food') continue;
@@ -385,5 +423,28 @@ export function processColony(s: GameState, colony: Colony): void {
       colony.goods[g] = cap;
     }
     if (colony.goods[g] < 0) colony.goods[g] = 0;
+  }
+}
+
+/** Teachers train the least skilled colonists: criminals become servants, servants free colonists, free colonists experts. */
+function processSchool(s: GameState, colony: Colony): void {
+  if (!colony.buildings.schoolhouse) return;
+  const workers = colonyWorkers(s, colony);
+  const isTeacher = (w: Unit) => w.loc.kind === 'colony' && w.loc.job.kind === 'building' && w.loc.job.building === 'schoolhouse';
+  for (const teacher of workers.filter(isTeacher)) {
+    const level = UNIT_TYPES[teacher.type].teach ?? 1;
+    teacher.teach = (teacher.teach ?? 0) + 1;
+    if (teacher.teach < TEACH_TURNS[level - 1]) continue;
+    const student = workers
+      .filter((w) => !isTeacher(w) && UNIT_TYPES[w.type].skill <= 0 && w.type !== 'nativeConvert')
+      .sort((a, b) => UNIT_TYPES[a.type].skill - UNIT_TYPES[b.type].skill)[0];
+    if (!student) {
+      teacher.teach = TEACH_TURNS[level - 1];
+      continue;
+    }
+    const before = UNIT_TYPES[student.type].name;
+    student.type = student.type === 'pettyCriminal' ? 'indenturedServant' : student.type === 'indenturedServant' ? 'freeColonist' : teacher.type;
+    teacher.teach = 0;
+    message(s, `In ${colony.name}, a ${before} has been taught to be a ${UNIT_TYPES[student.type].name}.`, colony.owner, colony);
   }
 }

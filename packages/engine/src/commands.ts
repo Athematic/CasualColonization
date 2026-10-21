@@ -1,8 +1,10 @@
 import { assignJob, equipInColony, foundColony, hurryBuild, leaveColony, setBuild } from './colony.js';
-import { attack } from './combat.js';
+import { attack, cashTreasure } from './combat.js';
 import { fail, RuleError } from './errors.js';
 import {
+  answerTax,
   boardInEurope,
+  payArrears,
   buyGoods,
   equipInEurope,
   recruit,
@@ -13,10 +15,14 @@ import {
   unboardInEurope,
 } from './europe.js';
 import { boardShip, leaveShip, moveUnit, setDestination, startImprovement } from './movement.js';
-import { learnSkill, speakToChief, tradeWithSettlement } from './natives.js';
+import { buyLand, establishMission, giftToTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
+import { chooseFather } from './fathers.js';
+import { proposePeace, startWar } from './diplomacy.js';
+import { declareIndependence } from './independence.js';
+import type { FatherId } from './rules/fathers.js';
 import { cargoRoomFor, colonyAt, currentPlayer, type Direction } from './queries.js';
 import type { GoodId } from './rules/goods.js';
-import type { NationId } from './rules/nations.js';
+import type { NationId, TribeId } from './rules/nations.js';
 import type { RoleId, UnitTypeId } from './rules/units.js';
 import { endTurn } from './turn.js';
 import type { BuildTarget, GameState, ImprovementKind, Job } from './types.js';
@@ -52,6 +58,18 @@ export type Command =
   | { type: 'sailToEurope'; unitId: string }
   | { type: 'sailToAmerica'; unitId: string }
   | { type: 'disband'; unitId: string }
+  | { type: 'chooseFather'; father: FatherId }
+  | { type: 'buyLand'; x: number; y: number }
+  | { type: 'takeLand'; x: number; y: number }
+  | { type: 'mission'; unitId: string; settlementId: string }
+  | { type: 'cashTreasure'; unitId: string }
+  | { type: 'answerTax'; accept: boolean }
+  | { type: 'payArrears'; good: GoodId }
+  | { type: 'setExport'; colonyId: string; good: GoodId; on: boolean }
+  | { type: 'declareWar'; nation: NationId }
+  | { type: 'proposePeace'; nation: NationId }
+  | { type: 'giftTribe'; tribe: TribeId; gold: number }
+  | { type: 'declareIndependence' }
   | { type: 'endTurn' };
 
 export type CommandResult = { ok: true; text?: string } | { ok: false; error: string };
@@ -235,6 +253,47 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         delete s.units[u.id];
         break;
       }
+      case 'chooseFather':
+        chooseFather(s, nation, cmd.father);
+        break;
+      case 'buyLand':
+        text = buyLand(s, nation, cmd.x, cmd.y);
+        break;
+      case 'takeLand':
+        text = takeLand(s, nation, cmd.x, cmd.y);
+        break;
+      case 'mission':
+        ownUnit(s, nation, cmd.unitId);
+        text = establishMission(s, cmd.unitId, cmd.settlementId);
+        break;
+      case 'cashTreasure':
+        ownUnit(s, nation, cmd.unitId);
+        text = cashTreasure(s, cmd.unitId);
+        break;
+      case 'answerTax':
+        text = answerTax(s, nation, cmd.accept);
+        break;
+      case 'payArrears':
+        payArrears(s, nation, cmd.good);
+        break;
+      case 'setExport': {
+        const c = ownColony(s, nation, cmd.colonyId);
+        if (cmd.on) c.exports[cmd.good] = true;
+        else delete c.exports[cmd.good];
+        break;
+      }
+      case 'declareWar':
+        text = startWar(s, nation, cmd.nation);
+        break;
+      case 'proposePeace':
+        text = proposePeace(s, nation, cmd.nation);
+        break;
+      case 'giftTribe':
+        text = giftToTribe(s, nation, cmd.tribe, cmd.gold);
+        break;
+      case 'declareIndependence':
+        text = declareIndependence(s, nation);
+        break;
       case 'endTurn':
         endTurn(s);
         break;

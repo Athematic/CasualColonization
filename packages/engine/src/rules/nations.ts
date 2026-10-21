@@ -1,7 +1,7 @@
 import type { GoodId } from './goods.js';
 import type { UnitTypeId } from './units.js';
 
-export type NationId = 'england' | 'france' | 'netherlands' | 'spain' | 'portugal' | 'sweden' | 'denmark' | 'russia';
+export type NationId = 'england' | 'france' | 'netherlands' | 'spain' | 'portugal' | 'sweden' | 'denmark' | 'russia' | 'crown';
 
 export interface NationDef {
   id: NationId;
@@ -12,7 +12,7 @@ export interface NationDef {
   colonyNames: string[];
 }
 
-export const NATIONS: Record<NationId, NationDef> = {
+export const NATIONS = {
   england: {
     id: 'england', name: 'England', adjective: 'English', color: '#c8202e',
     bonus: 'Immigration: fewer crosses needed for new colonists.',
@@ -53,6 +53,13 @@ export const NATIONS: Record<NationId, NationDef> = {
     bonus: 'Frontier: scouts and dragoons see further.',
     colonyNames: ['Novo-Arkhangelsk', 'Fort Ross', 'Kodiak', 'Pavlovsk', 'Mikhailovsk', 'Nikolaevsk', 'Konstantinovsk', 'Alexandrovsk', 'Unalaska', 'Kenai', 'Bodega', 'Kolmakov'],
   },
+} as Record<NationId, NationDef>;
+
+/** The Royal Expeditionary Force; joins the game only when a colony declares independence. */
+NATIONS.crown = {
+  id: 'crown', name: 'the Crown', adjective: 'Royal', color: '#6d1f3a',
+  bonus: 'Sent to crush rebellions.',
+  colonyNames: ['Royal Colony'],
 };
 
 export const NATION_ORDER: NationId[] = ['england', 'france', 'netherlands', 'spain', 'portugal', 'sweden', 'denmark', 'russia'];

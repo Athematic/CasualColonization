@@ -1,10 +1,12 @@
 import { BUILDINGS, WAREHOUSE_CAPACITY } from './rules/buildings.js';
+import { NATIONS } from './rules/nations.js';
 import { GOODS, type GoodId } from './rules/goods.js';
 import type { NationId } from './rules/nations.js';
 import { FOREST_DEFENCE, TERRAIN, type TerrainDef } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeDef } from './rules/units.js';
 import type { Colony, GameState, Player, Settlement, Tile, Unit, UnitLocation } from './types.js';
 import type { UnitTypeId } from './rules/units.js';
+import type { FatherId } from './rules/fathers.js';
 
 export const DIRECTIONS = [
   { id: 'n', dx: 0, dy: -1 },
@@ -90,15 +92,21 @@ export function isCarrier(u: Unit): boolean {
   return UNIT_TYPES[u.type].cargo > 0;
 }
 
-export function maxMoves(u: Unit): number {
+export function maxMoves(u: Unit, s: GameState): number {
   const def = UNIT_TYPES[u.type];
   let moves = ROLES[u.role].moves ?? def.moves;
   if (def.kind === 'ship' && u.owner === 'portugal') moves += 1;
+  if (def.kind === 'ship' && ownerHasFather(s, u.owner, 'ferdinandMagellan')) moves += 1;
   return moves * 3;
+}
+
+function ownerHasFather(s: GameState, nation: NationId, id: FatherId): boolean {
+  return s.players.find((p) => p.id === nation)?.fathers.includes(id) ?? false;
 }
 
 export function unitName(u: Unit): string {
   const def = UNIT_TYPES[u.type];
+  if (u.type === 'treasure') return `Treasure (${u.treasure ?? 0} gold)`;
   if (u.role === 'none') return def.name;
   const role = ROLES[u.role].name;
   if (u.type === 'veteranSoldier' && u.role === 'dragoon') return 'Veteran Dragoon';
@@ -150,7 +158,7 @@ export function colonyPopulation(s: GameState, colony: Colony): number {
 }
 
 export function cargoUsed(s: GameState, carrier: Unit): number {
-  let used = unitsAboard(s, carrier).length;
+  let used = unitsAboard(s, carrier).reduce((n, u) => n + (u.type === 'treasure' ? UNIT_TYPES[carrier.type].cargo : 1), 0);
   for (const g of GOODS) {
     const amount = carrier.cargo?.[g] ?? 0;
     if (amount > 0) used += Math.ceil(amount / 100);
@@ -178,12 +186,13 @@ export function isExplored(s: GameState, nation: NationId, x: number, y: number)
   return player(s, nation).explored[y * s.map.width + x] === 1;
 }
 
-export function sightRadius(u: Unit): number {
+export function sightRadius(u: Unit, s: GameState): number {
   const def = UNIT_TYPES[u.type];
   let r = 1;
   if (u.role === 'scout') r = 2;
   if (def.kind === 'ship' && def.offence > 0) r = 2;
   if (u.owner === 'russia' && (u.role === 'scout' || u.role === 'dragoon')) r += 1;
+  if (def.kind !== 'ship' && ownerHasFather(s, u.owner, 'hernandoDeSoto')) r += 1;
   return r;
 }
 
@@ -237,4 +246,10 @@ export function createUnit(s: GameState, owner: NationId, type: UnitTypeId, loc:
   const u: Unit = { id: newId(s, 'u'), owner, type, role: 'none', tools: 0, loc, moves: 0, state: 'active' };
   s.units[u.id] = u;
   return u;
+}
+
+/** A nation's name for the start of a sentence or a table cell ("The Netherlands"). */
+export function nationTitle(nation: NationId): string {
+  const name = NATIONS[nation].name;
+  return name[0].toUpperCase() + name.slice(1);
 }
