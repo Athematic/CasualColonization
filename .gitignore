@@ -4,3 +4,6 @@ dist/
 .DS_Store
 scripts/.*.mjs
 .claude/worktrees/
+
+# image generator output (tools/image-gen)
+tools/image-gen/output/
