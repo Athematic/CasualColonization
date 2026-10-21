@@ -9,6 +9,7 @@ import { processIndependence } from './independence.js';
 import { processRoutes } from './routes.js';
 import { formatDate, maxMoves, message, unitName, unitPosition } from './queries.js';
 import { checkTimeLimit } from './score.js';
+import { recordStats } from './stats.js';
 import type { GameState, Player, Unit } from './types.js';
 
 /** Resets a player's units and carries out standing orders at the start of their turn. */
@@ -71,6 +72,7 @@ function advance(s: GameState): void {
     processNatives(s);
     recoverMarkets(s);
     processIndependence(s);
+    recordStats(s);
     s.turn++;
     checkTimeLimit(s);
     message(s, `${formatDate(s.turn)} begins.`);

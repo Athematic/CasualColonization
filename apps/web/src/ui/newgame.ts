@@ -108,10 +108,10 @@ export function newGameScreen(
             h('span', { class: 'flag', style: `background:${NATIONS[slot.nation].color}` }),
             h('select', { 'aria-label': `Nation ${i + 1}`, onchange: (e: Event) => { slot.nation = (e.target as HTMLSelectElement).value as NationId; render(); } },
               NATION_ORDER.filter((n) => !taken.has(n)).map((n) => h('option', { value: n, selected: n === slot.nation || undefined }, nationTitle(n)))),
-            h('select', { 'aria-label': `Controller of nation ${i + 1}`, onchange: (e: Event) => { slot.controller = (e.target as HTMLSelectElement).value as Slot['controller']; render(); } },
+            h('select', { 'aria-label': `Controller of nation ${i + 1}`, title: slot.controller === 'human' ? undefined : AI_LEVEL_INFO[slot.controller].description, onchange: (e: Event) => { slot.controller = (e.target as HTMLSelectElement).value as Slot['controller']; render(); } },
               h('option', { value: 'human', selected: slot.controller === 'human' || undefined }, 'Player'),
               AI_LEVELS.map((level) => h('option', { value: level, selected: slot.controller === level || undefined, title: AI_LEVEL_INFO[level].description }, `Computer: ${AI_LEVEL_INFO[level].name}`))),
-            h('span', { class: 'muted small bonus' }, slot.controller === 'human' ? NATIONS[slot.nation].bonus : `${AI_LEVEL_INFO[slot.controller].description} ${NATIONS[slot.nation].bonus}`));
+            h('span', { class: 'muted small bonus' }, NATIONS[slot.nation].bonus));
         })),
         h('div', { class: 'row wrap' },
           plannedSelect('Difficulty', '0.3', ['Conquistador (today\'s rules)', 'Discoverer', 'Explorer', 'Governor', 'Viceroy'],
@@ -129,9 +129,6 @@ export function newGameScreen(
               ? h('select', { disabled: true, title: 'Stored maps have a fixed size.' }, h('option', null, storedMapSize(map)))
               : h('select', { onchange: (e: Event) => (mapSize = (e.target as HTMLSelectElement).value as MapSize) },
                   (Object.keys(MAP_SIZES) as MapSize[]).map((m) => h('option', { value: m, selected: m === mapSize || undefined }, `${m[0].toUpperCase()}${m.slice(1)} (${MAP_SIZES[m].width}×${MAP_SIZES[m].height})`)))),
-          h('label', { class: 'field', title: 'Starts the random number generator for the whole game: the generated map, where native settlements, bonus resources and rumours go, and every roll during play. The same seed and the same choices give the same game.' },
-            h('span', null, 'Game seed'),
-            h('input', { type: 'number', value: seed, onchange: (e: Event) => (seed = Number((e.target as HTMLInputElement).value) || 0) })),
           h('label', { class: 'field' }, h('span', null, 'Graphics style'),
             h('select', { onchange: (e: Event) => { setStyle((e.target as HTMLSelectElement).value); render(); } },
               availableStyles().map((st) => h('option', { value: st.id, selected: st.id === activeStyle().id || undefined }, st.name))))),
@@ -143,19 +140,22 @@ export function newGameScreen(
             h('label', { class: 'planned-option', title: o.note },
               h('input', { type: 'checkbox', disabled: true }),
               h('span', null, h('b', null, o.label), ' ', planned(o.release), h('br'), h('span', { class: 'muted small' }, o.note)))))),
-        humans > 0
-          ? h('div', { class: 'row wrap' },
-              h('label', { class: 'field' }, h('span', null, 'Start'),
+        h('div', { class: 'row wrap' },
+          humans > 0
+            ? h('label', { class: 'field' }, h('span', null, 'Start'),
                 h('select', { 'aria-label': 'Start year', onchange: (e: Event) => { headYear = Number((e.target as HTMLSelectElement).value); render(); } },
                   h('option', { value: 0, selected: !headYear || undefined }, 'At the beginning (1492)'),
-                  HEAD_START_YEARS.map((y) => h('option', { value: y, selected: headYear === y || undefined }, `Take over in ${y} (turn ${turnOfYear(y)})`)))),
-              headYear
-                ? h('label', { class: 'field' }, h('span', null, 'Until then'),
-                    h('select', { 'aria-label': 'Head start display', onchange: (e: Event) => { watchHeadStart = (e.target as HTMLSelectElement).value === 'watch'; } },
-                      h('option', { value: 'watch', selected: watchHeadStart || undefined }, 'Watch the speedrun'),
-                      h('option', { value: 'skip', selected: !watchHeadStart || undefined }, 'Skip ahead (faster)')))
-                : null)
-          : null,
+                  HEAD_START_YEARS.map((y) => h('option', { value: y, selected: headYear === y || undefined }, `Take over in ${y} (turn ${turnOfYear(y)})`))))
+            : null,
+          humans > 0 && headYear
+            ? h('label', { class: 'field' }, h('span', null, 'Until then'),
+                h('select', { 'aria-label': 'Head start display', onchange: (e: Event) => { watchHeadStart = (e.target as HTMLSelectElement).value === 'watch'; } },
+                  h('option', { value: 'watch', selected: watchHeadStart || undefined }, 'Watch the speedrun'),
+                  h('option', { value: 'skip', selected: !watchHeadStart || undefined }, 'Skip ahead (faster)')))
+            : null,
+          h('label', { class: 'field', title: 'Starts the random number generator for the whole game: the generated map, where native settlements, bonus resources and rumours go, and every roll during play. The same seed and the same choices give the same game.' },
+            h('span', null, 'Game seed'),
+            h('input', { type: 'number', value: seed, onchange: (e: Event) => (seed = Number((e.target as HTMLInputElement).value) || 0) }))),
         humans > 0 && headYear
           ? h('p', { class: 'muted small' }, `The strongest computer player runs your nation until ${headYear}, then hands it to you. Everyone else plays at the levels chosen above.`)
           : null,

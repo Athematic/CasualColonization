@@ -17,7 +17,7 @@ The one plan for Casual Colonization. We decide the priorities here together. Ne
 | Cheat menu with a permanent cheated marker | M | P1 | done |
 | Trade routes for ships and wagon trains; computer players stop goods spoiling (warehouses, routes, selling to natives) | L | P1 | in progress |
 | Turn-start modal with every decision and notice; turns-to-arrive badge on the go-to marker; stronger end-turn pulse | M | P1 | done |
-| Progress statistics every turn, a Progress Graphs screen, shown when the game ends | M | P1 | in progress |
+| Progress statistics every turn, a Progress Graphs screen, shown when the game ends | M | P1 | done |
 | Audit of which features each computer level uses; computer players build roads and buy ships | M | P1 | done (see [AI_FEATURE_AUDIT.md](AI_FEATURE_AUDIT.md)) |
 | Next computer-player gaps from the audit: Combative's idle army, missions and native trade, schools and custom houses earlier, buying experts, declaring independence, refusing taxes | M | P2 | planned |
 | New game screen previews planned options | S | P3 | done |
