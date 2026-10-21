@@ -1287,3 +1287,50 @@ button.good:not(:disabled):hover {
     max-width: none;
   }
 }
+
+/* Options from the roadmap on the New game screen. */
+.planned {
+  display: inline-block;
+  border: 1.5px dashed var(--muted);
+  border-radius: 999px;
+  padding: 0 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.planned-field select {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.planned-options {
+  margin: 0.5rem 0;
+  border: var(--line-width) dashed var(--muted);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.6rem;
+}
+
+.planned-options summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.planned-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.5rem 1rem;
+}
+
+.planned-option {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  cursor: not-allowed;
+}
+
+.planned-option input {
+  margin-top: 0.2rem;
+}
