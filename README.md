@@ -65,16 +65,19 @@ In a colony, click a colonist and then a field or building to put them to work. 
 
 ```sh
 npm run tournament -- --games 8 --turns 330 --size medium --levels naive,competent,combative,creative
+npm run tournament -- --games 6 --turns 300 --size medium --features   # feature-usage audit
 ```
 
-With those options, the current results are as follows. The three advanced levels are close; Creative has the best average and plays head starts.
+With those options, the current results are as follows. Creative has the best average and plays head starts.
 
 | Level | Wins | Score | Colonies | Colonists |
 | --- | ---: | ---: | ---: | ---: |
-| Creative | 2 | 343 | 21.9 | 102 |
-| Combative | 2 | 339 | 22.4 | 116 |
-| Competent | 4 | 337 | 19.1 | 101 |
-| Naive | 0 | 204 | 20.0 | 75 |
+| Creative | 3 | 510 | 21.8 | 148 |
+| Competent | 2 | 435 | 20.3 | 131 |
+| Combative | 3 | 415 | 21.9 | 140 |
+| Naive | 0 | 190 | 20.5 | 71 |
+
+Add `--features` to also count how often each level uses each game feature (commands, roads, ships bought, buildings, schools, missions, trade, wars and more), with a table that flags features the advanced levels never or hardly use. The findings so far, and the fixes they led to, are in [docs/AI_FEATURE_AUDIT.md](docs/AI_FEATURE_AUDIT.md).
 
 Simplifications in this alpha:
 - Native braves are not shown as units; their raids and gifts happen as events.

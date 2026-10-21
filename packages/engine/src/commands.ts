@@ -1,4 +1,5 @@
 import { assignJob, equipInColony, foundColony, hurryBuild, leaveColony, setBuild } from './colony.js';
+import { track } from './telemetry.js';
 import { attack, cashTreasure } from './combat.js';
 import { fail, RuleError } from './errors.js';
 import {
@@ -108,11 +109,16 @@ function transferGoods(s: GameState, nation: NationId, carrierId: string, good: 
   }
 }
 
+/** Command types that change the state directly here rather than through an engine function. */
+const DIRECT_COMMANDS = new Set<Command['type']>(['clearOrders', 'fortify', 'sentry', 'activate', 'skip', 'loadGoods', 'unloadGoods', 'disband', 'setExport']);
+
 /** Validates and applies a command for the nation whose turn it is. Mutates the state. */
 export function applyCommand(s: GameState, cmd: Command): CommandResult {
   const nation = currentPlayer(s).id;
   try {
     let text: string | undefined;
+    // Commands with no engine function of their own are counted here; the rest where they act.
+    if (DIRECT_COMMANDS.has(cmd.type)) track(nation, `cmd:${cmd.type}`);
     switch (cmd.type) {
       case 'move':
         ownUnit(s, nation, cmd.unitId);
