@@ -9,7 +9,7 @@ A browser clone of Sid Meier's *Colonization*. The game engine is kept separate 
 
 ## Play
 
-The game opens on a title screen with the cover art (`images/covers/landfall.png`), with Continue, Quick game, New game, Watch the computers play and Load.
+The game opens on a title screen showing one of the five front covers at random (`docs/BOX_ART_PROMPTS.md`, section 3), with Continue, Quick game, New game, Watch the computers play and Load.
 
 ```sh
 npm install
