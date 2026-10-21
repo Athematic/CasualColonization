@@ -32,11 +32,11 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| A market for every nation's home port, with supply and demand like the player's | L | P1 | design |
-| Taxes for every nation: computer nations raise and accept taxes, and boycott | M | P1 | design |
-| Trading with other Europeans: trade routes with stops at a foreign colony, by agreement | M | P1 | design |
-| Favoured Nation status: unlocked by years of peace plus trade routes, agreed by both sides, refusable by computer players, cancellable with consequences | L | P1 | design |
-| Trading and buying ships (not warships) in a favoured nation's home port, at its prices and taxes | M | P1 | design |
+| A market for every nation's home port, with supply and demand like the player's | L | P1 | planned |
+| Taxes for every nation: computer nations raise and accept taxes, and boycott | M | P1 | planned |
+| Trading with other Europeans: trade routes with stops at a foreign colony, by agreement | M | P1 | planned |
+| Favoured Nation status: unlocked by years of peace plus trade routes, agreed by both sides, refusable by computer players, cancellable with consequences | L | P1 | planned |
+| Trading and buying ships (not warships) in a favoured nation's home port, at its prices and taxes | M | P1 | planned |
 | Triangle trading by the Creative computer players when prices allow | M | P2 | idea |
 | Diplomacy screen shows relations, years of peace, trade volume, and progress towards Favoured Nation | S | P1 | idea |
 
