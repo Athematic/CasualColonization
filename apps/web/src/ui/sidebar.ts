@@ -137,7 +137,7 @@ export class Sidebar {
     const over = s.gameOver;
     const progress = head ? Math.min(100, Math.round((s.turn / head.turn) * 100)) : 0;
     return h('div', { class: 'card observer' },
-      h('div', { class: 'title-row' }, h('h1', null, 'Casual Colonization'), h('span', { class: 'pill' }, head ? 'Head start' : 'Observer')),
+      h('div', { class: 'title-row' }, h('h1', null, 'Casual Colonization'), h('span', { class: 'pill' }, head ? 'Head start' : 'Observer'), s.cheated ? h('span', { class: 'pill warn', title: 'Cheats have been used in this game' }, 'Cheated') : null),
       h('div', { class: 'stats' }, h('strong', null, formatDate(s.turn)), over ? ` · ${over.reason}` : ''),
       head ? h('div', null,
         h('p', { class: 'small' }, `The computer plays ${head.humans.map((n) => nationTitle(n)).join(' and ')} for you until ${formatDate(head.turn)}.`),
@@ -243,7 +243,9 @@ export class Sidebar {
       h('div', { class: 'row wrap' },
         h('button', { class: 'btn small', onclick: () => toast(saveManual(serialize(app.state)) ? 'Game saved in this browser.' : 'Could not save here.') }, 'Save'),
         h('button', { class: 'btn small', onclick: () => downloadSave(serialize(app.state), `casual-colonization-${app.state.turn}.json`) }, 'Export save'),
-        h('button', { class: 'btn small', onclick: () => app.exitToMenu() }, 'Main menu')),
+        h('button', { class: 'btn small', onclick: () => app.exitToMenu() }, 'Main menu'),
+        h('button', { class: 'btn small', onclick: () => app.openCheats(), title: 'Cheats for testing (Ctrl+Shift+C)' }, 'Cheats…')),
+      app.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used')) : null,
       h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · D foreign affairs · Enter end turn · Right-click or Shift-click to send a unit.'));
     details.addEventListener('toggle', () => (this.menuOpen = details.open));
     return details;

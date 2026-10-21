@@ -3,6 +3,7 @@
  * engine is deterministic, so a tournament always gives the same result for the same options.
  */
 import { AI_LEVEL_INFO, type AiLevel } from './ai/profiles.js';
+import { isCheated } from './cheats.js';
 import { applyCommand } from './commands.js';
 import { createGame } from './game.js';
 import { colonyWorkers } from './queries.js';
@@ -33,6 +34,8 @@ export interface ArenaEntry {
   gold: number;
   fathers: number;
   independence: string;
+  /** The game was cheated in (arena games never cheat, but standings can come from any state). */
+  cheated?: boolean;
   /** Highest score in its game (ties count for all). */
   won: boolean;
 }
@@ -48,6 +51,8 @@ export interface ArenaSummary {
   fathers: number;
   independenceWon: number;
   independenceLost: number;
+  /** Entries from cheated games. */
+  cheated: number;
 }
 
 /** Plays one computer-only game and reports every nation's standing at the end. */
@@ -73,6 +78,7 @@ export function standing(s: GameState, seed: number, nation: NationId, level: Ai
     gold: p.gold,
     fathers: p.fathers.length,
     independence: p.independence,
+    ...(isCheated(s) ? { cheated: true } : {}),
   };
 }
 
@@ -111,6 +117,7 @@ export function summarise(entries: ArenaEntry[]): ArenaSummary[] {
         fathers: mean((e) => e.fathers),
         independenceWon: rows.filter((e) => e.independence === 'won').length,
         independenceLost: rows.filter((e) => e.independence === 'lost').length,
+        cheated: rows.filter((e) => e.cheated).length,
       };
     })
     .sort((a, b) => b.score - a.score);
@@ -121,7 +128,9 @@ export function formatArena(summary: ArenaSummary[]): string {
   const head = '| Level | Nations | Wins | Score | Colonies | Colonists | Gold | Fathers | Independence won / lost |';
   const rule = '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
   const rows = summary.map((r) =>
-    `| ${AI_LEVEL_INFO[r.level].name} | ${r.entries} | ${r.wins} | ${r.score} | ${r.colonies} | ${r.population} | ${r.gold} | ${r.fathers} | ${r.independenceWon} / ${r.independenceLost} |`,
+    `| ${AI_LEVEL_INFO[r.level].name}${r.cheated ? ` (${r.cheated} cheated)` : ''} | ${r.entries} | ${r.wins} | ${r.score} | ${r.colonies} | ${r.population} | ${r.gold} | ${r.fathers} | ${r.independenceWon} / ${r.independenceLost} |`,
   );
-  return [head, rule, ...rows].join('\n');
+  const cheated = summary.reduce((n, r) => n + r.cheated, 0);
+  const note = cheated ? [`\nCheats used: ${cheated} of these entries come from cheated games.`] : [];
+  return [head, rule, ...rows, ...note].join('\n');
 }
