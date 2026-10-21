@@ -95,7 +95,7 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
 
 ## Later
 
-- More graphical styles as plugins.
+- More graphical styles as plugins. Sprite-based styles are packs of data (art, mapping from the game to sprite ids, draw rules) loaded by one generic sprite style plugin. Ligne claire (painted) is the first pack, and scenarios can bring their own.
 - A map editor in the game.
 - Network play (the deterministic engine already supports replays).
 
