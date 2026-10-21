@@ -1,4 +1,5 @@
 import { fail } from './errors.js';
+import { track } from './telemetry.js';
 import { sailToEurope } from './europe.js';
 import { resolveRumour } from './rumours.js';
 import {
@@ -145,6 +146,10 @@ export function placeOnMap(s: GameState, u: Unit, x: number, y: number): void {
 export function moveUnit(s: GameState, unitId: string, dir: Direction): void {
   const option = describeMove(s, unitId, dir);
   const u = s.units[unitId];
+  if (option.kind !== 'blocked' && option.kind !== 'attack' && option.kind !== 'settlement') {
+    track(u.owner, 'cmd:move');
+    if (UNIT_TYPES[u.type].kind === 'wagon') track(u.owner, 'wagon:moves');
+  }
   const pos = unitPosition(s, u)!;
   const { dx, dy } = dirOffset(dir);
   const x = pos.x + dx;
@@ -197,6 +202,7 @@ export function boardShip(s: GameState, unitId: string, carrierId: string): void
   if (!canCarry(s, ship, u)) fail(u.type === 'treasure' ? 'Only an empty galleon can carry treasure.' : 'The ship is full.');
   u.loc = { kind: 'carrier', carrierId };
   u.state = 'sentry';
+  track(u.owner, 'cmd:board');
 }
 
 /** Leaves a ship docked in a colony (or in Europe, handled elsewhere). */
@@ -207,6 +213,7 @@ export function leaveShip(s: GameState, unitId: string): void {
   if (ship.loc.kind !== 'map' || !colonyAt(s, ship.loc.x, ship.loc.y)) fail('Units can only leave a ship in port; move onto land instead.');
   u.loc = { kind: 'map', x: ship.loc.x, y: ship.loc.y };
   u.state = 'active';
+  track(u.owner, 'cmd:unboard');
 }
 
 /** Can the unit stand on this tile while pathing (ignoring move points)? */
@@ -329,6 +336,7 @@ export function setDestination(s: GameState, unitId: string, dest: Unit['dest'])
   if (dest && 'x' in dest && !findPath(s, u, dest.x, dest.y)) fail('There is no known route there.');
   u.dest = dest;
   u.state = 'active';
+  track(u.owner, dest && 'europe' in dest ? 'cmd:gotoEurope' : 'cmd:goto');
   continueOrders(s, u);
 }
 
@@ -396,6 +404,7 @@ export function startImprovement(s: GameState, unitId: string, kind: Improvement
   if (reason) fail(reason);
   const turns = IMPROVEMENT_TURNS[kind];
   u.work = { kind, turnsLeft: u.type === 'hardyPioneer' ? Math.ceil(turns / 2) : turns };
+  track(u.owner, 'cmd:improve');
   u.moves = 0;
   delete u.dest;
 }
@@ -412,6 +421,7 @@ export function advanceWork(s: GameState, u: Unit): void {
   delete u.work;
   if (kind === 'plow') tile.p = true;
   if (kind === 'road') tile.r = true;
+  track(u.owner, kind === 'plow' ? 'land:plowed' : kind === 'road' ? 'land:road built' : 'land:forest cleared');
   if (kind === 'clear') {
     delete tile.f;
     const colony = Object.values(s.colonies).find((c) => c.owner === u.owner && distance(c.x, c.y, at.x, at.y) <= 1);

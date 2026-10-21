@@ -29,3 +29,5 @@ export { siteScore } from './ai/common.js';
 export * from './ai/profiles.js';
 export * from './arena.js';
 export * from './headstart.js';
+export * from './features.js';
+export { setFeatureSink, track, type FeatureSink } from './telemetry.js';

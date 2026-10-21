@@ -1,4 +1,5 @@
 import { fail } from './errors.js';
+import { track } from './telemetry.js';
 import { describeMove } from './movement.js';
 import { chooseDefender, defencePower } from './combat.js';
 import { hasFather } from './fathers.js';
@@ -33,6 +34,7 @@ export function speakToChief(s: GameState, unitId: string, settlementId: string)
   const st = adjacentSettlement(s, u, settlementId);
   if (u.role !== 'scout') fail('Only scouts can speak with the chief.');
   u.moves = 0;
+  track(u.owner, 'cmd:speak');
   if (tensionOf(st, u.owner) > 500 && random(s) < 0.3) {
     delete s.units[u.id];
     const text = `The angry ${TRIBES[st.tribe].name} have killed your scout.`;
@@ -75,6 +77,7 @@ export function learnSkill(s: GameState, unitId: string, settlementId: string): 
   u.type = skill;
   u.moves = 0;
   st.skill = null;
+  track(u.owner, 'cmd:learn');
   const text = `Your colonist has lived among the ${TRIBES[st.tribe].name} and become a ${UNIT_TYPES[skill].name}.`;
   message(s, text, u.owner, st);
   return text;
@@ -103,6 +106,8 @@ export function tradeWithSettlement(s: GameState, unitId: string, settlementId: 
   addTension(st, u.owner, -15);
   player(s, u.owner).gold += gold;
   u.moves = 0;
+  track(u.owner, 'cmd:tradeNatives');
+  track(u.owner, UNIT_TYPES[u.type].kind === 'wagon' ? 'natives:sold by wagon train' : 'natives:sold by ship');
   const text = `The ${settlementName(st)} buys ${amount} ${GOOD_DEFS[chosen].name.toLowerCase()} for ${gold} gold.`;
   message(s, text, u.owner, st);
   return text;
@@ -149,6 +154,7 @@ export function buyLand(s: GameState, nation: NationId, x: number, y: number): s
   st.gold += price;
   tileAt(s, x, y)!.claim = nation;
   addTension(st, nation, -20);
+  track(nation, 'cmd:buyLand');
   return price ? `You buy the land from the ${TRIBES[st.tribe].name} for ${price} gold.` : `The ${TRIBES[st.tribe].name} let you use the land freely.`;
 }
 
@@ -157,6 +163,7 @@ export function takeLand(s: GameState, nation: NationId, x: number, y: number): 
   if (!st) fail('Nobody claims that land.');
   tileAt(s, x, y)!.claim = nation;
   addTension(st, nation, 250);
+  track(nation, 'cmd:takeLand');
   for (const other of Object.values(s.settlements)) if (other.tribe === st.tribe && other.id !== st.id) addTension(other, nation, 60);
   const text = `You take the land. The ${TRIBES[st.tribe].name} are ${tensionLabel(tensionOf(st, nation))}.`;
   message(s, text, nation, st);
@@ -178,6 +185,7 @@ export function giftToTribe(s: GameState, nation: NationId, tribe: TribeId, gold
   const settlements = Object.values(s.settlements).filter((st) => st.tribe === tribe);
   if (!settlements.length) fail('That tribe has no settlements left.');
   p.gold -= gold;
+  track(nation, 'cmd:giftTribe');
   for (const st of settlements) {
     st.gold += Math.round(gold / settlements.length);
     addTension(st, nation, -Math.round((gold * 1.5) / settlements.length));
@@ -192,10 +200,13 @@ export function establishMission(s: GameState, unitId: string, settlementId: str
   if (u.role !== 'missionary') fail('Only missionaries can found missions.');
   if (st.mission) fail(`There is already a ${NATIONS[st.mission].adjective} mission here.`);
   delete s.units[u.id];
+  track(u.owner, 'cmd:mission');
   let text: string;
   if (tensionOf(st, u.owner) > 600) {
+    track(u.owner, 'natives:missionary killed');
     text = `The ${TRIBES[st.tribe].name} have killed your missionary.`;
   } else {
+    track(u.owner, 'natives:mission founded');
     st.mission = u.owner;
     st.missionExpert = u.type === 'firebrandPreacher';
     addTension(st, u.owner, -100);
@@ -221,6 +232,7 @@ function raid(s: GameState, st: Settlement, colony: Colony): void {
   const defender = chooseDefender(s, defenders) ?? colonyWorkers(s, colony)[0];
   const tribe = TRIBES[st.tribe].name;
   if (!defender) return;
+  track(colony.owner, 'natives:raid suffered');
   const off = 1.5 * (TRIBES[st.tribe].settlement === 'city' ? 1.5 : 1);
   const def = defencePower(s, defender);
   if (random(s) >= off / (off + def)) {
@@ -273,6 +285,7 @@ export function processNatives(s: GameState): void {
       const atWar = tribe.stance[nation] === 'war';
       if (!atWar && t >= 800) {
         tribe.stance[nation] = 'war';
+        track(nation, 'natives:tribe went to war');
         message(s, `The ${TRIBES[st.tribe].name} have dug up the hatchet against ${NATIONS[nation].name}!`, nation, st);
       } else if (atWar && t < 250 && !Object.values(s.settlements).some((o) => o.tribe === st.tribe && tensionOf(o, nation) >= 250)) {
         tribe.stance[nation] = 'peace';
@@ -296,6 +309,7 @@ export function processNatives(s: GameState): void {
       if (colony && random(s) < chance) {
         const type = hasFather(s, st.mission, 'bartolomeDeLasCasas') ? 'freeColonist' : 'nativeConvert';
         createUnit(s, st.mission, type, { kind: 'map', x: colony.x, y: colony.y });
+        track(st.mission, 'natives:convert joined');
         message(s, `A ${TRIBES[st.tribe].name} convert has joined ${colony.name}.`, st.mission, colony);
       }
     }

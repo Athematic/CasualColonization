@@ -1,4 +1,5 @@
 import { declareWar } from './combat.js';
+import { track } from './telemetry.js';
 import { fail } from './errors.js';
 import { hasFather } from './fathers.js';
 import { message, player } from './queries.js';
@@ -13,6 +14,7 @@ export function startWar(s: GameState, nation: NationId, other: NationId): strin
   if (other === 'crown') fail('Declare independence to fight the Crown.');
   const p = player(s, nation);
   if (p.stance[other] === 'war') fail(`You are already at war with ${NATIONS[other].name}.`);
+  track(nation, 'cmd:declareWar');
   declareWar(s, nation, other);
   return `You are now at war with ${NATIONS[other].name}.`;
 }
@@ -23,6 +25,7 @@ export function proposePeace(s: GameState, nation: NationId, other: NationId): s
   const o = player(s, other);
   if (p.stance[other] !== 'war') fail(`You are not at war with ${NATIONS[other].name}.`);
   if (other === 'crown') fail('The Crown does not negotiate with rebels.');
+  track(nation, 'cmd:proposePeace');
   const tired = s.turn - (p.warSince[other] ?? s.turn) >= WAR_WEARINESS;
   if (!o.human && !tired && !hasFather(s, nation, 'benjaminFranklin')) {
     return `${NATIONS[other].name} refuses to make peace for now.`;
@@ -38,6 +41,8 @@ export function makePeace(s: GameState, a: NationId, b: NationId): void {
   pb.stance[a] = 'peace';
   delete pa.warSince[b];
   delete pb.warSince[a];
+  track(a, 'diplomacy:peace made');
+  track(b, 'diplomacy:peace made');
   message(s, `${NATIONS[a].name} and ${NATIONS[b].name} have made peace.`);
 }
 
