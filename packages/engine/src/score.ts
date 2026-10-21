@@ -11,7 +11,8 @@ export function score(s: GameState, p: Player): number {
   for (const u of Object.values(s.units)) if (u.owner === p.id && UNIT_TYPES[u.type].kind === 'colonist') points += 1;
   for (const c of Object.values(s.colonies)) {
     if (c.owner !== p.id) continue;
-    points += Math.round((colonyWorkers(s, c).length * sonsOfLiberty(s, c)) / 50);
+    const pop = colonyWorkers(s, c).length;
+    points += Math.round((pop * sonsOfLiberty(s, c, pop)) / 50);
   }
   points += p.fathers.length * 5;
   points += Math.floor(p.gold / 1000);
