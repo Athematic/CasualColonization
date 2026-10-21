@@ -14,7 +14,7 @@ import sharp from 'sharp';
 import { DEFAULTS, DEFAULT_PIXEL_MAX, DEFAULT_SIZES, TUNING_SPRITES, TUNING_VARIANTS, mergeSettings } from './lib/config.mjs';
 import { GRID_DEFAULTS, gridSizeFromDir, placeGrid, snapGrid, spriteColors, upscale } from './lib/grid.mjs';
 import { encodePng } from './lib/image.mjs';
-import { LAYOUTS, classify } from './lib/normalise.mjs';
+import { LAYOUTS, SPLIT_SPRITES, classify, isGroundOverlay } from './lib/normalise.mjs';
 import { basePalette, prepare, renderPng, spritePalette } from './lib/process.mjs';
 import { contactSheet } from './lib/sheet.mjs';
 import { DEFAULT_USER_AGENT, hasProxyEnv, isUrl, listLocalIds, resolveIds, syncRemote } from './lib/source.mjs';
@@ -221,6 +221,7 @@ async function main() {
   const tuning = [];
   const compare = [];
   const report = [];
+  const skipped = [];
   const tuningIds = new Set(TUNING_SPRITES);
   const boundary = [...pixelSizes.slice(-2), ...smoothSizes.slice(0, 1)];
   const sheetOn = !a['no-sheet'];
@@ -235,6 +236,11 @@ async function main() {
     const inMain = mainSet.has(id) && !gridOnly;
     const file = inMain ? path.join(srcDir, `${id}.png`) : null;
     const sp = inMain ? await prepare(id, file, settings) : null;
+    if (sp && isGroundOverlay(id) && !sp.transparent) {
+      console.log(`- ${id}: SKIPPED, a ground overlay must be transparent but this master is opaque (regenerate it)`);
+      skipped.push(id);
+      continue;
+    }
     const bytes = inMain ? await fs.readFile(file) : null;
     const { extras } = sp && pixelSizes.length ? spritePalette(sp, settings.pixel, refSize) : { extras: [] };
     const entry = {
@@ -245,6 +251,8 @@ async function main() {
       pixelColors: extras,
       files: {},
     };
+    // Back/front split line of an enclosure, in the square's coordinates (0..1 from the top).
+    if (sp && SPLIT_SPRITES[id] !== undefined) entry.split = +(SPLIT_SPRITES[id] * sp.master.h * sp.place.scale + sp.place.oy).toFixed(4);
     const row = { id, layout, extras, list: [], compare: {} };
     const grids = gridSources.filter((g) => g.ids.has(id));
     const gridN = new Set(grids.map((g) => g.n));
@@ -381,6 +389,7 @@ async function main() {
     }));
   }
   console.log(`Wrote ${Object.keys(manifest.sprites).length} sprites (sizes ${manifest.sizes.join(', ')}) to ${outDir} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  if (skipped.length) console.log(`Skipped ${skipped.length} unusable master(s): ${skipped.join(', ')}`);
   if (report.length) {
     const mean = report.reduce((s, r) => s + r.fidelity, 0) / report.length;
     console.log(`Grid fidelity: ${report.length} grid sprites, mean ${mean.toFixed(3)}, ${flagged.length} flagged (below ${gridSettings.minFidelity} or more than ${Math.round(gridSettings.maxBadShare * 100)}% non-uniform cells).`);

@@ -106,6 +106,21 @@ export function classify(id) {
 }
 
 /**
+ * Ground overlays drawn edge to edge on a tile: they must be transparent outside their shape, or
+ * they would hide the tile underneath. (The image model sometimes returns them opaque.)
+ */
+export function isGroundOverlay(id) {
+  return /^terrain\/coast__/.test(id) || /^decor\/road__/.test(id);
+}
+
+/**
+ * Enclosures generated whole (the colony stockade and fort) are drawn in two parts, the back wall
+ * behind the houses and the front wall in front. They split at this share of the master's height
+ * (docs/SPRITE_PROMPTS.md, section 4.10).
+ */
+export const SPLIT_SPRITES = { 'colonies/stockade': 0.58, 'colonies/fort': 0.58 };
+
+/**
  * Compute the master -> unit-canvas transform for a layout.
  * Returns { scale, ox, oy } with unit = master * scale + o, plus the boxes used.
  */
@@ -113,7 +128,11 @@ export function placement(img, layoutName, opts = {}) {
   const L = { ...LAYOUTS[layoutName], ...(opts.override ?? {}) };
   const t = opts.alphaThreshold ?? 0.5;
   if (L.fit === 'none') {
-    return { scale: 1 / Math.max(img.w, img.h), ox: 0, oy: 0, bbox: null, core: null, layout: L };
+    // Full-bleed art keeps its geometry: a square master fills the square exactly (terrain tiles,
+    // coast bands and roads must line up with the tile edges); a non-square one (UI pieces) is
+    // scaled to fit and centred, never trimmed.
+    const scale = 1 / Math.max(img.w, img.h);
+    return { scale, ox: (1 - img.w * scale) / 2, oy: (1 - img.h * scale) / 2, bbox: null, core: null, layout: L };
   }
   const bbox = alphaBBox(img, t);
   if (!bbox) throw new Error('empty image (nothing above the alpha threshold)');

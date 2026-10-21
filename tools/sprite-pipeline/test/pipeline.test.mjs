@@ -11,7 +11,8 @@ import sharp from 'sharp';
 
 import { CORE_PALETTE, EXTRA_PALETTE, Palette, hexToOklab, hexToRgb } from '../lib/color.mjs';
 import { cleanAlpha, resample } from '../lib/image.mjs';
-import { alphaBBox, classify, coreBBox, placement, transformFor } from '../lib/normalise.mjs';
+import { SPLIT_SPRITES, alphaBBox, classify, coreBBox, isGroundOverlay, placement, transformFor } from '../lib/normalise.mjs';
+import { FImage } from '../lib/image.mjs';
 import { INK_PACKED, TRANSPARENT, addOutline, cleanupOrphans, renderPixel, ridge } from '../lib/pixel.mjs';
 import { renderPng, spritePalette } from '../lib/process.mjs';
 import { DEFAULTS } from '../lib/config.mjs';
@@ -76,6 +77,23 @@ test('goods are centred', () => {
   assert.ok(Math.abs((bb.y0 + bb.y1) / 2 - 50) <= 1);
   assert.ok(Math.abs((bb.x0 + bb.x1) / 2 - 50) <= 1);
   assert.equal(bb.y1 - bb.y0, 84);
+});
+
+test('full-bleed art keeps its geometry: square fills the square, wide art is centred', () => {
+  const sq = placement(new FImage(400, 400), 'fullbleed');
+  assert.deepEqual([sq.scale * 400, sq.ox, sq.oy], [1, 0, 0]);
+  const wide = placement(new FImage(600, 400), 'fullbleed');
+  assert.equal(wide.scale * 600, 1);
+  assert.equal(wide.ox, 0);
+  assert.ok(Math.abs(wide.oy - (1 - 400 / 600) / 2) < 1e-9);
+});
+
+test('ground overlays and enclosure splits are recognised by id', () => {
+  assert.ok(isGroundOverlay('terrain/coast__edge'));
+  assert.ok(isGroundOverlay('decor/road__spoke'));
+  assert.ok(!isGroundOverlay('terrain/plains'));
+  assert.ok(!isGroundOverlay('decor/forest__plains'));
+  assert.equal(SPLIT_SPRITES['colonies/stockade'], 0.58);
 });
 
 test('classify picks the layout from the id', () => {

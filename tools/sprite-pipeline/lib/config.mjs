@@ -47,6 +47,15 @@ export const DEFAULTS = {
   },
 };
 
+/**
+ * Pixel-setting overrides per category. Terrain tiles and coast bands are full-bleed ground
+ * surfaces: no redrawn ink outline (a coast band's wavy edge is a thin blue stroke, and an outline
+ * would turn it into a heavy black line; base tiles have no transparent pixels to outline anyway).
+ */
+export const CATEGORY_PIXEL = {
+  terrain: { outline: 'none' },
+};
+
 /** Variants rendered in the "tuning" section of the contact sheet. */
 export const TUNING_VARIANTS = [
   { key: 'default', label: 'Default', pixel: {} },

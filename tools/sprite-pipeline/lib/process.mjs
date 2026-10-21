@@ -5,6 +5,7 @@ import { CORE_PALETTE, EXTRA_PALETTE, Palette } from './color.mjs';
 import { cleanAlpha, encodePng, loadPng, savePng } from './image.mjs';
 import { distanceTo, inkLineWidth, inkMask } from './ink.mjs';
 import { classify, placement } from './normalise.mjs';
+import { CATEGORY_PIXEL } from './config.mjs';
 import { analyseHiRes, findExtraColors, gridToRgba8, reduce } from './pixel.mjs';
 import { renderSmooth } from './smooth.mjs';
 
@@ -24,7 +25,9 @@ export async function prepare(id, file, settings) {
   const place = placement(master, layout, { coreFrac: settings.coreFrac });
   const mask = inkMask(master, { tol: settings.pixel.inkTol });
   const ink = { width: inkLineWidth(mask, master.w, master.h), dist: distanceTo(mask, master.w, master.h) };
-  return { id, category, layout, master, place, ink, extras: new Map() };
+  let transparent = false;
+  for (let i = 3; i < master.data.length; i += 4) if (master.data[i] < 1) { transparent = true; break; }
+  return { id, category, layout, master, place, ink, transparent, extras: new Map() };
 }
 
 /** Per-sprite palette for a pixel setting (extras are found once, at the largest pixel size). */
@@ -46,8 +49,9 @@ export async function renderPng(sp, size, mode, settings, refSize = 32) {
   if (mode === 'smooth') {
     return savePng(renderSmooth(sp.master, sp.ink, sp.place, size, settings.smooth));
   }
-  const { palette } = spritePalette(sp, settings.pixel, refSize);
-  const hi = analyseHiRes(sp.master, sp.ink, sp.place, size * settings.pixel.factor, size, settings.pixel);
-  const { px } = reduce(hi, size, palette, settings.pixel);
+  const pixel = { ...settings.pixel, ...(CATEGORY_PIXEL[sp.category] ?? {}) };
+  const { palette } = spritePalette(sp, pixel, refSize);
+  const hi = analyseHiRes(sp.master, sp.ink, sp.place, size * pixel.factor, size, pixel);
+  const { px } = reduce(hi, size, palette, pixel);
   return encodePng(size, size, gridToRgba8(px));
 }

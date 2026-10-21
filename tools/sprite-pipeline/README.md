@@ -236,7 +236,13 @@ Each master is trimmed to its alpha bounding box (after removing the faint dark 
 | `good`, `overlay` | goods, pennant, flag, mission | whole subject fits 0.84 × 0.84 | centred |
 | `building` | buildings, colonies, settlements | core fits 0.86 × 0.84 | bottom at 0.93 |
 | `decor` | forests, hills, mountains, ruins, bonuses | core fits 0.88 × 0.84 | bottom at 0.93 |
-| `fullbleed` | terrain tiles, road overlays, UI | none: scaled to the square as is | |
+| `fullbleed` | terrain tiles, coast bands, road overlays, UI | none: a square master fills the square as is (tiles and overlays keep their tile geometry); a non-square one (UI) is fitted and centred | |
+
+Category rules on top of the layouts:
+
+- **Terrain** (`terrain/*`, base tiles and coast bands) gets no redrawn pixel outline: a coast band's wavy edge is a thin blue stroke that the outline would turn into a heavy black line.
+- **Ground overlays** (`terrain/coast__*`, `decor/road__*`) must be transparent. An opaque master (the image model sometimes returns one) is reported and skipped, so the game falls back to its procedural drawing instead of covering the tile.
+- **Enclosures** (`colonies/stockade`, `colonies/fort`) get a `split` value in the manifest: the line, as a share of the square from the top, where the master splits into the back wall (drawn behind the houses) and the front wall (drawn in front), at 58% of the master's height as in `docs/SPRITE_PROMPTS.md` section 4.10. (A sprite that comes only from a `--grid-in` folder has no master geometry and gets no `split`.)
 
 The **core** is the bounding box without thin protrusions: a row or column belongs to it when it holds at least 18% as many opaque pixels as the widest row or tallest column. So a soldier with a shouldered musket, a missionary with a tall cross and a colonist with nothing above his head all get the same body size, and a raised sabre does not shrink a dragoon. If a protrusion would then cross the 0.065 margin (one pixel at 16 px, room for the outline), the whole subject is shrunk until it fits. Standing and mounted figures end up about the same height, so a rider is drawn smaller than a standing colonist, the usual strategy-game compromise that keeps both readable. Change `LAYOUTS` to rebalance.
 
