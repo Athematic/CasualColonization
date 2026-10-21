@@ -602,10 +602,11 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
   }
   // Deliver supplies bought in Europe.
   if (mine) {
+    // Only what the warehouse holds: the rest goes on to a port with room, rather than spoil.
     for (const g of SUPPLIES) {
-      const n = ship.cargo?.[g] ?? 0;
+      const n = Math.min(ship.cargo?.[g] ?? 0, Math.max(0, warehouseCapacity(mine) - mine.goods[g]));
       if (n > 0) {
-        ship.cargo![g] = 0;
+        ship.cargo![g]! -= n;
         mine.goods[g] += n;
       }
     }
@@ -622,9 +623,15 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
   const carrying = SELLABLE.reduce((n, g) => n + (ship.cargo?.[g] ?? 0), 0);
   const supplies = SUPPLIES.reduce((n, g) => n + (ship.cargo?.[g] ?? 0), 0);
   if (supplies > 0) {
-    const port = nearestColony(s, p, pos.x, pos.y, true);
-    if (port) setDestination(s, ship.id, { x: port.x, y: port.y });
-    return;
+    const room = (c: Colony) => SUPPLIES.some((g) => (ship.cargo?.[g] ?? 0) > 0 && c.goods[g] < warehouseCapacity(c) - 20);
+    const port = ownColonies(s, p)
+      .filter((c) => c.id !== mine?.id && isCoastal(s, c.x, c.y) && room(c))
+      .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];
+    if (port) {
+      setDestination(s, ship.id, { x: port.x, y: port.y });
+      return;
+    }
+    // Nowhere has room: keep the supplies aboard and trade as usual.
   }
   // Pick up from the colony with the most goods waiting, unless the hold is mostly full.
   const capacity = UNIT_TYPES[ship.type].cargo * 100;
@@ -713,7 +720,8 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
   if (fishable) buyUnit('expertFisherman');
   if (prof.missions && s.turn < 160 && !countOwned(s, p, (u) => u.type === 'firebrandPreacher')) buyUnit('firebrandPreacher');
   // Recruit the best of the pool while it is cheap.
-  for (let i = 0; i < 3 && room() > 0 && afford(recruitPrice(p)) && recruitPrice(p) < 500; i++) {
+  // (Dearer recruits too once trade has filled the treasury: idle gold scores next to nothing.)
+  for (let i = 0; i < 3 && room() > 0 && afford(recruitPrice(p)) && (recruitPrice(p) < 500 || p.gold > prof.reserve + recruitPrice(p) * 4); i++) {
     const slot = p.recruitPool.map((t, j) => [UNIT_TYPES[t].skill, j] as const).sort((a, b) => b[0] - a[0])[0][1];
     safely(() => recruit(s, p.id, slot));
   }

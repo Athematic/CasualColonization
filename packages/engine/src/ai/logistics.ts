@@ -97,8 +97,9 @@ function needsCarting(s: GameState, c: Colony, report: ColonyReport = colonyRepo
  * (one wagon train serves up to three neighbouring colonies).
  */
 export function wantsWagon(s: GameState, p: Player, c: Colony): boolean {
-  const { waiting } = cartingNeeds(s, p);
-  if (!waiting.has(c.id)) return false;
+  const { waiting, yard } = cartingNeeds(s, p);
+  // The colony with the most hammers builds wagon trains for its neighbours; failing one, a colony builds its own.
+  if (yard ? yard !== c.id : !waiting.has(c.id)) return false;
   const colonies = ownColonies(s, p);
   const idle = Object.values(s.units).filter((u) => u.owner === p.id && isWagon(u) && !u.route).length;
   const building = colonies.filter((o) => o.id !== c.id && o.build?.kind === 'unit' && o.build.id === 'wagonTrain').length;
@@ -106,15 +107,24 @@ export function wantsWagon(s: GameState, p: Player, c: Colony): boolean {
 }
 
 /** Worked out once per nation and turn: it is asked for every colony. */
-const cartingCache = new WeakMap<GameState, { key: string; served: Set<string>; waiting: Set<string> }>();
+const cartingCache = new WeakMap<GameState, { key: string; served: Set<string>; waiting: Set<string>; yard?: string }>();
 
-function cartingNeeds(s: GameState, p: Player): { served: Set<string>; waiting: Set<string> } {
+function cartingNeeds(s: GameState, p: Player): { served: Set<string>; waiting: Set<string>; yard?: string } {
   const key = `${s.turn}:${p.id}`;
   const hit = cartingCache.get(s);
   if (hit && hit.key === key) return hit;
   const served = wagonServed(s, p);
-  const waiting = new Set(ownColonies(s, p).filter((o) => !served.has(o.id) && needsCarting(s, o)).map((o) => o.id));
-  const entry = { key, served, waiting };
+  const colonies = ownColonies(s, p);
+  const waiting = new Set(colonies.filter((o) => !served.has(o.id) && needsCarting(s, o)).map((o) => o.id));
+  let yard: { id: string; hammers: number } | undefined;
+  if (waiting.size) {
+    for (const c of colonies) {
+      if (![...waiting].some((id) => distance(s.colonies[id].x, s.colonies[id].y, c.x, c.y) <= 10)) continue;
+      const hammers = colonyReport(s, c).produced.hammers;
+      if (hammers >= 3 && (!yard || hammers > yard.hammers)) yard = { id: c.id, hammers };
+    }
+  }
+  const entry = { key, served, waiting, yard: yard?.id };
   cartingCache.set(s, entry);
   return entry;
 }
@@ -141,6 +151,18 @@ export function manageLogistics(s: GameState, p: Player): void {
   if (p.independence === 'none') safely(() => routeShips(s, p));
 }
 
+/** A route name like "Port to Europe", numbered if the nation already has one by that name. */
+function routeName(s: GameState, p: Player, stops: RouteStop[], except?: string): string {
+  const first = s.colonies[stops[0].at]?.name ?? 'Route';
+  const last = stops[stops.length - 1].at === EUROPE_STOP ? 'Europe' : s.colonies[stops[stops.length - 1].at]?.name ?? 'port';
+  const base = `${first} to ${last}`;
+  const taken = new Set(routesOf(s, p.id).filter((r) => r.id !== except).map((r) => r.name));
+  for (let i = 1; ; i++) {
+    const name = i === 1 ? base : `${base} ${i}`;
+    if (!taken.has(name)) return name;
+  }
+}
+
 /** Keeps load amounts in step with the colonies' workshops, and ship stops with where goods pile up. */
 function refreshRoute(s: GameState, p: Player, r: TradeRoute, users: Unit[]): void {
   let stops: RouteStop[] = r.stops.filter((st) => st.at === EUROPE_STOP || s.colonies[st.at]?.owner === p.id);
@@ -153,7 +175,7 @@ function refreshRoute(s: GameState, p: Player, r: TradeRoute, users: Unit[]): vo
     deleteRoute(s, p.id, r.id);
     return;
   }
-  editRoute(s, p.id, r.id, { stops: stops.map((st) => withRules(s, st, stops)) });
+  editRoute(s, p.id, r.id, { name: routeName(s, p, stops, r.id), stops: stops.map((st) => withRules(s, st, stops)) });
 }
 
 /** The cargo rules for a stop: the last colony (or Europe) takes the goods, the others give them. */
@@ -184,7 +206,7 @@ function routeWagon(s: GameState, p: Player, wagon: Unit): void {
     }
     chain.sort((a, b) => distance(b.x, b.y, port.x, port.y) - distance(a.x, a.y, port.x, port.y));
     const stops: RouteStop[] = [...chain.map((o) => ({ at: o.id, load: [], unload: [] })), { at: port.id, load: [], unload: [] }];
-    const route = createRoute(s, p.id, `${c.name} to ${port.name}`, stops.map((st) => withRules(s, st, stops)));
+    const route = createRoute(s, p.id, routeName(s, p, stops), stops.map((st) => withRules(s, st, stops)));
     assignRoute(s, wagon.id, route.id);
     return;
   }
@@ -292,6 +314,6 @@ function routeShips(s: GameState, p: Player): void {
   const ports = busiestPorts(s, p, covered);
   if (!ports.length) return;
   const stops: RouteStop[] = [...ports.map((c) => ({ at: c.id, load: [], unload: [] })), { at: EUROPE_STOP, load: [], unload: [] }];
-  const route = createRoute(s, p.id, `${ports[0].name} to Europe`, stops.map((st) => withRules(s, st, stops)));
+  const route = createRoute(s, p.id, routeName(s, p, stops), stops.map((st) => withRules(s, st, stops)));
   assignRoute(s, candidate.id, route.id);
 }

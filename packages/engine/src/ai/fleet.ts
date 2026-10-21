@@ -61,6 +61,8 @@ export function cargoShipWanted(r: FleetReport, spare: number): UnitTypeId | nul
   if (r.galleons === 0 && r.treasure >= galleon && spare >= galleon) return 'galleon';
   if (spare >= galleon + 2500 && r.holds >= 4) return 'galleon';
   if (spare >= merchantman + 500) return 'merchantman';
+  // Goods rotting on the quays: a caravel now beats a merchantman later.
+  if (r.waiting >= Math.max(2, r.holds * 2) && spare >= UNIT_TYPES.caravel.price! + 200) return 'caravel';
   return null;
 }
 
