@@ -50,6 +50,11 @@ export interface Scene {
   hover?: Point;
   /** Planned route of the selected unit. */
   path?: Point[];
+  /**
+   * Turns of movement the selected unit needs to reach the end of `path`. Optional; when it is
+   * above 1, renderers should show it as a small counter badge on the target tile.
+   */
+  pathTurns?: number;
   /** Tiles currently in sight of the viewer's units and colonies. */
   visible: Uint8Array;
   /** Show the whole map (debug / spectator). */

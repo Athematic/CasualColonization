@@ -131,6 +131,17 @@ class SchematicRenderer implements MapRenderer {
       ctx.lineWidth = 1;
       ctx.strokeRect(p.x + 1.5, p.y + 1.5, z - 3, z - 3);
     }
+    const end = scene.path?.[scene.path.length - 1];
+    if (end && scene.pathTurns && scene.pathTurns > 1) {
+      // Plain counter: turns needed to reach the end of the route.
+      const p = tileToScreen(scene, end.x, end.y);
+      const r = Math.max(7, z * 0.17);
+      ctx.fillStyle = '#ffe28a';
+      ctx.beginPath();
+      ctx.arc(p.x + z * 0.8, p.y + z * 0.2, r, 0, Math.PI * 2);
+      ctx.fill();
+      this.text(String(scene.pathTurns), p.x + z * 0.8, p.y + z * 0.2 + 0.5, r * 1.3, '#000');
+    }
   }
 
   private text(t: string, x: number, y: number, size: number, color: string): void {

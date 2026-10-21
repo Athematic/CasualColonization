@@ -37,6 +37,7 @@ It then shows up in the new-game screen and in the in-game *Game* menu.
 | `width`, `height`, `pixelRatio` | Viewport size. Size the canvas backing store to `width × pixelRatio`. |
 | `visible` | One byte per tile: 1 when the viewer can see it now. Hide foreign units elsewhere. |
 | `selectedUnitId`, `hover`, `path` | Interaction feedback to draw. |
+| `pathTurns` | Optional. Turns of movement the selected unit needs to reach the end of `path`. When it is above 1, draw it as a small counter badge on the target tile. Older renderers can ignore it. |
 | `labels` | `false` in close-up views (the colony screen), where captions should be hidden. |
 
 Helpers in `@cc/render-api` take care of the bookkeeping: `tileToScreen`, `screenToTile`, `visibleRange`, `isTileExplored`, `isTileVisible`, `unitStacks` (one unit to draw per tile, honouring selection and visibility), `nationColor` and `hash2` (deterministic scatter for decorations).

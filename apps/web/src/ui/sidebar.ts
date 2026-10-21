@@ -61,10 +61,6 @@ export class Sidebar {
     this.el = h('aside', { class: 'sidebar' }, toggle, this.body, this.minimap);
   }
 
-  showReports(): void {
-    this.reportsOpen = true;
-  }
-
   refresh(): void {
     const app = this.app;
     const s = app.state;
@@ -103,7 +99,14 @@ export class Sidebar {
         h('button', { class: 'btn', onclick: () => app.openDiplomacy(), title: 'Foreign affairs (D)' }, 'Affairs'),
         h('button', { class: 'btn', onclick: () => app.selectNext(), title: 'Next unit (W)', disabled: !awaiting }, `Next unit${awaiting ? ` (${awaiting})` : ''}`),
       ),
-      h('button', { class: `btn primary end-turn${myTurn && !awaiting ? ' pulse' : ''}`, onclick: () => void app.endTurn(), disabled: !myTurn, title: 'End turn (Enter)' }, 'End turn'),
+      h('button', {
+        class: `btn primary end-turn${myTurn && !awaiting ? ' pulse' : ''}`,
+        // The panel is rebuilt on refresh; keep the pulse in phase with the clock so it does not restart.
+        style: `animation-delay:-${Math.round(performance.now() % 1400)}ms`,
+        onclick: () => void app.endTurn(),
+        disabled: !myTurn,
+        title: 'End turn (Enter)',
+      }, 'End turn'),
     );
 
     this.body.append(this.reports(), this.menu());

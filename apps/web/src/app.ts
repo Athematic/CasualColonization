@@ -1,5 +1,6 @@
 import {
   canFoundColony,
+  buildMapIndex,
   canImprove,
   colonyAt,
   describeMove,
@@ -7,16 +8,15 @@ import {
   distance,
   findPath,
   formatDate,
-  FATHERS,
   Game,
-  GOOD_DEFS,
   handOver,
   nationTitle,
-  nextFatherCost,
   tensionLabel,
   isShip,
   isWater,
   mapRevealed,
+  maxMoves,
+  moveCost,
   NATIONS,
   player,
   settlementAt,
@@ -29,6 +29,8 @@ import {
   unitsAwaitingOrders,
   type Command,
   type Direction,
+  type GameMessage,
+  type GameState,
   type NationId,
   type SettlementAction,
   type Unit,
@@ -43,6 +45,30 @@ import { choose, confirmDialog, promptDialog, toast } from './ui/dialogs.js';
 import { DiplomacyScreen } from './ui/diplomacy.js';
 import { EuropeScreen } from './ui/europe.js';
 import { Sidebar } from './ui/sidebar.js';
+import { showTurnStart, sortNews } from './ui/turnstart.js';
+
+/**
+ * Turns of movement a unit needs to walk a path: the rest of this turn's moves first (or a fresh
+ * turn when none are left), then full turns. As in the rules, a step is allowed while any moves remain.
+ */
+export function pathTurns(s: GameState, u: Unit, path: Point[]): number {
+  const start = unitPosition(s, u);
+  if (!start || !path.length) return 0;
+  const full = Math.max(1, maxMoves(u, s));
+  const index = buildMapIndex(s);
+  let turns = 1;
+  let left = u.moves > 0 ? u.moves : full;
+  let from = start;
+  for (const step of path) {
+    if (left <= 0) {
+      turns++;
+      left = full;
+    }
+    left -= moveCost(s, u, from.x, from.y, step.x, step.y, index);
+    from = step;
+  }
+  return turns;
+}
 
 export interface Screen {
   el: HTMLElement;
@@ -128,6 +154,8 @@ export class App {
     } else {
       this.selectNext();
       if (!this.selected) this.centerOnStart();
+      // A loaded game may be waiting on a decision.
+      setTimeout(() => void this.turnStart(), 0);
     }
     this.requestRender();
   }
@@ -230,7 +258,7 @@ export class App {
     saveAuto(serialize(this.state));
     this.game.emit();
     toast(`${formatDate(this.state.turn)}: ${nations.length > 1 ? 'your nations are' : `${nationTitle(this.viewer)} is`} yours to command.`);
-    void this.answerPending();
+    void this.turnStart();
   }
 
   setAutoplay(on: boolean): void {
@@ -276,6 +304,7 @@ export class App {
       selectedUnitId: this.selected,
       hover: this.hover,
       path,
+      pathTurns: u && path?.length ? pathTurns(this.state, u, path) : undefined,
       visible: computeVisibility(this.state, this.viewer),
       revealAll: this.revealAll(),
     };
@@ -336,43 +365,49 @@ export class App {
       return false;
     }
     if (result.text && !quiet) toast(result.text);
-    void this.answerPending();
+    // After an end of turn, endTurn() itself shows the briefing with the news.
+    if (cmd.type !== 'endTurn') void this.answerPending();
     return true;
   }
 
   private asking = false;
 
-  /** Asks the player about decisions the rules left waiting: tax raises first. */
-  async answerPending(): Promise<void> {
-    if (this.asking || !this.isMyTurn()) return;
-    const tax = this.me.pendingTax;
-    if (!tax) return;
-    this.asking = true;
-    const good = GOOD_DEFS[tax.good].name.toLowerCase();
-    const accept = await choose(
-      'The Crown raises taxes',
-      `His Majesty raises the tax rate from ${this.me.tax}% to ${tax.rate}%. If you refuse, colonists will dump their ${good} in protest and ${good} will be boycotted in Europe until you pay the arrears.`,
-      [
-        { label: `Accept ${tax.rate}% tax`, value: true, primary: true },
-        { label: `Refuse and hold a ${good} party`, value: false },
-      ],
-    );
-    this.asking = false;
-    this.dispatch({ type: 'answerTax', accept: accept !== false });
+  /** The last message each nation had seen when it ended its turn, to tell what is new since. */
+  private lastSeen = new Map<NationId, GameMessage>();
+
+  /** Messages for the viewer since it last ended its turn. */
+  private newsSinceLastTurn(): GameMessage[] {
+    const msgs = this.state.messages;
+    const mark = this.lastSeen.get(this.viewer);
+    const at = mark ? msgs.indexOf(mark) : -2;
+    // The log is capped; if the mark has scrolled out, fall back to the last round.
+    const recent = at === -2 ? [] : at === -1 ? msgs.filter((m) => m.turn >= this.state.turn - 1) : msgs.slice(at + 1);
+    return recent.filter((m) => !m.to || m.to === this.viewer);
   }
 
+  /**
+   * The turn-start briefing: one modal with every pending decision and the turn's news.
+   * Nothing is shown when nothing needs attention, nor to observers or during a head start.
+   */
+  async turnStart(news: GameMessage[] = [], opts: { father?: boolean } = {}): Promise<void> {
+    if (this.asking || !this.isMyTurn() || this.state.gameOver) return;
+    this.asking = true;
+    try {
+      await showTurnStart(this, sortNews(news), opts);
+    } finally {
+      this.asking = false;
+    }
+    this.requestRender();
+  }
+
+  /** Asks about decisions the rules left waiting mid-turn (a tax raise after a sale). */
+  async answerPending(): Promise<void> {
+    if (this.me.pendingTax) await this.turnStart();
+  }
+
+  /** Opens the Congress choice in the briefing modal. */
   async chooseFather(): Promise<void> {
-    const offer = Object.values(this.me.fatherOffer);
-    if (!offer.length || !this.isMyTurn()) return;
-    const choice = await choose(
-      'Continental Congress',
-      h('p', null, `Choose the next Founding Father to join Congress. ${this.me.fatherBells}/${nextFatherCost(this.state, this.me)} liberty bells collected.`),
-      [
-        ...offer.map((id) => ({ label: `${FATHERS[id].name} (${FATHERS[id].category}): ${FATHERS[id].effect}`, value: id, primary: id === this.me.currentFather })),
-        { label: 'Decide later', value: null },
-      ],
-    );
-    if (choice) this.dispatch({ type: 'chooseFather', father: choice }, true);
+    await this.turnStart([], { father: true });
   }
 
   private shownGameOver = false;
@@ -539,6 +574,8 @@ export class App {
     if (waiting > 0 && !(await confirmDialog('End turn?', `${waiting} unit${waiting > 1 ? 's' : ''} still ha${waiting > 1 ? 've' : 's'} moves left.`, 'End turn', 'Keep playing'))) return;
     this.closeScreen();
     const before = this.viewer;
+    const mark = this.state.messages[this.state.messages.length - 1];
+    if (mark) this.lastSeen.set(before, mark);
     this.dispatch({ type: 'endTurn' }, true);
     const next = this.game.current;
     saveAuto(serialize(this.state));
@@ -549,11 +586,9 @@ export class App {
     }
     this.selectNext();
     if (!this.selected) this.centerOnStart();
-    this.sidebar.showReports();
     this.requestRender();
     await this.showGameOver();
-    await this.answerPending();
-    if (!this.me.currentFather && Object.keys(this.me.fatherOffer).length && this.me.fatherBells > 0) await this.chooseFather();
+    await this.turnStart(this.newsSinceLastTurn());
   }
 
   private handoff(nation: NationId): Promise<void> {

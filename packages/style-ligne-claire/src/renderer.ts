@@ -371,6 +371,24 @@ export class LigneClaireMapRenderer implements MapRenderer {
       ctx.strokeRect(p.x + lw, p.y + lw, z - lw * 2, z - lw * 2);
       ctx.setLineDash([]);
     }
+
+    // 8. Journey length: a comic badge with the number of turns on the route's last tile.
+    const end = scene.path?.[scene.path.length - 1];
+    if (end && scene.pathTurns && scene.pathTurns > 1) {
+      const p = tileToScreen(scene, end.x, end.y);
+      const text = String(scene.pathTurns);
+      const r = Math.max(8, z * 0.2);
+      const fontSize = Math.round(r * 1.25);
+      ctx.font = `bold ${fontSize}px ${FONT}`;
+      const halfW = Math.max(r, ctx.measureText(text).width / 2 + r * 0.45);
+      const bx = p.x + z * 0.78;
+      const by = p.y + z * 0.22;
+      inked(ctx, '#e8412c', lw * 1.2, () => ctx.roundRect(bx - halfW, by - r, halfW * 2, r * 2, r));
+      ctx.fillStyle = WHITE;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, bx, by + fontSize * 0.06);
+    }
   }
 
   dispose(): void {
