@@ -52,6 +52,8 @@ export interface DifficultyRules {
   rumourBad: number;
   /** Multiplier on the odds of the best Lost City Rumour results (treasure, Fountain of Youth, survivors). */
   rumourGood: number;
+  /** Multiplier on the odds that a Lost City Rumour on tribal land is a burial ground (rules/natives.ts). */
+  burialGrounds: number;
   /** Multiplier on the Royal Expeditionary Force the Crown holds at the start of the game. */
   refBase: number;
   /**
@@ -85,6 +87,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     raidChance: 0.5,
     rumourBad: 0.5,
     rumourGood: 1.3,
+    burialGrounds: 0.5,
     refBase: 0.5,
     refGrowth: 0.6,
     demandChance: 0.5,
@@ -108,6 +111,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     raidChance: 0.75,
     rumourBad: 0.75,
     rumourGood: 1.15,
+    burialGrounds: 0.75,
     refBase: 0.75,
     refGrowth: 0.8,
     demandChance: 0.75,
@@ -131,6 +135,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     raidChance: 1,
     rumourBad: 1,
     rumourGood: 1,
+    burialGrounds: 1,
     refBase: 1,
     refGrowth: 1,
     demandChance: 1,
@@ -154,6 +159,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     raidChance: 1.25,
     rumourBad: 1.3,
     rumourGood: 0.9,
+    burialGrounds: 1.25,
     refBase: 1.25,
     refGrowth: 1.25,
     demandChance: 1.25,
@@ -177,6 +183,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     raidChance: 1.5,
     rumourBad: 1.6,
     rumourGood: 0.8,
+    burialGrounds: 1.5,
     refBase: 1.5,
     refGrowth: 1.5,
     demandChance: 1.5,

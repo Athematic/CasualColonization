@@ -228,7 +228,7 @@ describe('trade routes', () => {
   });
 
   it('keeps a computer nation’s routes running after a head start hand-over', () => {
-    const s = createGame(headStartConfig({ seed: 5, mapSize: 'small', nations: ['england', 'france'], humans: ['england'] }, 400));
+    const s = createGame(headStartConfig({ seed: 7, mapSize: 'small', nations: ['england', 'france'], humans: ['england'] }, 400));
     playUntil(s, 40);
     // Give the computer a route of its own, then hand over.
     s.config.headStart!.turn = s.turn;

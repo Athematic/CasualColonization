@@ -171,6 +171,8 @@ export interface Unit {
   cargo?: Partial<Record<GoodId, number>>;
   /** The trade route a ship or wagon train follows, and the index of the stop it is heading for. */
   route?: { id: string; stop: number };
+  /** Trade with a native settlement this turn: one sale and one purchase per visit. */
+  trade?: { at: string; turn: number; sold?: boolean; bought?: boolean };
 }
 
 /** What a carrier loads or unloads of one good at a trade route stop. */
@@ -226,6 +228,57 @@ export interface Tribe {
   id: TribeId;
   /** Per-European-nation stance; tribes become hostile when attacked. */
   stance: Partial<Record<NationId, Stance>>;
+  /** Nations that disturbed one of the tribe's burial grounds: at war with them for good. Missing means none. */
+  burial?: NationId[];
+  /** Nations the tribe submitted to after losing its capital (see natives.ts). Missing means none. */
+  submitted?: NationId[];
+}
+
+/**
+ * A native brave on the map (see braves.ts). Braves belong to a settlement, not to a player:
+ * they wander, visit colonies with gifts, trade or demands, attack when angry and go home.
+ */
+export interface Brave {
+  id: string;
+  tribe: TribeId;
+  /** Id of the home settlement. */
+  home: string;
+  x: number;
+  y: number;
+  /** Carries muskets (bought or captured). */
+  armed?: boolean;
+  /** Rides horses (bought or captured). */
+  mounted?: boolean;
+  /** What the brave is doing; missing means it is at or going home. */
+  task?: BraveTask;
+  /** Goods carried as a gift or for sale. */
+  goods?: { good: GoodId; amount: number };
+}
+
+export type BraveTask =
+  | { kind: 'wander'; turns: number }
+  | { kind: 'visit'; colonyId: string; purpose: 'gift' | 'trade' | 'demand' }
+  /** Waiting next to a colony for the answer to a demand. */
+  | { kind: 'wait'; demandId: string; turns: number }
+  | { kind: 'attack'; colonyId?: string; unitId?: string };
+
+/**
+ * A brave's demand for tribute, or offer of goods for sale, waiting for a person to answer it in
+ * the turn-start briefing. Computer players answer at once and never leave one waiting.
+ */
+export interface NativeDemand {
+  id: string;
+  kind: 'demand' | 'offer';
+  nation: NationId;
+  colonyId: string;
+  settlementId: string;
+  braveId: string;
+  /** The goods asked for (or offered); missing means gold. */
+  good?: GoodId;
+  amount: number;
+  /** For an offer: the price asked in gold. */
+  price?: number;
+  turn: number;
 }
 
 export interface Settlement {
@@ -245,6 +298,10 @@ export interface Settlement {
   /** Nation that runs a mission here. */
   mission?: NationId;
   missionExpert?: boolean;
+  /** Goods the settlement has for sale, and muskets and horses it holds for its braves. Missing means none. */
+  goods?: Partial<Record<GoodId, number>>;
+  /** Rounds until the settlement can send out a new brave; missing means it can now. */
+  braveTimer?: number;
 }
 
 export interface GameMessage {
@@ -308,6 +365,10 @@ export interface GameState {
   relations: Record<string, Relation>;
   /** Trade routes by id; missing means none. */
   routes?: Record<string, TradeRoute>;
+  /** Native braves on the map, by id. Missing (older saves) means none yet; settlements send them out. */
+  braves?: Record<string, Brave>;
+  /** Native demands and offers waiting for a person's answer. Missing means none. */
+  nativeDemands?: NativeDemand[];
   gameOver?: { turn: number; reason: string; winner?: NationId; scores: Partial<Record<NationId, number>> };
   /** Set the first time a cheat is used and never cleared. Missing means the game is not cheated. */
   cheated?: { turn: number; cheats: CheatId[] };
@@ -360,6 +421,9 @@ export interface GoodsTally {
   custom: Partial<Record<GoodId, number>>;
   route: Partial<Record<GoodId, number>>;
   foreign: Partial<Record<GoodId, number>>;
+  /** Sold to native settlements, and bought from them (by wagon trains, ships and from visiting braves). Missing means none. */
+  natives?: Partial<Record<GoodId, number>>;
+  fromNatives?: Partial<Record<GoodId, number>>;
 }
 
 export interface Ledger {

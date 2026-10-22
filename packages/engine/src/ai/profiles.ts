@@ -109,4 +109,8 @@ export interface AiMemory {
   warPlan?: { nation: NationId; turn: number };
   /** The colony that should build a wagon train for a trade route to a partner's colony, until the turn given. */
   foreignWagon?: { colony: string; until: number };
+  /** Wagon trains carrying goods bought from natives, and the port each is taking them to. */
+  nativeHaul?: Record<string, string>;
+  /** Turn a missionary last incited a tribe (Combative). */
+  lastIncite?: number;
 }

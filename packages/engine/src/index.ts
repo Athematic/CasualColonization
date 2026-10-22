@@ -13,6 +13,8 @@ export * from './colony.js';
 export * from './europe.js';
 export * from './movement.js';
 export * from './natives.js';
+export * from './braves.js';
+export * from './rules/natives.js';
 export * from './combat.js';
 export * from './turn.js';
 export * from './commands.js';

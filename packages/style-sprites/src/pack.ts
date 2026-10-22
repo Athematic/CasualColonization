@@ -26,6 +26,8 @@ export interface SpriteMapping {
     types?: Partial<Record<UnitTypeId, IdSlot>>;
     /** Per type and role, e.g. { nativeConvert: { soldier: null } }. */
     typeRoles?: Partial<Record<UnitTypeId, Partial<Record<RoleId, IdSlot>>>>;
+    /** Native braves: plain, armed (muskets), mounted (horses) and both. Missing ids fall back to procedural drawing. */
+    braves?: { plain: IdSlot; armed: IdSlot; mounted: IdSlot; armedMounted: IdSlot };
   };
   terrain: {
     /** Ground of a land tile, and of high seas and ocean tiles. */
@@ -130,6 +132,19 @@ export interface SpritePack {
   theme: StyleTheme | 'inherit';
   /** Stylesheets (web fonts), or 'inherit'. */
   stylesheets?: string[] | 'inherit';
+  /**
+   * Interface CSS for this pack, so it can restyle panels, buttons and dialogs beyond the theme
+   * variables (for example border-image frames from its ui/ sprites, and no hand-drawn look at all).
+   * Applied while the style is active, on top of the fallback's own `css` unless `fallbackCss` is false.
+   */
+  css?: string;
+  /**
+   * CSS files with the same lifetime. Relative paths resolve against the sprite folder (so a pack
+   * can ship `pack.css` next to its sprites, and `url()` inside it finds them); absolute URLs as given.
+   */
+  cssFiles?: string[];
+  /** Whether the fallback style's own interface CSS still applies (default true). */
+  fallbackCss?: boolean;
   source: SpriteSource;
   mapping: SpriteMapping;
   rules: DrawRules;
@@ -146,6 +161,14 @@ export const DEFAULT_MAPPING: SpriteMapping = {
     plain: 'units/{type}__none',
     // An expert's own role variant, else a free colonist in that role: the role always shows.
     role: ['units/{type}__{role}', 'units/free-colonist__{role}'],
+    // No brave sprites exist yet (the image tool's manifest has none); the native convert's
+    // poses stand in for them, and without those the renderer draws braves itself.
+    braves: {
+      plain: ['units/brave__none', 'units/native-convert__none'],
+      armed: ['units/brave__armed', 'units/native-convert__soldier'],
+      mounted: ['units/brave__mounted', 'units/native-convert__scout'],
+      armedMounted: ['units/brave__armed-mounted', 'units/native-convert__dragoon'],
+    },
   },
   terrain: {
     base: 'terrain/{terrain}',

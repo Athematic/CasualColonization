@@ -1,5 +1,6 @@
 import { TRIBES, TRIBE_ORDER, type TribeId } from './rules/nations.js';
 import { TERRAIN, type TerrainId } from './rules/terrain.js';
+import { FIRST_BRAVE_AFTER } from './rules/natives.js';
 import { random, randInt, pick } from './rng.js';
 import { generateRivers } from './rivers.js';
 import type { GameMap, MapSize, Settlement, Tile } from './types.js';
@@ -179,6 +180,7 @@ export function newSettlement(rng: { rng: number }, id: string, tribe: TribeId, 
     defenders: size + (capital ? 2 : 0) + randInt(rng, 2),
     gold: (size * 150 + randInt(rng, 200)) * (capital ? 2 : 1),
     tension: {},
+    braveTimer: FIRST_BRAVE_AFTER,
   };
 }
 

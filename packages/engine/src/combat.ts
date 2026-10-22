@@ -3,6 +3,7 @@ import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { hasFather } from './fathers.js';
 import { canAttack } from './movement.js';
+import { braveDefence, braveName, bravesOf, killBrave } from './braves.js';
 import { addTension, settlementName } from './natives.js';
 import { sonsOfLiberty } from './production.js';
 import {
@@ -25,7 +26,8 @@ import {
 import { random, randInt } from './rng.js';
 import { isFavoured, onWar } from './relations.js';
 import { STOCKADE_DEFENCE } from './rules/buildings.js';
-import { NATIONS, TRIBES } from './rules/nations.js';
+import { NATIONS, TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import { SURRENDER_CHANCE, SURRENDER_TRIBUTE } from './rules/natives.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
 import type { Colony, GameState, Unit } from './types.js';
 
@@ -180,7 +182,7 @@ function demote(s: GameState, u: Unit, winner: Unit): string {
 }
 
 /** Winning soldiers may become veterans; George Washington makes it certain. */
-function promote(s: GameState, u: Unit): string {
+export function promote(s: GameState, u: Unit): string {
   if (!s.units[u.id] || !isArmed(u) || UNIT_TYPES[u.type].skill > 0 || u.type === 'nativeConvert') return '';
   if (!hasFather(s, u.owner, 'georgeWashington') && random(s) >= 0.2) return '';
   u.type = player(s, u.owner).independence === 'declared' ? 'continentalSoldier' : 'veteranSoldier';
@@ -192,7 +194,7 @@ export interface CombatResult {
   text: string;
 }
 
-export function attack(s: GameState, unitId: string, target: { unitId?: string; colonyId?: string; settlementId?: string }): CombatResult {
+export function attack(s: GameState, unitId: string, target: { unitId?: string; colonyId?: string; settlementId?: string; braveId?: string }): CombatResult {
   const u = s.units[unitId];
   if (!u || !canAttack(u)) fail('That unit cannot attack.');
   if (u.moves <= 0) fail(`${unitName(u)} has no moves left.`);
@@ -205,6 +207,7 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
   if (u.type === 'privateer') track(u.owner, 'combat:privateer attack');
 
   if (target.settlementId) return attackSettlement(s, u, target.settlementId);
+  if (target.braveId) return attackBrave(s, u, target.braveId);
 
   let defender: Unit | undefined;
   let colony: Colony | undefined;
@@ -267,16 +270,50 @@ function captureColony(s: GameState, attacker: Unit, colony: Colony): string {
   return `${NATIONS[attacker.owner].name} captures ${colony.name}!`;
 }
 
+/** Attacking a tribe makes it an enemy, and ends any submission to the attacker. */
+function hostile(s: GameState, tribeId: TribeId, nation: NationId, at: { x: number; y: number }, cause: string): void {
+  const tribe = s.tribes.find((t) => t.id === tribeId)!;
+  if (tribe.submitted?.includes(nation)) tribe.submitted = tribe.submitted.filter((n) => n !== nation);
+  if (tribe.stance[nation] !== 'war') {
+    tribe.stance[nation] = 'war';
+    message(s, `The ${TRIBES[tribeId].name} now consider ${NATIONS[nation].name} an enemy.`, nation, at);
+    noteHistory(s, 'tribe', [nation], `War with the ${TRIBES[tribeId].name}, after ${cause}.`, { secret: true, at });
+  }
+}
+
+/** A European unit attacks a brave in the open. The brave defends with its own values and the terrain. */
+function attackBrave(s: GameState, u: Unit, braveId: string): CombatResult {
+  const b = bravesOf(s)[braveId];
+  const pos = unitPosition(s, u)!;
+  if (!b || distance(b.x, b.y, pos.x, pos.y) !== 1) fail('The brave is not next to the unit.');
+  if (isShip(u)) fail('Ships cannot attack braves on land.');
+  const atWar = s.tribes.find((t) => t.id === b.tribe)?.stance[u.owner] === 'war';
+  hostile(s, b.tribe, u.owner, b, `an attack on one of their braves`);
+  const off = offencePower(s, u);
+  const def = braveDefence(s, b);
+  const won = random(s) < off / (off + def);
+  const name = braveName(b);
+  let text: string;
+  if (won) {
+    killBrave(s, b, u.owner, atWar);
+    track(u.owner, 'combat:brave killed');
+    text = `${unitName(u)} kills the ${name}.${promote(s, u)}`;
+  } else {
+    const role = u.role;
+    text = `${unitName(u)} is beaten by the ${name}: ${demote(s, u, u)}.`;
+    // The brave keeps what the loser dropped.
+    if (role === 'dragoon') b.mounted = true;
+    else if (role === 'soldier') b.armed = true;
+  }
+  message(s, text, u.owner, b);
+  return { attackerWon: won, text };
+}
+
 function attackSettlement(s: GameState, u: Unit, settlementId: string): CombatResult {
   const st = s.settlements[settlementId];
   const pos = unitPosition(s, u)!;
   if (!st || distance(st.x, st.y, pos.x, pos.y) !== 1) fail('The settlement is not next to the unit.');
-  const tribe = s.tribes.find((t) => t.id === st.tribe)!;
-  if (tribe.stance[u.owner] !== 'war') {
-    tribe.stance[u.owner] = 'war';
-    message(s, `The ${TRIBES[st.tribe].name} now consider ${NATIONS[u.owner].name} an enemy.`, u.owner, st);
-    noteHistory(s, 'tribe', [u.owner], `War with the ${TRIBES[st.tribe].name}, after an attack on the ${settlementName(st)}.`, { secret: true, at: st });
-  }
+  hostile(s, st.tribe, u.owner, st, `an attack on the ${settlementName(st)}`);
   for (const other of Object.values(s.settlements)) if (other.tribe === st.tribe) addTension(other, u.owner, other.id === st.id ? 300 : 150);
   let off = offencePower(s, u);
   if (u.owner === 'spain') off *= 1.5;
@@ -299,6 +336,7 @@ function destroySettlement(s: GameState, u: Unit, settlementId: string): string 
   const pos = unitPosition(s, u)!;
   const def = TRIBES[st.tribe];
   delete s.settlements[st.id];
+  for (const b of Object.values(bravesOf(s))) if (b.home === st.id) delete bravesOf(s)[b.id];
   track(u.owner, 'combat:settlement burned');
   const cortes = hasFather(s, u.owner, 'hernanCortes');
   const plunder = st.gold;
@@ -317,8 +355,35 @@ function destroySettlement(s: GameState, u: Unit, settlementId: string): string 
     for (let i = 0; i < converts; i++) createUnit(s, u.owner, 'nativeConvert', { kind: 'map', x: pos.x, y: pos.y });
     text += ` ${converts} survivor${converts > 1 ? 's' : ''} join you as converts.`;
   }
+  if (st.capital) text += surrender(s, st.tribe, u.owner, st);
   noteHistory(s, 'burned', [u.owner], text, { secret: true, at: st });
   return text;
+}
+
+/**
+ * When a tribe's capital burns, its other settlements may submit to the attacker (one seeded roll
+ * per tribe; never after a desecrated burial ground). They make peace, forget their anger, pay a
+ * tribute, no longer attack or make demands, and give their land freely. Attacking the tribe
+ * again ends it. Otherwise they fight on.
+ */
+function surrender(s: GameState, tribeId: TribeId, nation: NationId, at: { x: number; y: number }): string {
+  if (nation === 'crown') return '';
+  const tribe = s.tribes.find((t) => t.id === tribeId)!;
+  const rest = Object.values(s.settlements).filter((o) => o.tribe === tribeId);
+  if (!rest.length || tribe.burial?.includes(nation) || random(s) >= SURRENDER_CHANCE) return '';
+  tribe.stance[nation] = 'peace';
+  tribe.submitted = [...(tribe.submitted ?? []).filter((n) => n !== nation), nation];
+  let tribute = 0;
+  for (const o of rest) {
+    o.tension[nation] = 0;
+    const gold = Math.floor(o.gold * SURRENDER_TRIBUTE);
+    o.gold -= gold;
+    tribute += gold;
+  }
+  player(s, nation).gold += tribute;
+  track(nation, 'natives:tribe surrendered');
+  noteHistory(s, 'tribe', [nation], `The ${TRIBES[tribeId].name} surrender to ${NATIONS[nation].name} after losing their capital, and pay ${tribute} gold.`, { at });
+  return ` The remaining ${TRIBES[tribeId].name} settlements surrender and pay a tribute of ${tribute} gold; their land is now open to you.`;
 }
 
 /** The Crown carries a treasure home from a coastal colony, for a fee unless Cortés is in Congress. */

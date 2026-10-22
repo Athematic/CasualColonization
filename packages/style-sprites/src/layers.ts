@@ -193,6 +193,11 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
       const box = s * rules.unit.scale;
       return painter.square(ctx, ids.unit(stack.top.type, stack.top.role), x - box / 2, y - box / 2 + s * rules.unit.dy, box, dpr);
     };
+    // Braves: their own sprites when the pack has them, else drawn procedurally by the renderer.
+    hooks.brave = (ctx, b, x, y, s) => {
+      const box = s * rules.unit.scale;
+      return painter.square(ctx, ids.brave(b.armed, b.mounted), x - box / 2, y - box / 2 + s * rules.unit.dy, box, dpr);
+    };
   }
 
   return hooks;

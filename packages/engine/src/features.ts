@@ -28,10 +28,10 @@ const COMMANDS = [
   'hurry', 'sellGoods', 'buyGoods', 'recruit', 'train', 'sailToEurope', 'sailToAmerica', 'disband', 'chooseFather', 'buyLand',
   'takeLand', 'mission', 'cashTreasure', 'answerTax', 'payArrears', 'setExport', 'declareWar', 'proposePeace', 'giftTribe',
   'declareIndependence', 'createRoute', 'assignRoute', 'proposeTrade', 'proposeFavoured', 'answerProposal', 'cancelTrade',
-  'cancelFavoured', 'endTurn',
+  'cancelFavoured', 'buyNatives', 'denounce', 'incite', 'answerNativeDemand', 'endTurn',
 ];
 /** Commands the AI performs by changing the state itself, or that only people need. */
-const DIRECT = new Set(['answerProposal', 'clearOrders', 'fortify', 'sentry', 'activate', 'skip', 'loadGoods', 'unloadGoods', 'disband', 'setExport', 'chooseFather']);
+const DIRECT = new Set(['answerProposal', 'answerNativeDemand', 'clearOrders', 'fortify', 'sentry', 'activate', 'skip', 'loadGoods', 'unloadGoods', 'disband', 'setExport', 'chooseFather']);
 
 /** Every feature the audit lists, in display order, whether used or not. */
 export const FEATURE_CATALOG: { id: string; kind: FeatureKind }[] = [
@@ -53,6 +53,19 @@ export const FEATURE_CATALOG: { id: string; kind: FeatureKind }[] = [
   { id: 'natives:sold by ship', kind: 'use' },
   { id: 'natives:mission founded', kind: 'use' },
   { id: 'natives:convert joined', kind: 'use' },
+  { id: 'natives:gold from sales', kind: 'use' },
+  { id: 'natives:goods bought', kind: 'use' },
+  { id: 'natives:gold spent buying', kind: 'use' },
+  { id: 'natives:bought from visiting brave', kind: 'event' },
+  { id: 'natives:sold to visiting brave', kind: 'event' },
+  { id: 'natives:gift received', kind: 'event' },
+  { id: 'natives:tribute demanded', kind: 'event' },
+  { id: 'natives:tribute paid', kind: 'event' },
+  { id: 'natives:tribute refused', kind: 'event' },
+  { id: 'natives:rival mission expelled', kind: 'use' },
+  { id: 'natives:tribe incited to war', kind: 'use' },
+  { id: 'natives:tribe surrendered', kind: 'event' },
+  { id: 'combat:brave killed', kind: 'event' },
   { id: 'wagon:moves', kind: 'use' },
   { id: 'explore:rumour explored', kind: 'use' },
   { id: 'treasure:found', kind: 'use' },
@@ -91,6 +104,11 @@ export const FEATURE_CATALOG: { id: string; kind: FeatureKind }[] = [
   { id: 'natives:raid suffered', kind: 'event' },
   { id: 'natives:tribe went to war', kind: 'event' },
   { id: 'natives:missionary killed', kind: 'event' },
+  { id: 'natives:brave killed', kind: 'event' },
+  { id: 'natives:unit attacked', kind: 'event' },
+  { id: 'natives:unit killed', kind: 'event' },
+  { id: 'natives:colonist killed', kind: 'event' },
+  { id: 'natives:burial ground disturbed', kind: 'event' },
   { id: 'explore:expedition lost', kind: 'event' },
   { id: 'independence:lost', kind: 'event' },
   ...['road tiles by colonies', 'colonies linked by road', 'ships', 'cargo holds', 'warships', 'wagon trains', 'artillery'].map((f) => ({ id: `end:${f}`, kind: 'state' as const })),

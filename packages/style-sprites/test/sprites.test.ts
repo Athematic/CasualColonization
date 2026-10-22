@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { StylePlugin } from '@cc/render-api';
 import { fill, kebab, SpriteIds } from '../src/ids.js';
 import { coastPieces, roadTurns } from '../src/layers.js';
-import { createSpriteStyle } from '../src/style.js';
+import { createSpriteStyle, packCssUrls } from '../src/style.js';
 import { completePack, DEFAULT_MAPPING, DEFAULT_RULES, extendPack, type SpritePack } from '../src/pack.js';
 import { Painter, type PaintContext } from '../src/painter.js';
 import { chooseSize } from '../src/sizes.js';
@@ -143,6 +143,31 @@ describe('packs', () => {
     expect(australia.rules.colony).toEqual({ ...DEFAULT_RULES.colony, scale: 1.3 });
     // The base pack is untouched.
     expect(new SpriteIds(base.mapping).unit('freeColonist', 'none')).toEqual(['units/free-colonist__none']);
+  });
+});
+
+describe('pack interface CSS', () => {
+  const fallback = {
+    id: 'fb', name: 'FB', description: '', theme: {} as StylePlugin['theme'],
+    css: '.panel { border: 2px solid; }', cssUrls: ['https://fonts.example/fb.css'],
+    createMapRenderer: () => { throw new Error('unused'); }, drawIcon: () => {}, tileColor: () => '#000',
+  } as StylePlugin;
+
+  it('resolves relative CSS files against the sprite folder, keeps absolute ones, drops relative ones when sprites are off', () => {
+    expect(packCssUrls(['pack.css', 'https://cdn.example/x.css', '/abs.css'], 'https://casual.spence.dk/assets/runtime/'))
+      .toEqual(['https://casual.spence.dk/assets/runtime/pack.css', 'https://cdn.example/x.css', '/abs.css']);
+    expect(packCssUrls(['pack.css', '/abs.css'], null)).toEqual(['/abs.css']);
+  });
+
+  it('layers the pack CSS over the fallback, or replaces it', () => {
+    const pack: SpritePack = completePack({ id: 'p', name: 'P', description: '', source: { base: 'sprites/' }, css: '.panel { border-image: url(ui/panel.png) 30; }', cssFiles: ['pack.css'] });
+    const over = createSpriteStyle(pack, fallback, { base: 'sprites/' });
+    expect(over.css).toBe('.panel { border: 2px solid; }\n.panel { border-image: url(ui/panel.png) 30; }');
+    expect(over.cssUrls).toEqual(['https://fonts.example/fb.css', 'sprites/pack.css']);
+    const only = createSpriteStyle({ ...pack, fallbackCss: false }, fallback, { base: 'sprites/' });
+    expect(only.css).toBe('.panel { border-image: url(ui/panel.png) 30; }');
+    expect(only.cssUrls).toEqual(['sprites/pack.css']);
+    expect(createSpriteStyle(completePack({ id: 'q', name: 'Q', description: '', source: { base: 'x/' } }), { ...fallback, css: undefined, cssUrls: undefined }, { base: null }).css).toBeUndefined();
   });
 });
 

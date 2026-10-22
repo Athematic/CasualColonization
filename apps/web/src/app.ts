@@ -1,6 +1,10 @@
 import {
   canFoundColony,
+  braveName,
+  bravesAt,
   buildMapIndex,
+  incitePrice,
+  pendingDemands,
   canUseRoutes,
   canImprove,
   colonyAt,
@@ -54,6 +58,7 @@ import { REPORT_TABS, ReportsScreen } from './ui/reports.js';
 import { RoutesScreen } from './ui/routes.js';
 import { Sidebar } from './ui/sidebar.js';
 import { showTurnStart, sortNews } from './ui/turnstart.js';
+import { inciteDialog, nativeTradeDialog } from './ui/natives.js';
 
 /**
  * Turns of movement a unit needs to walk a path: the rest of this turn's moves first (or a fresh
@@ -413,7 +418,7 @@ export class App {
 
   /** Asks about decisions the rules left waiting mid-turn (a tax raise after a sale, a royal demand). */
   async answerPending(): Promise<void> {
-    if (this.me.pendingTax || this.me.pendingDemand) await this.turnStart();
+    if (this.me.pendingTax || this.me.pendingDemand || pendingDemands(this.state, this.me.id).some((d) => d.kind === 'demand')) await this.turnStart();
   }
 
   /** Opens the Congress choice in the briefing modal. */
@@ -473,9 +478,10 @@ export class App {
         if (this.dispatch({ type: 'move', unitId: u.id, dir }, true)) this.afterUnitAction();
         return;
       case 'attack': {
-        const target = opt.colonyId ? this.state.colonies[opt.colonyId]?.name : 'the enemy unit';
+        const brave = opt.braveId ? this.state.braves?.[opt.braveId] : undefined;
+        const target = opt.colonyId ? this.state.colonies[opt.colonyId]?.name : brave ? `the ${braveName(brave)}` : 'the enemy unit';
         const ok = await confirmDialog('Attack?', `Attack ${target}? This is an act of war.`, 'Attack', 'Hold back');
-        if (ok && this.dispatch({ type: 'attack', unitId: u.id, target: { unitId: opt.targetUnitId, colonyId: opt.colonyId } })) this.afterUnitAction();
+        if (ok && this.dispatch({ type: 'attack', unitId: u.id, target: { unitId: opt.targetUnitId, colonyId: opt.colonyId, braveId: opt.braveId } })) this.afterUnitAction();
         return;
       }
       case 'settlement':
@@ -490,7 +496,9 @@ export class App {
       speak: 'Speak with the chief',
       mission: st.mission ? `A ${NATIONS[st.mission].adjective} mission is already here` : 'Establish a mission',
       learn: st.skill ? `Live among the natives (learn: ${st.skill.replace(/([A-Z])/g, ' $1').toLowerCase()})` : 'Live among the natives (nothing left to teach)',
-      trade: 'Offer goods for trade',
+      trade: 'Trade: sell and buy goods',
+      denounce: st.mission ? `Denounce the ${NATIONS[st.mission].adjective} mission` : 'Denounce a rival mission',
+      incite: `Incite the natives against a rival (${incitePrice(st)} gold)`,
       attack: 'Attack the settlement',
     } as const;
     const mood = tensionLabel(st.tension[this.viewer] ?? 0);
@@ -502,8 +510,10 @@ export class App {
     let ok = false;
     if (choice === 'speak') ok = this.dispatch({ type: 'speak', unitId: u.id, settlementId });
     if (choice === 'learn') ok = this.dispatch({ type: 'learn', unitId: u.id, settlementId });
-    if (choice === 'trade') ok = this.dispatch({ type: 'tradeNatives', unitId: u.id, settlementId });
+    if (choice === 'trade') ok = await nativeTradeDialog(this, u, settlementId);
     if (choice === 'mission') ok = this.dispatch({ type: 'mission', unitId: u.id, settlementId });
+    if (choice === 'denounce') ok = this.dispatch({ type: 'denounce', unitId: u.id, settlementId });
+    if (choice === 'incite') ok = await inciteDialog(this, u, settlementId);
     if (choice === 'attack' && (await confirmDialog('Attack?', `Attack the ${settlementName(st)}? Its people will never trust you again.`, 'Attack', 'Hold back'))) {
       ok = this.dispatch({ type: 'attack', unitId: u.id, target: { settlementId } });
     }
@@ -729,7 +739,8 @@ export class App {
           this.hover = t;
           // Tile info on hover: terrain, river, road.
           const tile = tileAt(this.state, t.x, t.y);
-          c.title = tile && this.knows(t.y * this.state.map.width + t.x) ? tileDescription(tile) : '';
+          const braves = bravesAt(this.state, t.x, t.y).map((b) => braveName(b));
+          c.title = tile && this.knows(t.y * this.state.map.width + t.x) ? [tileDescription(tile), ...braves].join(' · ') : '';
           this.requestRender(true);
         }
       }

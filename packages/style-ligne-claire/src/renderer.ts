@@ -1,19 +1,22 @@
 import { colonyWorkers, NATIONS, RIVER_DIRS, TERRAIN, type Colony, type GameState, type Settlement, type Tile } from '@cc/engine';
 import {
+  braveMarkers,
   hash2,
   isTileExplored,
   isTileVisible,
   tileToScreen,
+  tribeColor,
   unitStacks,
   visibleRange,
   type LayerTile,
+  type MapBrave,
   type MapLayerHooks,
   type MapRenderer,
   type MapUnitStack,
   type Scene,
 } from '@cc/render-api';
 import { FOREST, HIGHLIGHT, INK, LAND, PAPER, PAPER_WASH, RIVER, ROAD, WAVE, WHITE, shade } from './palette.js';
-import { FONT, colonySprite, hills, inked, mountains, ruins, settlementSprite, tree, unitSprite } from './sprites.js';
+import { FONT, braveSprite, colonySprite, hills, inked, mountains, ruins, settlementSprite, tree, unitSprite } from './sprites.js';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -473,8 +476,38 @@ export class LigneClaireMapRenderer implements MapRenderer {
       }
     }
 
-    // 7. Units: one sprite per tile with an ownership pennant and stack count.
-    for (const stack of unitStacks(scene)) {
+    // 7. Native braves out on the land, with a triangular pennant in the tribe's colour; smaller
+    // in a corner when a European unit shares the tile. Then the units: one sprite per tile with
+    // an ownership pennant and stack count.
+    const stacks = unitStacks(scene);
+    const occupied = new Set(stacks.map((st) => st.y * s.map.width + st.x));
+    for (const b of braveMarkers(scene)) {
+      const p = tileToScreen(scene, b.x, b.y);
+      if (p.x < -z || p.y < -z || p.x > scene.width + z || p.y > scene.height + z) continue;
+      const shared = occupied.has(b.y * s.map.width + b.x);
+      const bx = shared ? p.x + z * 0.24 : p.x + z / 2;
+      const by = shared ? p.y + z * 0.7 : p.y + z / 2;
+      this.drawBrave(b, bx, by, shared ? z * 0.5 : z * 0.86, lw);
+      if (shared) continue;
+      const fx = p.x + z * 0.06;
+      const fy = p.y + z * 0.06;
+      const fw = z * 0.24;
+      const fh = z * 0.2;
+      inked(ctx, tribeColor(b.tribe), lw * 0.8, () => {
+        ctx.moveTo(fx, fy);
+        ctx.lineTo(fx + fw, fy + fh / 2);
+        ctx.lineTo(fx, fy + fh);
+        ctx.closePath();
+      });
+      if (b.count > 1) {
+        ctx.fillStyle = WHITE;
+        ctx.font = `bold ${Math.round(fh * 0.75)}px ${FONT}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(b.count), fx + fw * 0.36, fy + fh / 2 + 1);
+      }
+    }
+    for (const stack of stacks) {
       const p = tileToScreen(scene, stack.x, stack.y);
       if (p.x < -z || p.y < -z || p.x > scene.width + z || p.y > scene.height + z) continue;
       const cx = p.x + z / 2;
@@ -621,6 +654,12 @@ export class LigneClaireMapRenderer implements MapRenderer {
   protected drawColony(c: Readonly<Colony>, size: number, px: number, py: number, z: number, lw: number): void {
     if (this.hooks.colony?.(this.ctx, c, size, px, py, z)) return;
     colonySprite(this.ctx, px + z / 2, py + z / 2, z * 0.95, c.owner, size, c.buildings.stockade, lw);
+  }
+
+  /** A native brave, centred at (x, y) in a box of size s. */
+  protected drawBrave(b: MapBrave, x: number, y: number, s: number, lw: number): void {
+    if (this.hooks.brave?.(this.ctx, b, x, y, s)) return;
+    braveSprite(this.ctx, x, y, s, b.tribe, b.armed, b.mounted, lw);
   }
 
   /** The unit on top of a stack, centred at (x, y) in a box of size s. */

@@ -63,7 +63,10 @@ function ledgerOf(s: GameState, nation: NationId): Ledger {
 export function noteGoods(s: GameState, nation: NationId, channel: LedgerChannel, good: GoodId, amount: number): void {
   if (amount <= 0 || nation === 'crown') return;
   const l = ledgerOf(s, nation);
-  for (const t of [l.total, l.now]) t[channel][good] = (t[channel][good] ?? 0) + amount;
+  for (const t of [l.total, l.now]) {
+    const tally = (t[channel] ??= {});
+    tally[good] = (tally[good] ?? 0) + amount;
+  }
 }
 
 /** A nation's tallies: over the game, this turn and last turn. Empty when nothing was recorded. */

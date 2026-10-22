@@ -11,6 +11,7 @@ import {
   isShip,
   NATIONS,
   sightRadius,
+  TRIBES,
   unitPosition,
   type BuildingKind,
   type Colony,
@@ -21,6 +22,7 @@ import {
   type RoleId,
   type Settlement,
   type Tile,
+  type TribeId,
   type UnitTypeId,
 } from '@cc/engine';
 
@@ -111,6 +113,8 @@ export interface MapLayerHooks {
   colony?(ctx: Ctx2D, colony: Readonly<Colony>, size: number, px: number, py: number, z: number): boolean;
   /** The unit on top of a stack, centred at (x, y) in a box of size s (nation pennants stay with the renderer). */
   unit?(ctx: Ctx2D, stack: MapUnitStack, x: number, y: number, s: number): boolean;
+  /** A native brave, centred at (x, y) in a box of size s (the tribe's pennant stays with the renderer). */
+  brave?(ctx: Ctx2D, brave: MapBrave, x: number, y: number, s: number): boolean;
 }
 
 export type IconRequest =
@@ -140,8 +144,16 @@ export interface StylePlugin {
   name: string;
   description: string;
   theme: StyleTheme;
-  /** Optional stylesheet URLs (for example web fonts) the style wants loaded. */
+  /** Optional stylesheet URLs (for example web fonts) the style wants loaded. They stay loaded. */
   stylesheets?: string[];
+  /**
+   * Optional CSS that restyles the shell's interface (panels, buttons, dialogs) while this style is
+   * active, for styles that want their own look beyond the theme variables. Removed again when
+   * another style is chosen. Scope rules to `:root[data-style="<id>"]` to be safe.
+   */
+  css?: string;
+  /** Optional CSS file URLs with the same lifetime as `css`; `url()` inside them resolves against the file. */
+  cssUrls?: string[];
   /** `hooks` lets another style paint some layers (see MapLayerHooks); a renderer may ignore it. */
   createMapRenderer(canvas: HTMLCanvasElement, hooks?: MapLayerHooks): MapRenderer;
   /** Draws an icon centred in a size×size box at the origin of the context. */
@@ -265,6 +277,46 @@ export function unitStacks(scene: Scene): MapUnitStack[] {
     if (prefer) existing.top = entry;
   }
   return [...byTile.values()];
+}
+
+/** A native brave as the map shows it: one per tile (the strongest), with how many stand there. */
+export interface MapBrave {
+  id: string;
+  x: number;
+  y: number;
+  tribe: TribeId;
+  armed: boolean;
+  mounted: boolean;
+  count: number;
+}
+
+/**
+ * The braves a viewer can see: out on the land (those at home in their settlement are not drawn),
+ * on tiles in sight, and not where the viewer's own units or a colony stand.
+ */
+export function braveMarkers(scene: Scene): MapBrave[] {
+  const s = scene.state as GameState;
+  const w = s.map.width;
+  const byTile = new Map<number, MapBrave>();
+  const settlements = new Set(Object.values(s.settlements).map((st) => st.y * w + st.x));
+  const colonies = new Set(Object.values(s.colonies).map((c) => c.y * w + c.x));
+  for (const b of Object.values(s.braves ?? {})) {
+    const key = b.y * w + b.x;
+    if (settlements.has(key) || colonies.has(key) || !isTileVisible(scene, b.x, b.y) || !isTileExplored(scene, b.x, b.y)) continue;
+    const strength = (o: { armed: boolean; mounted: boolean }) => (o.armed ? 1 : 0) + (o.mounted ? 1 : 0);
+    const entry: MapBrave = { id: b.id, x: b.x, y: b.y, tribe: b.tribe, armed: !!b.armed, mounted: !!b.mounted, count: 1 };
+    const existing = byTile.get(key);
+    if (!existing) byTile.set(key, entry);
+    else {
+      const count = existing.count + 1;
+      byTile.set(key, strength(entry) > strength(existing) ? { ...entry, count } : { ...existing, count });
+    }
+  }
+  return [...byTile.values()];
+}
+
+export function tribeColor(tribe: TribeId): string {
+  return TRIBES[tribe].color;
 }
 
 function isShipType(type: UnitTypeId): boolean {

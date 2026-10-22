@@ -41,6 +41,19 @@ export function setStyle(id: string): void {
     if (document.querySelector(`link[href="${href}"]`)) continue;
     document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'stylesheet', href }));
   }
+  // The style's own interface CSS replaces the previous style's.
+  for (const old of document.head.querySelectorAll('[data-style-css]')) old.remove();
+  for (const href of style.cssUrls ?? []) {
+    const link = Object.assign(document.createElement('link'), { rel: 'stylesheet', href });
+    link.dataset.styleCss = style.id;
+    document.head.appendChild(link);
+  }
+  if (style.css) {
+    const el = document.createElement('style');
+    el.dataset.styleCss = style.id;
+    el.textContent = style.css;
+    document.head.appendChild(el);
+  }
   try {
     localStorage.setItem('cc.style', style.id);
   } catch {

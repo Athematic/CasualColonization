@@ -139,7 +139,7 @@ Ordered by how much they should help:
 1. **Wagon trains and inland exports.** No level builds a wagon train, so inland colonies cannot sell anything, and spoilage is the largest waste left (10,000+ goods a game). Trade routes would fix this; that work is happening in parallel.
 2. **Fleet size.** It still lags production: about 2 ships for 20 colonies. Shipyards are rarely built (`built:Shipyard` ≈ 0). Docks only reach that level at 8 colonists, and few colonies get that big.
 3. **Combative's army is idle.** It buys about 10 artillery a game and attacks nothing. Raid orders set in `diplomacy()` are overwritten by `soldierTurn` in the same turn; the raid force should be exempt from garrison duty while the raid lasts. The war threshold (2.5:1 against a colony within 10 tiles) is almost never met. Either use the army or stop buying it.
-4. **Missions and native trade are unused.** Missions need a level-2 church, which is almost never built, and a firebrand preacher, which is never bought. Nothing in the AI trades goods with natives, although `tradeWithSettlement` pays well for wanted goods.
+4. **Missions are unused** (native trade is used since 0.4 and 0.5; see the natives section below). Missions need a level-2 church, which is almost never built, and a firebrand preacher, which is never bought.
 5. **Schools, custom houses and level-2 production buildings are never built.** They sit late in `buildPlan`, behind docks, the printing press and warehouses, in colonies averaging 5–6 colonists. Consider a "core colony" plan for the 2–3 largest colonies.
 6. **Few experts are trained in Europe.** Fisherman, farmer, statesman and preacher purchases are checked only after other spending, and only when a ship with room is in Europe.
 7. **Independence is almost never declared** (minimum share 50–55%, plus stockade and musket requirements). No level has ever won it in the arena.
@@ -189,6 +189,59 @@ What the numbers say:
 - **Runtime** did not grow: 21 min 10 s with Favoured Nation against 21 min 2 s without proposals (+0.7%), two runs side by side on the same machine; the step-1 code took 22 min 35 s when run beside them.
 
 Features still never used: buying a ship in a partner's port (prices are the same for every computer nation, so home is never dearer), and paying arrears (refusals are now rare and only for minor goods).
+
+## Natives: visible braves (0.5)
+
+0.5 replaced the abstract native raids and gifts with real braves (`braves.ts`, rules in `rules/natives.ts`): each settlement keeps one or two out on its land, and in the native phase they wander, bring gifts, come to trade, demand tribute and attack. It also added buying goods from settlements, armed and mounted braves, burial grounds, surrender after a capital falls, and missionaries denouncing rival missions and inciting tribes.
+
+What the computer players do with it:
+
+- **Tribute.** All levels answer a demand at once (`aiPaysTribute`): they pay when the brave would win a fight against the colony's best defender at least 35% of the time, or when the tribute is worth 120 gold or less; otherwise they refuse and let the garrison fight. Naive decides the same way.
+- **Hostile braves.** Soldiers and artillery attack a hostile brave next to them when their offence is at least 2.5 times the brave's defence (`aiFight` in `ai/common.ts`), and routes avoid tiles where hostile braves stand.
+- **Buying from natives** (`ai/natives.ts`, called from `logistics.ts`): a wagon train trading with a settlement also buys the goods that pay best, when they fetch at least 1.4 times their price in Europe after tax and 400 gold stay in the treasury, and carries them to the nearest port for the ship routes. Goods offered by visiting braves are bought only for a port with room in its warehouse, at 1.5 times their price, with 800 gold to spare.
+- **Incite** is Combative only, at most once every 40 turns, when it is at war with a European nation with a colony within 6 tiles of the settlement, and has the price plus 1,300 gold. Nobody denounces missions (the advanced levels hardly found missions; see below).
+
+### Measured
+
+Eight games, 300 turns, medium map, seeds 1000–1007, the code before 0.5's natives work (with the advisor reports) and after, run side by side on the same machine:
+
+```sh
+npm run tournament -- --games 8 --turns 300 --size medium --features
+```
+
+| Level | Score before | Score after | Difference per game (± standard error) |
+| --- | ---: | ---: | ---: |
+| Creative | 451.6 | 449.8 | −1.8 |
+| Combative | 414.6 | 392.6 | −22 ± 20 |
+| Competent | 365.6 | 346.5 | −19 ± 32 |
+| Naive | 183.3 | 183.1 | −0.2 |
+
+Natives, average per nation per game (Naive / Competent / Combative / Creative):
+
+| Measure | Before | After |
+| --- | --- | --- |
+| Raids suffered (attacks on colonies) | 176 / 27 / 216 / 5.8 | 31 / 18 / 56 / 11 |
+| Wars with tribes | 3.5 / 0.4 / 5.0 / 0.4 | 2.6 / 1.5 / 4.3 / 1.3 |
+| Colonies lost | 0 / 0.1 / 0 / 0 | 0 / 0.1 / 0 / 0 |
+| Colonists killed by braves | – | 1.1 / 0.8 / 1.4 / 0.3 |
+| Other units killed by braves | – | 1.1 / 0.9 / 3.1 / 0.5 |
+| Braves killed (by the nation's units / defending colonies) | – | 1.3 / 0.3 / 14 / 0.3 and 14 / 7.8 / 34 / 6.8 |
+| Sales to settlements (wagon trains) | 0 / 1.1 / 0.8 / 0.9 | 0 / 0.6 / 0.9 / 0.5 |
+| Gold from sales to natives (wagons and visiting braves) | (not counted) | 89 / 1,072 / 803 / 372 |
+| Goods bought from settlements (units) | – | 0 / 38 / 29 / 13 |
+| Gifts received | (not counted) | 6.3 / 12 / 9.1 / 12 |
+| Tribute demanded / paid | – | 4.8 / 6.4 / 3.0 / 10 and 4.8 / 6.4 / 2.5 / 9.8 |
+| Burial grounds disturbed | – | 0 / 0.4 / 0.1 / 0.3 |
+
+Runtime: 529 s after against 573 s before (−8%), the two runs side by side. Braves cost little (at most 80 on the map, greedy one-step moves, one index per round), and fewer abstract raid rolls and smaller wars make up for it.
+
+What the numbers say:
+
+- **Far fewer raids**, because a raid now needs a brave to walk to the colony and win a real fight: Naive and Combative suffer about a quarter of the attacks they used to. Creative and Competent suffer a few more, mostly from burial grounds (about one game in three), which put a tribe at war for good, and from tribute refused.
+- **Combative fights the braves.** It takes native land, so tribes stay angry; its garrisons kill about 14 braves a game and beat off about 34 attacks. It scores about 22 points less, the clearest cost of the change: angry braves now strip its soldiers of muskets and horses (the brave keeps them) and kill pioneers and scouts in the open. Killing braves while already at war adds only a third of the usual tension, so these wars can still end.
+- **Competent** scores about 19 points less, within the noise (±32): it pays most tributes (6.4 a game) and earns about 1,000 gold a game selling to natives.
+- **Buying from natives is used, modestly** (13–38 units a game): wagon trains only trade with natives when they have no route, which is rare once routes exist.
+- **Not seen in the tournament:** incitement (Combative was rarely at war with a European neighbour that had a colony near one of its missionaries), denunciations (no AI code), and surrenders (no level burns a capital in these games).
 
 ## Appendix: full feature tables (seeds 1000–1005, 6 games, 300 turns, medium)
 
