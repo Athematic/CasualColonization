@@ -153,6 +153,8 @@ function productValue(p: Player, c: Colony, report: ColonyReport, product: Produ
     case 'food':
       return report.net.food < 2 ? 10 : report.net.food < 6 ? 4 : 2;
     case 'bells':
+      // While arming for independence, more bells than the colony needs only make the King add troops.
+      if (turnArming && sol >= 60) return 0.8;
       return sol >= 100 ? 0.5 : 2.5 * prof.liberty;
     case 'crosses':
       return 1.2;
@@ -164,9 +166,9 @@ function productValue(p: Player, c: Colony, report: ColonyReport, product: Produ
     case 'lumber':
       return report.produced.lumber < report.consumed.lumber + 3 && c.goods.lumber < 60 ? 3 : 0.8;
     case 'tools':
-      return 3;
+      return turnArming ? 4 : 3;
     case 'muskets':
-      return 3.5;
+      return turnArming ? 7 : 3.5;
     default: {
       const g = product as GoodId;
       // Goods that will only spoil in a full warehouse are worth little.
@@ -316,10 +318,14 @@ function staffSchool(s: GameState, c: Colony): void {
 function raiseMilitia(s: GameState, p: Player, c: Colony, prof: AiProfile): void {
   const workers = colonyWorkers(s, c);
   if (workers.length < 3 || c.goods.muskets < 50) return;
-  if (armedAt(s, p, c.x, c.y).length >= garrisonFor(p, prof)) return;
+  // Arming for independence, a port with the muskets also raises troops for colonies still short
+  // of their garrison (they march there); otherwise only for its own garrison.
+  const short = turnArming && countOwned(s, p, isArmed) < ownColonies(s, p).length * garrisonFor(p, prof);
+  if (armedAt(s, p, c.x, c.y).length >= garrisonFor(p, prof) && !short) return;
+  // Arming, experts take up muskets too once no unskilled colonist is left (veterans first).
   const recruit = workers
-    .filter((w) => UNIT_TYPES[w.type].skill <= 0 && w.type !== 'nativeConvert')
-    .sort((a, b) => UNIT_TYPES[a.type].skill - UNIT_TYPES[b.type].skill)[0];
+    .filter((w) => (UNIT_TYPES[w.type].skill <= 0 || (turnArming && (w.type === 'veteranSoldier' || workers.length >= 4))) && w.type !== 'nativeConvert')
+    .sort((a, b) => Number(b.type === 'veteranSoldier') - Number(a.type === 'veteranSoldier') || UNIT_TYPES[a.type].skill - UNIT_TYPES[b.type].skill)[0];
   if (!recruit) return;
   leaveColony(s, recruit.id);
   equipInColony(s, recruit.id, 'soldier');
@@ -766,7 +772,8 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
   if (prof.missions && s.turn < 160 && !countOwned(s, p, (u) => u.type === 'firebrandPreacher')) buyUnit('firebrandPreacher');
   // Recruit the best of the pool while it is cheap.
   // (Dearer recruits too once trade has filled the treasury: idle gold scores next to nothing.)
-  for (let i = 0; i < 3 && room() > 0 && afford(recruitPrice(p)) && (recruitPrice(p) < 500 || p.gold > prof.reserve + recruitPrice(p) * 4); i++) {
+  // While arming for independence, muskets come first (bought below): recruits only with gold to spare.
+  for (let i = 0; i < 3 && room() > 0 && afford(recruitPrice(p) + (turnArming ? 1500 : 0)) && (recruitPrice(p) < 500 || p.gold > prof.reserve + recruitPrice(p) * 4); i++) {
     const slot = p.recruitPool.map((t, j) => [UNIT_TYPES[t].skill, j] as const).sort((a, b) => b[0] - a[0])[0][1];
     safely(() => recruit(s, p.id, slot));
   }
@@ -775,6 +782,11 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
   for (const ship of inEurope()) {
     const warship = UNIT_TYPES[ship.type].offence > 0;
     const market = portOf(ship) === p.id ? p : s.players.find((o) => o.id === portOf(ship)) ?? p;
+    // Arming for independence: muskets for militia are the cheapest defence (50 a soldier), so
+    // they go aboard first, in every hold but one, as far as the gold above the reserve allows.
+    if (turnArming && !warship) {
+      for (let i = 0; i < 6 && cargoFree(s, ship) > 1 && afford(buyPrice(market, 'muskets') * 100); i++) safely(() => buyGoods(s, ship.id, 'muskets', 100));
+    }
     if (!warship && inHomePort(ship)) for (const u of docks()) if (cargoFree(s, ship) > 0) safely(() => boardInEurope(s, u.id, ship.id));
     // Supplies: tools for builds and pioneers, muskets when war or independence is coming.
     const toolsNeeded = colonies.reduce((n, c) => (c.build ? n + Math.max(0, buildTargetCost(c.build, c).tools - c.goods.tools) : n), 0) + pioneerToolsWanted(s, p);

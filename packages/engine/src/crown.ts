@@ -33,7 +33,7 @@ import type { Colony, GameState, Player } from './types.js';
  * declaration is in the same range as the old formula sized at the declaration (see
  * docs/AI_FEATURE_AUDIT.md, "The Crown").
  */
-export const REF_GROWTH = { perColony: 0.015, perBell: 0.0032, batch: 3, landPerShip: 12 };
+export const REF_GROWTH = { perColony: 0.01, perBell: 0.0035, batch: 3, landPerShip: 12 };
 
 /** Land units the King adds when a demand for gold is refused. */
 export const REF_ON_REFUSAL = 2;

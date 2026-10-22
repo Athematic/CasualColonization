@@ -67,7 +67,7 @@ function applyFocus(base: AiProfile, focus: AiFocus, personality: { aggression: 
     case 'liberty':
       return { ...prof, liberty: 2.4 * personality.liberty, schools: true };
     case 'independence':
-      return { ...prof, liberty: 2, garrison: 2, independence: { minTurn: 140, minShare: 50, armyPerColony: 1, ratio: 1.25 } };
+      return { ...prof, liberty: 2, garrison: 2, independence: { minTurn: 140, minShare: 50, armyPerColony: 1, ratio: 1.15 } };
     case 'defend':
       return { ...prof, garrison: 2, aggression: 0, gifts: true };
     case 'war':
