@@ -333,7 +333,7 @@ export interface TribeOverview {
   /** Average tension of the known settlements. */
   tension: number;
   settlements: SettlementOverview[];
-  /** Known settlements of the tribe out of how many survive; the total is only shown once all are found. */
+  /** Settlements of the tribe the nation knows (the tribe may have more it has not found). */
   known: number;
 }
 

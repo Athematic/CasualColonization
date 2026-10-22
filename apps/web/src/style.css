@@ -1465,6 +1465,7 @@ button.good:not(:disabled):hover {
   .routes-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+}
 
 /* Options from the roadmap on the New game screen. */
 .planned {
@@ -1707,5 +1708,342 @@ button.good:not(:disabled):hover {
   .progress-desc {
     flex-basis: 100%;
     margin-left: 0;
+  }
+}
+
+/* ---- Advisor reports ---- */
+
+.reports-screen {
+  max-width: 1400px;
+}
+
+.reports-screen .screen-head .report-nation {
+  margin: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.report-tabs {
+  display: flex;
+  gap: 0.3rem;
+  margin: 0.6rem 0 0.2rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+  scrollbar-width: thin;
+}
+
+.report-tabs .tab {
+  flex: 1 0 auto;
+  padding: 0.3rem 0.7rem;
+  white-space: nowrap;
+  color: var(--panel-ink);
+}
+
+.report-tabs .tab.active {
+  color: var(--accent-ink);
+}
+
+.report-tabs kbd {
+  font-family: inherit;
+  font-size: 0.68rem;
+  opacity: 0.65;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 0 0.2rem;
+  margin-right: 0.35rem;
+}
+
+.report-title {
+  margin: 0.4rem 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.report-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.report-card {
+  min-width: 0;
+}
+
+.report-card > h3 {
+  margin-bottom: 0.4rem;
+}
+
+.report-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  align-items: start;
+}
+
+.report-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem;
+}
+
+.report-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  background: var(--panel);
+  color: var(--panel-ink);
+  border: var(--line-width) solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.6rem;
+  min-width: 0;
+}
+
+.report-stat-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.report-stat strong {
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-stat .muted {
+  overflow-wrap: anywhere;
+}
+
+/* Wide tables scroll inside their card, never the page. */
+.report-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.report-table {
+  min-width: max-content;
+}
+
+.report-table td {
+  white-space: nowrap;
+}
+
+.report-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-table th .sort {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.report-table th .sort:hover,
+.report-table th[aria-sort='ascending'] .sort,
+.report-table th[aria-sort='descending'] .sort {
+  color: var(--accent);
+}
+
+.report-table tr.alert td:first-child {
+  box-shadow: inset 3px 0 0 var(--bad);
+}
+
+.report-table tr.boycott td {
+  background: repeating-linear-gradient(45deg, transparent 0 6px, color-mix(in srgb, var(--bad) 14%, transparent) 6px 8px);
+}
+
+.report-table .link.strong {
+  font-weight: 700;
+}
+
+.report-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.report-card > div > .report-chips {
+  flex-wrap: wrap;
+}
+
+.report-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  border-radius: 999px;
+  padding: 0 0.4rem 0 0.1rem;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  background: var(--panel);
+  color: var(--panel-ink);
+  white-space: nowrap;
+}
+
+button.report-chip {
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.report-chip.unit {
+  padding: 0 0.3rem 0 0;
+}
+
+.report-chip.risk {
+  border-color: var(--bad);
+  color: var(--bad);
+  font-weight: 700;
+  background: color-mix(in srgb, var(--bad) 12%, var(--panel));
+}
+
+.report-good {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.report-good .pill {
+  margin-left: 0.2rem;
+}
+
+.good-text {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.bad-text {
+  color: var(--bad);
+  font-weight: 700;
+}
+
+.report-mini-bar {
+  display: inline-block;
+  width: 3rem;
+  height: 0.45rem;
+  margin-left: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.report-mini-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.report-tribe-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.7rem;
+  margin-bottom: 0.4rem;
+}
+
+.report-fathers {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.35rem 1.2rem;
+}
+
+.report-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
+}
+
+.report-filters .chip {
+  padding: 0.1rem 0.6rem;
+  min-height: 1.8rem;
+}
+
+.report-filters .chip.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.report-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin: 0 0.4rem;
+}
+
+.report-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.report-history h4 {
+  margin: 0.6rem 0 0.2rem;
+  font-family: var(--heading-font);
+  font-size: 0.95rem;
+  border-bottom: 1px dashed var(--line);
+}
+
+.report-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.report-history li li {
+  display: grid;
+  grid-template-columns: 1.3rem 6.5rem auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+}
+
+.report-history .history-mark {
+  text-align: center;
+  color: var(--accent);
+}
+
+.report-history .link {
+  text-decoration: underline dotted;
+}
+
+@media (max-width: 760px) {
+  .report-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .report-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .report-stat strong {
+    font-size: 1.05rem;
+  }
+
+  .report-history li li {
+    grid-template-columns: 1.2rem auto minmax(0, 1fr);
+  }
+
+  .report-history .history-date {
+    display: none;
   }
 }
