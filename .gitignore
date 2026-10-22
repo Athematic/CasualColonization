@@ -4,3 +4,7 @@ dist/
 .DS_Store
 scripts/.*.mjs
 .claude/worktrees/
+
+# Runtime sprite set (tools/sprite-pipeline output): uploaded to the server, not committed
+site/assets/runtime/
+apps/web/public/assets/runtime/

@@ -1,4 +1,5 @@
 import { colonySiteProblem } from '../colony.js';
+import { braveDefence, hostileBraveAt } from '../braves.js';
 import { attack, defencePower, offencePower } from '../combat.js';
 import { RuleError } from '../errors.js';
 import { describeMove, findPath, leaveShip, moveUnit, setDestination } from '../movement.js';
@@ -46,6 +47,9 @@ export function siteScore(s: GameState, x: number, y: number): number {
     for (const g of GOODS) if (g !== 'food') best = Math.max(best, baseTileYield(tile, g));
     score += best * 0.6;
   }
+  // A river through the centre: road-speed travel inland, and its yield bonus counted above.
+  const centre = tileAt(s, x, y)!;
+  if (centre.rv) score += 2 * centre.rv;
   if (water > 0 && water < 6) score += 8;
   if (water >= 6) score -= 10;
   return score;
@@ -98,6 +102,12 @@ export function aiFight(s: GameState, p: Player, u: Unit): boolean {
     const enemy = unitsAt(s, n.x, n.y).find((o) => atWar(o.owner) && isShip(o) === isShip(u));
     if (enemy && offencePower(s, u) >= defencePower(s, enemy)) {
       attack(s, u.id, { unitId: enemy.id });
+      return true;
+    }
+    // Hostile braves next to the unit, when the odds are good.
+    const brave = !isShip(u) ? hostileBraveAt(s, p.id, n.x, n.y) : undefined;
+    if (brave && offencePower(s, u) >= braveDefence(s, brave) * 2.5) {
+      attack(s, u.id, { braveId: brave.id });
       return true;
     }
   }

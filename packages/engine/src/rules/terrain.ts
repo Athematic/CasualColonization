@@ -77,3 +77,8 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
 export const FOREST_MOVE_COST = 6;
 export const FOREST_DEFENCE = 50;
 export const ROAD_MOVE_COST = 1;
+/**
+ * Moving along a river, between two neighbouring river tiles that the river links, costs the
+ * same as a road (1/3 of a move), as in the original game. Road and river do not add up.
+ */
+export const RIVER_MOVE_COST = ROAD_MOVE_COST;

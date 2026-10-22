@@ -1,4 +1,6 @@
 import { attack, declareWar, defencePower } from './combat.js';
+import { noteHistory } from './history.js';
+import { track } from './telemetry.js';
 import { fail, RuleError } from './errors.js';
 import { newPlayer } from './game.js';
 import { findPath, setDestination } from './movement.js';
@@ -19,6 +21,8 @@ import {
   unitPosition,
   unitsAt,
 } from './queries.js';
+import { lapseFavoured } from './relations.js';
+import { difficultyRules } from './rules/difficulty.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { finalScores } from './score.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
@@ -64,14 +68,22 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   const p = player(s, nation);
   const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
   p.independence = 'declared';
+  track(nation, 'cmd:declareIndependence');
   p.tax = 0;
   p.boycotts = {};
   p.pendingTax = null;
   p.coloniesAtDeclaration = colonies.length;
-  const n = colonies.length;
-  p.ref = { regulars: 4 + 2 * n, dragoons: 2 + n, artillery: 1 + Math.floor(n / 2), menOfWar: 2 };
+  delete p.pendingDemand;
+  // The force the Crown has built up over the game sails (crown.ts); a nation the Crown never
+  // reviewed (a test position) gets the old formula's force for its colonies.
+  const formula = royalForce(p, colonies.length);
+  if (!p.royal) p.ref = formula;
+  p.refAtDeclaration = { turn: s.turn, force: { ...p.ref }, formula: formula.regulars + formula.dragoons + formula.artillery };
+  track(nation, 'independence:royal land units', p.ref.regulars + p.ref.dragoons + p.ref.artillery);
   ensureCrown(s);
   declareWar(s, nation, 'crown');
+  // The home port is lost, and with it every Favoured Nation status (no penalties).
+  lapseFavoured(s, nation);
 
   // Everything left in Europe is confiscated.
   for (const u of Object.values(s.units)) {
@@ -92,9 +104,22 @@ export function declareIndependence(s: GameState, nation: NationId): string {
       continentals++;
     } else if (committed) continentals++;
   }
-  const text = `${NATIONS[nation].name}'s colonies have declared independence! The Crown sends ${p.ref.regulars} regulars, ${p.ref.dragoons} dragoons and ${p.ref.artillery} artillery to crush the rebellion.`;
+  const text = `${NATIONS[nation].name}'s colonies have declared independence! The Crown sends ${p.ref.regulars} regulars, ${p.ref.dragoons} dragoons, ${p.ref.artillery} artillery and ${p.ref.menOfWar} men-of-war to crush the rebellion.`;
   message(s, text);
+  noteHistory(s, 'independence', [nation], `${NATIONS[nation].name}'s colonies declare independence.`);
   return text;
+}
+
+/**
+ * The old formula for the Royal Expeditionary Force of a nation with `n` colonies: a fixed part
+ * plus a part per colony, each scaled by the nation's difficulty. Since 0.5 the force grows
+ * during the game instead (crown.ts); this sets the force at the start (n = 0), catches up
+ * saves from before 0.5, and is the yardstick the growth is tuned against.
+ */
+export function royalForce(p: Player, n: number): Player['ref'] {
+  const { refBase: base, refGrowth: per } = difficultyRules(p);
+  const size = (fixed: number, perColony: number) => Math.max(1, Math.round(fixed * base + perColony * per));
+  return { regulars: size(4, 2 * n), dragoons: size(2, n), artillery: size(1, Math.floor(n / 2)), menOfWar: size(2, 0) };
 }
 
 function colonyStrength(s: GameState, c: Colony): number {
@@ -164,9 +189,11 @@ function checkOutcome(s: GameState, p: Player): void {
   const royalsLeft = Object.values(s.units).some((u) => u.owner === 'crown' && u.against === p.id && !isShip(u));
   if (ref.regulars + ref.dragoons + ref.artillery === 0 && !royalsLeft) {
     p.independence = 'won';
+    track(p.id, 'independence:won');
     for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === p.id) delete s.units[u.id];
     const text = `${NATIONS[p.id].name} has won the War of Independence! A new nation is born.`;
     message(s, text);
+    noteHistory(s, 'independence', [p.id], text);
     if (!s.gameOver) s.gameOver = { turn: s.turn, reason: text, winner: p.id, scores: finalScores(s) };
     return;
   }
@@ -174,8 +201,10 @@ function checkOutcome(s: GameState, p: Player): void {
   const lost = Object.values(s.colonies).filter((c) => c.owner === 'crown' && c.takenFrom === p.id).length;
   if (lost > 0 && held <= Math.floor((p.coloniesAtDeclaration ?? 1) / 2)) {
     p.independence = 'lost';
+    track(p.id, 'independence:lost');
     const text = `The rebellion in ${NATIONS[p.id].name}'s colonies has been crushed.`;
     message(s, text);
+    noteHistory(s, 'independence', [p.id], text);
     const humansLeft = s.players.some((o) => o.human && o.independence !== 'lost');
     if (!humansLeft && !s.gameOver) s.gameOver = { turn: s.turn, reason: text, scores: finalScores(s) };
   }

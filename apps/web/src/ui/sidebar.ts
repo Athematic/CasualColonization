@@ -1,9 +1,14 @@
 import {
   canFoundColony,
   canImprove,
+  canUseRoutes,
+  routeStopName,
+  portName,
   colonyAt,
   AI_LEVEL_INFO,
   colonyWorkers,
+  DIFFICULTY,
+  resolveDifficulty,
   FATHERS,
   formatDate,
   rebelShare,
@@ -18,7 +23,8 @@ import {
   recruitPrice,
   serialize,
   tileAt,
-  tileName,
+  tileDescription,
+  RIVER_DIRS,
   unitName,
   unitPosition,
   unitsAboard,
@@ -61,10 +67,6 @@ export class Sidebar {
     this.el = h('aside', { class: 'sidebar' }, toggle, this.body, this.minimap);
   }
 
-  showReports(): void {
-    this.reportsOpen = true;
-  }
-
   refresh(): void {
     const app = this.app;
     const s = app.state;
@@ -98,12 +100,22 @@ export class Sidebar {
     this.body.append(this.unitCard(app.selectedUnit()));
 
     this.body.append(
-      h('div', { class: 'row' },
+      h('div', { class: 'row wrap nav-row' },
         h('button', { class: 'btn', onclick: () => app.openEurope(), title: 'Europe (E)' }, 'Europe'),
         h('button', { class: 'btn', onclick: () => app.openDiplomacy(), title: 'Foreign affairs (D)' }, 'Affairs'),
+        h('button', { class: 'btn', onclick: () => app.openRoutes(), title: 'Trade routes (T)' }, 'Routes'),
+        h('button', { class: 'btn', onclick: () => app.openProgress(), title: 'Progress graphs (H)' }, 'Progress'),
+        h('button', { class: 'btn', onclick: () => app.openReports(), title: 'Advisor reports (A, or F1–F8)' }, 'Reports'),
         h('button', { class: 'btn', onclick: () => app.selectNext(), title: 'Next unit (W)', disabled: !awaiting }, `Next unit${awaiting ? ` (${awaiting})` : ''}`),
       ),
-      h('button', { class: `btn primary end-turn${myTurn && !awaiting ? ' pulse' : ''}`, onclick: () => void app.endTurn(), disabled: !myTurn, title: 'End turn (Enter)' }, 'End turn'),
+      h('button', {
+        class: `btn primary end-turn${myTurn && !awaiting ? ' pulse' : ''}`,
+        // The panel is rebuilt on refresh; keep the pulse in phase with the clock so it does not restart.
+        style: `animation-delay:-${Math.round(performance.now() % 1400)}ms`,
+        onclick: () => void app.endTurn(),
+        disabled: !myTurn,
+        title: 'End turn (Enter)',
+      }, 'End turn'),
     );
 
     this.body.append(this.reports(), this.menu());
@@ -137,7 +149,7 @@ export class Sidebar {
     const over = s.gameOver;
     const progress = head ? Math.min(100, Math.round((s.turn / head.turn) * 100)) : 0;
     return h('div', { class: 'card observer' },
-      h('div', { class: 'title-row' }, h('h1', null, 'Casual Colonization'), h('span', { class: 'pill' }, head ? 'Head start' : 'Observer')),
+      h('div', { class: 'title-row' }, h('h1', null, 'Casual Colonization'), h('span', { class: 'pill' }, head ? 'Head start' : 'Observer'), s.cheated ? h('span', { class: 'pill warn', title: 'Cheats have been used in this game' }, 'Cheated') : null),
       h('div', { class: 'stats' }, h('strong', null, formatDate(s.turn)), over ? ` · ${over.reason}` : ''),
       head ? h('div', null,
         h('p', { class: 'small' }, `The computer plays ${head.humans.map((n) => nationTitle(n)).join(' and ')} for you until ${formatDate(head.turn)}.`),
@@ -146,7 +158,9 @@ export class Sidebar {
       h('div', { class: 'row' },
         h('button', { class: 'btn primary', disabled: !!over, onclick: () => app.setAutoplay(!app.autoplay), title: 'Space' }, app.autoplay ? 'Pause' : 'Play'),
         h('button', { class: 'btn', disabled: !!over || app.autoplay, onclick: () => app.observeTurns(1), title: 'Enter' }, '+1 turn'),
-        h('button', { class: 'btn', disabled: !!over || app.autoplay, onclick: () => app.observeTurns(10) }, '+10')),
+        h('button', { class: 'btn', disabled: !!over || app.autoplay, onclick: () => app.observeTurns(10) }, '+10'),
+        h('button', { class: 'btn', onclick: () => app.openProgress(), title: 'Progress graphs (H)' }, 'Graphs'),
+        h('button', { class: 'btn', onclick: () => app.openReports(), title: 'Advisor reports (A, or F1–F8)' }, 'Reports')),
       h('div', { class: 'row' }, h('label', { class: 'field' }, h('span', null, 'Speed'), speed), h('label', { class: 'field' }, h('span', null, 'Show'), watch)),
       h('table', { class: 'table scoreboard' },
         h('tr', null, h('th', null, 'Nation'), h('th', null, 'Level'), h('th', { title: 'Colonies' }, 'Col'), h('th', { title: 'Colonists' }, 'Pop'), h('th', { title: 'Sons of Liberty' }, 'SoL'), h('th', null, 'Score')),
@@ -172,7 +186,8 @@ export class Sidebar {
     const def = UNIT_TYPES[u.type];
     const aboard = unitsAboard(s, u);
     const cargo = GOODS.filter((g) => (u.cargo?.[g] ?? 0) > 0);
-    const orders = u.repair ? `Under repair (${u.repair} turns)` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? 'Sailing for Europe' : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
+    const route = u.route && s.routes?.[u.route.id];
+    const orders = u.repair ? `Under repair (${u.repair} turns)` : route ? `Trade route: ${route.name}${route.stops.length ? `, next ${routeStopName(s, route.stops[u.route!.stop % route.stops.length], route.owner)}` : ''}` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? (u.dest.port ? `Sailing for ${portName(u.dest.port)}` : 'Sailing for Europe') : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
     const mine = u.owner === app.viewer;
     const can = (fn: () => string | null) => mine && app.isMyTurn() && fn() === null;
     const terrain = tile?.f ? 'clear' : 'plow';
@@ -189,12 +204,13 @@ export class Sidebar {
         app.gotoMode = true;
         toast('Click where the unit should go.');
       });
+      if (canUseRoutes(u)) btn(u.route ? 'Change route…' : 'Trade route…', 'T', () => app.openRoutes(u.id));
       if (isShip(u)) btn('Sail to Europe', '', () => app.unitCommand('gotoEurope'));
       if (u.type === 'treasure') btn('Ship treasure home', '', () => { if (app.dispatch({ type: 'cashTreasure', unitId: u.id })) app.afterUnitAction(); });
       btn('Fortify', 'F', () => app.unitCommand('fortify'), !isShip(u));
       btn('Sentry', 'S', () => app.unitCommand('sentry'));
       btn('Skip', 'Space', () => app.unitCommand('skip'));
-      if (u.state !== 'active' || u.dest || u.work) btn('Clear orders', '', () => app.unitCommand('clearOrders'));
+      if (u.state !== 'active' || u.dest || u.work || u.route) btn('Clear orders', '', () => app.unitCommand('clearOrders'));
       const colony = pos && colonyAt(s, pos.x, pos.y);
       if (colony && colony.owner === app.viewer) btn('Open colony', '', () => app.openColony(colony.id));
       btn('Disband', '', () => app.unitCommand('disband'));
@@ -211,7 +227,7 @@ export class Sidebar {
           h('div', { class: 'unit-name' }, unitName(u)),
           h('div', { class: 'muted' }, `Moves ${movesText(u, s)}${u.role === 'pioneer' ? ` · Tools ${u.tools}` : ''}`),
           h('div', { class: 'muted' }, orders),
-          tile ? h('div', { class: 'muted' }, `${tileName(tile)}${tile.p ? ', plowed' : ''}${tile.r ? ', road' : ''}`) : null)),
+          tile ? h('div', { class: 'muted' }, tileDescription(tile)) : null)),
       aboard.length || cargo.length
         ? h('div', { class: 'cargo' },
             aboard.map((p) => h('button', { class: 'chip', title: `Select ${unitName(p)}`, onclick: () => app.select(p.id) }, icon({ kind: 'unit', type: p.type, role: p.role, nation: p.owner }, 28), unitName(p))),
@@ -226,7 +242,7 @@ export class Sidebar {
     const s = app.state;
     const mine = s.messages.filter((m) => (!m.to || m.to === app.viewer) && m.turn >= s.turn - 1).slice(-12).reverse();
     const details = h('details', { class: 'card reports', open: this.reportsOpen || undefined },
-      h('summary', null, `Reports (${mine.length})`),
+      h('summary', null, `News (${mine.length})`),
       h('ul', null, mine.map((m) => h('li', null,
         m.at ? h('button', { class: 'link', onclick: () => app.centerOn(m.at!.x, m.at!.y) }, m.text) : m.text))));
     details.addEventListener('toggle', () => (this.reportsOpen = details.open));
@@ -243,10 +259,19 @@ export class Sidebar {
       h('div', { class: 'row wrap' },
         h('button', { class: 'btn small', onclick: () => toast(saveManual(serialize(app.state)) ? 'Game saved in this browser.' : 'Could not save here.') }, 'Save'),
         h('button', { class: 'btn small', onclick: () => downloadSave(serialize(app.state), `casual-colonization-${app.state.turn}.json`) }, 'Export save'),
-        h('button', { class: 'btn small', onclick: () => app.exitToMenu() }, 'Main menu')),
-      h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · D foreign affairs · Enter end turn · Right-click or Shift-click to send a unit.'));
+        h('button', { class: 'btn small', onclick: () => app.exitToMenu() }, 'Main menu'),
+        h('button', { class: 'btn small', onclick: () => app.openReports(), title: 'Advisor reports (A, or F1–F8)' }, 'Reports…'),
+        h('button', { class: 'btn small', onclick: () => app.openCheats(), title: 'Cheats for testing (Ctrl+Shift+C)' }, 'Cheats…')),
+      this.difficultyLine(),
+      app.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used')) : null,
+      h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · D foreign affairs · H progress graphs · A or F1–F8 reports · T trade routes · Enter end turn · Right-click or Shift-click to send a unit.'));
     details.addEventListener('toggle', () => (this.menuOpen = details.open));
     return details;
+  }
+
+  private difficultyLine(): HTMLElement {
+    const level = DIFFICULTY[resolveDifficulty(this.app.state.difficulty)];
+    return h('p', { class: 'small', title: level.description }, 'Difficulty: ', h('strong', null, level.name));
   }
 
   drawMinimap(): void {
@@ -268,6 +293,23 @@ export class Sidebar {
         ctx.fillStyle = style.tileColor(s.map.tiles[i]);
         ctx.fillRect(x * scale, y * scale, scale, scale);
       }
+    }
+    // Rivers as thin lines in the style's water colour.
+    ctx.strokeStyle = style.tileColor({ t: 'ocean' });
+    ctx.lineCap = 'round';
+    for (let i = 0; i < s.map.tiles.length; i++) {
+      const tile = s.map.tiles[i];
+      if (!tile.rv || !tile.rd || !this.app.knows(i)) continue;
+      const cx = (i % s.map.width) * scale + scale / 2;
+      const cy = Math.floor(i / s.map.width) * scale + scale / 2;
+      ctx.lineWidth = tile.rv === 2 ? 1.6 : 1;
+      ctx.beginPath();
+      RIVER_DIRS.forEach(([dx, dy], d) => {
+        if (!(tile.rd! & (1 << d))) return;
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + (dx * scale) / 2, cy + (dy * scale) / 2);
+      });
+      ctx.stroke();
     }
     for (const col of Object.values(s.colonies)) {
       if (!this.app.knows(col.y * s.map.width + col.x)) continue;

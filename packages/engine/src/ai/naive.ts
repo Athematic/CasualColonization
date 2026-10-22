@@ -3,12 +3,13 @@ import { aiPeace } from '../diplomacy.js';
 import { boardInEurope, recruit, recruitPrice, sailToAmerica, sellGoods } from '../europe.js';
 import { canImprove, findPath, setDestination, startImprovement } from '../movement.js';
 import { colonyReport } from '../production.js';
-import { cargoFree, cargoRoomFor, colonyAt, colonyWorkers, distance, isShip, isWater, tileAt, unitsAboard } from '../queries.js';
+import { cargoFree, cargoRoomFor, colonyAt, colonyWorkers, distance, isCoastal, isShip, isWater, tileAt, unitsAboard, warehouseCapacity } from '../queries.js';
 import type { BuildingKind } from '../rules/buildings.js';
 import { GOODS, type GoodId } from '../rules/goods.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
 import { aiFight, disembarkAll, guardColony, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
+import { crownAffairs } from './royal.js';
 
 const SELLABLE: GoodId[] = ['sugar', 'tobacco', 'cotton', 'furs', 'ore', 'silver', 'rum', 'cigars', 'cloth', 'coats'];
 const BUILD_PREFERENCE: BuildingKind[] = ['docks', 'stockade', 'warehouse', 'carpenter', 'printingPress', 'church', 'schoolhouse', 'customHouse', 'armory'];
@@ -16,6 +17,8 @@ const BUILD_PREFERENCE: BuildingKind[] = ['docks', 'stockade', 'warehouse', 'car
 /** The Naive level: settles, works the land and trades, but plans nothing ahead. */
 export function runNaive(s: GameState, p: Player): void {
   aiPeace(s, p.id);
+  // The King's demands are paid whenever the treasury can (ai/royal.ts).
+  crownAffairs(s, p, null);
   const units = Object.values(s.units).filter((u) => u.owner === p.id);
   for (const u of units) {
     if (!s.units[u.id] || u.owner !== p.id) continue;
@@ -28,7 +31,7 @@ export function runNaive(s: GameState, p: Player): void {
 }
 
 function aiUnit(s: GameState, p: Player, u: Unit): void {
-  if (u.loc.kind !== 'map' || u.work) return;
+  if (u.loc.kind !== 'map' || u.work || u.route) return;
   const def = UNIT_TYPES[u.type];
   if (def.kind === 'ship') {
     if (def.offence > 0 && aiFight(s, p, u)) return;
@@ -141,8 +144,10 @@ function aiShip(s: GameState, p: Player, ship: Unit): void {
   }
   const here = colonyAt(s, ship.loc.x, ship.loc.y);
   if (here && here.owner === p.id) {
+    // Full loads, or anything about to spill out of the warehouse.
+    const nearlyFull = (g: GoodId) => here.goods[g] >= 30 && here.goods[g] >= warehouseCapacity(here) - 30;
     for (const g of SELLABLE) {
-      if (here.goods[g] >= 100 && cargoFree(s, ship) > 0) {
+      if ((here.goods[g] >= 100 || nearlyFull(g)) && cargoFree(s, ship) > 0) {
         const amount = Math.min(here.goods[g], cargoRoomFor(s, ship, g));
         here.goods[g] -= amount;
         ship.cargo = ship.cargo ?? {};
@@ -154,11 +159,20 @@ function aiShip(s: GameState, p: Player, ship: Unit): void {
   const docks = Object.values(s.units).some((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u));
   if (loaded || docks || p.gold >= recruitPrice(p) + 200 || !here) {
     if (!ship.dest) setDestination(s, ship.id, { europe: true });
+    return;
   }
+  // An idle ship fetches goods that would otherwise rot in another port.
+  if (ship.dest) return;
+  const rotting = ownColonies(s, p)
+    .filter((c) => c.id !== here?.id && isCoastal(s, c.x, c.y))
+    .map((c) => ({ c, n: Math.max(...SELLABLE.map((g) => c.goods[g] - (warehouseCapacity(c) - 30))) }))
+    .filter((r) => r.n >= 0)
+    .sort((a, b) => b.n - a.n)[0];
+  if (rotting && findPath(s, ship, rotting.c.x, rotting.c.y)) setDestination(s, ship.id, { x: rotting.c.x, y: rotting.c.y });
 }
 
 function aiEurope(s: GameState, p: Player): void {
-  const ships = Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && isShip(u));
+  const ships = Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && isShip(u) && !u.route);
   for (const ship of ships) {
     for (const g of GOODS) if ((ship.cargo?.[g] ?? 0) > 0) sellGoods(s, ship.id, g, ship.cargo![g]!);
     const totalUnits = Object.values(s.units).filter((u) => u.owner === p.id).length;

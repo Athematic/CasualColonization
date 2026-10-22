@@ -5,6 +5,7 @@
 import type { AiLevel } from './ai/profiles.js';
 import { applyCommand } from './commands.js';
 import { player } from './queries.js';
+import { revealRoutes } from './routes.js';
 import { runAiUntilHuman } from './turn.js';
 import type { GameConfig, GameState } from './types.js';
 import type { NationId } from './rules/nations.js';
@@ -36,6 +37,8 @@ export function playUntil(s: GameState, turn: number, maxRounds = Infinity): boo
 export function handOver(s: GameState, nations: NationId[] = s.config.headStart?.humans ?? []): void {
   for (const nation of nations) {
     const p = player(s, nation);
+    // The computer's trade routes stay in place and keep running for the person.
+    revealRoutes(s, nation);
     p.human = true;
     delete p.ai;
     delete p.aiMemory;

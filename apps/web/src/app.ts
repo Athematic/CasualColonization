@@ -1,5 +1,11 @@
 import {
   canFoundColony,
+  braveName,
+  bravesAt,
+  buildMapIndex,
+  incitePrice,
+  pendingDemands,
+  canUseRoutes,
   canImprove,
   colonyAt,
   describeMove,
@@ -7,27 +13,33 @@ import {
   distance,
   findPath,
   formatDate,
-  FATHERS,
   Game,
-  GOOD_DEFS,
   handOver,
   nationTitle,
-  nextFatherCost,
+  portName,
+  portsFor,
   tensionLabel,
+  unitName,
   isShip,
   isWater,
+  mapRevealed,
+  maxMoves,
+  moveCost,
   NATIONS,
   player,
   settlementAt,
   settlementName,
   serialize,
   tileAt,
+  tileDescription,
   unitPosition,
   unitsAboard,
   unitsAt,
   unitsAwaitingOrders,
   type Command,
   type Direction,
+  type GameMessage,
+  type GameState,
   type NationId,
   type SettlementAction,
   type Unit,
@@ -35,17 +47,48 @@ import {
 import { computeVisibility, screenToTile, type Camera, type MapRenderer, type Point, type Scene } from '@cc/render-api';
 import { h } from './dom.js';
 import { saveAuto } from './save.js';
-import { activeStyle, onStyleChange } from './styles.js';
+import { activeStyle, onStyleAssetsChanged, onStyleChange } from './styles.js';
 import { ColonyScreen } from './ui/colony.js';
+import { openCheats } from './ui/cheats.js';
 import { choose, confirmDialog, promptDialog, toast } from './ui/dialogs.js';
 import { DiplomacyScreen } from './ui/diplomacy.js';
 import { EuropeScreen } from './ui/europe.js';
+import { ProgressScreen } from './ui/progress.js';
+import { REPORT_TABS, ReportsScreen } from './ui/reports.js';
+import { RoutesScreen } from './ui/routes.js';
 import { Sidebar } from './ui/sidebar.js';
+import { showTurnStart, sortNews } from './ui/turnstart.js';
+import { inciteDialog, nativeTradeDialog } from './ui/natives.js';
+
+/**
+ * Turns of movement a unit needs to walk a path: the rest of this turn's moves first (or a fresh
+ * turn when none are left), then full turns. As in the rules, a step is allowed while any moves remain.
+ */
+export function pathTurns(s: GameState, u: Unit, path: Point[]): number {
+  const start = unitPosition(s, u);
+  if (!start || !path.length) return 0;
+  const full = Math.max(1, maxMoves(u, s));
+  const index = buildMapIndex(s);
+  let turns = 1;
+  let left = u.moves > 0 ? u.moves : full;
+  let from = start;
+  for (const step of path) {
+    if (left <= 0) {
+      turns++;
+      left = full;
+    }
+    left -= moveCost(s, u, from.x, from.y, step.x, step.y, index);
+    from = step;
+  }
+  return turns;
+}
 
 export interface Screen {
   el: HTMLElement;
   refresh(): void;
   close?(): void;
+  /** Keys pressed while the screen is open (Escape always closes it). Returns true when handled. */
+  onKey?(e: KeyboardEvent): boolean;
 }
 
 /** A watched head start shows each turn for at least this long. */
@@ -106,6 +149,7 @@ export class App {
         this.renderer = style.createMapRenderer(this.canvas);
         this.requestRender();
       }),
+      onStyleAssetsChanged(() => this.requestRender()),
     );
     this.bindInput();
     const ro = new ResizeObserver(() => this.requestRender());
@@ -126,6 +170,8 @@ export class App {
     } else {
       this.selectNext();
       if (!this.selected) this.centerOnStart();
+      // A loaded game may be waiting on a decision.
+      setTimeout(() => void this.turnStart(), 0);
     }
     this.requestRender();
   }
@@ -157,7 +203,12 @@ export class App {
 
   /** Whether the shown view knows this tile. */
   knows(index: number): boolean {
-    return (this.observer && this.watch === 'all') || this.me.explored[index] === 1;
+    return this.revealAll() || this.me.explored[index] === 1;
+  }
+
+  /** Whether the shown view has the whole map: an observer watching everything, or the reveal-map cheat. */
+  revealAll(): boolean {
+    return (this.observer && this.watch === 'all') || mapRevealed(this.state, this.viewer);
   }
 
   // ---- Observer mode ----
@@ -223,7 +274,7 @@ export class App {
     saveAuto(serialize(this.state));
     this.game.emit();
     toast(`${formatDate(this.state.turn)}: ${nations.length > 1 ? 'your nations are' : `${nationTitle(this.viewer)} is`} yours to command.`);
-    void this.answerPending();
+    void this.turnStart();
   }
 
   setAutoplay(on: boolean): void {
@@ -269,8 +320,9 @@ export class App {
       selectedUnitId: this.selected,
       hover: this.hover,
       path,
+      pathTurns: u && path?.length ? pathTurns(this.state, u, path) : undefined,
       visible: computeVisibility(this.state, this.viewer),
-      revealAll: this.observer && this.watch === 'all',
+      revealAll: this.revealAll(),
     };
   }
 
@@ -329,43 +381,49 @@ export class App {
       return false;
     }
     if (result.text && !quiet) toast(result.text);
-    void this.answerPending();
+    // After an end of turn, endTurn() itself shows the briefing with the news.
+    if (cmd.type !== 'endTurn') void this.answerPending();
     return true;
   }
 
   private asking = false;
 
-  /** Asks the player about decisions the rules left waiting: tax raises first. */
-  async answerPending(): Promise<void> {
-    if (this.asking || !this.isMyTurn()) return;
-    const tax = this.me.pendingTax;
-    if (!tax) return;
-    this.asking = true;
-    const good = GOOD_DEFS[tax.good].name.toLowerCase();
-    const accept = await choose(
-      'The Crown raises taxes',
-      `His Majesty raises the tax rate from ${this.me.tax}% to ${tax.rate}%. If you refuse, colonists will dump their ${good} in protest and ${good} will be boycotted in Europe until you pay the arrears.`,
-      [
-        { label: `Accept ${tax.rate}% tax`, value: true, primary: true },
-        { label: `Refuse and hold a ${good} party`, value: false },
-      ],
-    );
-    this.asking = false;
-    this.dispatch({ type: 'answerTax', accept: accept !== false });
+  /** The last message each nation had seen when it ended its turn, to tell what is new since. */
+  private lastSeen = new Map<NationId, GameMessage>();
+
+  /** Messages for the viewer since it last ended its turn. */
+  private newsSinceLastTurn(): GameMessage[] {
+    const msgs = this.state.messages;
+    const mark = this.lastSeen.get(this.viewer);
+    const at = mark ? msgs.indexOf(mark) : -2;
+    // The log is capped; if the mark has scrolled out, fall back to the last round.
+    const recent = at === -2 ? [] : at === -1 ? msgs.filter((m) => m.turn >= this.state.turn - 1) : msgs.slice(at + 1);
+    return recent.filter((m) => !m.to || m.to === this.viewer);
   }
 
+  /**
+   * The turn-start briefing: one modal with every pending decision and the turn's news.
+   * Nothing is shown when nothing needs attention, nor to observers or during a head start.
+   */
+  async turnStart(news: GameMessage[] = [], opts: { father?: boolean } = {}): Promise<void> {
+    if (this.asking || !this.isMyTurn() || this.state.gameOver) return;
+    this.asking = true;
+    try {
+      await showTurnStart(this, sortNews(news), opts);
+    } finally {
+      this.asking = false;
+    }
+    this.requestRender();
+  }
+
+  /** Asks about decisions the rules left waiting mid-turn (a tax raise after a sale, a royal demand). */
+  async answerPending(): Promise<void> {
+    if (this.me.pendingTax || this.me.pendingDemand || pendingDemands(this.state, this.me.id).some((d) => d.kind === 'demand')) await this.turnStart();
+  }
+
+  /** Opens the Congress choice in the briefing modal. */
   async chooseFather(): Promise<void> {
-    const offer = Object.values(this.me.fatherOffer);
-    if (!offer.length || !this.isMyTurn()) return;
-    const choice = await choose(
-      'Continental Congress',
-      h('p', null, `Choose the next Founding Father to join Congress. ${this.me.fatherBells}/${nextFatherCost(this.state, this.me)} liberty bells collected.`),
-      [
-        ...offer.map((id) => ({ label: `${FATHERS[id].name} (${FATHERS[id].category}): ${FATHERS[id].effect}`, value: id, primary: id === this.me.currentFather })),
-        { label: 'Decide later', value: null },
-      ],
-    );
-    if (choice) this.dispatch({ type: 'chooseFather', father: choice }, true);
+    await this.turnStart([], { father: true });
   }
 
   private shownGameOver = false;
@@ -374,16 +432,8 @@ export class App {
     const over = this.state.gameOver;
     if (!over || this.shownGameOver) return;
     this.shownGameOver = true;
-    const rows = (Object.entries(over.scores) as [NationId, number][]).sort((a, b) => b[1] - a[1]);
-    const body = h('div', null,
-      h('p', null, over.reason),
-      over.winner ? h('p', null, h('strong', null, `${nationTitle(over.winner)} ${over.winner === this.viewer ? '(you) ' : ''}wins.`)) : null,
-      h('table', { class: 'scores' }, rows.map(([n, score]) => h('tr', null, h('td', null, nationTitle(n)), h('td', null, String(score))))));
-    const again = await choose('The game is over', body, [
-      { label: 'Keep playing', value: false },
-      { label: 'Main menu', value: true, primary: true },
-    ]);
-    if (again) this.exitToMenu();
+    // The final scores open on the Progress Graphs, so the whole game can be looked back on.
+    this.showScreen(new ProgressScreen(this, { ...over, viewer: this.observer ? undefined : this.viewer, onMenu: () => this.exitToMenu() }));
   }
 
   /** After a unit acts, move on to the next one that needs orders. */
@@ -428,9 +478,10 @@ export class App {
         if (this.dispatch({ type: 'move', unitId: u.id, dir }, true)) this.afterUnitAction();
         return;
       case 'attack': {
-        const target = opt.colonyId ? this.state.colonies[opt.colonyId]?.name : 'the enemy unit';
+        const brave = opt.braveId ? this.state.braves?.[opt.braveId] : undefined;
+        const target = opt.colonyId ? this.state.colonies[opt.colonyId]?.name : brave ? `the ${braveName(brave)}` : 'the enemy unit';
         const ok = await confirmDialog('Attack?', `Attack ${target}? This is an act of war.`, 'Attack', 'Hold back');
-        if (ok && this.dispatch({ type: 'attack', unitId: u.id, target: { unitId: opt.targetUnitId, colonyId: opt.colonyId } })) this.afterUnitAction();
+        if (ok && this.dispatch({ type: 'attack', unitId: u.id, target: { unitId: opt.targetUnitId, colonyId: opt.colonyId, braveId: opt.braveId } })) this.afterUnitAction();
         return;
       }
       case 'settlement':
@@ -445,7 +496,9 @@ export class App {
       speak: 'Speak with the chief',
       mission: st.mission ? `A ${NATIONS[st.mission].adjective} mission is already here` : 'Establish a mission',
       learn: st.skill ? `Live among the natives (learn: ${st.skill.replace(/([A-Z])/g, ' $1').toLowerCase()})` : 'Live among the natives (nothing left to teach)',
-      trade: 'Offer goods for trade',
+      trade: 'Trade: sell and buy goods',
+      denounce: st.mission ? `Denounce the ${NATIONS[st.mission].adjective} mission` : 'Denounce a rival mission',
+      incite: `Incite the natives against a rival (${incitePrice(st)} gold)`,
       attack: 'Attack the settlement',
     } as const;
     const mood = tensionLabel(st.tension[this.viewer] ?? 0);
@@ -457,8 +510,10 @@ export class App {
     let ok = false;
     if (choice === 'speak') ok = this.dispatch({ type: 'speak', unitId: u.id, settlementId });
     if (choice === 'learn') ok = this.dispatch({ type: 'learn', unitId: u.id, settlementId });
-    if (choice === 'trade') ok = this.dispatch({ type: 'tradeNatives', unitId: u.id, settlementId });
+    if (choice === 'trade') ok = await nativeTradeDialog(this, u, settlementId);
     if (choice === 'mission') ok = this.dispatch({ type: 'mission', unitId: u.id, settlementId });
+    if (choice === 'denounce') ok = this.dispatch({ type: 'denounce', unitId: u.id, settlementId });
+    if (choice === 'incite') ok = await inciteDialog(this, u, settlementId);
     if (choice === 'attack' && (await confirmDialog('Attack?', `Attack the ${settlementName(st)}? Its people will never trust you again.`, 'Attack', 'Hold back'))) {
       ok = this.dispatch({ type: 'attack', unitId: u.id, target: { settlementId } });
     }
@@ -514,7 +569,24 @@ export class App {
       this.requestRender();
       return;
     }
+    if (type === 'gotoEurope' || type === 'sailToEurope') {
+      void this.sailForEurope(u, type);
+      return;
+    }
     if (this.dispatch({ type, unitId: u.id } as Command)) this.afterUnitAction();
+  }
+
+  /** Sends a ship to Europe; with Favoured Nation partners, first asks which home port. */
+  private async sailForEurope(u: Unit, type: 'gotoEurope' | 'sailToEurope'): Promise<void> {
+    const ports = portsFor(this.state, u.owner);
+    let port: NationId | undefined;
+    if (ports.length > 1) {
+      const choice = await choose<NationId>('Sail to which port?', `${unitName(u)} can sail to your own home port or to a Favoured Nation's. In a partner's port you trade at its prices and tax and can buy merchant ships; colonists are recruited and go ashore only at home.`,
+        ports.map((p, i) => ({ label: `${portName(p)}${i === 0 ? ' (home)' : ` (${NATIONS[p].adjective})`}`, value: p, primary: i === 0 })));
+      if (!choice) return;
+      port = choice === u.owner ? undefined : choice;
+    }
+    if (this.dispatch(port ? { type, unitId: u.id, port } : { type, unitId: u.id })) this.afterUnitAction();
   }
 
   buildRoad(): void {
@@ -531,6 +603,8 @@ export class App {
     if (waiting > 0 && !(await confirmDialog('End turn?', `${waiting} unit${waiting > 1 ? 's' : ''} still ha${waiting > 1 ? 've' : 's'} moves left.`, 'End turn', 'Keep playing'))) return;
     this.closeScreen();
     const before = this.viewer;
+    const mark = this.state.messages[this.state.messages.length - 1];
+    if (mark) this.lastSeen.set(before, mark);
     this.dispatch({ type: 'endTurn' }, true);
     const next = this.game.current;
     saveAuto(serialize(this.state));
@@ -541,11 +615,9 @@ export class App {
     }
     this.selectNext();
     if (!this.selected) this.centerOnStart();
-    this.sidebar.showReports();
     this.requestRender();
     await this.showGameOver();
-    await this.answerPending();
-    if (!this.me.currentFather && Object.keys(this.me.fatherOffer).length && this.me.fatherBells > 0) await this.chooseFather();
+    await this.turnStart(this.newsSinceLastTurn());
   }
 
   private handoff(nation: NationId): Promise<void> {
@@ -567,12 +639,35 @@ export class App {
     this.showScreen(new ColonyScreen(this, colonyId));
   }
 
-  openEurope(): void {
-    this.showScreen(new EuropeScreen(this));
+  /** Europe; `port` opens a Favoured Nation partner's port where the viewer has ships. */
+  openEurope(port?: NationId): void {
+    this.showScreen(new EuropeScreen(this, port));
   }
 
   openDiplomacy(): void {
     this.showScreen(new DiplomacyScreen(this));
+  }
+
+  /** Trade routes; with a ship or wagon train, ready to assign it. */
+  openRoutes(unitId?: string): void {
+    this.showScreen(new RoutesScreen(this, unitId));
+  }
+
+  openCheats(): void {
+    void openCheats(this);
+  }
+
+  openProgress(): void {
+    this.showScreen(new ProgressScreen(this));
+  }
+
+  /** The advisor reports, on a tab (see REPORT_TABS) or the one last looked at. */
+  openReports(tab?: string): void {
+    if (this.screen instanceof ReportsScreen) {
+      if (tab) this.screen.setTab(tab);
+      return;
+    }
+    this.showScreen(new ReportsScreen(this, tab));
   }
 
   private showScreen(screen: Screen): void {
@@ -642,6 +737,10 @@ export class App {
         const t = this.tileAtEvent(e);
         if (!this.hover || t.x !== this.hover.x || t.y !== this.hover.y) {
           this.hover = t;
+          // Tile info on hover: terrain, river, road.
+          const tile = tileAt(this.state, t.x, t.y);
+          const braves = bravesAt(this.state, t.x, t.y).map((b) => braveName(b));
+          c.title = tile && this.knows(t.y * this.state.map.width + t.x) ? [tileDescription(tile), ...braves].join(' · ') : '';
           this.requestRender(true);
         }
       }
@@ -737,8 +836,31 @@ export class App {
     if (document.getElementById('dialog-layer')?.childElementCount || document.querySelector('.handoff')) return;
     const target = e.target as HTMLElement;
     if (target.matches('input, select, textarea')) return;
+    if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
+      e.preventDefault();
+      this.openCheats();
+      return;
+    }
+    // F1–F8 open the advisor reports from anywhere, as in the original game.
+    const fkey = /^F([1-8])$/.exec(e.key);
+    if (fkey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      this.openReports(REPORT_TABS[Number(fkey[1]) - 1].id);
+      return;
+    }
     if (this.screen) {
       if (e.key === 'Escape') this.closeScreen();
+      else if (this.screen.onKey?.(e)) e.preventDefault();
+      return;
+    }
+    if (e.key.toLowerCase() === 'a' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      this.openReports();
+      return;
+    }
+    if (e.key.toLowerCase() === 'h' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      this.openProgress();
       return;
     }
     if (this.observer) {
@@ -779,6 +901,10 @@ export class App {
       },
       e: () => this.openEurope(),
       d: () => this.openDiplomacy(),
+      t: () => {
+        const u = this.selectedUnit();
+        this.openRoutes(u && u.owner === this.viewer && canUseRoutes(u) ? u.id : undefined);
+      },
       enter: () => void this.endTurn(),
       escape: () => {
         this.gotoMode = false;

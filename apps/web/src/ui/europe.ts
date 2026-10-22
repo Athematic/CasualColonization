@@ -1,13 +1,20 @@
 import {
   arrears,
+  buyableInPartnerPort,
   buyPrice,
+  player,
+  portName,
+  portOf,
+  portsFor,
   cargoFree,
+  describeForce,
   GOOD_DEFS,
   GOODS,
   isShip,
   NATIONS,
   PURCHASABLE,
   recruitPrice,
+  trainPrice,
   ROLES,
   sellPrice,
   TRAINABLE,
@@ -15,17 +22,14 @@ import {
   unitsAboard,
   UNIT_TYPES,
   type GoodId,
+  type NationId,
+  type Player,
   type RoleId,
   type Unit,
 } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
 import { icon } from '../styles.js';
-
-const PORTS: Record<string, string> = {
-  england: 'London', france: 'La Rochelle', netherlands: 'Amsterdam', spain: 'Seville',
-  portugal: 'Lisbon', sweden: 'Gothenburg', denmark: 'Copenhagen', russia: 'Saint Petersburg',
-};
 
 export class EuropeScreen implements Screen {
   el: HTMLElement;
@@ -34,7 +38,8 @@ export class EuropeScreen implements Screen {
   private selected?: string;
   private tab: 'recruit' | 'train' | 'purchase' = 'recruit';
 
-  constructor(private app: App) {
+  /** The home port on view: the viewer's own, or a Favoured Nation partner's where it has ships. */
+  constructor(private app: App, private port?: NationId) {
     this.body = h('div', { class: 'screen-body' });
     this.el = h('section', { class: 'screen europe-screen', role: 'dialog', 'aria-label': 'Europe' }, this.body);
   }
@@ -47,8 +52,19 @@ export class EuropeScreen implements Screen {
     const s = this.app.state;
     const me = this.app.me;
     const mine = Object.values(s.units).filter((u) => u.owner === this.app.viewer);
-    const ships = mine.filter((u) => u.loc.kind === 'europe' && isShip(u));
-    const docks = mine.filter((u) => u.loc.kind === 'europe' && !isShip(u));
+    const viewer = this.app.viewer;
+    // Ports to view: home, and partners' ports where the viewer has ships.
+    const visited = new Set(mine.filter((u) => u.loc.kind === 'europe' && isShip(u)).map(portOf));
+    const views = portsFor(s, viewer).filter((p) => p === viewer || visited.has(p));
+    // Opening Europe with no ship at home but ships in a partner's port shows that port first.
+    const homeShips = mine.some((u) => u.loc.kind === 'europe' && isShip(u) && portOf(u) === viewer);
+    if (!this.port) this.port = homeShips ? viewer : views.find((p) => p !== viewer) ?? viewer;
+    if (!views.includes(this.port)) this.port = viewer;
+    const port = this.port;
+    const home = port === viewer;
+    const host = player(s, port);
+    const ships = mine.filter((u) => u.loc.kind === 'europe' && isShip(u) && portOf(u) === port);
+    const docks = home ? mine.filter((u) => u.loc.kind === 'europe' && !isShip(u)) : [];
     const sailing = mine.filter((u) => u.loc.kind === 'sailing');
     if (!this.ship || !ships.some((x) => x.id === this.ship)) this.ship = ships[0]?.id;
     if (this.selected && !s.units[this.selected]) this.selected = undefined;
@@ -65,31 +81,40 @@ export class EuropeScreen implements Screen {
     }
     this.body.append(
       h('header', { class: 'screen-head' },
-        h('h2', null, `Europe — Port of ${PORTS[this.app.viewer]}`),
-        h('span', { class: 'muted' }, `Gold ${me.gold.toLocaleString()} · Tax ${me.tax}% · ${NATIONS[this.app.viewer].bonus}`),
+        h('h2', null, `Europe — Port of ${portName(port)}`),
+        h('span', { class: 'muted' }, home
+          ? `Gold ${me.gold.toLocaleString()} · Tax ${me.tax}% · ${NATIONS[viewer].bonus}`
+          : `${NATIONS[port].adjective} home port (Favoured Nation) · Gold ${me.gold.toLocaleString()} · ${NATIONS[port].adjective} tax ${host.tax}%`),
         me.pendingTax ? h('button', { class: 'btn small', onclick: () => void this.app.answerPending() }, 'Answer the tax raise') : null,
         h('button', { class: 'btn close', onclick: () => this.app.closeScreen(), 'aria-label': 'Close Europe' }, 'Close')),
+      h('p', { class: 'muted small royal-forces', title: 'The Royal Expeditionary Force the Crown holds against a rebellion. It grows during the game, faster as your colonies ring more liberty bells, and sails if you declare independence.' },
+        `Royal forces: ${describeForce(me.ref)}.`),
+      views.length > 1 ? h('div', { class: 'port-tabs', role: 'tablist', 'aria-label': 'Ports' }, views.map((p) =>
+        h('button', { class: `tab${p === port ? ' active' : ''}`, role: 'tab', 'aria-selected': String(p === port), onclick: () => { this.port = p; this.ship = undefined; this.selected = undefined; this.app.requestRender(); } },
+          h('span', { class: 'foreign-flag', style: `background:${NATIONS[p].color}` }), portName(p), p === viewer ? ' (home)' : ''))) : '',
       h('div', { class: 'europe-grid' },
-        this.market(ship),
+        this.market(ship, host),
         h('div', { class: 'card' },
           h('h3', null, 'Ships in port'),
-          ships.length ? ships.map((x) => this.shipCard(x)) : h('p', { class: 'muted small' }, 'No ships in port. Send a ship east onto the high seas and choose “Sail to Europe”.'),
+          ships.length ? ships.map((x) => this.shipCard(x)) : h('p', { class: 'muted small' }, 'No ships in port. Send a ship out onto the high seas and choose “Sail to Europe”.'),
           sailing.length ? h('h3', null, 'At sea') : null,
-          sailing.map((x) => h('div', { class: 'muted small' }, `${unitName(x)} — ${x.loc.kind === 'sailing' ? `${x.loc.to === 'europe' ? 'to Europe' : 'to the New World'}, ${x.loc.turnsLeft} turn${x.loc.turnsLeft === 1 ? '' : 's'}` : ''}`)),
-          h('h3', null, 'On the docks'),
-          docks.length ? h('div', { class: 'chips' }, docks.map((u) => this.unitChip(u))) : h('p', { class: 'muted small' }, 'Nobody is waiting on the docks.'),
+          sailing.map((x) => h('div', { class: 'muted small' }, `${unitName(x)} — ${x.loc.kind === 'sailing' ? `${x.loc.to === 'europe' ? `to ${portName(portOf(x))}` : 'to the New World'}, ${x.loc.turnsLeft} turn${x.loc.turnsLeft === 1 ? '' : 's'}` : ''}`)),
+          home ? h('h3', null, 'On the docks') : null,
+          home ? (docks.length ? h('div', { class: 'chips' }, docks.map((u) => this.unitChip(u))) : h('p', { class: 'muted small' }, 'Nobody is waiting on the docks.')) : h('p', { class: 'muted small' }, 'Colonists are recruited, trained and go ashore only in your own home port. Here you can trade and buy merchant ships.'),
           this.selectedActions(ship)),
-        this.recruitPanel()),
+        home ? this.recruitPanel() : this.partnerShipyard(host)),
     );
   }
 
-  private market(ship: Unit | undefined): HTMLElement {
+  /** The market of the port on view: `host` is the port's nation. */
+  private market(ship: Unit | undefined, host: Player): HTMLElement {
     const me = this.app.me;
+    const home = host.id === me.id;
     return h('div', { class: 'card market' },
       h('h3', null, ship ? `Market — buying for ${unitName(ship)}` : 'Market'),
       h('div', { class: 'goods market-goods' }, GOODS.map((g) => {
         const carried = ship?.cargo?.[g] ?? 0;
-        if (me.boycotts[g]) {
+        if (home && me.boycotts[g]) {
           const owed = arrears(me, g);
           return h('div', { class: 'good market-good boycott', title: `${GOOD_DEFS[g].name} is boycotted` },
             icon({ kind: 'product', product: g }, 30, GOOD_DEFS[g].name),
@@ -98,12 +123,23 @@ export class EuropeScreen implements Screen {
         }
         return h('div', { class: 'good market-good' },
           icon({ kind: 'product', product: g }, 30, GOOD_DEFS[g].name),
-          h('span', { class: 'price' }, `${sellPrice(me, g)}/${buyPrice(me, g)}`),
+          h('span', { class: 'price' }, `${sellPrice(host, g)}/${buyPrice(host, g)}`),
           h('div', { class: 'row' },
-            h('button', { class: 'btn tiny', disabled: !ship || cargoFree(this.app.state, ship) <= 0 && carried % 100 === 0, title: `Buy 100 ${GOOD_DEFS[g].name.toLowerCase()} for ${buyPrice(me, g) * 100}`, onclick: () => this.buy(g) }, 'Buy'),
+            h('button', { class: 'btn tiny', disabled: !ship || cargoFree(this.app.state, ship) <= 0 && carried % 100 === 0, title: `Buy 100 ${GOOD_DEFS[g].name.toLowerCase()} for ${buyPrice(host, g) * 100}`, onclick: () => this.buy(g) }, 'Buy'),
             h('button', { class: 'btn tiny', disabled: !carried, title: `Sell ${carried}`, onclick: () => this.dispatch({ type: 'sellGoods', carrierId: ship!.id, good: g, amount: carried }) }, 'Sell')));
       })),
-      h('p', { class: 'muted small' }, 'Prices are sell/buy per unit. Selling a lot lowers the price; taxes are taken from every sale.'));
+      h('p', { class: 'muted small' }, home
+        ? 'Prices are sell/buy per unit. Selling a lot lowers the price; taxes are taken from every sale.'
+        : `${NATIONS[host.id].adjective} prices, sell/buy per unit, and the ${NATIONS[host.id].adjective} tax rate. Boycotts do not apply here. Selling a lot lowers the price in this market.`));
+  }
+
+  /** In a Favoured Nation partner's port: merchant ships at its prices (no warships, artillery or colonists). */
+  private partnerShipyard(host: Player): HTMLElement {
+    const list = PURCHASABLE.filter(buyableInPartnerPort);
+    return h('div', { class: 'card recruit' },
+      h('h3', null, `Shipyard of ${portName(host.id)}`),
+      h('div', { class: 'offers' }, list.map((type) => this.offer(type, trainPrice(host, type), () => this.dispatch({ type: 'train', unitType: type, port: host.id })))),
+      h('p', { class: 'muted small' }, 'Merchant ships only: warships and artillery are not sold to foreigners. A ship bought here starts in this port.'));
   }
 
   private buy(g: GoodId): void {
@@ -132,8 +168,8 @@ export class EuropeScreen implements Screen {
     const u = this.selected ? this.app.state.units[this.selected] : undefined;
     if (!u) return null;
     const actions: HTMLElement[] = [];
-    if (u.loc.kind === 'europe' && ship) actions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'board', unitId: u.id, carrierId: ship.id }) }, `Board ${unitName(ship)}`));
-    if (u.loc.kind === 'carrier') actions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'unboard', unitId: u.id }) }, 'Go ashore'));
+    if (u.loc.kind === 'europe' && ship && portOf(ship) === u.owner) actions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'board', unitId: u.id, carrierId: ship.id }) }, `Board ${unitName(ship)}`));
+    if (u.loc.kind === 'carrier' && ship && portOf(ship) === u.owner) actions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'unboard', unitId: u.id }) }, 'Go ashore'));
     if (u.loc.kind === 'europe' && UNIT_TYPES[u.type].kind === 'colonist') {
       for (const role of ['soldier', 'dragoon', 'pioneer', 'scout', 'missionary', 'none'] as RoleId[]) {
         if (role === u.role) continue;
@@ -157,7 +193,7 @@ export class EuropeScreen implements Screen {
         me.recruitPool.map((type, slot) => this.offer(type, price, () => this.dispatch({ type: 'recruit', slot }))));
     } else {
       const list = this.tab === 'train' ? TRAINABLE : PURCHASABLE;
-      content = h('div', { class: 'offers' }, list.map((type) => this.offer(type, UNIT_TYPES[type].price!, () => this.dispatch({ type: 'train', unitType: type }))));
+      content = h('div', { class: 'offers' }, list.map((type) => this.offer(type, trainPrice(me, type), () => this.dispatch({ type: 'train', unitType: type }))));
     }
     return h('div', { class: 'card recruit' }, tabs, content);
   }

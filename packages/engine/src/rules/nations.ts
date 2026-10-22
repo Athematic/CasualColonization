@@ -1,3 +1,4 @@
+import { COLONY_NAMES } from './colonyNames.js';
 import type { GoodId } from './goods.js';
 import type { UnitTypeId } from './units.js';
 
@@ -16,42 +17,42 @@ export const NATIONS = {
   england: {
     id: 'england', name: 'England', adjective: 'English', color: '#c8202e',
     bonus: 'Immigration: fewer crosses needed for new colonists.',
-    colonyNames: ['Jamestown', 'Plymouth', 'Roanoke', 'Boston', 'Providence', 'Hartford', 'New Haven', 'Salem', 'Charleston', 'Baltimore', 'Savannah', 'Albany'],
+    colonyNames: COLONY_NAMES.england,
   },
   france: {
     id: 'france', name: 'France', adjective: 'French', color: '#1f4fa3',
     bonus: 'Cooperation: native settlements give better gifts and teach more readily.',
-    colonyNames: ['Québec', 'Montréal', 'Trois-Rivières', 'Port Royal', 'Louisbourg', 'Détroit', 'Biloxi', 'Nouvelle-Orléans', 'Mobile', 'Kaskaskia', 'Vincennes', 'Tadoussac'],
+    colonyNames: COLONY_NAMES.france,
   },
   netherlands: {
     id: 'netherlands', name: 'the Netherlands', adjective: 'Dutch', color: '#e8820c',
     bonus: 'Trade: market prices recover twice as fast.',
-    colonyNames: ['Nieuw Amsterdam', 'Fort Oranje', 'Beverwijck', 'Nieuw Haarlem', 'Breuckelen', 'Vlissingen', 'Wiltwijck', 'Swaanendael', 'Fort Nassau', 'Nieuw Utrecht', 'Bergen', 'Rensselaerswijck'],
+    colonyNames: COLONY_NAMES.netherlands,
   },
   spain: {
     id: 'spain', name: 'Spain', adjective: 'Spanish', color: '#e6b800',
     bonus: 'Conquest: +50% offence against native settlements.',
-    colonyNames: ['Isabela', 'Santo Domingo', 'San Juan', 'La Habana', 'Veracruz', 'San Agustín', 'Santa Fe', 'Cartagena', 'Panamá', 'Campeche', 'Mérida', 'Pensacola'],
+    colonyNames: COLONY_NAMES.spain,
   },
   portugal: {
     id: 'portugal', name: 'Portugal', adjective: 'Portuguese', color: '#0f7a3c',
     bonus: 'Seafaring: ships gain one extra move.',
-    colonyNames: ['Salvador', 'São Vicente', 'Olinda', 'Recife', 'Rio de Janeiro', 'Belém', 'São Luís', 'Santos', 'Natal', 'Vitória', 'Porto Seguro', 'Ilhéus'],
+    colonyNames: COLONY_NAMES.portugal,
   },
   sweden: {
     id: 'sweden', name: 'Sweden', adjective: 'Swedish', color: '#3d8fd1',
     bonus: 'Expertise: an expert lumberjack waits on the docks in Europe from the start.',
-    colonyNames: ['Fort Christina', 'Nya Göteborg', 'Fort Nya Elfsborg', 'Upland', 'Finland', 'Kristinehamn', 'Mölndal', 'Nya Vasa', 'Sveaborg', 'Torne', 'Nya Uppsala', 'Kalmar'],
+    colonyNames: COLONY_NAMES.sweden,
   },
   denmark: {
     id: 'denmark', name: 'Denmark', adjective: 'Danish', color: '#b0306a',
     bonus: 'Endurance: colonies need less food to grow.',
-    colonyNames: ['Christiansted', 'Frederiksted', 'Charlotte Amalie', 'Godthåb', 'Christianshåb', 'Frederikshåb', 'Holsteinsborg', 'Jakobshavn', 'Egedesminde', 'Julianehåb', 'Sukkertoppen', 'Upernavik'],
+    colonyNames: COLONY_NAMES.denmark,
   },
   russia: {
     id: 'russia', name: 'Russia', adjective: 'Russian', color: '#5a3d8a',
     bonus: 'Frontier: scouts and dragoons see further.',
-    colonyNames: ['Novo-Arkhangelsk', 'Fort Ross', 'Kodiak', 'Pavlovsk', 'Mikhailovsk', 'Nikolaevsk', 'Konstantinovsk', 'Alexandrovsk', 'Unalaska', 'Kenai', 'Bodega', 'Kolmakov'],
+    colonyNames: COLONY_NAMES.russia,
   },
 } as Record<NationId, NationDef>;
 
@@ -60,6 +61,12 @@ NATIONS.crown = {
   id: 'crown', name: 'the Crown', adjective: 'Royal', color: '#6d1f3a',
   bonus: 'Sent to crush rebellions.',
   colonyNames: ['Royal Colony'],
+};
+
+/** Each nation's home port in Europe, where its ships trade (and, for Favoured Nations, its partners' ships). */
+export const HOME_PORTS: Record<NationId, string> = {
+  england: 'London', france: 'La Rochelle', netherlands: 'Amsterdam', spain: 'Seville',
+  portugal: 'Lisbon', sweden: 'Gothenburg', denmark: 'Copenhagen', russia: 'Saint Petersburg', crown: 'London',
 };
 
 export const NATION_ORDER: NationId[] = ['england', 'france', 'netherlands', 'spain', 'portugal', 'sweden', 'denmark', 'russia'];

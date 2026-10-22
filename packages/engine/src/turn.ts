@@ -1,12 +1,16 @@
 import { runAi } from './ai/index.js';
+import { track } from './telemetry.js';
 import { processColony } from './colony.js';
 import { advanceSailing, processImmigration, recoverMarkets } from './europe.js';
 import { advanceWork, continueOrders, placeOnMap } from './movement.js';
 import { processNatives } from './natives.js';
 import { processCongress } from './fathers.js';
+import { processCrown } from './crown.js';
 import { processIndependence } from './independence.js';
+import { processRoutes } from './routes.js';
 import { formatDate, maxMoves, message, unitName, unitPosition } from './queries.js';
 import { checkTimeLimit } from './score.js';
+import { recordStats } from './stats.js';
 import type { GameState, Player, Unit } from './types.js';
 
 /** Resets a player's units and carries out standing orders at the start of their turn. */
@@ -30,8 +34,10 @@ export function beginPlayerTurn(s: GameState, p: Player): void {
     if (u.work) advanceWork(s, u);
   }
   for (const u of Object.values(s.units)) {
-    if (u.owner === p.id && u.dest && s.units[u.id]) continueOrders(s, u);
+    if (u.owner === p.id && u.dest && !u.route && s.units[u.id]) continueOrders(s, u);
   }
+  // Trade routes run here, before the player or the computer gives any orders this turn.
+  processRoutes(s, p.id);
 }
 
 /** Ends the current player's turn, runs AI players, and advances the year when everyone has moved. */
@@ -52,6 +58,7 @@ export function runAiUntilHuman(s: GameState): void {
 }
 
 function finishPlayerTurn(s: GameState, p: Player): void {
+  track(p.id, 'cmd:endTurn');
   for (const c of Object.values(s.colonies)) {
     if (c.owner === p.id) processColony(s, c);
   }
@@ -65,7 +72,9 @@ function advance(s: GameState): void {
     s.current = 0;
     processNatives(s);
     recoverMarkets(s);
+    processCrown(s);
     processIndependence(s);
+    recordStats(s);
     s.turn++;
     checkTimeLimit(s);
     message(s, `${formatDate(s.turn)} begins.`);
@@ -76,7 +85,7 @@ function advance(s: GameState): void {
 /** Units of a player that still want orders this turn. */
 export function unitsAwaitingOrders(s: GameState, nation: Player['id']): string[] {
   return Object.values(s.units)
-    .filter((u) => u.owner === nation && u.moves > 0 && u.state === 'active' && !u.work && !u.dest)
+    .filter((u) => u.owner === nation && u.moves > 0 && u.state === 'active' && !u.work && !u.dest && !u.route)
     .filter((u) => u.loc.kind === 'map')
     .map((u) => u.id);
 }

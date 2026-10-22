@@ -2,6 +2,7 @@ import { BUILDINGS, BUILDING_ORDER, BUILDING_SKILL_OUTPUT, PRINTING_BELL_BONUS, 
 import { GOODS, type GoodId, type ProductId } from './rules/goods.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
+import { yieldMultiplier } from './cheats.js';
 import { hasFather } from './fathers.js';
 import { colonyWorkers, isWater, tileAt } from './queries.js';
 import type { Colony, GameState, Tile } from './types.js';
@@ -29,6 +30,18 @@ export function libertyBonus(s: GameState, colony: Colony, pop = colonyWorkers(s
   return (sol >= 100 ? 2 : sol >= 50 ? 1 : 0) - penalty;
 }
 
+/**
+ * What a river adds to a tile's yield, by river size (1 minor, 2 major), for the goods the tile
+ * already produces; a river never creates a good the land does not yield. Based on the original
+ * game and FreeCol's classic rules: farm goods, furs, lumber and ore gain 1 on a minor and 2 on a
+ * major river; silver gains 1 on either. The centre tile of a colony on a river gets it too.
+ * One table so a scenario can tune it.
+ */
+export const RIVER_YIELD_BONUS: Record<1 | 2, Partial<Record<GoodId, number>>> = {
+  1: { food: 1, sugar: 1, tobacco: 1, cotton: 1, furs: 1, lumber: 1, ore: 1, silver: 1 },
+  2: { food: 2, sugar: 2, tobacco: 2, cotton: 2, furs: 2, lumber: 2, ore: 2, silver: 1 },
+};
+
 /** Raw yield of a tile for a good before colonist skill. */
 export function baseTileYield(tile: Tile, good: GoodId): number {
   const def = TERRAIN[tile.t];
@@ -39,6 +52,7 @@ export function baseTileYield(tile: Tile, good: GoodId): number {
   if (tile.r && (good === 'lumber' || good === 'ore' || good === 'silver' || good === 'furs')) amount += 1;
   const bonusGood = tile.f ? 'furs' : def.bonusGood;
   if (tile.b && bonusGood === good) amount *= 2;
+  if (tile.rv) amount += RIVER_YIELD_BONUS[tile.rv][good] ?? 0;
   return amount;
 }
 
@@ -47,7 +61,7 @@ export function tileYield(s: GameState, colony: Colony, x: number, y: number, go
   const tile = tileAt(s, x, y);
   if (!tile) return 0;
   if (isWater(tile) && colony.buildings.docks === 0) return 0;
-  let amount = baseTileYield(tile, good);
+  let amount = baseTileYield(tile, good) * yieldMultiplier(s);
   if (amount === 0) return 0;
   const def = UNIT_TYPES[unitType];
   const expert =
@@ -75,6 +89,8 @@ export function centreProduction(s: GameState, colony: Colony): Partial<Record<G
     if (!best || baseTileYield(tile, g) > baseTileYield(tile, best)) best = g;
   }
   if (best) out[best] = baseTileYield({ ...tile, p: true }, best);
+  const mult = yieldMultiplier(s);
+  if (mult !== 1) for (const g of Object.keys(out) as GoodId[]) out[g]! *= mult;
   return out;
 }
 

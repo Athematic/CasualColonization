@@ -19,6 +19,29 @@ export const americas: StoredMap = {
     { tribe: 'tupi', region: [42, 55, 51, 65], count: 4 },
     { tribe: 'inca', region: [33, 54, 43, 83], count: 7 },
   ],
+  // Main rivers first, tributaries after the river they join. Format: parseRivers in rivers.ts.
+  rivers: `
+    Mississippi: m 25,18 26,23 M 26,27 26,31 26,32
+    Missouri: m 10,17 16,20 M 21,24 26,26
+    Ohio: m 37,21 M 31,24 26,25
+    St. Lawrence: M 32,19 33,18 42,18 43,18
+    Hudson: m 38,19 39,20 40,20
+    Rio Grande: m 15,25 16,30 M 18,32 21,33 22,33
+    Colorado: m 11,22 M 10,26 11,30 11,31
+    Columbia: m 7,14 6,17 M 5,19 4,19 3,19
+    Mackenzie: M 14,11 10,7 7,4 6,3
+    Nelson: m 14,15 20,12 24,10 24,9 25,9
+    Amazon: m 34,57 M 38,58 46,57 54,56 55,56
+    Madeira: m 41,67 44,62 45,58 45,57
+    Negro: m 40,53 43,55 46,57
+    Xingu: m 51,66 51,57 51,56
+    Tocantins: m 56,66 56,57 57,57
+    Orinoco: m 45,52 41,51 M 40,50 41,49 46,49 47,49
+    Magdalena: m 37,54 37,51 36,50 35,49 34,49 33,49
+    Sao Francisco: m 55,74 57,68 M 59,65 60,64 61,64
+    Parana: m 53,70 50,75 M 47,79 47,83 48,83
+    Paraguay: m 47,68 46,75 46,78 47,79
+  `,
   rows: `
 ...............................................~~~~~~~~~~~~~~~~~~~~
 aattTtttttt.t..tta...aaaaaaa.aaa...aa..........~~~~~~~~~~~~~~~~~~~~

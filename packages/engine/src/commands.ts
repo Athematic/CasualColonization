@@ -1,4 +1,6 @@
 import { assignJob, equipInColony, foundColony, hurryBuild, leaveColony, setBuild } from './colony.js';
+import { applyCheat, type CheatId } from './cheats.js';
+import { track } from './telemetry.js';
 import { attack, cashTreasure } from './combat.js';
 import { fail, RuleError } from './errors.js';
 import {
@@ -15,28 +17,41 @@ import {
   unboardInEurope,
 } from './europe.js';
 import { boardShip, leaveShip, moveUnit, setDestination, startImprovement } from './movement.js';
-import { buyLand, establishMission, giftToTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
+import { answerNativeDemand } from './braves.js';
+import { buyFromSettlement, buyLand, denounceMission, establishMission, giftToTribe, inciteTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
 import { chooseFather } from './fathers.js';
 import { proposePeace, startWar } from './diplomacy.js';
+import { answerProposal, cancelFavoured, cancelTrade, proposeFavoured, proposeTrade } from './relations.js';
 import { declareIndependence } from './independence.js';
+import { answerDemand } from './crown.js';
 import type { FatherId } from './rules/fathers.js';
 import { cargoRoomFor, colonyAt, currentPlayer, type Direction } from './queries.js';
 import type { GoodId } from './rules/goods.js';
 import type { NationId, TribeId } from './rules/nations.js';
 import type { RoleId, UnitTypeId } from './rules/units.js';
 import { endTurn } from './turn.js';
-import type { BuildTarget, GameState, ImprovementKind, Job } from './types.js';
+import { assignRoute, createRoute, deleteRoute, editRoute, unassignRoute } from './routes.js';
+import type { BuildTarget, GameState, ImprovementKind, Job, RouteStop } from './types.js';
 
 export type Command =
   | { type: 'move'; unitId: string; dir: Direction }
   | { type: 'goto'; unitId: string; x: number; y: number }
-  | { type: 'gotoEurope'; unitId: string }
+  /** `port`: a Favoured Nation partner's home port to sail to; missing means the ship's own. */
+  | { type: 'gotoEurope'; unitId: string; port?: NationId }
   | { type: 'clearOrders'; unitId: string }
   | { type: 'foundColony'; unitId: string; name?: string }
-  | { type: 'attack'; unitId: string; target: { unitId?: string; colonyId?: string; settlementId?: string } }
+  | { type: 'attack'; unitId: string; target: { unitId?: string; colonyId?: string; settlementId?: string; braveId?: string } }
   | { type: 'speak'; unitId: string; settlementId: string }
   | { type: 'learn'; unitId: string; settlementId: string }
   | { type: 'tradeNatives'; unitId: string; settlementId: string; good?: GoodId }
+  /** A wagon train or ship next to a settlement buys goods it has gathered (up to `amount`, default 100). */
+  | { type: 'buyNatives'; unitId: string; settlementId: string; good: GoodId; amount?: number }
+  /** A missionary next to a settlement denounces a rival nation's mission there. */
+  | { type: 'denounce'; unitId: string; settlementId: string }
+  /** A missionary pays a settlement's tribe to turn against a rival nation. */
+  | { type: 'incite'; unitId: string; settlementId: string; nation: NationId }
+  /** Pays (or refuses) a brave's demand for tribute, or buys (or declines) goods a brave offers. */
+  | { type: 'answerNativeDemand'; demandId: string; accept: boolean }
   | { type: 'fortify'; unitId: string }
   | { type: 'sentry'; unitId: string }
   | { type: 'activate'; unitId: string }
@@ -54,8 +69,9 @@ export type Command =
   | { type: 'sellGoods'; carrierId: string; good: GoodId; amount: number }
   | { type: 'buyGoods'; carrierId: string; good: GoodId; amount: number }
   | { type: 'recruit'; slot: number }
-  | { type: 'train'; unitType: UnitTypeId }
-  | { type: 'sailToEurope'; unitId: string }
+  /** `port`: buy a merchant ship in a Favoured Nation partner's port, where one of your ships is. */
+  | { type: 'train'; unitType: UnitTypeId; port?: NationId }
+  | { type: 'sailToEurope'; unitId: string; port?: NationId }
   | { type: 'sailToAmerica'; unitId: string }
   | { type: 'disband'; unitId: string }
   | { type: 'chooseFather'; father: FatherId }
@@ -64,15 +80,31 @@ export type Command =
   | { type: 'mission'; unitId: string; settlementId: string }
   | { type: 'cashTreasure'; unitId: string }
   | { type: 'answerTax'; accept: boolean }
+  /** Pays (or refuses) the King's demand for gold. */
+  | { type: 'answerDemand'; pay: boolean }
   | { type: 'payArrears'; good: GoodId }
   | { type: 'setExport'; colonyId: string; good: GoodId; on: boolean }
   | { type: 'declareWar'; nation: NationId }
   | { type: 'proposePeace'; nation: NationId }
+  | { type: 'proposeTrade'; nation: NationId }
+  | { type: 'proposeFavoured'; nation: NationId }
+  /** Answers the proposal (trade agreement or Favoured Nation) that `nation` made. */
+  | { type: 'answerProposal'; nation: NationId; accept: boolean }
+  | { type: 'cancelTrade'; nation: NationId }
+  | { type: 'cancelFavoured'; nation: NationId }
   | { type: 'giftTribe'; tribe: TribeId; gold: number }
   | { type: 'declareIndependence' }
+  | { type: 'createRoute'; name: string; stops?: RouteStop[] }
+  | { type: 'editRoute'; routeId: string; name?: string; stops?: RouteStop[] }
+  | { type: 'deleteRoute'; routeId: string }
+  | { type: 'assignRoute'; unitId: string; routeId: string }
+  | { type: 'unassignRoute'; unitId: string }
+  /** A cheat (see cheats.ts). `nation` defaults to the nation whose turn it is; `on` sets a toggle, omitted flips it. */
+  | { type: 'cheat'; cheat: CheatId; nation?: NationId; on?: boolean }
   | { type: 'endTurn' };
 
-export type CommandResult = { ok: true; text?: string } | { ok: false; error: string };
+/** `id` names what the command created (a new trade route). */
+export type CommandResult = { ok: true; text?: string; id?: string } | { ok: false; error: string };
 
 function ownUnit(s: GameState, nation: NationId, unitId: string) {
   const u = s.units[unitId];
@@ -108,11 +140,17 @@ function transferGoods(s: GameState, nation: NationId, carrierId: string, good: 
   }
 }
 
+/** Command types that change the state directly here rather than through an engine function. */
+const DIRECT_COMMANDS = new Set<Command['type']>(['clearOrders', 'fortify', 'sentry', 'activate', 'skip', 'loadGoods', 'unloadGoods', 'disband', 'setExport']);
+
 /** Validates and applies a command for the nation whose turn it is. Mutates the state. */
 export function applyCommand(s: GameState, cmd: Command): CommandResult {
   const nation = currentPlayer(s).id;
   try {
     let text: string | undefined;
+    let id: string | undefined;
+    // Commands with no engine function of their own are counted here; the rest where they act.
+    if (DIRECT_COMMANDS.has(cmd.type)) track(nation, `cmd:${cmd.type}`);
     switch (cmd.type) {
       case 'move':
         ownUnit(s, nation, cmd.unitId);
@@ -124,12 +162,13 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'gotoEurope':
         ownUnit(s, nation, cmd.unitId);
-        setDestination(s, cmd.unitId, { europe: true });
+        setDestination(s, cmd.unitId, cmd.port ? { europe: true, port: cmd.port } : { europe: true });
         break;
       case 'clearOrders': {
         const u = ownUnit(s, nation, cmd.unitId);
         delete u.dest;
         delete u.work;
+        delete u.route;
         u.state = 'active';
         break;
       }
@@ -152,6 +191,21 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
       case 'tradeNatives':
         ownUnit(s, nation, cmd.unitId);
         text = tradeWithSettlement(s, cmd.unitId, cmd.settlementId, cmd.good);
+        break;
+      case 'buyNatives':
+        ownUnit(s, nation, cmd.unitId);
+        text = buyFromSettlement(s, cmd.unitId, cmd.settlementId, cmd.good, cmd.amount);
+        break;
+      case 'denounce':
+        ownUnit(s, nation, cmd.unitId);
+        text = denounceMission(s, cmd.unitId, cmd.settlementId);
+        break;
+      case 'incite':
+        ownUnit(s, nation, cmd.unitId);
+        text = inciteTribe(s, cmd.unitId, cmd.settlementId, cmd.nation);
+        break;
+      case 'answerNativeDemand':
+        text = answerNativeDemand(s, nation, cmd.demandId, cmd.accept);
         break;
       case 'fortify': {
         const u = ownUnit(s, nation, cmd.unitId);
@@ -236,11 +290,11 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         recruit(s, nation, cmd.slot);
         break;
       case 'train':
-        train(s, nation, cmd.unitType);
+        train(s, nation, cmd.unitType, cmd.port);
         break;
       case 'sailToEurope':
         ownUnit(s, nation, cmd.unitId);
-        sailToEurope(s, cmd.unitId);
+        sailToEurope(s, cmd.unitId, cmd.port);
         break;
       case 'sailToAmerica':
         ownUnit(s, nation, cmd.unitId);
@@ -273,6 +327,9 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
       case 'answerTax':
         text = answerTax(s, nation, cmd.accept);
         break;
+      case 'answerDemand':
+        text = answerDemand(s, nation, cmd.pay);
+        break;
       case 'payArrears':
         payArrears(s, nation, cmd.good);
         break;
@@ -288,11 +345,49 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
       case 'proposePeace':
         text = proposePeace(s, nation, cmd.nation);
         break;
+      case 'proposeTrade':
+        text = proposeTrade(s, nation, cmd.nation);
+        break;
+      case 'proposeFavoured':
+        text = proposeFavoured(s, nation, cmd.nation);
+        break;
+      case 'answerProposal':
+        text = answerProposal(s, nation, cmd.nation, cmd.accept);
+        break;
+      case 'cancelTrade':
+        text = cancelTrade(s, nation, cmd.nation);
+        break;
+      case 'cancelFavoured':
+        text = cancelFavoured(s, nation, cmd.nation);
+        break;
       case 'giftTribe':
         text = giftToTribe(s, nation, cmd.tribe, cmd.gold);
         break;
       case 'declareIndependence':
         text = declareIndependence(s, nation);
+        break;
+      case 'createRoute': {
+        const route = createRoute(s, nation, cmd.name, cmd.stops);
+        id = route.id;
+        text = `The ${route.name} route has been set up.`;
+        break;
+      }
+      case 'editRoute':
+        editRoute(s, nation, cmd.routeId, { name: cmd.name, stops: cmd.stops });
+        break;
+      case 'deleteRoute':
+        deleteRoute(s, nation, cmd.routeId);
+        break;
+      case 'assignRoute':
+        ownUnit(s, nation, cmd.unitId);
+        assignRoute(s, cmd.unitId, cmd.routeId);
+        break;
+      case 'unassignRoute':
+        ownUnit(s, nation, cmd.unitId);
+        unassignRoute(s, cmd.unitId);
+        break;
+      case 'cheat':
+        text = applyCheat(s, cmd.cheat, cmd.nation ?? nation, cmd.on);
         break;
       case 'endTurn':
         endTurn(s);
@@ -302,7 +397,7 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         fail(`Unknown command ${(never as { type: string }).type}`);
       }
     }
-    return { ok: true, text };
+    return id ? { ok: true, text, id } : { ok: true, text };
   } catch (e) {
     if (e instanceof RuleError) return { ok: false, error: e.message };
     throw e;

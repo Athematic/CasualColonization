@@ -1,5 +1,7 @@
 import { fail } from './errors.js';
-import { sailToEurope } from './europe.js';
+import { track } from './telemetry.js';
+import { portProblem, sailToEurope } from './europe.js';
+import { braveName, hostileBraveAt } from './braves.js';
 import { resolveRumour } from './rumours.js';
 import {
   cargoFree,
@@ -23,19 +25,21 @@ import {
   unitsAt,
   type Direction,
 } from './queries.js';
-import { FOREST_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './rules/terrain.js';
+import { FOREST_MOVE_COST, RIVER_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './rules/terrain.js';
+import { riverLinked } from './rivers.js';
 import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
+import type { TribeId } from './rules/nations.js';
 import type { GameState, ImprovementKind, Unit } from './types.js';
 
 export type MoveOption =
   | { kind: 'move' }
   | { kind: 'board'; carrierId: string }
   | { kind: 'disembark' }
-  | { kind: 'attack'; targetUnitId?: string; colonyId?: string; settlementId?: string }
+  | { kind: 'attack'; targetUnitId?: string; colonyId?: string; settlementId?: string; braveId?: string }
   | { kind: 'settlement'; settlementId: string; actions: SettlementAction[] }
   | { kind: 'blocked'; reason: string };
 
-export type SettlementAction = 'speak' | 'learn' | 'trade' | 'mission' | 'attack';
+export type SettlementAction = 'speak' | 'learn' | 'trade' | 'mission' | 'denounce' | 'incite' | 'attack';
 
 export function canAttack(u: Unit): boolean {
   const def = UNIT_TYPES[u.type];
@@ -55,6 +59,8 @@ export function moveCost(s: GameState, u: Unit, fx: number, fy: number, tx: numb
   const roadFrom = from.r || hasColony(fx, fy);
   const roadTo = to.r || hasColony(tx, ty);
   if (roadFrom && roadTo) return ROAD_MOVE_COST;
+  // Along a river: as cheap as a road, and the two do not add up.
+  if (to.rv && from.rv && riverLinked(s.map, fx, fy, tx, ty)) return RIVER_MOVE_COST;
   if (to.f) return FOREST_MOVE_COST;
   return TERRAIN[to.t].moveCost;
 }
@@ -83,7 +89,8 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
       return canAttack(u) ? { kind: 'blocked', reason: 'Ships cannot attack colonies yet.' } : { kind: 'blocked', reason: `${colony.name} belongs to another nation.` };
     }
     if (settlement) {
-      const actions: SettlementAction[] = hasCargo(u) ? ['trade'] : [];
+      // Ships with cargo sell, ships with room buy.
+      const actions: SettlementAction[] = UNIT_TYPES[u.type].cargo > 0 ? ['trade'] : [];
       return actions.length ? { kind: 'settlement', settlementId: settlement.id, actions } : { kind: 'blocked', reason: 'Natives live there.' };
     }
     if (!isWater(tile)) return { kind: 'blocked', reason: 'Ships cannot sail onto land.' };
@@ -105,14 +112,23 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
     const actions: SettlementAction[] = [];
     if (u.role === 'scout') actions.push('speak');
     if (UNIT_TYPES[u.type].kind === 'colonist' && u.role === 'none' && UNIT_TYPES[u.type].skill <= 0) actions.push('learn');
-    if (UNIT_TYPES[u.type].kind === 'wagon' && hasCargo(u)) actions.push('trade');
-    if (u.role === 'missionary') actions.push('mission');
+    if (UNIT_TYPES[u.type].kind === 'wagon') actions.push('trade');
+    if (u.role === 'missionary') {
+      if (!settlement.mission) actions.push('mission');
+      else if (settlement.mission !== u.owner) actions.push('denounce');
+      if (s.players.some((p) => p.id !== u.owner && p.id !== 'crown')) actions.push('incite');
+    }
     if (canAttack(u)) actions.push('attack');
     if (!actions.length) return { kind: 'blocked', reason: 'Only scouts, colonists, missionaries, wagon trains and soldiers can visit natives.' };
     return { kind: 'settlement', settlementId: settlement.id, actions };
   }
   if (colony && colony.owner !== u.owner) {
     return canAttack(u) ? { kind: 'attack', colonyId: colony.id } : { kind: 'blocked', reason: `${colony.name} belongs to another nation.` };
+  }
+  // Braves of a tribe at peace step aside; hostile ones must be fought.
+  const brave = !colony ? hostileBraveAt(s, u.owner, x, y) : undefined;
+  if (brave) {
+    return canAttack(u) ? { kind: 'attack', braveId: brave.id } : { kind: 'blocked', reason: `A hostile ${braveName(brave)} is in the way.` };
   }
   if (foreign.length) {
     return canAttack(u) ? { kind: 'attack', targetUnitId: foreign[0].id } : { kind: 'blocked', reason: 'Foreign units block the way.' };
@@ -132,10 +148,6 @@ export function canCarry(s: GameState, ship: Unit, u: Unit): boolean {
   return cargoFree(s, ship) > 0;
 }
 
-function hasCargo(u: Unit): boolean {
-  return Object.values(u.cargo ?? {}).some((n) => (n ?? 0) > 0);
-}
-
 export function placeOnMap(s: GameState, u: Unit, x: number, y: number): void {
   u.loc = { kind: 'map', x, y };
   reveal(s, u.owner, x, y, sightRadius(u, s));
@@ -145,6 +157,10 @@ export function placeOnMap(s: GameState, u: Unit, x: number, y: number): void {
 export function moveUnit(s: GameState, unitId: string, dir: Direction): void {
   const option = describeMove(s, unitId, dir);
   const u = s.units[unitId];
+  if (option.kind !== 'blocked' && option.kind !== 'attack' && option.kind !== 'settlement') {
+    track(u.owner, 'cmd:move');
+    if (UNIT_TYPES[u.type].kind === 'wagon') track(u.owner, 'wagon:moves');
+  }
   const pos = unitPosition(s, u)!;
   const { dx, dy } = dirOffset(dir);
   const x = pos.x + dx;
@@ -197,6 +213,7 @@ export function boardShip(s: GameState, unitId: string, carrierId: string): void
   if (!canCarry(s, ship, u)) fail(u.type === 'treasure' ? 'Only an empty galleon can carry treasure.' : 'The ship is full.');
   u.loc = { kind: 'carrier', carrierId };
   u.state = 'sentry';
+  track(u.owner, 'cmd:board');
 }
 
 /** Leaves a ship docked in a colony (or in Europe, handled elsewhere). */
@@ -207,6 +224,7 @@ export function leaveShip(s: GameState, unitId: string): void {
   if (ship.loc.kind !== 'map' || !colonyAt(s, ship.loc.x, ship.loc.y)) fail('Units can only leave a ship in port; move onto land instead.');
   u.loc = { kind: 'map', x: ship.loc.x, y: ship.loc.y };
   u.state = 'active';
+  track(u.owner, 'cmd:unboard');
 }
 
 /** Can the unit stand on this tile while pathing (ignoring move points)? */
@@ -216,6 +234,8 @@ export interface MapIndex {
   settlements: Set<number>;
   /** Owners of units standing on each tile. */
   units: Map<number, Set<string>>;
+  /** Tribes whose braves stand on each tile (routes avoid hostile ones). Missing in indexes built elsewhere. */
+  braves?: Map<number, TribeId[]>;
 }
 
 export function buildMapIndex(s: GameState): MapIndex {
@@ -230,6 +250,14 @@ export function buildMapIndex(s: GameState): MapIndex {
     if (!owners) index.units.set(i, (owners = new Set()));
     owners.add(u.owner);
   }
+  const braves = new Map<number, TribeId[]>();
+  for (const b of Object.values(s.braves ?? {})) {
+    const i = b.y * w + b.x;
+    const list = braves.get(i);
+    if (list) list.push(b.tribe);
+    else braves.set(i, [b.tribe]);
+  }
+  index.braves = braves;
   return index;
 }
 
@@ -242,6 +270,8 @@ function passable(s: GameState, u: Unit, x: number, y: number, isGoal: boolean, 
   if (index.settlements.has(i)) return false;
   const owners = index.units.get(i);
   if (owners && [...owners].some((o) => o !== u.owner)) return false;
+  const tribes = isGoal ? undefined : index.braves?.get(i);
+  if (tribes && tribes.some((t) => s.tribes.find((o) => o.id === t)?.stance[u.owner] === 'war')) return false;
   // People can only route through land they have seen; the AI knows the map.
   const owner = player(s, u.owner);
   if (owner.human && !owner.explored[i] && !isGoal) return false;
@@ -326,9 +356,17 @@ export function setDestination(s: GameState, unitId: string, dest: Unit['dest'])
   const u = s.units[unitId];
   if (u.loc.kind !== 'map') fail('Only units on the map can be given orders.');
   if (dest && 'europe' in dest && !isShip(u)) fail('Only ships can sail to Europe.');
+  if (dest && 'europe' in dest && dest.port) {
+    if (dest.port === u.owner) dest = { europe: true };
+    else {
+      const problem = portProblem(s, u.owner, dest.port);
+      if (problem) fail(problem);
+    }
+  }
   if (dest && 'x' in dest && !findPath(s, u, dest.x, dest.y)) fail('There is no known route there.');
   u.dest = dest;
   u.state = 'active';
+  track(u.owner, dest && 'europe' in dest ? 'cmd:gotoEurope' : 'cmd:goto');
   continueOrders(s, u);
 }
 
@@ -340,7 +378,7 @@ export function continueOrders(s: GameState, u: Unit): void {
     if ('europe' in u.dest) {
       const tile = tileAt(s, u.loc.x, u.loc.y)!;
       if (tile.t === 'highSeas' && !colonyAt(s, u.loc.x, u.loc.y)) {
-        sailToEurope(s, u.id);
+        sailToEurope(s, u.id, u.dest.port && !portProblem(s, u.owner, u.dest.port) ? u.dest.port : undefined);
         return;
       }
       target = nearestHighSeas(s, u);
@@ -396,6 +434,7 @@ export function startImprovement(s: GameState, unitId: string, kind: Improvement
   if (reason) fail(reason);
   const turns = IMPROVEMENT_TURNS[kind];
   u.work = { kind, turnsLeft: u.type === 'hardyPioneer' ? Math.ceil(turns / 2) : turns };
+  track(u.owner, 'cmd:improve');
   u.moves = 0;
   delete u.dest;
 }
@@ -412,6 +451,7 @@ export function advanceWork(s: GameState, u: Unit): void {
   delete u.work;
   if (kind === 'plow') tile.p = true;
   if (kind === 'road') tile.r = true;
+  track(u.owner, kind === 'plow' ? 'land:plowed' : kind === 'road' ? 'land:road built' : 'land:forest cleared');
   if (kind === 'clear') {
     delete tile.f;
     const colony = Object.values(s.colonies).find((c) => c.owner === u.owner && distance(c.x, c.y, at.x, at.y) <= 1);

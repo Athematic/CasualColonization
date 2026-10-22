@@ -10,6 +10,8 @@ import {
   foundColony,
   isWater,
   migrate,
+  OLD_SAVE_MESSAGE,
+  SaveVersionError,
   nativeLandOwner,
   neighbours,
   nextFatherCost,
@@ -246,17 +248,14 @@ describe('game end and saves', () => {
     expect(s.gameOver?.scores.england).toBeGreaterThan(0);
   });
 
-  it('upgrades Alpha 0.1 saves', () => {
+  it('does not load saves from before Alpha 0.4', () => {
     const s = game();
-    const old = JSON.parse(serialize(s));
-    old.version = 1;
-    for (const p of old.players) {
-      for (const k of ['fathers', 'fatherOffer', 'currentFather', 'fatherBells', 'boycotts', 'pendingTax', 'independence', 'ref', 'warSince']) delete p[k];
+    for (const version of [1, 2]) {
+      const old = JSON.parse(serialize(s));
+      old.version = version;
+      delete old.relations;
+      expect(() => migrate(old)).toThrow(OLD_SAVE_MESSAGE);
+      expect(() => deserialize(JSON.stringify(old))).toThrow(SaveVersionError);
     }
-    for (const st of Object.values(old.settlements) as Record<string, unknown>[]) delete st.tension;
-    const upgraded = migrate(old);
-    expect(upgraded.version).toBe(2);
-    expect(upgraded.players[0].fathers).toEqual([]);
-    expect(Object.keys(upgraded.players[0].fatherOffer).length).toBe(5);
   });
 });

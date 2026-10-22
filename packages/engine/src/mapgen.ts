@@ -1,6 +1,8 @@
 import { TRIBES, TRIBE_ORDER, type TribeId } from './rules/nations.js';
 import { TERRAIN, type TerrainId } from './rules/terrain.js';
+import { FIRST_BRAVE_AFTER } from './rules/natives.js';
 import { random, randInt, pick } from './rng.js';
+import { generateRivers } from './rivers.js';
 import type { GameMap, MapSize, Settlement, Tile } from './types.js';
 
 export const MAP_SIZES: Record<MapSize, { width: number; height: number }> = {
@@ -39,9 +41,14 @@ function octaves(rng: { rng: number }, width: number, height: number, cells: num
 export interface GeneratedWorld {
   map: GameMap;
   settlements: Settlement[];
-  /** Rows (inclusive) along the east edge where European expeditions arrive. */
+  /** Rows (inclusive) along the arrival edge where European expeditions arrive. */
   entryRows: [number, number];
+  /** The map edge European expeditions arrive at. Absent means the east edge. */
+  entrySide?: EntrySide;
 }
+
+/** The map edge whose high seas European expeditions arrive at. */
+export type EntrySide = 'east' | 'west';
 
 export function generateMap(rng: { rng: number }, size: MapSize): GeneratedWorld {
   const { width, height } = MAP_SIZES[size];
@@ -112,6 +119,9 @@ export function generateMap(rng: { rng: number }, size: MapSize): GeneratedWorld
   }
 
   const map = { width, height, tiles };
+  // Rivers draw on their own generator, seeded from this one without advancing it, so the rest of
+  // the world (bonuses, rumours, settlements) stays what the seed has always made.
+  generateRivers({ rng: (rng.rng ^ 0x2c1b3c6d) | 0 }, map, elev, wet);
   sprinkleExtras(rng, map);
   const settlements = placeSettlements(rng, tiles, width, height);
   for (const st of settlements) {
@@ -122,13 +132,14 @@ export function generateMap(rng: { rng: number }, size: MapSize): GeneratedWorld
 }
 
 /**
- * Spreads up to `n` arrival points evenly along the east-edge high seas between two rows.
+ * Spreads up to `n` arrival points evenly along the east-edge (or west-edge) high seas between two rows.
  * Over the whole height this is the same spacing the generated map has always used.
  */
-export function entryPoints(map: GameMap, n: number, rows: [number, number] = [0, map.height - 1]): { x: number; y: number }[] {
+export function entryPoints(map: GameMap, n: number, rows: [number, number] = [0, map.height - 1], side: EntrySide = 'east'): { x: number; y: number }[] {
   const [top, bottom] = rows;
   const span = bottom - top + 1;
-  return Array.from({ length: n }, (_, i) => ({ x: map.width - 2, y: top + Math.round(((i + 1) * span) / (n + 1)) }));
+  const x = side === 'west' ? 1 : map.width - 2;
+  return Array.from({ length: n }, (_, i) => ({ x, y: top + Math.round(((i + 1) * span) / (n + 1)) }));
 }
 
 /** Scatters bonus resources (on land and on coastal ocean) and Lost City Rumours. */
@@ -169,6 +180,7 @@ export function newSettlement(rng: { rng: number }, id: string, tribe: TribeId, 
     defenders: size + (capital ? 2 : 0) + randInt(rng, 2),
     gold: (size * 150 + randInt(rng, 200)) * (capital ? 2 : 1),
     tension: {},
+    braveTimer: FIRST_BRAVE_AFTER,
   };
 }
 

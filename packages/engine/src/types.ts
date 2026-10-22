@@ -1,5 +1,7 @@
 import type { AiLevel, AiMemory } from './ai/profiles.js';
+import type { CheatId } from './cheats.js';
 import type { BuildingKind } from './rules/buildings.js';
+import type { DifficultyId } from './rules/difficulty.js';
 import type { FatherCategory, FatherId } from './rules/fathers.js';
 import type { GoodId } from './rules/goods.js';
 import type { NationId, TribeId } from './rules/nations.js';
@@ -21,6 +23,15 @@ export interface GameConfig {
   ai?: Partial<Record<NationId, AiLevel>>;
   /** While a head start runs: the people's nations, played by the computer until hand-over. */
   headStart?: { humans: NationId[]; level: AiLevel; turn: number };
+  /** Difficulty level (see rules/difficulty.ts); missing means Conquistador, the standard rules. */
+  difficulty?: DifficultyId;
+  /** Give computer players the chosen difficulty's economics too (tournaments); by default only people get it. */
+  difficultyForAll?: boolean;
+  /**
+   * Computer players propose no trade agreements and no Favoured Nation status (they still answer
+   * people's proposals). For tournaments that measure what the feature brings (`--no-favoured`).
+   */
+  noFavoured?: boolean;
 }
 
 export interface Tile {
@@ -35,6 +46,13 @@ export interface Tile {
   b?: boolean;
   /** Lost City Rumour. */
   lcr?: boolean;
+  /** River: 1 minor, 2 major. A fixed map feature on land; absent means no river. See rivers.ts. */
+  rv?: 1 | 2;
+  /**
+   * Where the river runs: one bit per neighbour in `DIRECTIONS` order (n 1, ne 2, e 4, se 8, s 16,
+   * sw 32, w 64, nw 128). A bit towards a water tile is the river's mouth.
+   */
+  rd?: number;
   /** European nation that bought or took this land from the natives. */
   claim?: NationId;
 }
@@ -87,12 +105,29 @@ export interface Player {
   /** A tax raise waiting for the player to accept or refuse. */
   pendingTax: { rate: number; good: GoodId } | null;
   independence: 'none' | 'declared' | 'won' | 'lost';
-  /** The Royal Expeditionary Force still waiting to sail against this player. */
+  /**
+   * The Royal Expeditionary Force: before independence, the force the Crown has built up so far
+   * (it grows during the game, see crown.ts); after the declaration, what is still to land.
+   */
   ref: { regulars: number; dragoons: number; artillery: number; menOfWar: number };
+  /**
+   * The Crown's bookkeeping for this nation (crown.ts): liberty bells already reacted to, growth
+   * points not yet spent on units, land units added over the game, and the turn and target of the last royal
+   * war. Missing in saves from before 0.5 (filled in, with the old formula's force, on the next round).
+   */
+  royal?: { bells: number; points: number; added?: number; lastWar?: number; warOn?: NationId };
+  /** A demand for gold from the King, waiting to be paid or refused; `colony` is where goods would be seized. */
+  pendingDemand?: { gold: number; colony: string | null; turn: number };
+  /** The turn of the declaration of independence, the Royal Expeditionary Force then, and the old formula's size then (for measurements). */
+  refAtDeclaration?: { turn: number; force: { regulars: number; dragoons: number; artillery: number; menOfWar: number }; formula: number };
   /** Turn on which each war started, keyed by nation id. */
   warSince: Partial<Record<string, number>>;
   /** Colonies held when independence was declared. */
   coloniesAtDeclaration?: number;
+  /** Units of goods lost to full warehouses over the game; missing means none. */
+  goodsSpoiled?: number;
+  /** Difficulty whose economics this nation plays at; missing means Conquistador (computer players). */
+  difficulty?: DifficultyId;
 }
 
 export type Job =
@@ -103,8 +138,9 @@ export type UnitLocation =
   | { kind: 'map'; x: number; y: number }
   | { kind: 'colony'; colonyId: string; job: Job }
   | { kind: 'carrier'; carrierId: string }
-  | { kind: 'europe' }
-  | { kind: 'sailing'; to: 'europe' | 'america'; turnsLeft: number };
+  /** In a home port in Europe. `port` is a Favoured Nation partner whose port the ship visits; missing means the owner's own. */
+  | { kind: 'europe'; port?: NationId }
+  | { kind: 'sailing'; to: 'europe' | 'america'; turnsLeft: number; port?: NationId };
 
 export type UnitState = 'active' | 'fortified' | 'sentry';
 
@@ -130,8 +166,42 @@ export interface Unit {
   repair?: number;
   /** For Royal troops: the rebel nation they were sent against. */
   against?: NationId;
-  dest?: { x: number; y: number } | { europe: true };
+  /** Where the unit is going; for Europe, `port` is a Favoured Nation partner's port (missing: its own). */
+  dest?: { x: number; y: number } | { europe: true; port?: NationId };
   cargo?: Partial<Record<GoodId, number>>;
+  /** The trade route a ship or wagon train follows, and the index of the stop it is heading for. */
+  route?: { id: string; stop: number };
+  /** Trade with a native settlement this turn: one sale and one purchase per visit. */
+  trade?: { at: string; turn: number; sold?: boolean; bought?: boolean };
+}
+
+/** What a carrier loads or unloads of one good at a trade route stop. */
+export interface RouteCargo {
+  good: GoodId;
+  /**
+   * Loading in a colony: units left in the warehouse (default 0). Loading in Europe: units to
+   * have aboard after buying (default 100). Unloading in a colony: fill the warehouse up to this
+   * (default its capacity, so nothing spoils). Unloading in Europe: ignored, all of it is sold.
+   */
+  amount?: number;
+}
+
+/** One stop of a trade route: a colony (own, or a trade partner's), or Europe for ships. */
+export interface RouteStop {
+  /** Colony id, or 'europe' (always the owner's own home port). */
+  at: string;
+  load: RouteCargo[];
+  unload: RouteCargo[];
+  /** In Europe: take aboard the colonists waiting on the docks. They go ashore at the next colony stop. */
+  passengers?: boolean;
+}
+
+/** A named, ordered round trip that ships and wagon trains follow on their own. */
+export interface TradeRoute {
+  id: string;
+  owner: NationId;
+  name: string;
+  stops: RouteStop[];
 }
 
 export type BuildTarget = { kind: 'building'; id: BuildingKind } | { kind: 'unit'; id: UnitTypeId };
@@ -158,6 +228,57 @@ export interface Tribe {
   id: TribeId;
   /** Per-European-nation stance; tribes become hostile when attacked. */
   stance: Partial<Record<NationId, Stance>>;
+  /** Nations that disturbed one of the tribe's burial grounds: at war with them for good. Missing means none. */
+  burial?: NationId[];
+  /** Nations the tribe submitted to after losing its capital (see natives.ts). Missing means none. */
+  submitted?: NationId[];
+}
+
+/**
+ * A native brave on the map (see braves.ts). Braves belong to a settlement, not to a player:
+ * they wander, visit colonies with gifts, trade or demands, attack when angry and go home.
+ */
+export interface Brave {
+  id: string;
+  tribe: TribeId;
+  /** Id of the home settlement. */
+  home: string;
+  x: number;
+  y: number;
+  /** Carries muskets (bought or captured). */
+  armed?: boolean;
+  /** Rides horses (bought or captured). */
+  mounted?: boolean;
+  /** What the brave is doing; missing means it is at or going home. */
+  task?: BraveTask;
+  /** Goods carried as a gift or for sale. */
+  goods?: { good: GoodId; amount: number };
+}
+
+export type BraveTask =
+  | { kind: 'wander'; turns: number }
+  | { kind: 'visit'; colonyId: string; purpose: 'gift' | 'trade' | 'demand' }
+  /** Waiting next to a colony for the answer to a demand. */
+  | { kind: 'wait'; demandId: string; turns: number }
+  | { kind: 'attack'; colonyId?: string; unitId?: string };
+
+/**
+ * A brave's demand for tribute, or offer of goods for sale, waiting for a person to answer it in
+ * the turn-start briefing. Computer players answer at once and never leave one waiting.
+ */
+export interface NativeDemand {
+  id: string;
+  kind: 'demand' | 'offer';
+  nation: NationId;
+  colonyId: string;
+  settlementId: string;
+  braveId: string;
+  /** The goods asked for (or offered); missing means gold. */
+  good?: GoodId;
+  amount: number;
+  /** For an offer: the price asked in gold. */
+  price?: number;
+  turn: number;
 }
 
 export interface Settlement {
@@ -177,6 +298,10 @@ export interface Settlement {
   /** Nation that runs a mission here. */
   mission?: NationId;
   missionExpert?: boolean;
+  /** Goods the settlement has for sale, and muskets and horses it holds for its braves. Missing means none. */
+  goods?: Partial<Record<GoodId, number>>;
+  /** Rounds until the settlement can send out a new brave; missing means it can now. */
+  braveTimer?: number;
 }
 
 export interface GameMessage {
@@ -187,8 +312,40 @@ export interface GameMessage {
   at?: { x: number; y: number };
 }
 
+export type ProposalKind = 'trade' | 'favoured';
+
+/**
+ * Relations between two European nations (see relations.ts and docs/design/favoured-nation.md).
+ * Turn numbers, not years; the thresholds are hidden from players.
+ */
+export interface Relation {
+  /** The pair, in the order of `GameConfig.nations`. */
+  a: NationId;
+  b: NationId;
+  /** Turn the current run of peace began: game start, the last peace treaty, or the last cancellation. */
+  peaceSince: number;
+  /** Hidden: years of continuous peace needed for Favoured Nation (8–12, from the seed). */
+  peaceNeeded: number;
+  /** Hidden: active trade routes between the two needed for Favoured Nation (2–4, from the seed). */
+  routesNeeded: number;
+  /** A trade agreement: route stops at each other's colonies are allowed. */
+  trade?: boolean;
+  /** Favoured Nation status (implies a trade agreement). */
+  favoured?: boolean;
+  /** Gold that has changed hands at each other's colonies, both ways, over the game. */
+  volume: number;
+  /** After a cancellation: no new agreements or foreign stops before this turn. */
+  waitUntil?: number;
+  /** After a cancellation: computer players on both sides treat the other as a target until this turn. */
+  hostileUntil?: number;
+  /** Cancellations so far; seeds the next waiting and hostility draws. */
+  cancels?: number;
+  /** A proposal waiting for the other side (a person) to answer. */
+  proposal?: { kind: ProposalKind; from: NationId; turn: number };
+}
+
 export interface GameState {
-  version: 2;
+  version: 3;
   config: GameConfig;
   turn: number;
   /** Index into players of the nation whose turn it is. */
@@ -202,5 +359,89 @@ export interface GameState {
   tribes: Tribe[];
   settlements: Record<string, Settlement>;
   messages: GameMessage[];
+  /** The game's difficulty level, resolved from the config; missing (older saves) means Conquistador. */
+  difficulty?: DifficultyId;
+  /** Relations between each pair of European nations, keyed by relationKey(a, b). */
+  relations: Record<string, Relation>;
+  /** Trade routes by id; missing means none. */
+  routes?: Record<string, TradeRoute>;
+  /** Native braves on the map, by id. Missing (older saves) means none yet; settlements send them out. */
+  braves?: Record<string, Brave>;
+  /** Native demands and offers waiting for a person's answer. Missing means none. */
+  nativeDemands?: NativeDemand[];
   gameOver?: { turn: number; reason: string; winner?: NationId; scores: Partial<Record<NationId, number>> };
+  /** Set the first time a cheat is used and never cleared. Missing means the game is not cheated. */
+  cheated?: { turn: number; cheats: CheatId[] };
+  /** Game-wide modifiers set by cheats. Missing fields mean the normal rules. */
+  modifiers?: {
+    /** Multiplier on terrain yields (missing means 1). */
+    yieldMultiplier?: number;
+    /** Nations whose view shows the whole map without fog. */
+    reveal?: NationId[];
+  };
+  /** Progress statistics, one snapshot per round (see stats.ts). Missing in older saves. */
+  stats?: StatsHistory;
+  /** Notable events for the History report, oldest first and capped (see history.ts). Missing in older saves. */
+  history?: HistoryEntry[];
+  /** Goods sold and delivered per nation, for the Trade report (see history.ts). Missing in older saves. */
+  ledger?: Partial<Record<NationId, Ledger>>;
+}
+
+export type HistoryKind =
+  | 'colony'
+  | 'captured'
+  | 'father'
+  | 'war'
+  | 'peace'
+  | 'trade'
+  | 'favoured'
+  | 'cancel'
+  | 'treasure'
+  | 'burned'
+  | 'independence'
+  | 'tribe'
+  /** The King's demands for gold (paid or refused) and the wars he declares (crown.ts). */
+  | 'crown';
+
+/** One event in the game's history (see history.ts). */
+export interface HistoryEntry {
+  turn: number;
+  kind: HistoryKind;
+  /** The nations concerned; the first is the one that acted. */
+  nations: NationId[];
+  text: string;
+  /** Known only to the nations concerned; otherwise every nation heard of it. */
+  secret?: boolean;
+  at?: { x: number; y: number };
+}
+
+/** Units of each good, by channel: sold in a home port, by custom houses, unloaded by routes, sold to partners' colonies. */
+export interface GoodsTally {
+  europe: Partial<Record<GoodId, number>>;
+  custom: Partial<Record<GoodId, number>>;
+  route: Partial<Record<GoodId, number>>;
+  foreign: Partial<Record<GoodId, number>>;
+  /** Sold to native settlements, and bought from them (by wagon trains, ships and from visiting braves). Missing means none. */
+  natives?: Partial<Record<GoodId, number>>;
+  fromNatives?: Partial<Record<GoodId, number>>;
+}
+
+export interface Ledger {
+  total: GoodsTally;
+  /** Turn `now` counts. */
+  turn: number;
+  now: GoodsTally;
+  last: GoodsTally;
+}
+
+/**
+ * Compact per-round statistics: `data[nation]` holds `keys.length` numbers per entry of `turns`,
+ * each the change since the nation's previous entry (the first entry as is). Read it with statsHistory.
+ */
+export interface StatsHistory {
+  keys: string[];
+  turns: number[];
+  data: Partial<Record<NationId, number[]>>;
+  /** Trade income, goods produced and crosses since the last snapshot. */
+  flows?: Partial<Record<NationId, { trade?: number; production?: number; crosses?: number }>>;
 }

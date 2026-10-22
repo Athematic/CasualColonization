@@ -1,8 +1,11 @@
 import { declareWar } from './combat.js';
+import { noteHistory } from './history.js';
+import { track } from './telemetry.js';
 import { fail } from './errors.js';
 import { hasFather } from './fathers.js';
-import { message, player } from './queries.js';
+import { message, nationTitle, player } from './queries.js';
 import { NATIONS, type NationId } from './rules/nations.js';
+import { isFavoured, onPeace } from './relations.js';
 import type { GameState } from './types.js';
 
 /** Turns of war after which a computer nation is willing to talk peace. */
@@ -13,6 +16,8 @@ export function startWar(s: GameState, nation: NationId, other: NationId): strin
   if (other === 'crown') fail('Declare independence to fight the Crown.');
   const p = player(s, nation);
   if (p.stance[other] === 'war') fail(`You are already at war with ${NATIONS[other].name}.`);
+  if (!p.human && isFavoured(s, nation, other)) fail('Computer players never declare war on a Favoured Nation.');
+  track(nation, 'cmd:declareWar');
   declareWar(s, nation, other);
   return `You are now at war with ${NATIONS[other].name}.`;
 }
@@ -23,6 +28,7 @@ export function proposePeace(s: GameState, nation: NationId, other: NationId): s
   const o = player(s, other);
   if (p.stance[other] !== 'war') fail(`You are not at war with ${NATIONS[other].name}.`);
   if (other === 'crown') fail('The Crown does not negotiate with rebels.');
+  track(nation, 'cmd:proposePeace');
   const tired = s.turn - (p.warSince[other] ?? s.turn) >= WAR_WEARINESS;
   if (!o.human && !tired && !hasFather(s, nation, 'benjaminFranklin')) {
     return `${NATIONS[other].name} refuses to make peace for now.`;
@@ -38,7 +44,11 @@ export function makePeace(s: GameState, a: NationId, b: NationId): void {
   pb.stance[a] = 'peace';
   delete pa.warSince[b];
   delete pb.warSince[a];
+  onPeace(s, a, b);
+  track(a, 'diplomacy:peace made');
+  track(b, 'diplomacy:peace made');
   message(s, `${NATIONS[a].name} and ${NATIONS[b].name} have made peace.`);
+  noteHistory(s, 'peace', [a, b], `${nationTitle(a)} and ${NATIONS[b].name} make peace.`);
 }
 
 /** Computer nations tired of fighting each other settle their wars. */

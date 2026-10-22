@@ -2,8 +2,9 @@
  * A deliberately plain board-game style. It exists to show (and test) that the game
  * shell works with any style plugin, and is a starting point for new styles.
  */
-import { NATIONS, TERRAIN, TRIBES, UNIT_TYPES, colonyWorkers, type GameState, type Tile, type TerrainId } from '@cc/engine';
+import { NATIONS, RIVER_DIRS, TERRAIN, TRIBES, UNIT_TYPES, colonyWorkers, type GameState, type Tile, type TerrainId } from '@cc/engine';
 import {
+  braveMarkers,
   isTileExplored,
   isTileVisible,
   tileToScreen,
@@ -90,6 +91,24 @@ class SchematicRenderer implements MapRenderer {
         }
       }
     }
+    // Rivers: plain blue lines from each tile's centre towards the neighbours the river links.
+    ctx.lineCap = 'round';
+    for (let y = r.y0; y <= r.y1; y++) {
+      for (let x = r.x0; x <= r.x1; x++) {
+        const tile = s.map.tiles[y * s.map.width + x];
+        if (!tile?.rv || !tile.rd || !isTileExplored(scene, x, y)) continue;
+        const p = tileToScreen(scene, x, y);
+        ctx.strokeStyle = isTileVisible(scene, x, y) ? '#4aa3df' : '#3a7fae';
+        ctx.lineWidth = Math.max(1.5, z * (tile.rv === 2 ? 0.16 : 0.08));
+        ctx.beginPath();
+        RIVER_DIRS.forEach(([dx, dy], i) => {
+          if (!(tile.rd! & (1 << i))) return;
+          ctx.moveTo(p.x + z / 2, p.y + z / 2);
+          ctx.lineTo(p.x + z / 2 + (dx * z) / 2, p.y + z / 2 + (dy * z) / 2);
+        });
+        ctx.stroke();
+      }
+    }
     for (const st of Object.values(s.settlements)) {
       if (!isTileExplored(scene, st.x, st.y)) continue;
       const p = tileToScreen(scene, st.x, st.y);
@@ -106,6 +125,26 @@ class SchematicRenderer implements MapRenderer {
       ctx.fillRect(p.x + z * 0.12, p.y + z * 0.12, z * 0.76, z * 0.76);
       this.text(String(colonyWorkers(s, c).length), p.x + z / 2, p.y + z / 2, z * 0.4, '#fff');
       if (scene.labels !== false) this.text(c.name, p.x + z / 2, p.y + z * 1.1, Math.max(10, z * 0.22), '#fff');
+    }
+    // Braves: a diamond in the tribe's colour, B (brave), A (armed), M (mounted) or AM.
+    for (const b of braveMarkers(scene)) {
+      const p = tileToScreen(scene, b.x, b.y);
+      const cx = p.x + z / 2;
+      const cy = p.y + z / 2;
+      ctx.fillStyle = TRIBES[b.tribe].color;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - z * 0.36);
+      ctx.lineTo(cx + z * 0.36, cy);
+      ctx.lineTo(cx, cy + z * 0.36);
+      ctx.lineTo(cx - z * 0.36, cy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#000';
+      ctx.stroke();
+      const label = b.armed && b.mounted ? 'AM' : b.armed ? 'A' : b.mounted ? 'M' : 'B';
+      this.text(label, cx, cy, z * 0.28, '#fff');
+      if (b.count > 1) this.text(String(b.count), p.x + z * 0.85, p.y + z * 0.18, z * 0.22, '#fff');
     }
     for (const stack of unitStacks(scene)) {
       const p = tileToScreen(scene, stack.x, stack.y);
@@ -130,6 +169,17 @@ class SchematicRenderer implements MapRenderer {
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1;
       ctx.strokeRect(p.x + 1.5, p.y + 1.5, z - 3, z - 3);
+    }
+    const end = scene.path?.[scene.path.length - 1];
+    if (end && scene.pathTurns && scene.pathTurns > 1) {
+      // Plain counter: turns needed to reach the end of the route.
+      const p = tileToScreen(scene, end.x, end.y);
+      const r = Math.max(7, z * 0.17);
+      ctx.fillStyle = '#ffe28a';
+      ctx.beginPath();
+      ctx.arc(p.x + z * 0.8, p.y + z * 0.2, r, 0, Math.PI * 2);
+      ctx.fill();
+      this.text(String(scene.pathTurns), p.x + z * 0.8, p.y + z * 0.2 + 0.5, r * 1.3, '#000');
     }
   }
 

@@ -12,6 +12,21 @@ export const southAmerica: StoredMap = {
     { tribe: 'tupi', region: [19, 14, 33, 27], count: 6 },
     { tribe: 'inca', region: [5, 13, 21, 53], count: 10 },
   ],
+  // Main rivers first, tributaries after the river they join. Format: parseRivers in rivers.ts.
+  rivers: `
+    Amazon: m 6,19 M 12,17 20,16 28,15 35,14 36,14
+    Negro: m 13,10 17,13 21,15 21,16
+    Madeira: m 17,28 20,22 M 23,18 24,17 24,16
+    Xingu: m 31,27 31,16 31,15
+    Tocantins: m 37,30 37,19 38,16 38,15 39,15
+    Orinoco: m 24,11 17,10 M 15,8 20,6 26,6 27,6
+    Magdalena: m 11,12 10,9 M 9,6 9,3 8,3
+    Parana: m 38,33 34,38 M 29,43 28,48 28,53 29,53
+    Paraguay: m 28,31 27,36 28,41 29,43
+    Uruguay: m 37,40 33,46 32,50 32,51 32,52
+    Sao Francisco: m 41,38 40,32 M 42,29 46,29 47,29
+    Rio Negro: m 15,56 20,57 24,57 25,57
+  `,
   rows: `
 ....~~~~...........~~~~...~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 hW..~~~......sss........s..~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

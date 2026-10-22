@@ -51,7 +51,7 @@ export const ligneClaire: StylePlugin = {
     '--line-width': '2px',
     '--radius': '10px',
   },
-  createMapRenderer: (canvas) => new LigneClaireMapRenderer(canvas),
+  createMapRenderer: (canvas, hooks) => new LigneClaireMapRenderer(canvas, hooks),
   drawIcon,
   tileColor,
 };
