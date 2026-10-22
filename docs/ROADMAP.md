@@ -3,7 +3,13 @@
 The one plan for Casual Colonization. We decide the priorities here together. New ideas first land in [CHANGE_SUGGESTIONS.md](CHANGE_SUGGESTIONS.md) (the inbox). Once discussed, an idea moves into a release below, goes to **Parked**, or is **Rejected** with a reason.
 
 **How it works**
-- One release at a time, each with a theme. A release is merged to `main` when we agree it is done.
+- One release at a time, each with a theme.
+- **Branches:**
+  - `main` is what is released: what runs on https://casual.spence.dk/.
+  - Each release is built on its own branch, made from `main` and named after the release, for example `claude/0.6-living-world`. Agents work in isolated copies and merge into it.
+  - Side projects (tools and so on) get their own short branch.
+- **Pull requests:** a release (or side project) reaches `main` through a pull request. CI runs on it, Simon reviews and merges. `site/` is rebuilt (`npm run release`) in that pull request.
+- **Tags:** none for now. Simon decides when to copy `site/` to the server.
 - Anything bigger than M gets a short design note in [docs/design/](design/) before it is built.
 - Changes to the computer players come with tournament numbers (`npm run tournament`, `--features` for the feature-use audit), so "smarter" is measured.
 - Status: `idea` → `design` → `planned` → `in progress` → `done`.
@@ -66,6 +72,8 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Historical events (a starter set) | M | P1 | idea |
 | Random events in the Sim City spirit (a starter set) | M | P1 | idea |
 | Roads in the Civilization II style: auto-road along a path, later railroads | M | P3 | idea, needs scoping |
+| Rivers and roads meander a little instead of running straight between tile centres (drawn, with a fixed wobble per tile, so they don't move between frames) | S | P1 | in progress |
+| Title screen: add the new box covers once generated (F–K for the Americas; L–M and N–O later, with their scenarios) | S | P2 | planned |
 
 ## 0.7: The classic game, part 2
 
@@ -105,6 +113,12 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
   - Next: packs that use no hand-drawn graphics at all. A pack option (for example `fallback: 'placeholder'`) draws a plain placeholder (a flat tile colour, or a simple silhouette per category) instead of the procedural drawing for missing sprites. Packs can also supply sprite versions of the layers that are always procedural today: rivers (pieces per direction and size), coastline ink, fog edges, colony and unit flags, captions and badges. Plus a check that lists which ids a pack is missing.
 - A map editor in the game.
 - Network play (the deterministic engine already supports replays).
+
+## Agentic sprite pack generator
+
+| Item | Size | Prio | Status |
+| --- | --- | --- | --- |
+| Players write one prompt describing an art style and context (for example "science fiction", "mixed genders", "use a blue skin tone"). An agent turns it into a full sprite pack automatically: it writes the style bible and per-asset prompts, generates the full and thumbnail images, checks them (transparency, line weight, consistency) and redoes failures, runs the sprite pipeline and publishes a pack definition the game can load. Builds on tools/image-gen, tools/sprite-pipeline and sprite packs (including interface CSS). Needs a cost cap and a preview before the full run | XL | P3 | idea |
 
 ## Long-term ambition
 
