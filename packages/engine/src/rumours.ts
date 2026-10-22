@@ -1,4 +1,5 @@
 import { createUnit, message, player, reveal, unitPosition } from './queries.js';
+import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { randInt, weightedPick } from './rng.js';
 import { randomImmigrant } from './europe.js';
@@ -50,11 +51,13 @@ export function resolveRumour(s: GameState, u: Unit): void {
       const gold = 300 + randInt(s, 700);
       p.gold += gold;
       message(s, `You discover the ruins of a lost civilisation and recover ${gold} gold!`, u.owner, pos);
+      noteHistory(s, 'treasure', [u.owner], `Explorers find the ruins of a lost civilisation and recover ${gold} gold.`, { secret: true, at: pos });
       break;
     }
     case 'fountain':
       for (let i = 0; i < 4; i++) createUnit(s, u.owner, randomImmigrant(s, u.owner), { kind: 'europe' });
       message(s, 'You have found the Fountain of Youth! Four new colonists wait on the docks in Europe.', u.owner, pos);
+      noteHistory(s, 'treasure', [u.owner], 'Explorers find the Fountain of Youth: four colonists come from Europe.', { secret: true, at: pos });
       break;
     case 'lost':
       delete s.units[u.id];

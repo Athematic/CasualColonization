@@ -1,4 +1,5 @@
 import { fail } from './errors.js';
+import { noteGoods } from './history.js';
 import { track } from './telemetry.js';
 import { hasFather } from './fathers.js';
 import {
@@ -138,6 +139,7 @@ export function sellToMarket(s: GameState, p: Player, good: GoodId, amount: numb
   const net = gross - Math.floor((gross * market.tax) / 100);
   p.gold += net;
   noteTrade(s, p.id, net);
+  noteGoods(s, p.id, 'europe', good, amount);
   adjustMarket(market, good, amount);
   if (market === p) maybeRaiseTax(s, p, gross, good);
   return net;
@@ -212,6 +214,7 @@ export function runCustomHouse(s: GameState, colonyId: string): void {
     if (amount <= 0) continue;
     colony.goods[g] -= amount;
     total += sellToMarket(s, p, g, amount);
+    noteGoods(s, p.id, 'custom', g, amount);
   }
   if (total > 0) track(colony.owner, 'trade:custom house sales');
   if (total > 0) message(s, `The custom house in ${colony.name} sold goods for ${total} gold.`, colony.owner, colony);

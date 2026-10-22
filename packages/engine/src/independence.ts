@@ -1,4 +1,5 @@
 import { attack, declareWar, defencePower } from './combat.js';
+import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { fail, RuleError } from './errors.js';
 import { newPlayer } from './game.js';
@@ -99,6 +100,7 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   }
   const text = `${NATIONS[nation].name}'s colonies have declared independence! The Crown sends ${p.ref.regulars} regulars, ${p.ref.dragoons} dragoons and ${p.ref.artillery} artillery to crush the rebellion.`;
   message(s, text);
+  noteHistory(s, 'independence', [nation], `${NATIONS[nation].name}'s colonies declare independence.`);
   return text;
 }
 
@@ -183,6 +185,7 @@ function checkOutcome(s: GameState, p: Player): void {
     for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === p.id) delete s.units[u.id];
     const text = `${NATIONS[p.id].name} has won the War of Independence! A new nation is born.`;
     message(s, text);
+    noteHistory(s, 'independence', [p.id], text);
     if (!s.gameOver) s.gameOver = { turn: s.turn, reason: text, winner: p.id, scores: finalScores(s) };
     return;
   }
@@ -193,6 +196,7 @@ function checkOutcome(s: GameState, p: Player): void {
     track(p.id, 'independence:lost');
     const text = `The rebellion in ${NATIONS[p.id].name}'s colonies has been crushed.`;
     message(s, text);
+    noteHistory(s, 'independence', [p.id], text);
     const humansLeft = s.players.some((o) => o.human && o.independence !== 'lost');
     if (!humansLeft && !s.gameOver) s.gameOver = { turn: s.turn, reason: text, scores: finalScores(s) };
   }

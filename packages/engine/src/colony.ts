@@ -1,4 +1,5 @@
 import { fail } from './errors.js';
+import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { buildingCapacityPerWorker, colonyReport, foodToGrow, libertyBonus, tileYield, type ColonyReport } from './production.js';
 import {
@@ -114,6 +115,7 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
   onColonyFounded(s, colony);
   track(u.owner, 'cmd:foundColony');
   message(s, `${colony.name} has been founded.`, u.owner, { x, y });
+  noteHistory(s, 'colony', [u.owner], `${colony.name} is founded.`, { secret: true, at: { x, y } });
   return colony;
 }
 
