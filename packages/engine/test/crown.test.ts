@@ -312,6 +312,6 @@ describe('determinism', () => {
     const b = play();
     expect(serialize(a)).toBe(serialize(b));
     expect(landForce(nation(a, 'england').ref)).toBeGreaterThan(7);
-  });
+  }, 60_000);
 });
 

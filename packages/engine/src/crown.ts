@@ -9,6 +9,7 @@
  */
 import { declareWar } from './combat.js';
 import { fail } from './errors.js';
+import { noteHistory } from './history.js';
 import { royalForce } from './independence.js';
 import { message, player } from './queries.js';
 import { hasTradeAgreement, isFavoured, pairRandom } from './relations.js';
@@ -164,6 +165,7 @@ export function answerDemand(s: GameState, nation: NationId, pay: boolean): stri
     delete p.pendingDemand;
     p.gold -= demand.gold;
     track(nation, 'crown:demand paid');
+    noteHistory(s, 'crown', [nation], `${NATIONS[nation].name} pays the King ${demand.gold} gold.`, { secret: true });
     const text = `You pay the King ${demand.gold} gold.`;
     message(s, text, nation);
     return text;
@@ -171,6 +173,7 @@ export function answerDemand(s: GameState, nation: NationId, pay: boolean): stri
   const { colony } = demandPenalty(s, nation);
   delete p.pendingDemand;
   track(nation, 'crown:demand refused');
+  noteHistory(s, 'crown', [nation], `${NATIONS[nation].name} refuses the King's demand for ${demand.gold} gold${colony ? `; the goods in ${colony.name} are seized` : ''}.`, { secret: true, at: colony ?? undefined });
   const seized: string[] = [];
   if (colony) {
     for (const g of GOODS) {
@@ -222,6 +225,7 @@ export function royalWar(s: GameState, nation: NationId, target: NationId): void
   crown.lastWar = s.turn;
   crown.warOn = target;
   track(nation, 'crown:royal war');
+  noteHistory(s, 'crown', [nation, target], `The King of ${NATIONS[nation].name} declares war on ${NATIONS[target].name}.`);
   message(s, `The King has declared war on ${NATIONS[target].name}! Your colonies are at war with ${NATIONS[target].name}, whether you want it or not. Peace can be made later, as usual.`, nation);
   message(s, `The King of ${NATIONS[nation].name} has declared war on ${NATIONS[target].name}.`, target);
 }

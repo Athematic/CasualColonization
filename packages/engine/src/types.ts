@@ -338,7 +338,9 @@ export type HistoryKind =
   | 'treasure'
   | 'burned'
   | 'independence'
-  | 'tribe';
+  | 'tribe'
+  /** The King's demands for gold (paid or refused) and the wars he declares (crown.ts). */
+  | 'crown';
 
 /** One event in the game's history (see history.ts). */
 export interface HistoryEntry {

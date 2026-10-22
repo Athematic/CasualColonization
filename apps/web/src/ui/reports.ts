@@ -329,7 +329,7 @@ function militaryTab(ctx: ReportContext): Child[] {
       h('p', null, p.independence === 'declared'
         ? `Still to land: ${ref.regulars} regulars, ${ref.dragoons} dragoons, ${ref.artillery} artillery and ${ref.menOfWar} men-of-war. ${ref.landed} royal units are already in the New World.`
         : p.independence === 'won' ? 'The Crown’s forces have been defeated.'
-        : `The Crown keeps ${ref.regulars} regulars, ${ref.dragoons} dragoons, ${ref.artillery} artillery and ${ref.menOfWar} men-of-war ready to sail against a rebellion${refTotal ? '' : ' (none yet)'}.`),
+        : `The Crown keeps ${ref.regulars} regulars, ${ref.dragoons} dragoons, ${ref.artillery} artillery and ${ref.menOfWar} men-of-war ready to sail against a rebellion${refTotal ? '' : ' (none yet)'}. The King adds to it during the game, faster as your colonies ring more liberty bells.`),
       h('p', { class: 'muted small' }, 'Your own strength above counts soldiers at 2, dragoons at 3 and artillery at 5, as the Crown’s regulars would.')) : null,
     card('By place', byPlace),
     h('div', { class: 'report-columns' }, card('By type', forces.length ? byType : empty('None.')), card('Fortifications', colonies.length ? forts : empty('No colonies.'))),
@@ -490,10 +490,11 @@ const HISTORY_FILTERS: { id: string; name: string; kinds: HistoryKind[] }[] = [
   { id: 'congress', name: 'Congress', kinds: ['father', 'independence'] },
   { id: 'diplomacy', name: 'Diplomacy', kinds: ['war', 'peace', 'trade', 'favoured', 'cancel', 'tribe'] },
   { id: 'treasure', name: 'Treasure and conquest', kinds: ['treasure', 'burned'] },
+  { id: 'crown', name: 'The Crown', kinds: ['crown'] },
 ];
 
 const HISTORY_MARKS: Record<HistoryKind, string> = {
-  colony: '⌂', captured: '⚑', father: '★', war: '⚔', peace: '☮', trade: '⇄', favoured: '♦', cancel: '✕', treasure: '◆', burned: '🔥', independence: '✦', tribe: '⚔',
+  colony: '⌂', captured: '⚑', father: '★', war: '⚔', peace: '☮', trade: '⇄', favoured: '♦', cancel: '✕', treasure: '◆', burned: '🔥', independence: '✦', tribe: '⚔', crown: '♛',
 };
 
 let historyFilter = 'all';
