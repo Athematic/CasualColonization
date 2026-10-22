@@ -50,7 +50,7 @@ DO NOT INCLUDE: any text, letters, numbers, logos, publisher marks, signatures o
 
 ## 3. Front cover concepts
 
-Each concept is a self-contained prompt to append to the style block. Generate them all at low quality first. Concept B fits the game's planned direction (cooperation rather than conquest) best.
+Each concept is a self-contained prompt to append to the style block. Generate them all at low quality first. Concepts B and H fit the game's planned direction (cooperation rather than conquest) best. Concepts L and M are for the planned Australia scenario, and N and O for the planned Vinland scenario; they start with a SETTING line that replaces the period and place named in the style block.
 
 ### A. Landfall
 
@@ -80,6 +80,70 @@ FRONT COVER, portrait. Interior of a ship's great cabin in the stern of a sailin
 
 ```text
 FRONT COVER, portrait. Late afternoon on the hilltop of a mature colony. In the foreground, a crowd of colonists of all trades (a farmer with a pitchfork, a blacksmith in a leather apron, a weaver, a preacher in black, a fisherman, a militiaman in a blue coat) gathers around a town crier standing on the steps of a timber town hall; above them, a large bronze liberty bell hangs in an open wooden belfry and is being rung. Hats are thrown in the air; a new plain flag in blue and white, with no symbols, is being raised on a tall pole. Below the hill, a wide view: the colony's red roofs, a harbour with ships, fields and forest stretching to distant mountains under a big clear sky. Mood: hope and independence, not war.
+```
+
+### F. Winter quarters
+
+```text
+FRONT COVER, portrait. A small colony in its first winter, on a forest clearing above a frozen river in the northern woods. Deep snow on the ground and on the roofs of six log cabins and a palisade of sharpened logs; blue smoke rises straight up from the chimneys into a clear, pale winter sky. In the foreground, a colonist family in heavy wool coats and fur hats greets a party of Wendat visitors arriving on snowshoes, who pull a toboggan loaded with dried corn, smoked fish and furs to share; a Wendat woman shows a colonist child how to tie a snowshoe. Behind them, a colonist splits firewood and another carries a bucket from a hole cut in the river ice. Dark green conifers heavy with snow frame the scene, with blue-white hills beyond. Mood: hardship met together, warmth and help.
+```
+
+### G. The great river
+
+```text
+FRONT COVER, portrait. A wide, calm river flowing through a vast green continent, seen from low over the water. In the foreground, a large birch-bark canoe paddled by a mixed party: two French voyageurs in red caps and sashes, an Anishinaabe guide at the bow pointing ahead, and a mapmaker in a blue coat sketching in a blank notebook. Bundles, a small keg and a rolled tent lie in the canoe. Behind them, a second canoe follows. The riverbanks are lined with tall cottonwoods and willows; on a bluff to the right stands a small earth-walled trading post with a plain white pennant. In the distance the river bends between low bluffs into a hazy horizon under towering white summer clouds below the title band. A heron lifts off the water. Mood: discovery, scale and adventure.
+```
+
+### H. A feast of nations
+
+```text
+FRONT COVER, portrait. A long harvest feast on a meadow between two colonies and a native town, under autumn trees in red, orange and gold. Down a long trestle table running diagonally into the picture sit colonists of two different European nations, told apart only by coat colours (blue coats with cream facings, and dark green coats with yellow facings), and their Lenape hosts in deerskin and woven sashes, all sharing food: roast turkey, corn, squash, pumpkins, bread and apples. In the foreground, a Lenape elder and two colony governors raise wooden cups together. Children run between the benches; a fiddler and a drummer play. In the background, the cream houses of one colony, the log houses of another and the bark houses of the Lenape town stand side by side along a river, smoke rising. Mood: friendship, plenty and alliance.
+```
+
+### I. Two harbours
+
+```text
+FRONT COVER, portrait. Two merchant ships of different nations meet beside a stone quay in a busy European home port in the 1700s, one flying a plain blue pennant and one a plain green pennant, gangplanks down. In the foreground on the quay, two merchants in long coats and tricorns shake hands over an open crate of furs while porters carry sacks of coffee, bales of tobacco, crates of tools and casks onto both ships. A harbour crane of timber with a great treadwheel lifts a cargo net. Behind, tall gabled warehouses in cream, brick red and slate blue line the harbour, with a customs house and a church spire. The open sea beyond the harbour mouth shows more sails heading west. Mood: prosperity and trade between friendly nations.
+```
+
+### J. The silver road
+
+```text
+FRONT COVER, portrait. A narrow stone road zigzags down a steep green mountainside in the Andes. In the foreground, a mule train loaded with leather sacks and wooden chests is led by Quechua drivers in woven ponchos and knitted caps, with a Spanish officer in a cream coat and broad hat on a grey mule beside them; a llama carries a bundle and looks at the viewer. Below the road, stepped green farming terraces curve around the slope. Far below, a white colonial town with red tile roofs and a church tower sits in a valley beside a blue lake, and beyond it snow-capped peaks rise into a deep blue sky with a few clean white clouds below the title band. A condor glides above the valley. Mood: grandeur, height and the long journey of trade.
+```
+
+### K. The lost city
+
+```text
+FRONT COVER, portrait. Deep in a tropical rainforest, an expedition steps out of the undergrowth and finds the overgrown ruins of an ancient stone city. In the foreground, a Tupi guide holds aside a curtain of vines with one arm, and behind him a European scout in a sun-faded coat and a young cartographer with a telescope stare in wonder. Before them rise mossy stone stairways and a stepped temple platform wrapped in roots of giant trees, carved stones half buried in ferns; a shaft of sunlight falls across the steps. Bright parrots perch on a ruined wall, and a small waterfall spills into a green pool at the right. The forest canopy opens above the ruins to a patch of clear sky for the title. Mood: mystery, wonder and the lure of the unknown. No gold, treasure chests or skeletons.
+```
+
+### L. Australia: The first harbour
+
+```text
+SETTING (this replaces the period and place named in the style block): the east coast of Australia in the late 1780s.
+FRONT COVER, portrait. A deep, sheltered blue harbour lined with sandstone cliffs and tall grey-green eucalyptus trees. In the middle ground, three tall-masted sailing ships of the period lie at anchor with sails furled; longboats row towards a small sandy cove. In the foreground on a broad sandstone ledge above the cove, three Eora people, a man with a fishing spear and a woman and child beside a small fire with a bark canoe drawn up below, watch the arriving boats calmly and with curiosity. On the beach below, the first settlers in plain coats and a few marines in red unload crates and pitch canvas tents. Rainbow lorikeets fly across the cove; the bush stretches to blue hills. Mood: a quiet, momentous first meeting; respect and uncertainty, not triumph.
+```
+
+### M. Australia: Into the outback
+
+```text
+SETTING (this replaces the period and place named in the style block): inland Australia in the early 1800s.
+FRONT COVER, portrait. An exploring party crosses wide red-earth country under an enormous clear blue sky. In the foreground, a Wiradjuri guide in a possum-skin cloak kneels and points out a hidden waterhole to an explorer in a dusty blue coat and broad hat, who holds his horse's reins; a second explorer behind them writes in a notebook. A covered wagon pulled by bullocks and two pack horses follow. Around them, spinifex grass, a few white-trunked gum trees and a dry creek bed; red sandstone ranges glow on the horizon, and a mob of kangaroos watches from the shade of a tree. Mood: vastness, endurance and knowledge shared.
+```
+
+### N. Vinland: The longships
+
+```text
+SETTING (this replaces the period and place named in the style block): the coast of Newfoundland around the year 1000, when Norse settlers sailed from Greenland.
+FRONT COVER, portrait. Two Norse longships with square sails in broad red and cream stripes, carved prows and rows of round shields along the sides (plain colours, no symbols) glide into a calm grey-blue bay on a cool summer morning. In the foreground, the first longship's crew leap into knee-deep water: a woman in a long wool dress and apron brooches carries a basket of seed, a man shoulders a woodcutter's axe and another hauls a rope towards the shore, where green meadows rise to dark spruce forest. A low headland with grassy turf and pale rocks frames the bay at the right; seabirds wheel over the water below the title band. Mood: hope and boldness at the edge of the known world. No helmets with horns.
+```
+
+### O. Vinland: The first winter
+
+```text
+SETTING (this replaces the period and place named in the style block): the Norse settlement in Vinland (Newfoundland) around the year 1000.
+FRONT COVER, portrait. A cluster of long turf-walled houses with grass roofs, half buried in snow, stands on a terrace above a frozen shore, smoke rising from the roof holes into a pale winter sky. In the foreground, Norse settlers in wool cloaks and fur hoods trade with a small party of local people dressed in caribou-skin parkas, who have arrived with a sled of furs and dried meat; a Norse woman offers a bolt of red cloth and a little iron knife in return, and both groups are cautious but friendly. A Norse child and a local child watch each other from behind the adults. A beached longship rests under a snow-covered shelter of timber at the shore. Dark spruce forest and white hills behind. Mood: survival, scarcity and a fragile first contact.
 ```
 
 ## 4. Back cover

@@ -67,6 +67,9 @@ param(
     [switch]$RedoFlagged,
     # Also make "<front>__titled" box-art jobs with model-lettered title (BOX_ART_PROMPTS.md section 6).
     [switch]$IncludeTitle,
+    # Generate sprites in the prompt document's order. By default the sections run in reverse (UI pieces
+    # first, colonist units last), with the style bible always first.
+    [switch]$DocumentOrder,
     # At most this many API jobs in this run (0 = no limit).
     [ValidateRange(0, 100000)][int]$MaxJobs = 0,
     # HTTP attempts per job for rate limits, 5xx and network errors.
@@ -113,7 +116,7 @@ if ($Variant -ne 'full') {
     }
 }
 $jobs = Get-ImageJobs -SpriteDoc $SpriteDoc -BoxArtDoc $BoxArtDoc -Doc $Doc -Only $Only -Variants $Variants -IncludeTitle:$IncludeTitle `
-    -Variant $Variant -ThumbPrompts $thumbPrompts
+    -Variant $Variant -ThumbPrompts $thumbPrompts -DocumentOrder:$DocumentOrder
 $byDoc = foreach ($d in 'sprites', 'boxart', 'thumbs') {
     $n = @($jobs | Where-Object Doc -eq $d).Count
     if ($n) { "${d}: $n" }
