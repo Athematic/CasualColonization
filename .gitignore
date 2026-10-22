@@ -8,3 +8,10 @@ scripts/.*.mjs
 # Runtime sprite set (tools/sprite-pipeline output): uploaded to the server, not committed
 site/assets/runtime/
 apps/web/public/assets/runtime/
+
+# image generator output (tools/image-gen)
+tools/image-gen/output/
+
+# sprite pipeline output and download cache (tools/sprite-pipeline)
+tools/sprite-pipeline/out/
+tools/sprite-pipeline/cache/
