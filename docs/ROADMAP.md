@@ -3,7 +3,13 @@
 The one plan for Casual Colonization. We decide the priorities here together. New ideas first land in [CHANGE_SUGGESTIONS.md](CHANGE_SUGGESTIONS.md) (the inbox). Once discussed, an idea moves into a release below, goes to **Parked**, or is **Rejected** with a reason.
 
 **How it works**
-- One release at a time, each with a theme. A release is merged to `main` when we agree it is done.
+- One release at a time, each with a theme.
+- **Branches:**
+  - `main` is what is released: what runs on https://casual.spence.dk/.
+  - Each release is built on its own branch, made from `main` and named after the release, for example `claude/0.6-living-world`. Agents work in isolated copies and merge into it.
+  - Side projects (tools and so on) get their own short branch.
+- **Pull requests:** a release (or side project) reaches `main` through a pull request. CI runs on it, Simon reviews and merges. `site/` is rebuilt (`npm run release`) in that pull request.
+- **Tags:** none for now. Simon decides when to copy `site/` to the server.
 - Anything bigger than M gets a short design note in [docs/design/](design/) before it is built.
 - Changes to the computer players come with tournament numbers (`npm run tournament`, `--features` for the feature-use audit), so "smarter" is measured.
 - Status: `idea` → `design` → `planned` → `in progress` → `done`.
