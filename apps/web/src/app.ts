@@ -479,7 +479,7 @@ export class App {
         return;
       case 'attack': {
         const brave = opt.braveId ? this.state.braves?.[opt.braveId] : undefined;
-        const target = opt.colonyId ? this.state.colonies[opt.colonyId]?.name : brave ? `the ${braveName(brave).toLowerCase()}` : 'the enemy unit';
+        const target = opt.colonyId ? this.state.colonies[opt.colonyId]?.name : brave ? `the ${braveName(brave)}` : 'the enemy unit';
         const ok = await confirmDialog('Attack?', `Attack ${target}? This is an act of war.`, 'Attack', 'Hold back');
         if (ok && this.dispatch({ type: 'attack', unitId: u.id, target: { unitId: opt.targetUnitId, colonyId: opt.colonyId, braveId: opt.braveId } })) this.afterUnitAction();
         return;

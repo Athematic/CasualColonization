@@ -106,7 +106,7 @@ export function aiFight(s: GameState, p: Player, u: Unit): boolean {
     }
     // Hostile braves next to the unit, when the odds are good.
     const brave = !isShip(u) ? hostileBraveAt(s, p.id, n.x, n.y) : undefined;
-    if (brave && offencePower(s, u) >= braveDefence(s, brave) * 1.5) {
+    if (brave && offencePower(s, u) >= braveDefence(s, brave) * 2.5) {
       attack(s, u.id, { braveId: brave.id });
       return true;
     }

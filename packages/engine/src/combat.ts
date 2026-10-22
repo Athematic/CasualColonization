@@ -287,6 +287,7 @@ function attackBrave(s: GameState, u: Unit, braveId: string): CombatResult {
   const pos = unitPosition(s, u)!;
   if (!b || distance(b.x, b.y, pos.x, pos.y) !== 1) fail('The brave is not next to the unit.');
   if (isShip(u)) fail('Ships cannot attack braves on land.');
+  const atWar = s.tribes.find((t) => t.id === b.tribe)?.stance[u.owner] === 'war';
   hostile(s, b.tribe, u.owner, b, `an attack on one of their braves`);
   const off = offencePower(s, u);
   const def = braveDefence(s, b);
@@ -294,12 +295,12 @@ function attackBrave(s: GameState, u: Unit, braveId: string): CombatResult {
   const name = braveName(b);
   let text: string;
   if (won) {
-    killBrave(s, b, u.owner);
+    killBrave(s, b, u.owner, atWar);
     track(u.owner, 'combat:brave killed');
-    text = `${unitName(u)} kills a ${name.toLowerCase()}.${promote(s, u)}`;
+    text = `${unitName(u)} kills the ${name}.${promote(s, u)}`;
   } else {
     const role = u.role;
-    text = `${unitName(u)} is beaten by a ${name.toLowerCase()}: ${demote(s, u, u)}.`;
+    text = `${unitName(u)} is beaten by the ${name}: ${demote(s, u, u)}.`;
     // The brave keeps what the loser dropped.
     if (role === 'dragoon') b.mounted = true;
     else if (role === 'soldier') b.armed = true;

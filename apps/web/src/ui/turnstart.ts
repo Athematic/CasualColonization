@@ -1,4 +1,4 @@
-import { demandText, FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, pendingDemands, TRIBES, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { aBrave, demandText, FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, pendingDemands, TRIBES, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
 
@@ -86,7 +86,7 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
         required: true,
         render: (done) =>
           h('div', { class: 'decision-body' },
-            h('p', null, `A ${tribe} brave stands outside ${colony.name} and demands ${what}. If you refuse, the ${tribe} grow angrier and the brave attacks the colony.`),
+            h('p', null, `${aBrave(tribe)} stands outside ${colony.name} and demands ${what}. If you refuse, the ${tribe} grow angrier and the brave attacks the colony.`),
             h('div', { class: 'decision-actions' },
               h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerNativeDemand', demandId: d.id, accept: true }, true) && done(`Paid ${what}.`) }, `Pay ${what}`),
               h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerNativeDemand', demandId: d.id, accept: false }, true) && done('Refused: the brave attacks.') }, 'Refuse'))),
@@ -98,7 +98,7 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
         required: false,
         render: (done) =>
           h('div', { class: 'decision-body' },
-            h('p', null, `A ${tribe} brave at ${colony.name} offers ${what} for ${d.price} gold. You have ${me.gold} gold.`),
+            h('p', null, `${aBrave(tribe)} at ${colony.name} offers ${what} for ${d.price} gold. You have ${me.gold} gold.`),
             h('div', { class: 'decision-actions' },
               h('button', { class: 'btn primary', disabled: me.gold < (d.price ?? 0), onclick: () => app.dispatch({ type: 'answerNativeDemand', demandId: d.id, accept: true }, true) && done(`Bought ${what}.`) }, `Buy for ${d.price} gold`),
               h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerNativeDemand', demandId: d.id, accept: false }, true) && done('Declined.') }, 'Decline'))),

@@ -17,6 +17,7 @@ import {
   DIRECTIONS,
   distance,
   inBounds,
+  isCoastal,
   isShip,
   isWater,
   message,
@@ -25,6 +26,7 @@ import {
   tileAt,
   unitName,
   unitsAt,
+  warehouseCapacity,
 } from './queries.js';
 import { random, randInt } from './rng.js';
 import { noteTrade } from './stats.js';
@@ -80,6 +82,11 @@ export function bravesAt(s: GameState, x: number, y: number): Brave[] {
   return out;
 }
 
+/** "A Sioux brave", "An Arawak brave". */
+export function aBrave(tribe: string): string {
+  return `${/^[AEIOU]/.test(tribe) ? 'An' : 'A'} ${tribe} brave`;
+}
+
 export function braveName(b: Brave): string {
   const kind = b.armed && b.mounted ? 'Mounted armed brave' : b.armed ? 'Armed brave' : b.mounted ? 'Mounted brave' : 'Brave';
   return `${TRIBES[b.tribe].name} ${kind.toLowerCase()}`;
@@ -94,14 +101,21 @@ export function hasSubmitted(s: GameState, tribe: Settlement['tribe'], nation: N
   return !!s.tribes.find((t) => t.id === tribe)?.submitted?.includes(nation);
 }
 
-/** Removes a brave. With a killer, the tribe mourns: tension rises towards that nation. */
-export function killBrave(s: GameState, b: Brave, killer?: NationId): void {
+/**
+ * Removes a brave. With a killer, the tribe mourns: tension rises towards that nation, by a third
+ * as much (and at home only) when the tribe was already at war with it, so wars can still end.
+ */
+export function killBrave(s: GameState, b: Brave, killer?: NationId, atWar = false): void {
   delete bravesOf(s)[b.id];
   s.nativeDemands = (s.nativeDemands ?? []).filter((d) => d.braveId !== b.id);
   const home = s.settlements[b.home];
   if (!home) return;
   home.braveTimer = Math.max(home.braveTimer ?? 0, BRAVE_RESPAWN[settlementKind(home)]);
   if (!killer || killer === 'crown') return;
+  if (atWar) {
+    addTension(home, killer, Math.round(BRAVE_KILLED_TENSION / 3));
+    return;
+  }
   for (const st of Object.values(s.settlements)) {
     if (st.tribe !== b.tribe) continue;
     addTension(st, killer, st.id === home.id ? BRAVE_KILLED_TENSION : Math.round(BRAVE_KILLED_TENSION / 3));
@@ -460,7 +474,7 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
     track(nation, 'natives:gold from sales', gold);
     noteGoods(s, nation, 'natives', g, amount);
     addTension(st, nation, -10);
-    message(s, `A ${tribe} brave buys ${amount} ${GOOD_DEFS[g].name.toLowerCase()} in ${c.name} for ${gold} gold.`, nation, c);
+    message(s, `${aBrave(tribe)} buys ${amount} ${GOOD_DEFS[g].name.toLowerCase()} in ${c.name} for ${gold} gold.`, nation, c);
     break;
   }
   const offer = settlementForSale(st)
@@ -473,12 +487,14 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
   if (p.human) {
     const d = addDemand(s, { kind: 'offer', nation, colonyId: c.id, settlementId: st.id, braveId: b.id, good: offer.good, amount: offer.amount, price });
     b.task = { kind: 'wait', demandId: d.id, turns: DEMAND_WAIT };
-    message(s, `A ${tribe} brave at ${c.name} offers ${offer.amount} ${GOOD_DEFS[offer.good].name.toLowerCase()} for ${price} gold.`, nation, c);
+    message(s, `${aBrave(tribe)} at ${c.name} offers ${offer.amount} ${GOOD_DEFS[offer.good].name.toLowerCase()} for ${price} gold.`, nation, c);
     return;
   }
   // A computer player buys when the goods fetch clearly more in Europe, and it can spare the gold.
   const worth = offer.amount * sellPrice(p, offer.good) * (1 - p.tax / 100);
-  if (p.ai && p.ai !== 'naive' && worth >= price * 1.3 && p.gold >= price + 500 && p.independence === 'none') {
+  // Only for a port with room for the goods, so they can be shipped rather than spoil.
+  const room = c.goods[offer.good] + offer.amount <= warehouseCapacity(c) && isCoastal(s, c.x, c.y);
+  if (p.ai && p.ai !== 'naive' && room && worth >= price * 1.5 && p.gold >= price + 800 && p.independence === 'none') {
     buyOffer(s, st, c, offer.good, offer.amount, price);
   }
 }
@@ -520,7 +536,7 @@ function makeDemand(s: GameState, b: Brave, st: Settlement, c: Colony): void {
   const p = player(s, c.owner);
   if (p.human) {
     b.task = { kind: 'wait', demandId: d.id, turns: DEMAND_WAIT };
-    message(s, `A ${tribe} brave at ${c.name} demands ${demandText(d)} as tribute.`, c.owner, c);
+    message(s, `${aBrave(tribe)} at ${c.name} demands ${demandText(d)} as tribute.`, c.owner, c);
     return;
   }
   resolveDemand(s, d, aiPaysTribute(s, b, c, d));
@@ -663,7 +679,7 @@ export function attackColony(s: GameState, b: Brave, c: Colony): void {
     killBrave(s, b);
     if (st) addTension(st, c.owner, -30);
     track(c.owner, 'natives:brave killed');
-    message(s, `${c.name} beats off an attack by the ${tribe}: the ${braveName(b).toLowerCase()} is killed.${promote(s, defender)}`, c.owner, c);
+    message(s, `${c.name} beats off an attack by the ${tribe}: the ${braveName(b)} is killed.${promote(s, defender)}`, c.owner, c);
     return;
   }
   if (isArmed(defender) && defender.loc.kind === 'map') {

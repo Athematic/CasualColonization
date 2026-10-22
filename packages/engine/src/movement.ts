@@ -28,6 +28,7 @@ import {
 import { FOREST_MOVE_COST, RIVER_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './rules/terrain.js';
 import { riverLinked } from './rivers.js';
 import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
+import type { TribeId } from './rules/nations.js';
 import type { GameState, ImprovementKind, Unit } from './types.js';
 
 export type MoveOption =
@@ -127,7 +128,7 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
   // Braves of a tribe at peace step aside; hostile ones must be fought.
   const brave = !colony ? hostileBraveAt(s, u.owner, x, y) : undefined;
   if (brave) {
-    return canAttack(u) ? { kind: 'attack', braveId: brave.id } : { kind: 'blocked', reason: `A hostile ${braveName(brave).toLowerCase()} is in the way.` };
+    return canAttack(u) ? { kind: 'attack', braveId: brave.id } : { kind: 'blocked', reason: `A hostile ${braveName(brave)} is in the way.` };
   }
   if (foreign.length) {
     return canAttack(u) ? { kind: 'attack', targetUnitId: foreign[0].id } : { kind: 'blocked', reason: 'Foreign units block the way.' };
@@ -233,6 +234,8 @@ export interface MapIndex {
   settlements: Set<number>;
   /** Owners of units standing on each tile. */
   units: Map<number, Set<string>>;
+  /** Tribes whose braves stand on each tile (routes avoid hostile ones). Missing in indexes built elsewhere. */
+  braves?: Map<number, TribeId[]>;
 }
 
 export function buildMapIndex(s: GameState): MapIndex {
@@ -247,6 +250,14 @@ export function buildMapIndex(s: GameState): MapIndex {
     if (!owners) index.units.set(i, (owners = new Set()));
     owners.add(u.owner);
   }
+  const braves = new Map<number, TribeId[]>();
+  for (const b of Object.values(s.braves ?? {})) {
+    const i = b.y * w + b.x;
+    const list = braves.get(i);
+    if (list) list.push(b.tribe);
+    else braves.set(i, [b.tribe]);
+  }
+  index.braves = braves;
   return index;
 }
 
@@ -259,6 +270,8 @@ function passable(s: GameState, u: Unit, x: number, y: number, isGoal: boolean, 
   if (index.settlements.has(i)) return false;
   const owners = index.units.get(i);
   if (owners && [...owners].some((o) => o !== u.owner)) return false;
+  const tribes = isGoal ? undefined : index.braves?.get(i);
+  if (tribes && tribes.some((t) => s.tribes.find((o) => o.id === t)?.stance[u.owner] === 'war')) return false;
   // People can only route through land they have seen; the AI knows the map.
   const owner = player(s, u.owner);
   if (owner.human && !owner.explored[i] && !isGoal) return false;

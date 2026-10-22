@@ -44,11 +44,11 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Visible native braves: wandering, visiting, trading, demanding, attacking | L | P1 | in progress |
-| Armed and mounted braves | S | P2 | in progress |
-| Buying goods from native settlements | S | P1 | in progress |
-| Burial grounds; surrender of a tribe after its capital falls | S | P2 | in progress |
-| Missionaries denouncing rival missions and inciting tribes | S | P3 | in progress |
+| Visible native braves: wandering, visiting, trading, demanding, attacking | L | P1 | done |
+| Armed and mounted braves | S | P2 | done |
+| Buying goods from native settlements | S | P1 | done |
+| Burial grounds; surrender of a tribe after its capital falls | S | P2 | done |
+| Missionaries denouncing rival missions and inciting tribes | S | P3 | done |
 | A Royal Expeditionary Force that grows during the game, visible to the player | M | P1 | in progress |
 | Royal demands for gold; royal wars | M | P1 | in progress |
 | Advisor reports (colony, trade, military, naval, religion, natives, Congress, history) | M | P1 | done (eight tabs, `A`/`F1`–`F8`; engine keeps a capped history and a goods ledger) |

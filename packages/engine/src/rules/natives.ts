@@ -83,7 +83,7 @@ export const BUY_PRICE_PLENTY = 0.8;
  * be a burial ground. Weight among the rumour outcomes, multiplied by the difficulty's `burialGrounds`.
  */
 export const BURIAL_RADIUS = 2;
-export const BURIAL_WEIGHT = 8;
+export const BURIAL_WEIGHT = 4;
 
 /**
  * Surrender: when a tribe's capital is burned, its remaining settlements submit to the attacker

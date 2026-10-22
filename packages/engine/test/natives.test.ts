@@ -11,6 +11,7 @@ import {
   distance,
   foundColony,
   incitePrice,
+  isCoastal,
   isWater,
   killBrave,
   landPrice,
@@ -29,6 +30,8 @@ import {
   type Settlement,
 } from '../src/index.js';
 import { resolveRumour, tribalLandOwner } from '../src/rumours.js';
+import { buyFromNatives, maybeIncite } from '../src/ai/natives.js';
+import { AI_PROFILES } from '../src/ai/profiles.js';
 
 function game(seed = 42, humans: NationId[] = ['england']): GameState {
   return createGame({ seed, mapSize: 'small', nations: ['england', 'france'], humans });
@@ -217,6 +220,22 @@ describe('braves', () => {
     if (/kills/.test(r.ok ? r.text ?? '' : '')) expect(bravesOf(s)[b.id]).toBeUndefined();
   });
 
+  it('step aside at peace, and block routes when hostile', () => {
+    const s = game();
+    const { c, st } = colonyNear(s);
+    const spot = landBeside(s, c.x, c.y);
+    const b = brave(s, st, spot);
+    const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', x: c.x, y: c.y });
+    u.moves = 3;
+    const dir = (['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'] as const).find((d) => {
+      const o = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] }[d];
+      return c.x + o[0] === b.x && c.y + o[1] === b.y;
+    })!;
+    expect(describeMove(s, u.id, dir).kind).toBe('move');
+    tribeOf(s, st).stance.england = 'war';
+    expect(describeMove(s, u.id, dir).kind).toBe('blocked');
+  });
+
   it('take muskets and horses the tribe has bought, and fight harder with them', () => {
     const s = game();
     const { st } = colonyNear(s);
@@ -270,6 +289,48 @@ describe('buying from natives', () => {
     expect(nativeUnitPrice(st, 'silver', 'england')).toBeGreaterThan(calm);
     for (let i = 0; i < 30; i++) processNatives(s);
     expect(Object.values(s.settlements).some((o) => Object.values(o.goods ?? {}).some((n) => (n ?? 0) > 0))).toBe(true);
+  });
+});
+
+describe('computer players and natives', () => {
+  it('buy goods from a settlement with a wagon train when it pays', () => {
+    const s = game(42, []);
+    const { c, st } = colonyNear(s, 'france');
+    const p = s.players.find((o) => o.id === 'france')!;
+    p.gold = 3000;
+    const spot = landBeside(s, st.x, st.y);
+    const wagon = createUnit(s, 'france', 'wagonTrain', { kind: 'map', ...spot });
+    wagon.moves = 6;
+    st.goods = { silver: 100, cotton: 100 };
+    // The goods need a port to go to.
+    if (!isCoastal(s, c.x, c.y)) {
+      const i = s.map.tiles.findIndex((_, k) => !colonySiteProblem(s, k % s.map.width, Math.floor(k / s.map.width)) && isCoastal(s, k % s.map.width, Math.floor(k / s.map.width)));
+      const u = createUnit(s, 'france', 'freeColonist', { kind: 'map', x: i % s.map.width, y: Math.floor(i / s.map.width) });
+      u.moves = 3;
+      foundColony(s, u.id, 'Port');
+    }
+    expect(buyFromNatives(s, p, wagon, st)).toBe(true);
+    expect(wagon.cargo?.silver).toBe(100);
+    // Cotton does not pay enough to be worth it.
+    expect(wagon.cargo?.cotton).toBeUndefined();
+  });
+
+  it('incite only at Combative level, at war, with gold to spare', () => {
+    const s = game(42, []);
+    const { st } = colonyNear(s, 'england');
+    const p = s.players.find((o) => o.id === 'france')!;
+    const spot = landBeside(s, st.x, st.y);
+    const m = createUnit(s, 'france', 'freeColonist', { kind: 'map', ...spot });
+    m.role = 'missionary';
+    m.moves = 3;
+    p.gold = 10_000;
+    expect(maybeIncite(s, p, m, st, AI_PROFILES.combative)).toBe(false);
+    p.stance.england = 'war';
+    expect(maybeIncite(s, p, m, st, AI_PROFILES.competent)).toBe(false);
+    expect(maybeIncite(s, p, m, st, AI_PROFILES.creative)).toBe(false);
+    expect(maybeIncite(s, p, m, st, AI_PROFILES.combative)).toBe(true);
+    m.moves = 3;
+    expect(maybeIncite(s, p, m, st, AI_PROFILES.combative)).toBe(false);
   });
 });
 

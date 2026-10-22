@@ -40,7 +40,7 @@ It then shows up in the new-game screen and in the in-game *Game* menu.
 | `pathTurns` | Optional. Turns of movement the selected unit needs to reach the end of `path`. When it is above 1, draw it as a small counter badge on the target tile. Older renderers can ignore it. |
 | `labels` | `false` in close-up views (the colony screen), where captions should be hidden. |
 
-Helpers in `@cc/render-api` take care of the bookkeeping: `tileToScreen`, `screenToTile`, `visibleRange`, `isTileExplored`, `isTileVisible`, `unitStacks` (one unit to draw per tile, honouring selection and visibility), `nationColor` and `hash2` (deterministic scatter for decorations).
+Helpers in `@cc/render-api` take care of the bookkeeping: `tileToScreen`, `screenToTile`, `visibleRange`, `isTileExplored`, `isTileVisible`, `unitStacks` (one unit to draw per tile, honouring selection and visibility), `braveMarkers` and `tribeColor` (native braves in sight, one per tile, to draw in the tribe's colour), `nationColor` and `hash2` (deterministic scatter for decorations).
 
 The shell does all hit-testing with `screenToTile`. A renderer must therefore use the same square grid: tile `(x, y)` covers `tileToScreen(x, y)` to `tileToScreen(x + 1, y + 1)`. Inside that square you can draw anything. Sprites may overflow into neighbouring tiles.
 
@@ -62,7 +62,7 @@ A style that loads images in the background can implement the optional `onAssets
 
 ## Layer hooks
 
-`MapLayerHooks` (in `@cc/render-api`) name the layers of a map frame: `water`, `land` (with a `shape()` callback that traces the renderer's own outline of the tile), `shore`, `plowed`, `road`, `relief` (hills, mountains, forest), `bonus`, `rumour`, `settlement`, `colony` and `unit`, plus `beginFrame`. A renderer that supports them offers each piece to its hook first. A hook returns `true` when it drew the piece, and `false` to let the renderer draw it as usual. Everything else (coastline ink, rivers, fog, captions, pennants, routes, badges) stays with the renderer. `LigneClaireMapRenderer` supports all of them. The schematic renderer ignores them.
+`MapLayerHooks` (in `@cc/render-api`) name the layers of a map frame: `water`, `land` (with a `shape()` callback that traces the renderer's own outline of the tile), `shore`, `plowed`, `road`, `relief` (hills, mountains, forest), `bonus`, `rumour`, `settlement`, `colony`, `unit` and `brave` (a native brave; sprite packs map `units.braves`, falling back to procedural drawing), plus `beginFrame`. A renderer that supports them offers each piece to its hook first. A hook returns `true` when it drew the piece, and `false` to let the renderer draw it as usual. Everything else (coastline ink, rivers, fog, captions, pennants, routes, badges) stays with the renderer. `LigneClaireMapRenderer` supports all of them. The schematic renderer ignores them.
 
 ## Sprite packs
 
