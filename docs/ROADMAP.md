@@ -99,6 +99,8 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
 ## Later
 
 - More graphical styles as plugins. Sprite-based styles are packs of data (art, mapping from the game to sprite ids, draw rules) loaded by one generic sprite style plugin. Ligne claire (painted) is the first pack, and scenarios can bring their own.
+  - Done: packs and styles can bring their own interface CSS (`css`, `cssFiles`, `fallbackCss: false`).
+  - Next: packs that use no hand-drawn graphics at all. A pack option (for example `fallback: 'placeholder'`) draws a plain placeholder (a flat tile colour, or a simple silhouette per category) instead of the procedural drawing for missing sprites. Packs can also supply sprite versions of the layers that are always procedural today: rivers (pieces per direction and size), coastline ink, fog edges, colony and unit flags, captions and badges. Plus a check that lists which ids a pack is missing.
 - A map editor in the game.
 - Network play (the deterministic engine already supports replays).
 
