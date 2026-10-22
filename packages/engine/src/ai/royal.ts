@@ -90,9 +90,9 @@ export function crownAffairs(s: GameState, p: Player, prof: AiProfile | null, pl
 
 /**
  * A war the King declared: a nation that means to fight (aggression 0.5 or more) and finds an
- * enemy colony within 10 tiles its spare army (of the given attack strength) could take marches on it; otherwise it offers
- * peace once the enemy can be tired of the war (WAR_WEARINESS turns), unless it already has a
- * war target there.
+ * enemy colony within 10 tiles that its spare army (of the given attack strength) could take
+ * marches on it; otherwise it offers peace once the enemy can be tired of the war
+ * (WAR_WEARINESS turns), unless it already has a war target there.
  */
 function royalWarTurn(s: GameState, p: Player, prof: AiProfile, strength: number): void {
   const enemy = p.royal?.warOn;

@@ -60,6 +60,7 @@ const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
 export function runAdvanced(s: GameState, p: Player, prof: AiProfile): void {
   turnShare = rebelShare(s, p.id);
   turnArmy = prof.independence ? armyForIndependence(s, p, prof.independence) : 0;
+  turnArming = preparingIndependence(prof) && !canBeatRef(s, p, prof.independence!.ratio);
   const army = spareArmy(s, p, prof);
   const strength = army.reduce((n, u) => n + offencePower(s, u), 0);
   safely(() => foreignAffairs(s, p, prof, strength, army.length));
@@ -85,6 +86,9 @@ let turnShare = 0;
 
 /** Armed units per colony wanted for independence, against the force the Crown has built up (ai/royal.ts); also once per turn. */
 let turnArmy = 0;
+
+/** Getting ready for independence while the defence is still short of the Royal Expeditionary Force: arm. */
+let turnArming = false;
 
 /** Whether the nation's rebel share is within `margin` points of the share at which it means to declare. */
 function preparingIndependence(prof: AiProfile, margin = 15): boolean {
@@ -248,6 +252,8 @@ function buildPlan(s: GameState, p: Player, c: Colony, prof: AiProfile): BuildTa
   b('carpenter');
   b('warehouse');
   if (militant(prof) || preparing) b('armory');
+  // Artillery defends a colony best of all against the Royal Expeditionary Force.
+  if (turnArming && c.buildings.armory > 0 && c.buildings.stockade > 0) plan.push({ kind: 'unit', id: 'artillery' });
   if (prof.schools && pop >= 4) b('schoolhouse');
   for (const k of ['weaver', 'distiller', 'tobacconist', 'furTrader', 'blacksmith'] as BuildingKind[]) if (staffed(k) >= 2) b(k);
   b('church');
@@ -750,9 +756,9 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
   if (prof.liberty > 1.3 && s.turn > 30 && statesmen < colonies.length) buyUnit('elderStatesman');
   const armed = countOwned(s, p, isArmed);
   // A nation getting ready for independence also buys veterans and artillery against the Royal Expeditionary Force.
-  const arming = preparingIndependence(prof) && !canBeatRef(s, p, prof.independence!.ratio);
-  if (armed < colonies.length * garrisonFor(p, prof) && (armed === 0 || ((militant(prof) || arming) && p.gold > prof.reserve + 4000))) buyUnit('veteranSoldier');
-  if ((militant(prof) || arming) && s.turn > 80 && countOwned(s, p, (u) => u.type === 'artillery') < Math.ceil(colonies.length / 2)) {
+  const arming = turnArming;
+  if (armed < colonies.length * garrisonFor(p, prof) && (armed === 0 || (militant(prof) && p.gold > prof.reserve + 4000) || (arming && p.gold > prof.reserve + 2500))) buyUnit('veteranSoldier');
+  if ((militant(prof) || arming) && s.turn > 80 && countOwned(s, p, (u) => u.type === 'artillery') < Math.ceil(colonies.length / (arming ? 1 : 2))) {
     if (room() >= 0 && afford(trainPrice(p, 'artillery'))) safely(() => train(s, p.id, 'artillery'));
   }
   const fishable = colonies.some((c) => c.buildings.docks > 0) && !countOwned(s, p, (u) => u.type === 'expertFisherman');
@@ -775,7 +781,11 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
     if (toolsNeeded > 0 && afford(buyPrice(market, 'tools') * 100)) safely(() => buyGoods(s, ship.id, 'tools', Math.min(100, Math.ceil(toolsNeeded / 10) * 10)));
     const preparing = !!prof.independence && turnShare >= prof.independence.minShare - 15;
     const muskets = colonies.reduce((n, c) => n + c.goods.muskets, 0);
-    if ((preparing || militant(prof)) && muskets < colonies.length * 50 * (preparing ? Math.max(1, turnArmy) : 1) && afford(buyPrice(market, 'muskets') * 100 + 300)) safely(() => buyGoods(s, ship.id, 'muskets', 100));
+    // Arming for independence: up to three holds of muskets a trip, to arm colonists as militia.
+    for (let i = 0; i < (turnArming ? 3 : 1); i++) {
+      const stock = muskets + (ship.cargo?.muskets ?? 0);
+      if ((preparing || militant(prof)) && stock < colonies.length * 50 * (preparing ? Math.max(1, turnArmy) : 1) && afford(buyPrice(market, 'muskets') * 100 + 300)) safely(() => buyGoods(s, ship.id, 'muskets', 100));
+    }
     if (!colonies.some((c) => c.goods.horses >= 2) && colonies.length && afford(buyPrice(market, 'horses') * 50)) safely(() => buyGoods(s, ship.id, 'horses', 50));
     // Creative: holds left over carry goods that another port pays clearly more for.
     if (!warship) safely(() => triangleBuy(s, p, ship, prof));

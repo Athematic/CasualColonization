@@ -321,7 +321,8 @@ export function train(s: GameState, nation: Player['id'], type: UnitTypeId, port
 
 /** Called each turn: crosses bring a new immigrant to the docks. */
 export function processImmigration(s: GameState, p: Player): void {
-  if (p.crosses < p.crossesRequired || p.independence !== 'none') return;
+  // The Crown (holding colonies it retook) has no docks to send immigrants to.
+  if (p.crosses < p.crossesRequired || p.independence !== 'none' || p.id === 'crown' || !p.recruitPool.length) return;
   p.crosses -= p.crossesRequired;
   p.crossesRequired += Math.round((p.id === 'england' ? 12 : 20) * difficultyRules(p).crosses);
   // Brewster lets the colony pick the best candidate; otherwise chance decides.

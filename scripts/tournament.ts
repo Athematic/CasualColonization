@@ -5,7 +5,8 @@
 // --features also counts how often each level uses each game feature and prints a table of
 // features against levels, flagging the ones the advanced levels never or hardly use.
 // --no-favoured: computer players make no trade or Favoured Nation proposals, to measure what
-// Favoured Nation brings. Every run also prints relations and trade between the nations.
+// Favoured Nation brings. Every run also prints relations and trade between the nations, and the
+// Crown: independence, the Royal Expeditionary Force against the old formula, demands and royal wars.
 import { AI_LEVELS, DIFFICULTY_LEVELS, formatArena, formatCrown, formatFeatures, formatRelations, formatRelationsLine, runArena, type AiLevel, type DifficultyId, type MapSize } from '../packages/engine/src/index.ts';
 
 const args = process.argv.slice(2);

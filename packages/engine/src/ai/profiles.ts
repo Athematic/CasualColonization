@@ -68,7 +68,7 @@ const competent: AiProfile = {
   missions: true,
   schools: true,
   gifts: true,
-  independence: { minTurn: 200, minShare: 55, armyPerColony: 1, ratio: 0.7 },
+  independence: { minTurn: 200, minShare: 55, armyPerColony: 1, ratio: 1.3 },
   adaptive: false,
 };
 
@@ -83,7 +83,7 @@ export const AI_PROFILES: Record<Exclude<AiLevel, 'naive'>, AiProfile> = {
     raidNatives: true,
     piracy: true,
     gifts: false,
-    independence: { minTurn: 170, minShare: 50, armyPerColony: 1.5, ratio: 0.55 },
+    independence: { minTurn: 170, minShare: 50, armyPerColony: 1.5, ratio: 1.2 },
   },
   creative: { ...competent, adaptive: true },
 };
