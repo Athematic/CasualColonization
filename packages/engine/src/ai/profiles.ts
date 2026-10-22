@@ -47,9 +47,10 @@ export interface AiProfile {
   /**
    * When to declare independence: not before `minTurn`, with at least `minShare` percent rebels,
    * at least `armyPerColony` armed units per colony, and a defence of at least `ratio` times the
-   * Royal Expeditionary Force built up by then (ai/royal.ts).
+   * Royal Expeditionary Force built up by then (ai/royal.ts). With `arm` (Creative's plan) the
+   * nation also arms for it: garrisons sized against the REF, muskets first, militia, artillery.
    */
-  independence: { minTurn: number; minShare: number; armyPerColony: number; ratio: number } | null;
+  independence: { minTurn: number; minShare: number; armyPerColony: number; ratio: number; arm?: boolean } | null;
   /** Re-plans its focus every few turns (Creative). */
   adaptive: boolean;
 }

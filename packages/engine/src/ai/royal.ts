@@ -19,6 +19,8 @@ export const CHEAP_DEMAND = 0.15;
 export const REGULAR_COST = 600;
 /** Defence a typical armed rebel brings once fortified in a colony after the declaration. */
 export const REBEL_DEFENCE = 7.5;
+/** Arming for independence starts only once the defence is this share of what it needs. */
+export const ARMING_REACH = 0.5;
 
 /** Attack power of a King's regular as a soldier and as a dragoon, and of royal artillery. */
 const REGULAR = ROLES.soldier.offence * 1.5 * 1.5;
@@ -60,6 +62,18 @@ export function armyForIndependence(s: GameState, p: Player, plan: { armyPerColo
   if (!colonies) return plan.armyPerColony;
   const units = (refPower(p) * plan.ratio) / REBEL_DEFENCE;
   return Math.min(4, Math.max(plan.armyPerColony, Math.ceil(units / colonies)));
+}
+
+/**
+ * Whether arming for independence is worth it: the defence is still short of `ratio` times the
+ * REF, but already at least ARMING_REACH of the way there. Further behind, the colonists and gold
+ * an army takes cost more score than the war could bring (tournaments: arming from far behind
+ * cost Creative about 100 points a game without a single declaration).
+ */
+export function armingPays(s: GameState, p: Player, ratio: number): boolean {
+  const have = rebelPower(s, p);
+  const need = refPower(p) * ratio;
+  return have < need && have >= need * ARMING_REACH;
 }
 
 /** Whether the nation's defence can plausibly beat the Royal Expeditionary Force waiting for it. */

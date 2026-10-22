@@ -50,7 +50,7 @@ import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { maybeIncite } from './natives.js';
-import { armyForIndependence, canBeatRef, crownAffairs } from './royal.js';
+import { armingPays, armyForIndependence, canBeatRef, crownAffairs } from './royal.js';
 import { equippedPrice, trainEquipped } from './outfit.js';
 import type { AiProfile } from './profiles.js';
 import { buildRoads, equipPioneer, pioneerToolsWanted } from './roads.js';
@@ -61,8 +61,9 @@ const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
 /** Plays one turn with the given profile. */
 export function runAdvanced(s: GameState, p: Player, prof: AiProfile): void {
   turnShare = rebelShare(s, p.id);
-  turnArmy = prof.independence ? armyForIndependence(s, p, prof.independence) : 0;
-  turnArming = preparingIndependence(prof) && !canBeatRef(s, p, prof.independence!.ratio);
+  const plan = prof.independence;
+  turnArmy = plan ? (plan.arm ? armyForIndependence(s, p, plan) : plan.armyPerColony) : 0;
+  turnArming = !!plan?.arm && preparingIndependence(prof) && armingPays(s, p, plan.ratio);
   const army = spareArmy(s, p, prof);
   const strength = army.reduce((n, u) => n + offencePower(s, u), 0);
   safely(() => foreignAffairs(s, p, prof, strength, army.length));
@@ -155,8 +156,6 @@ function productValue(p: Player, c: Colony, report: ColonyReport, product: Produ
     case 'food':
       return report.net.food < 2 ? 10 : report.net.food < 6 ? 4 : 2;
     case 'bells':
-      // While arming for independence, more bells than the colony needs only make the King add troops.
-      if (turnArming && sol >= 60) return 0.8;
       return sol >= 100 ? 0.5 : 2.5 * prof.liberty;
     case 'crosses':
       return 1.2;
