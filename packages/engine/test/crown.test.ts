@@ -25,7 +25,7 @@ import {
   type NationId,
   type Player,
 } from '../src/index.js';
-import { payDemand } from '../src/ai/royal.js';
+import { payDemand, rebelPower, refPower } from '../src/ai/royal.js';
 import { AI_PROFILES } from '../src/ai/profiles.js';
 
 function game(opts: { difficulty?: DifficultyId; nations?: NationId[]; humans?: NationId[] } = {}): GameState {
@@ -298,6 +298,35 @@ describe('royal wars', () => {
       return n;
     };
     expect(count('viceroy')).toBeGreaterThan(count('discoverer'));
+  });
+});
+
+describe('computer players and independence', () => {
+  /** A Competent England with one fortified colony, every colonist a rebel, and `soldiers` veterans in it. */
+  function ready(soldiers: number): GameState {
+    const s = createGame({ seed: 5, mapSize: 'small', nations: ['england', 'france'], humans: [], ai: { england: 'competent', france: 'naive' } });
+    const c = colony(s, 'england');
+    for (let i = 0; i < 3; i++) createUnit(s, 'england', 'freeColonist', { kind: 'colony', colonyId: c.id, job: { kind: 'building', building: 'carpenter' } });
+    c.buildings.stockade = 1;
+    c.liberty = 100_000;
+    for (let i = 0; i < soldiers; i++) {
+      const u = createUnit(s, 'england', 'veteranSoldier', { kind: 'map', x: c.x, y: c.y });
+      u.role = 'soldier';
+      u.state = 'fortified';
+    }
+    s.turn = 250;
+    return s;
+  }
+
+  it('declares only when the defence can plausibly beat the force the Crown has built up', () => {
+    const weak = ready(2);
+    expect(rebelPower(weak, nation(weak, 'england'))).toBeLessThan(refPower(nation(weak, 'england')) * AI_PROFILES.competent.independence!.ratio);
+    applyCommand(weak, { type: 'endTurn' });
+    expect(nation(weak, 'england').independence).toBe('none');
+    const strong = ready(12);
+    expect(rebelPower(strong, nation(strong, 'england'))).toBeGreaterThan(refPower(nation(strong, 'england')) * AI_PROFILES.competent.independence!.ratio);
+    applyCommand(strong, { type: 'endTurn' });
+    expect(nation(strong, 'england').independence).not.toBe('none');
   });
 });
 
