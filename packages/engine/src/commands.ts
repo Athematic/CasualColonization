@@ -17,7 +17,8 @@ import {
   unboardInEurope,
 } from './europe.js';
 import { boardShip, leaveShip, moveUnit, setDestination, startImprovement } from './movement.js';
-import { buyLand, establishMission, giftToTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
+import { answerNativeDemand } from './braves.js';
+import { buyFromSettlement, buyLand, denounceMission, establishMission, giftToTribe, inciteTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
 import { chooseFather } from './fathers.js';
 import { proposePeace, startWar } from './diplomacy.js';
 import { answerProposal, cancelFavoured, cancelTrade, proposeFavoured, proposeTrade } from './relations.js';
@@ -38,10 +39,18 @@ export type Command =
   | { type: 'gotoEurope'; unitId: string; port?: NationId }
   | { type: 'clearOrders'; unitId: string }
   | { type: 'foundColony'; unitId: string; name?: string }
-  | { type: 'attack'; unitId: string; target: { unitId?: string; colonyId?: string; settlementId?: string } }
+  | { type: 'attack'; unitId: string; target: { unitId?: string; colonyId?: string; settlementId?: string; braveId?: string } }
   | { type: 'speak'; unitId: string; settlementId: string }
   | { type: 'learn'; unitId: string; settlementId: string }
   | { type: 'tradeNatives'; unitId: string; settlementId: string; good?: GoodId }
+  /** A wagon train or ship next to a settlement buys goods it has gathered (up to `amount`, default 100). */
+  | { type: 'buyNatives'; unitId: string; settlementId: string; good: GoodId; amount?: number }
+  /** A missionary next to a settlement denounces a rival nation's mission there. */
+  | { type: 'denounce'; unitId: string; settlementId: string }
+  /** A missionary pays a settlement's tribe to turn against a rival nation. */
+  | { type: 'incite'; unitId: string; settlementId: string; nation: NationId }
+  /** Pays (or refuses) a brave's demand for tribute, or buys (or declines) goods a brave offers. */
+  | { type: 'answerNativeDemand'; demandId: string; accept: boolean }
   | { type: 'fortify'; unitId: string }
   | { type: 'sentry'; unitId: string }
   | { type: 'activate'; unitId: string }
@@ -179,6 +188,21 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
       case 'tradeNatives':
         ownUnit(s, nation, cmd.unitId);
         text = tradeWithSettlement(s, cmd.unitId, cmd.settlementId, cmd.good);
+        break;
+      case 'buyNatives':
+        ownUnit(s, nation, cmd.unitId);
+        text = buyFromSettlement(s, cmd.unitId, cmd.settlementId, cmd.good, cmd.amount);
+        break;
+      case 'denounce':
+        ownUnit(s, nation, cmd.unitId);
+        text = denounceMission(s, cmd.unitId, cmd.settlementId);
+        break;
+      case 'incite':
+        ownUnit(s, nation, cmd.unitId);
+        text = inciteTribe(s, cmd.unitId, cmd.settlementId, cmd.nation);
+        break;
+      case 'answerNativeDemand':
+        text = answerNativeDemand(s, nation, cmd.demandId, cmd.accept);
         break;
       case 'fortify': {
         const u = ownUnit(s, nation, cmd.unitId);

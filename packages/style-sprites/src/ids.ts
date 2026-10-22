@@ -31,6 +31,13 @@ export class SpriteIds {
     return fill(colonistRole ? m.role : m.plain, vars);
   }
 
+  /** A native brave: plain, armed, mounted or both. Empty when the pack maps none. */
+  brave(armed: boolean, mounted: boolean): string[] {
+    const m = this.mapping.units.braves;
+    if (!m) return [];
+    return fill(armed && mounted ? m.armedMounted : armed ? m.armed : mounted ? m.mounted : m.plain);
+  }
+
   /** The ground of a tile: plowed first when plowed. */
   terrain(tile: Pick<Tile, 't' | 'p'>): string[] {
     const m = this.mapping.terrain;

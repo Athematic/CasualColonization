@@ -4,6 +4,7 @@
  */
 import { NATIONS, RIVER_DIRS, TERRAIN, TRIBES, UNIT_TYPES, colonyWorkers, type GameState, type Tile, type TerrainId } from '@cc/engine';
 import {
+  braveMarkers,
   isTileExplored,
   isTileVisible,
   tileToScreen,
@@ -124,6 +125,26 @@ class SchematicRenderer implements MapRenderer {
       ctx.fillRect(p.x + z * 0.12, p.y + z * 0.12, z * 0.76, z * 0.76);
       this.text(String(colonyWorkers(s, c).length), p.x + z / 2, p.y + z / 2, z * 0.4, '#fff');
       if (scene.labels !== false) this.text(c.name, p.x + z / 2, p.y + z * 1.1, Math.max(10, z * 0.22), '#fff');
+    }
+    // Braves: a diamond in the tribe's colour, B (brave), A (armed), M (mounted) or AM.
+    for (const b of braveMarkers(scene)) {
+      const p = tileToScreen(scene, b.x, b.y);
+      const cx = p.x + z / 2;
+      const cy = p.y + z / 2;
+      ctx.fillStyle = TRIBES[b.tribe].color;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - z * 0.36);
+      ctx.lineTo(cx + z * 0.36, cy);
+      ctx.lineTo(cx, cy + z * 0.36);
+      ctx.lineTo(cx - z * 0.36, cy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#000';
+      ctx.stroke();
+      const label = b.armed && b.mounted ? 'AM' : b.armed ? 'A' : b.mounted ? 'M' : 'B';
+      this.text(label, cx, cy, z * 0.28, '#fff');
+      if (b.count > 1) this.text(String(b.count), p.x + z * 0.85, p.y + z * 0.18, z * 0.22, '#fff');
     }
     for (const stack of unitStacks(scene)) {
       const p = tileToScreen(scene, stack.x, stack.y);

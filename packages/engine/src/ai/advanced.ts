@@ -34,6 +34,7 @@ import {
   isShip,
   isWater,
   neighbours,
+  settlementAt,
   tileAt,
   unitPosition,
   unitsAboard,
@@ -48,6 +49,7 @@ import { aiFight, disembarkAll, landingSpot, nearestColony, ownColonies, safely,
 import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
+import { maybeIncite } from './natives.js';
 import { equippedPrice, trainEquipped } from './outfit.js';
 import type { AiProfile } from './profiles.js';
 import { buildRoads, equipPioneer, pioneerToolsWanted } from './roads.js';
@@ -345,7 +347,7 @@ function unitTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   if (u.role === 'soldier' || u.role === 'dragoon') return soldierTurn(s, p, u, prof);
   if (u.role === 'scout') return scoutTurn(s, p, u);
   if (u.role === 'pioneer') return pioneerTurn(s, p, u);
-  if (u.role === 'missionary') return missionaryTurn(s, p, u);
+  if (u.role === 'missionary') return missionaryTurn(s, p, u, prof);
   colonistTurn(s, p, u, prof);
 }
 
@@ -490,8 +492,13 @@ function pioneerTurn(s: GameState, p: Player, u: Unit): void {
   else if (home) setDestination(s, u.id, { x: home.x, y: home.y });
 }
 
-function missionaryTurn(s: GameState, p: Player, u: Unit): void {
+function missionaryTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   const pos = unitPosition(s, u)!;
+  // Combative first stirs a nearby tribe against an enemy, now and then (ai/natives.ts).
+  for (const n of neighbours(s, pos.x, pos.y)) {
+    const near = settlementAt(s, n.x, n.y);
+    if (near && u.moves > 0 && maybeIncite(s, p, u, near, prof)) return;
+  }
   const st = Object.values(s.settlements)
     .filter((o) => !o.mission && tensionOf(o, p.id) < 500 && s.tribes.find((t) => t.id === o.tribe)?.stance[p.id] !== 'war')
     .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];

@@ -1,4 +1,5 @@
 import { colonySiteProblem } from '../colony.js';
+import { braveDefence, hostileBraveAt } from '../braves.js';
 import { attack, defencePower, offencePower } from '../combat.js';
 import { RuleError } from '../errors.js';
 import { describeMove, findPath, leaveShip, moveUnit, setDestination } from '../movement.js';
@@ -101,6 +102,12 @@ export function aiFight(s: GameState, p: Player, u: Unit): boolean {
     const enemy = unitsAt(s, n.x, n.y).find((o) => atWar(o.owner) && isShip(o) === isShip(u));
     if (enemy && offencePower(s, u) >= defencePower(s, enemy)) {
       attack(s, u.id, { unitId: enemy.id });
+      return true;
+    }
+    // Hostile braves next to the unit, when the odds are good.
+    const brave = !isShip(u) ? hostileBraveAt(s, p.id, n.x, n.y) : undefined;
+    if (brave && offencePower(s, u) >= braveDefence(s, brave) * 1.5) {
+      attack(s, u.id, { braveId: brave.id });
       return true;
     }
   }

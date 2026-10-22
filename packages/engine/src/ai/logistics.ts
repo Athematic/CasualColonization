@@ -19,6 +19,7 @@ import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, RouteCargo, RouteStop, TradeRoute, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import { wagonSteps } from './foreign.js';
+import { buyFromNatives } from './natives.js';
 
 /** Goods worth carrying away from a colony to sell. */
 export const TRADE_GOODS: GoodId[] = ['silver', 'furs', 'sugar', 'tobacco', 'cotton', 'ore', 'rum', 'cigars', 'cloth', 'coats', 'horses'];
@@ -468,8 +469,50 @@ function routeWagon(s: GameState, p: Player, wagon: Unit): void {
   nativeTrade(s, p, wagon);
 }
 
-/** A wagon train without a port sells its colony's surplus to the nearest settlement that pays. */
+/**
+ * Goods a wagon train bought from natives go to the nation's nearest port, where they are
+ * unloaded for the ship routes. Returns whether the wagon is busy hauling.
+ */
+function haulNativeGoods(s: GameState, p: Player, wagon: Unit): boolean {
+  const memory = (p.aiMemory = p.aiMemory ?? {});
+  const haul = memory.nativeHaul?.[wagon.id];
+  if (!haul) return false;
+  const pos = unitPosition(s, wagon)!;
+  const c = s.colonies[haul];
+  if (c && c.owner === p.id && pos.x === c.x && pos.y === c.y) {
+    for (const [g, n] of Object.entries(wagon.cargo ?? {}) as [GoodId, number][]) {
+      if (!n) continue;
+      c.goods[g] += n;
+      wagon.cargo![g] = 0;
+    }
+    track(p.id, 'natives:goods hauled to port');
+  } else if (c && c.owner === p.id && findPath(s, wagon, c.x, c.y)) {
+    if (!wagon.dest) setDestination(s, wagon.id, { x: c.x, y: c.y });
+    return true;
+  }
+  delete memory.nativeHaul![wagon.id];
+  return false;
+}
+
+/** After buying from natives: the nearest port the wagon train can reach takes the goods. */
+function sendToPort(s: GameState, p: Player, wagon: Unit): void {
+  const pos = unitPosition(s, wagon)!;
+  const port = ownColonies(s, p)
+    .filter((c) => isCoastal(s, c.x, c.y))
+    .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))
+    .find((c) => findPath(s, wagon, c.x, c.y));
+  if (!port) return;
+  const memory = (p.aiMemory = p.aiMemory ?? {});
+  (memory.nativeHaul = memory.nativeHaul ?? {})[wagon.id] = port.id;
+}
+
+/**
+ * A wagon train without a port sells its colony's surplus to the nearest settlement that pays,
+ * and, while it is there, buys goods that fetch clearly more in Europe (ai/natives.ts) and carries
+ * them to a port.
+ */
 function nativeTrade(s: GameState, p: Player, wagon: Unit): void {
+  if (haulNativeGoods(s, p, wagon)) return;
   const pos = unitPosition(s, wagon)!;
   const cargo = wagon.cargo ?? {};
   const carrying = TRADE_GOODS.filter((g) => (cargo[g] ?? 0) > 0);
@@ -481,6 +524,7 @@ function nativeTrade(s: GameState, p: Player, wagon: Unit): void {
     if (!st) return;
     if (distance(st.x, st.y, pos.x, pos.y) === 1) {
       if (wagon.moves > 0) tradeWithSettlement(s, wagon.id, st.id);
+      if (buyFromNatives(s, p, wagon, st)) sendToPort(s, p, wagon);
       return;
     }
     const step = besideSettlement(s, wagon, st.x, st.y);

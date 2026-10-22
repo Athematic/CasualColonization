@@ -1,4 +1,4 @@
-import { FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { demandText, FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, pendingDemands, TRIBES, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
 
@@ -71,6 +71,39 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
             h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerTax', accept: true }) && done(`Accepted: the tax is now ${tax.rate}%.`) }, `Accept ${tax.rate}% tax`),
             h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerTax', accept: false }) && done(`Refused: ${good} is boycotted.`) }, `Refuse and hold a ${good} party`))),
     });
+  }
+  // Native braves at the colonies: demands for tribute (to answer now) and goods for sale.
+  for (const d of pendingDemands(app.state, me.id)) {
+    const st = app.state.settlements[d.settlementId];
+    const colony = app.state.colonies[d.colonyId];
+    if (!st || !colony) continue;
+    const tribe = TRIBES[st.tribe].name;
+    const what = demandText(d);
+    if (d.kind === 'demand') {
+      list.push({
+        id: `native-${d.id}`,
+        title: `The ${tribe} demand tribute at ${colony.name}`,
+        required: true,
+        render: (done) =>
+          h('div', { class: 'decision-body' },
+            h('p', null, `A ${tribe} brave stands outside ${colony.name} and demands ${what}. If you refuse, the ${tribe} grow angrier and the brave attacks the colony.`),
+            h('div', { class: 'decision-actions' },
+              h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerNativeDemand', demandId: d.id, accept: true }, true) && done(`Paid ${what}.`) }, `Pay ${what}`),
+              h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerNativeDemand', demandId: d.id, accept: false }, true) && done('Refused: the brave attacks.') }, 'Refuse'))),
+      });
+    } else {
+      list.push({
+        id: `native-${d.id}`,
+        title: `The ${tribe} offer goods at ${colony.name}`,
+        required: false,
+        render: (done) =>
+          h('div', { class: 'decision-body' },
+            h('p', null, `A ${tribe} brave at ${colony.name} offers ${what} for ${d.price} gold. You have ${me.gold} gold.`),
+            h('div', { class: 'decision-actions' },
+              h('button', { class: 'btn primary', disabled: me.gold < (d.price ?? 0), onclick: () => app.dispatch({ type: 'answerNativeDemand', demandId: d.id, accept: true }, true) && done(`Bought ${what}.`) }, `Buy for ${d.price} gold`),
+              h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerNativeDemand', demandId: d.id, accept: false }, true) && done('Declined.') }, 'Decline'))),
+      });
+    }
   }
   // Proposals from other nations: a trade agreement or Favoured Nation status.
   for (const rel of Object.values(app.state.relations ?? {}) as Relation[]) {
@@ -217,7 +250,7 @@ export function showTurnStart(app: App, news: TurnNews, opts: { father?: boolean
             h('ul', null, news.routine.map((m) => h('li', null, m.text)))));
       }
       goOn.disabled = blocked();
-      goOn.title = blocked() ? 'Answer the Crown first' : 'Continue (Enter)';
+      goOn.title = blocked() ? 'Answer the decisions marked first' : 'Continue (Enter)';
     };
 
     draw();

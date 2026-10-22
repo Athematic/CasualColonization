@@ -431,6 +431,42 @@ export function unitSprite(ctx: Ctx, x: number, y: number, s: number, type: Unit
   }
 }
 
+/** A native brave in the tribe's colour: a feather, and a bow, or a musket when armed; on a horse when mounted. */
+export function braveSprite(ctx: Ctx, x: number, y: number, s: number, tribe: TribeId, armed: boolean, mounted: boolean, lw: number): void {
+  const color = TRIBES[tribe].color;
+  let px = x;
+  let py = y;
+  let ps = s;
+  if (mounted) {
+    horse(ctx, x, y + s * 0.02, s, lw);
+    px = x - s * 0.04;
+    py = y - s * 0.18;
+    ps = s * 0.78;
+  }
+  person(ctx, px, py, ps, color, 'none', lw);
+  // Feather.
+  inked(ctx, WHITE, lw * 0.8, () => {
+    ctx.moveTo(px + ps * 0.02, py - ps * 0.24);
+    ctx.quadraticCurveTo(px + ps * 0.12, py - ps * 0.42, px + ps * 0.06, py - ps * 0.5);
+    ctx.quadraticCurveTo(px - ps * 0.02, py - ps * 0.38, px + ps * 0.02, py - ps * 0.24);
+  });
+  if (armed) {
+    line(ctx, lw * 0.8, WOOD, [[px + ps * 0.24, py + ps * 0.3], [px + ps * 0.3, py - ps * 0.34]]);
+  } else {
+    // Bow.
+    inked(ctx, null, lw, () => {
+      ctx.moveTo(px - ps * 0.26, py - ps * 0.26);
+      ctx.quadraticCurveTo(px - ps * 0.44, py + ps * 0.04, px - ps * 0.26, py + ps * 0.32);
+    });
+    ctx.beginPath();
+    ctx.moveTo(px - ps * 0.26, py - ps * 0.26);
+    ctx.lineTo(px - ps * 0.26, py + ps * 0.32);
+    ctx.lineWidth = lw * 0.5;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+  }
+}
+
 // ---- Goods ----
 
 export function productIcon(ctx: Ctx, x: number, y: number, s: number, product: ProductId, lw: number): void {

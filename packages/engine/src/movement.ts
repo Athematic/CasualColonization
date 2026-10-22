@@ -1,6 +1,7 @@
 import { fail } from './errors.js';
 import { track } from './telemetry.js';
 import { portProblem, sailToEurope } from './europe.js';
+import { braveName, hostileBraveAt } from './braves.js';
 import { resolveRumour } from './rumours.js';
 import {
   cargoFree,
@@ -33,11 +34,11 @@ export type MoveOption =
   | { kind: 'move' }
   | { kind: 'board'; carrierId: string }
   | { kind: 'disembark' }
-  | { kind: 'attack'; targetUnitId?: string; colonyId?: string; settlementId?: string }
+  | { kind: 'attack'; targetUnitId?: string; colonyId?: string; settlementId?: string; braveId?: string }
   | { kind: 'settlement'; settlementId: string; actions: SettlementAction[] }
   | { kind: 'blocked'; reason: string };
 
-export type SettlementAction = 'speak' | 'learn' | 'trade' | 'mission' | 'attack';
+export type SettlementAction = 'speak' | 'learn' | 'trade' | 'mission' | 'denounce' | 'incite' | 'attack';
 
 export function canAttack(u: Unit): boolean {
   const def = UNIT_TYPES[u.type];
@@ -87,7 +88,8 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
       return canAttack(u) ? { kind: 'blocked', reason: 'Ships cannot attack colonies yet.' } : { kind: 'blocked', reason: `${colony.name} belongs to another nation.` };
     }
     if (settlement) {
-      const actions: SettlementAction[] = hasCargo(u) ? ['trade'] : [];
+      // Ships with cargo sell, ships with room buy.
+      const actions: SettlementAction[] = UNIT_TYPES[u.type].cargo > 0 ? ['trade'] : [];
       return actions.length ? { kind: 'settlement', settlementId: settlement.id, actions } : { kind: 'blocked', reason: 'Natives live there.' };
     }
     if (!isWater(tile)) return { kind: 'blocked', reason: 'Ships cannot sail onto land.' };
@@ -109,14 +111,23 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
     const actions: SettlementAction[] = [];
     if (u.role === 'scout') actions.push('speak');
     if (UNIT_TYPES[u.type].kind === 'colonist' && u.role === 'none' && UNIT_TYPES[u.type].skill <= 0) actions.push('learn');
-    if (UNIT_TYPES[u.type].kind === 'wagon' && hasCargo(u)) actions.push('trade');
-    if (u.role === 'missionary') actions.push('mission');
+    if (UNIT_TYPES[u.type].kind === 'wagon') actions.push('trade');
+    if (u.role === 'missionary') {
+      if (!settlement.mission) actions.push('mission');
+      else if (settlement.mission !== u.owner) actions.push('denounce');
+      if (s.players.some((p) => p.id !== u.owner && p.id !== 'crown')) actions.push('incite');
+    }
     if (canAttack(u)) actions.push('attack');
     if (!actions.length) return { kind: 'blocked', reason: 'Only scouts, colonists, missionaries, wagon trains and soldiers can visit natives.' };
     return { kind: 'settlement', settlementId: settlement.id, actions };
   }
   if (colony && colony.owner !== u.owner) {
     return canAttack(u) ? { kind: 'attack', colonyId: colony.id } : { kind: 'blocked', reason: `${colony.name} belongs to another nation.` };
+  }
+  // Braves of a tribe at peace step aside; hostile ones must be fought.
+  const brave = !colony ? hostileBraveAt(s, u.owner, x, y) : undefined;
+  if (brave) {
+    return canAttack(u) ? { kind: 'attack', braveId: brave.id } : { kind: 'blocked', reason: `A hostile ${braveName(brave).toLowerCase()} is in the way.` };
   }
   if (foreign.length) {
     return canAttack(u) ? { kind: 'attack', targetUnitId: foreign[0].id } : { kind: 'blocked', reason: 'Foreign units block the way.' };
@@ -134,10 +145,6 @@ export function canCarry(s: GameState, ship: Unit, u: Unit): boolean {
   if (UNIT_TYPES[u.type].kind === 'wagon' || isShip(u) || ship.repair) return false;
   if (u.type === 'treasure') return ship.type === 'galleon' && cargoFree(s, ship) >= UNIT_TYPES.galleon.cargo;
   return cargoFree(s, ship) > 0;
-}
-
-function hasCargo(u: Unit): boolean {
-  return Object.values(u.cargo ?? {}).some((n) => (n ?? 0) > 0);
 }
 
 export function placeOnMap(s: GameState, u: Unit, x: number, y: number): void {
