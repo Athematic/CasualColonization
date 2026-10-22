@@ -1,4 +1,5 @@
 import { createUnit, distance, message, player, reveal, tileAt, unitPosition } from './queries.js';
+import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { randInt, weightedPick } from './rng.js';
 import { randomImmigrant } from './europe.js';
@@ -66,11 +67,13 @@ export function resolveRumour(s: GameState, u: Unit): void {
       const gold = 300 + randInt(s, 700);
       p.gold += gold;
       message(s, `You discover the ruins of a lost civilisation and recover ${gold} gold!`, u.owner, pos);
+      noteHistory(s, 'treasure', [u.owner], `Explorers find the ruins of a lost civilisation and recover ${gold} gold.`, { secret: true, at: pos });
       break;
     }
     case 'fountain':
       for (let i = 0; i < 4; i++) createUnit(s, u.owner, randomImmigrant(s, u.owner), { kind: 'europe' });
       message(s, 'You have found the Fountain of Youth! Four new colonists wait on the docks in Europe.', u.owner, pos);
+      noteHistory(s, 'treasure', [u.owner], 'Explorers find the Fountain of Youth: four colonists come from Europe.', { secret: true, at: pos });
       break;
     case 'lost':
       delete s.units[u.id];
@@ -85,6 +88,7 @@ export function resolveRumour(s: GameState, u: Unit): void {
       tribe.stance[u.owner] = 'war';
       for (const st of Object.values(s.settlements)) if (st.tribe === tribeId) st.tension[u.owner] = 1000;
       track(u.owner, 'natives:burial ground disturbed');
+      noteHistory(s, 'tribe', [u.owner], `${NATIONS[u.owner].adjective} explorers disturb a ${TRIBES[tribeId].name} burial ground; the ${TRIBES[tribeId].name} swear eternal war.`, { at: pos });
       track(u.owner, 'natives:tribe went to war');
       message(s, `You have disturbed a ${TRIBES[tribeId].name} burial ground! The ${TRIBES[tribeId].name} swear eternal vengeance on ${NATIONS[u.owner].name}.`, u.owner, pos);
       break;

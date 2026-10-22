@@ -8,6 +8,7 @@
  * drawing them does not shift any other random outcome of the game.
  */
 import { fail } from './errors.js';
+import { noteGoods, noteHistory } from './history.js';
 import { buyPrice, sellPrice } from './europe.js';
 import { noteTrade } from './stats.js';
 import { cargoRoomFor, colonyAt, distance, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
@@ -296,6 +297,7 @@ export function makeTradeAgreement(s: GameState, a: NationId, b: NationId): stri
   track(b, 'diplomacy:trade agreement made');
   const text = `${nationTitleOf(a)} and ${NATIONS[b].name} have signed a trade agreement. Their trade routes may now call at each other's colonies.`;
   message(s, text);
+  noteHistory(s, 'trade', [a, b], `${nationTitleOf(a)} and ${NATIONS[b].name} sign a trade agreement.`);
   return text;
 }
 
@@ -307,6 +309,7 @@ export function makeFavoured(s: GameState, a: NationId, b: NationId): string {
   track(b, 'diplomacy:favoured nation made');
   const text = `${nationTitleOf(a)} and ${NATIONS[b].name} are now Favoured Nations: their ships may trade, and buy merchant ships, in each other's home ports.`;
   message(s, text);
+  noteHistory(s, 'favoured', [a, b], `${nationTitleOf(a)} and ${NATIONS[b].name} become Favoured Nations.`);
   return text;
 }
 
@@ -324,6 +327,7 @@ export function cancelTrade(s: GameState, by: NationId, to: NationId): string {
   pruneRoutes(s, by, to);
   const text = `${nationTitleOf(by)} has ended its trade agreement with ${NATIONS[to].name}.`;
   message(s, text);
+  noteHistory(s, 'cancel', [by, to], text);
   return text;
 }
 
@@ -355,6 +359,7 @@ export function cancelFavoured(s: GameState, by: NationId, to: NationId, why: 'c
   const parts = seized.filter(Boolean);
   const text = `${nationTitleOf(by)} has cancelled the Favoured Nation status with ${NATIONS[to].name}${why === 'war' ? ' by declaring war' : ''}. Trade routes between them are cancelled.${parts.length ? ` ${parts.join(' ')}` : ''}`;
   message(s, text);
+  noteHistory(s, 'cancel', [by, to], `${nationTitleOf(by)} cancels the Favoured Nation status with ${NATIONS[to].name}${why === 'war' ? ' by declaring war' : ''}.`);
   return text;
 }
 
@@ -532,6 +537,7 @@ export function tradeAtForeignColony(
     const gold = n * price;
     u.cargo[r.good] = have - n;
     colony.goods[r.good] += n;
+    noteGoods(s, me.id, 'foreign', r.good, n);
     owner.gold -= gold;
     me.gold += gold;
     noteTrade(s, me.id, gold);

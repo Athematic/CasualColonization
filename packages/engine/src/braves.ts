@@ -10,6 +10,7 @@
 import { chooseDefender, defencePower, promote } from './combat.js';
 import { fail } from './errors.js';
 import { sellPrice } from './europe.js';
+import { noteGoods } from './history.js';
 import { addTension, nativeOffer, tensionOf } from './natives.js';
 import {
   colonyWorkers,
@@ -457,6 +458,7 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
     noteTrade(s, nation, gold);
     track(nation, 'natives:sold to visiting brave');
     track(nation, 'natives:gold from sales', gold);
+    noteGoods(s, nation, 'natives', g, amount);
     addTension(st, nation, -10);
     message(s, `A ${tribe} brave buys ${amount} ${GOOD_DEFS[g].name.toLowerCase()} in ${c.name} for ${gold} gold.`, nation, c);
     break;
@@ -490,6 +492,7 @@ function buyOffer(s: GameState, st: Settlement, c: Colony, good: GoodId, amount:
   addTension(st, c.owner, -10);
   track(c.owner, 'natives:bought from visiting brave');
   track(c.owner, 'natives:gold spent buying', price);
+  noteGoods(s, c.owner, 'fromNatives', good, amount);
   message(s, `${c.name} buys ${amount} ${GOOD_DEFS[good].name.toLowerCase()} from the ${TRIBES[st.tribe].name} for ${price} gold.`, c.owner, c);
 }
 

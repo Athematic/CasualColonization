@@ -1,4 +1,5 @@
 import { fail } from './errors.js';
+import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { colonyWorkers, createUnit, message, player, reveal } from './queries.js';
 import { weightedPick } from './rng.js';
@@ -59,6 +60,7 @@ export function joinCongress(s: GameState, p: Player, id: FatherId): void {
   track(p.id, 'fathers:joined');
   const def = FATHERS[id];
   message(s, `${def.name} joins the Continental Congress of ${NATIONS[p.id].name}. ${def.effect}`, p.id);
+  noteHistory(s, 'father', [p.id], `${def.name} joins the Continental Congress of ${NATIONS[p.id].name}.`);
   for (const other of s.players) {
     if (other.id !== p.id) message(s, `${def.name} has joined the Continental Congress of ${NATIONS[p.id].name}.`, other.id);
   }

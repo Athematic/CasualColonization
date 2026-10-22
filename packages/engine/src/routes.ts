@@ -8,6 +8,7 @@
  * routed unit is never "awaiting orders"; clearing its orders takes it off the route.
  */
 import { fail, RuleError } from './errors.js';
+import { noteGoods } from './history.js';
 import { boardInEurope, buyGoods, buyPrice, inHomePort, sailToAmerica, sellGoods } from './europe.js';
 import { continueOrders, findPath } from './movement.js';
 import { cargoFree, cargoRoomFor, isCoastal, isShip, isWater, message, neighbours, newId, player, reveal, tileAt, unitName, unitPosition, unitsAboard, warehouseCapacity } from './queries.js';
@@ -247,6 +248,7 @@ function serveStop(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop): v
     if (n > 0) {
       move(u.cargo, colony.goods, r.good, n);
       track(u.owner, 'route:goods delivered to a colony', n);
+      noteGoods(s, u.owner, 'route', r.good, n);
     }
   }
   // The goods with most to spare are loaded first, so a small hold carries what matters most.

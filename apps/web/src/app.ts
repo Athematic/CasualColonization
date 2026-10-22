@@ -54,6 +54,7 @@ import { choose, confirmDialog, promptDialog, toast } from './ui/dialogs.js';
 import { DiplomacyScreen } from './ui/diplomacy.js';
 import { EuropeScreen } from './ui/europe.js';
 import { ProgressScreen } from './ui/progress.js';
+import { REPORT_TABS, ReportsScreen } from './ui/reports.js';
 import { RoutesScreen } from './ui/routes.js';
 import { Sidebar } from './ui/sidebar.js';
 import { showTurnStart, sortNews } from './ui/turnstart.js';
@@ -86,6 +87,8 @@ export interface Screen {
   el: HTMLElement;
   refresh(): void;
   close?(): void;
+  /** Keys pressed while the screen is open (Escape always closes it). Returns true when handled. */
+  onKey?(e: KeyboardEvent): boolean;
 }
 
 /** A watched head start shows each turn for at least this long. */
@@ -658,6 +661,15 @@ export class App {
     this.showScreen(new ProgressScreen(this));
   }
 
+  /** The advisor reports, on a tab (see REPORT_TABS) or the one last looked at. */
+  openReports(tab?: string): void {
+    if (this.screen instanceof ReportsScreen) {
+      if (tab) this.screen.setTab(tab);
+      return;
+    }
+    this.showScreen(new ReportsScreen(this, tab));
+  }
+
   private showScreen(screen: Screen): void {
     this.closeScreen();
     this.screen = screen;
@@ -829,8 +841,21 @@ export class App {
       this.openCheats();
       return;
     }
+    // F1–F8 open the advisor reports from anywhere, as in the original game.
+    const fkey = /^F([1-8])$/.exec(e.key);
+    if (fkey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      this.openReports(REPORT_TABS[Number(fkey[1]) - 1].id);
+      return;
+    }
     if (this.screen) {
       if (e.key === 'Escape') this.closeScreen();
+      else if (this.screen.onKey?.(e)) e.preventDefault();
+      return;
+    }
+    if (e.key.toLowerCase() === 'a' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      this.openReports();
       return;
     }
     if (e.key.toLowerCase() === 'h' && !e.metaKey && !e.ctrlKey && !e.altKey) {
