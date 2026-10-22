@@ -26,6 +26,8 @@ export * from './routes.js';
 export * from './relations.js';
 export * from './cheats.js';
 export * from './stats.js';
+export * from './history.js';
+export * from './reports.js';
 export { RIVER_DIRS, MAJOR_RIVER_LENGTH, riverLinked, riverName, parseRivers } from './rivers.js';
 export { MAP_SIZES, entryPoints, type EntrySide } from './mapgen.js';
 export { STORED_MAPS, storedMap, parseStoredMap, type StoredMap, type TribeRegion } from './maps/index.js';

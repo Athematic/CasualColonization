@@ -320,6 +320,52 @@ export interface GameState {
   };
   /** Progress statistics, one snapshot per round (see stats.ts). Missing in older saves. */
   stats?: StatsHistory;
+  /** Notable events for the History report, oldest first and capped (see history.ts). Missing in older saves. */
+  history?: HistoryEntry[];
+  /** Goods sold and delivered per nation, for the Trade report (see history.ts). Missing in older saves. */
+  ledger?: Partial<Record<NationId, Ledger>>;
+}
+
+export type HistoryKind =
+  | 'colony'
+  | 'captured'
+  | 'father'
+  | 'war'
+  | 'peace'
+  | 'trade'
+  | 'favoured'
+  | 'cancel'
+  | 'treasure'
+  | 'burned'
+  | 'independence'
+  | 'tribe';
+
+/** One event in the game's history (see history.ts). */
+export interface HistoryEntry {
+  turn: number;
+  kind: HistoryKind;
+  /** The nations concerned; the first is the one that acted. */
+  nations: NationId[];
+  text: string;
+  /** Known only to the nations concerned; otherwise every nation heard of it. */
+  secret?: boolean;
+  at?: { x: number; y: number };
+}
+
+/** Units of each good, by channel: sold in a home port, by custom houses, unloaded by routes, sold to partners' colonies. */
+export interface GoodsTally {
+  europe: Partial<Record<GoodId, number>>;
+  custom: Partial<Record<GoodId, number>>;
+  route: Partial<Record<GoodId, number>>;
+  foreign: Partial<Record<GoodId, number>>;
+}
+
+export interface Ledger {
+  total: GoodsTally;
+  /** Turn `now` counts. */
+  turn: number;
+  now: GoodsTally;
+  last: GoodsTally;
 }
 
 /**

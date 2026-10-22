@@ -1,8 +1,9 @@
 import { declareWar } from './combat.js';
+import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { fail } from './errors.js';
 import { hasFather } from './fathers.js';
-import { message, player } from './queries.js';
+import { message, nationTitle, player } from './queries.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { isFavoured, onPeace } from './relations.js';
 import type { GameState } from './types.js';
@@ -47,6 +48,7 @@ export function makePeace(s: GameState, a: NationId, b: NationId): void {
   track(a, 'diplomacy:peace made');
   track(b, 'diplomacy:peace made');
   message(s, `${NATIONS[a].name} and ${NATIONS[b].name} have made peace.`);
+  noteHistory(s, 'peace', [a, b], `${nationTitle(a)} and ${NATIONS[b].name} make peace.`);
 }
 
 /** Computer nations tired of fighting each other settle their wars. */

@@ -51,7 +51,7 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Missionaries denouncing rival missions and inciting tribes | S | P3 | in progress |
 | A Royal Expeditionary Force that grows during the game, visible to the player | M | P1 | in progress |
 | Royal demands for gold; royal wars | M | P1 | in progress |
-| Advisor reports (colony, trade, military, naval, religion, natives, Congress, history) | M | P1 | in progress |
+| Advisor reports (colony, trade, military, naval, religion, natives, Congress, history) | M | P1 | done (eight tabs, `A`/`F1`–`F8`; engine keeps a capped history and a goods ledger) |
 | Port character: each home port gets its own starting prices, demand and ship prices (for example cheap trade goods in Amsterdam, furs dear in La Rochelle, silver in Seville, cheap ships in Lisbon), so Favoured Nation access and triangle trading pay off. Scenario data per nation | M | P2 | idea (noted after 0.4) |
 | Find why Creative scores about 14 points less with Favoured Nation on | S | P2 | idea |
 | Trade routes may call at a favoured partner's port, not only the home port | S | P3 | idea |
