@@ -9,6 +9,7 @@ import type { GameConfig, GameState, Player } from './types.js';
 import { offerFathers } from './fathers.js';
 import { createWorld } from './world.js';
 import { initRelations } from './relations.js';
+import { initCrown } from './crown.js';
 import { entryPoints } from './mapgen.js';
 
 /** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
@@ -64,6 +65,7 @@ export function createGame(config: GameConfig): GameState {
       p.gold = rules.startingGold;
       p.crossesRequired = Math.round(p.crossesRequired * rules.crosses);
     }
+    initCrown(s, p);
     s.players.push(p);
     p.recruitPool = [randomImmigrant(s), randomImmigrant(s), randomImmigrant(s)];
     offerFathers(s, p);

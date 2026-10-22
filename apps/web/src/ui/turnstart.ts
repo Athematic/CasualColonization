@@ -1,4 +1,4 @@
-import { FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { demandPenalty, FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, REF_ON_REFUSAL, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
 
@@ -72,6 +72,21 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
             h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerTax', accept: false }) && done(`Refused: ${good} is boycotted.`) }, `Refuse and hold a ${good} party`))),
     });
   }
+  const demand = me.pendingDemand;
+  if (demand) {
+    const { colony } = demandPenalty(app.state, me.id);
+    const short = me.gold < demand.gold;
+    list.push({
+      id: 'demand',
+      required: true,
+      render: (done) =>
+        h('div', { class: 'decision-body' },
+          h('p', null, `His Majesty demands ${demand.gold.toLocaleString()} gold from your treasury (${me.gold.toLocaleString()} gold). If you refuse, ${colony ? `royal officials will seize the goods in ${colony.name}'s warehouse (all but food) and ` : ''}the King will send ${REF_ON_REFUSAL} more regulars to the Royal Expeditionary Force.`),
+          h('div', { class: 'decision-actions' },
+            h('button', { class: 'btn primary', disabled: short, title: short ? 'The treasury cannot pay this much.' : undefined, onclick: () => app.dispatch({ type: 'answerDemand', pay: true }, true) && done(`Paid ${demand.gold.toLocaleString()} gold to the King.`) }, `Pay ${demand.gold.toLocaleString()} gold`),
+            h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerDemand', pay: false }, true) && done(colony ? `Refused: the goods in ${colony.name} were seized.` : 'Refused.') }, 'Refuse'))),
+    });
+  }
   // Proposals from other nations: a trade agreement or Favoured Nation status.
   for (const rel of Object.values(app.state.relations ?? {}) as Relation[]) {
     const p = rel.proposal;
@@ -114,7 +129,7 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
   return list;
 }
 
-const TITLES: Record<string, string> = { tax: 'The Crown raises taxes', father: 'Continental Congress' };
+const TITLES: Record<string, string> = { tax: 'The Crown raises taxes', demand: 'The King demands gold', father: 'Continental Congress' };
 
 let open = false;
 

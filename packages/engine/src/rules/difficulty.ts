@@ -52,10 +52,19 @@ export interface DifficultyRules {
   rumourBad: number;
   /** Multiplier on the odds of the best Lost City Rumour results (treasure, Fountain of Youth, survivors). */
   rumourGood: number;
-  /** Multiplier on the fixed part of the Royal Expeditionary Force sent at the declaration. */
+  /** Multiplier on the Royal Expeditionary Force the Crown holds at the start of the game. */
   refBase: number;
-  /** Multiplier on the part of the Royal Expeditionary Force that grows with each rebel colony. */
-  refPerColony: number;
+  /**
+   * Multiplier on how fast the Crown adds to the Royal Expeditionary Force during the game, with
+   * time (per colony) and with the nation's liberty bells (see crown.ts).
+   */
+  refGrowth: number;
+  /** Multiplier on the chance each round that the King demands gold. */
+  demandChance: number;
+  /** Multiplier on the share of the treasury the King demands. */
+  demandSize: number;
+  /** Multiplier on the chance each round that the King drags the nation into a war with another European nation. */
+  royalWarChance: number;
 }
 
 export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
@@ -77,7 +86,10 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     rumourBad: 0.5,
     rumourGood: 1.3,
     refBase: 0.5,
-    refPerColony: 0.6,
+    refGrowth: 0.6,
+    demandChance: 0.5,
+    demandSize: 0.7,
+    royalWarChance: 0.5,
   },
   explorer: {
     name: 'Explorer',
@@ -97,7 +109,10 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     rumourBad: 0.75,
     rumourGood: 1.15,
     refBase: 0.75,
-    refPerColony: 0.8,
+    refGrowth: 0.8,
+    demandChance: 0.75,
+    demandSize: 0.85,
+    royalWarChance: 0.75,
   },
   conquistador: {
     name: 'Conquistador',
@@ -117,7 +132,10 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     rumourBad: 1,
     rumourGood: 1,
     refBase: 1,
-    refPerColony: 1,
+    refGrowth: 1,
+    demandChance: 1,
+    demandSize: 1,
+    royalWarChance: 1,
   },
   governor: {
     name: 'Governor',
@@ -137,7 +155,10 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     rumourBad: 1.3,
     rumourGood: 0.9,
     refBase: 1.25,
-    refPerColony: 1.25,
+    refGrowth: 1.25,
+    demandChance: 1.25,
+    demandSize: 1.15,
+    royalWarChance: 1.25,
   },
   viceroy: {
     name: 'Viceroy',
@@ -157,7 +178,10 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     rumourBad: 1.6,
     rumourGood: 0.8,
     refBase: 1.5,
-    refPerColony: 1.5,
+    refGrowth: 1.5,
+    demandChance: 1.5,
+    demandSize: 1.3,
+    royalWarChance: 1.5,
   },
 };
 

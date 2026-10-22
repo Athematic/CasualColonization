@@ -2,6 +2,7 @@ import {
   AI_LEVEL_INFO,
   canDeclareIndependence,
   colonyWorkers,
+  describeForce,
   FATHERS,
   favouredProblem,
   hasTradeAgreement,
@@ -104,6 +105,7 @@ export class DiplomacyScreen implements Screen {
         h('h3', null, 'Independence'),
         h('div', { class: 'bar', role: 'progressbar', 'aria-valuenow': share, 'aria-valuemin': 0, 'aria-valuemax': 100 }, h('span', { style: `width:${share}%` })),
         h('p', null, `${share}% of your colonists support independence; 50% are needed to declare it.`),
+        h('p', { class: 'small' }, `Royal forces: ${describeForce(me.ref)}. The Crown adds to them during the game, faster as your colonies ring more liberty bells; all of them sail when you declare.`),
         h('button', { class: 'btn small primary', disabled: !!blocked, title: blocked ?? undefined, onclick: () => this.declare() }, 'Declare independence'));
     }
 

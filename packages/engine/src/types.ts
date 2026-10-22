@@ -105,8 +105,21 @@ export interface Player {
   /** A tax raise waiting for the player to accept or refuse. */
   pendingTax: { rate: number; good: GoodId } | null;
   independence: 'none' | 'declared' | 'won' | 'lost';
-  /** The Royal Expeditionary Force still waiting to sail against this player. */
+  /**
+   * The Royal Expeditionary Force: before independence, the force the Crown has built up so far
+   * (it grows during the game, see crown.ts); after the declaration, what is still to land.
+   */
   ref: { regulars: number; dragoons: number; artillery: number; menOfWar: number };
+  /**
+   * The Crown's bookkeeping for this nation (crown.ts): liberty bells already reacted to, growth
+   * points not yet spent on units, land units added over the game, and the turn and target of the last royal
+   * war. Missing in saves from before 0.5 (filled in, with the old formula's force, on the next round).
+   */
+  royal?: { bells: number; points: number; added?: number; lastWar?: number; warOn?: NationId };
+  /** A demand for gold from the King, waiting to be paid or refused; `colony` is where goods would be seized. */
+  pendingDemand?: { gold: number; colony: string | null; turn: number };
+  /** The turn of the declaration of independence, the Royal Expeditionary Force then, and the old formula's size then (for measurements). */
+  refAtDeclaration?: { turn: number; force: { regulars: number; dragoons: number; artillery: number; menOfWar: number }; formula: number };
   /** Turn on which each war started, keyed by nation id. */
   warSince: Partial<Record<string, number>>;
   /** Colonies held when independence was declared. */

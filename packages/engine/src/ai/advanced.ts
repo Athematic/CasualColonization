@@ -48,6 +48,7 @@ import { aiFight, disembarkAll, landingSpot, nearestColony, ownColonies, safely,
 import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
+import { armyForIndependence, canBeatRef, crownAffairs } from './royal.js';
 import { equippedPrice, trainEquipped } from './outfit.js';
 import type { AiProfile } from './profiles.js';
 import { buildRoads, equipPioneer, pioneerToolsWanted } from './roads.js';
@@ -58,10 +59,12 @@ const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
 /** Plays one turn with the given profile. */
 export function runAdvanced(s: GameState, p: Player, prof: AiProfile): void {
   turnShare = rebelShare(s, p.id);
-  safely(() => {
-    const army = spareArmy(s, p, prof);
-    foreignAffairs(s, p, prof, army.reduce((n, u) => n + offencePower(s, u), 0), army.length);
-  });
+  turnArmy = prof.independence ? armyForIndependence(s, p, prof.independence) : 0;
+  const army = spareArmy(s, p, prof);
+  const strength = army.reduce((n, u) => n + offencePower(s, u), 0);
+  safely(() => foreignAffairs(s, p, prof, strength, army.length));
+  // The King's demands and wars (ai/royal.ts).
+  crownAffairs(s, p, prof, preparingIndependence(prof, 20), strength);
   safely(() => diplomacy(s, p, prof));
   for (const c of ownColonies(s, p)) safely(() => manageColony(s, p, c, prof));
   safely(() => manageLogistics(s, p));
@@ -79,6 +82,14 @@ export function runAdvanced(s: GameState, p: Player, prof: AiProfile): void {
 
 /** The nation's rebel share, worked out once per turn: it is needed constantly. */
 let turnShare = 0;
+
+/** Armed units per colony wanted for independence, against the force the Crown has built up (ai/royal.ts); also once per turn. */
+let turnArmy = 0;
+
+/** Whether the nation's rebel share is within `margin` points of the share at which it means to declare. */
+function preparingIndependence(prof: AiProfile, margin = 15): boolean {
+  return !!prof.independence && turnShare >= prof.independence.minShare - margin;
+}
 
 /** Armies, artillery and armories are for nations that mean to fight (Combative, or Creative at war). */
 const militant = (prof: AiProfile) => prof.aggression >= 0.5;
@@ -113,7 +124,7 @@ function garrisonFor(p: Player, prof: AiProfile): number {
   const preparing = prof.independence && turnShare >= prof.independence.minShare - 15;
   let n = prof.garrison;
   if (atWar) n += 1;
-  if (preparing && prof.independence) n = Math.max(n, prof.independence.armyPerColony);
+  if (preparing && prof.independence) n = Math.max(n, turnArmy);
   return n;
 }
 
@@ -738,8 +749,10 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
   const statesmen = countOwned(s, p, (u) => u.type === 'elderStatesman');
   if (prof.liberty > 1.3 && s.turn > 30 && statesmen < colonies.length) buyUnit('elderStatesman');
   const armed = countOwned(s, p, isArmed);
-  if (armed < colonies.length * garrisonFor(p, prof) && (armed === 0 || (militant(prof) && p.gold > prof.reserve + 4000))) buyUnit('veteranSoldier');
-  if (militant(prof) && s.turn > 80 && countOwned(s, p, (u) => u.type === 'artillery') < Math.ceil(colonies.length / 2)) {
+  // A nation getting ready for independence also buys veterans and artillery against the Royal Expeditionary Force.
+  const arming = preparingIndependence(prof) && !canBeatRef(s, p, prof.independence!.ratio);
+  if (armed < colonies.length * garrisonFor(p, prof) && (armed === 0 || ((militant(prof) || arming) && p.gold > prof.reserve + 4000))) buyUnit('veteranSoldier');
+  if ((militant(prof) || arming) && s.turn > 80 && countOwned(s, p, (u) => u.type === 'artillery') < Math.ceil(colonies.length / 2)) {
     if (room() >= 0 && afford(trainPrice(p, 'artillery'))) safely(() => train(s, p.id, 'artillery'));
   }
   const fishable = colonies.some((c) => c.buildings.docks > 0) && !countOwned(s, p, (u) => u.type === 'expertFisherman');
@@ -762,7 +775,7 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
     if (toolsNeeded > 0 && afford(buyPrice(market, 'tools') * 100)) safely(() => buyGoods(s, ship.id, 'tools', Math.min(100, Math.ceil(toolsNeeded / 10) * 10)));
     const preparing = !!prof.independence && turnShare >= prof.independence.minShare - 15;
     const muskets = colonies.reduce((n, c) => n + c.goods.muskets, 0);
-    if ((preparing || militant(prof)) && muskets < colonies.length * 50 && afford(buyPrice(market, 'muskets') * 100 + 300)) safely(() => buyGoods(s, ship.id, 'muskets', 100));
+    if ((preparing || militant(prof)) && muskets < colonies.length * 50 * (preparing ? Math.max(1, turnArmy) : 1) && afford(buyPrice(market, 'muskets') * 100 + 300)) safely(() => buyGoods(s, ship.id, 'muskets', 100));
     if (!colonies.some((c) => c.goods.horses >= 2) && colonies.length && afford(buyPrice(market, 'horses') * 50)) safely(() => buyGoods(s, ship.id, 'horses', 50));
     // Creative: holds left over carry goods that another port pays clearly more for.
     if (!warship) safely(() => triangleBuy(s, p, ship, prof));
@@ -842,8 +855,9 @@ function independence(s: GameState, p: Player, prof: AiProfile): void {
   if (!colonies.length || turnShare < plan.minShare) return;
   const armed = countOwned(s, p, isArmed);
   const fortified = colonies.filter((c) => c.buildings.stockade > 0).length;
-  const muskets = colonies.reduce((n, c) => n + c.goods.muskets, 0);
-  if (armed < colonies.length * plan.armyPerColony || fortified < colonies.length / 3 || muskets < colonies.length * 25) return;
+  if (armed < colonies.length * plan.armyPerColony || fortified < colonies.length / 3) return;
+  // The Royal Expeditionary Force has grown all game: declare only when the defence can plausibly beat it.
+  if (!canBeatRef(s, p, plan.ratio)) return;
   if (canDeclareIndependence(s, p.id) === null) declareIndependence(s, p.id);
 }
 

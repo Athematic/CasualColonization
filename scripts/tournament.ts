@@ -6,7 +6,7 @@
 // features against levels, flagging the ones the advanced levels never or hardly use.
 // --no-favoured: computer players make no trade or Favoured Nation proposals, to measure what
 // Favoured Nation brings. Every run also prints relations and trade between the nations.
-import { AI_LEVELS, DIFFICULTY_LEVELS, formatArena, formatFeatures, formatRelations, formatRelationsLine, runArena, type AiLevel, type DifficultyId, type MapSize } from '../packages/engine/src/index.ts';
+import { AI_LEVELS, DIFFICULTY_LEVELS, formatArena, formatCrown, formatFeatures, formatRelations, formatRelationsLine, runArena, type AiLevel, type DifficultyId, type MapSize } from '../packages/engine/src/index.ts';
 
 const args = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
@@ -36,12 +36,15 @@ const result = runArena(options, (rows, g) => {
   const line = rows.map((r) => `${r.level}:${r.score}`).join('  ');
   const half = (k: 'agreements' | 'favoured') => rows.reduce((n, r) => n + (r.relations?.[k] ?? 0), 0) / 2;
   const wars = rows.reduce((n, r) => n + (r.relations?.wars ?? 0), 0);
-  console.error(`  game ${g + 1}/${options.games} (seed ${rows[0].seed}): ${line}  | agreements ${half('agreements')}, favoured ${half('favoured')}, wars ${wars}`);
+  const royal = rows.reduce((n, r) => n + (r.relations?.royalWars ?? 0), 0);
+  const declared = rows.filter((r) => r.declared !== undefined).map((r) => `${r.level} ${r.independence}`).join(', ');
+  console.error(`  game ${g + 1}/${options.games} (seed ${rows[0].seed}): ${line}  | agreements ${half('agreements')}, favoured ${half('favoured')}, wars ${wars} (royal ${royal})${declared ? `, independence: ${declared}` : ''}`);
 });
 if (args.includes('--json')) console.log(JSON.stringify(result, null, 2));
 else {
   console.log(`\n${formatArena(result.summary)}\n`);
   console.log(`Relations and trade between the Europeans, average per nation per game:\n\n${formatRelations(result.summary)}\n\n${formatRelationsLine(result.entries)}\n`);
+  console.log(`The Crown: independence, the Royal Expeditionary Force (land units) against the old formula, demands and royal wars, average per nation per game:\n\n${formatCrown(result.entries)}\n`);
   if (features) {
     // Columns in the order the levels were listed, so tables from different runs line up.
     const byLevel = [...new Set(levels)].map((level) => ({ level, features: result.summary.find((r) => r.level === level)?.features ?? {} }));

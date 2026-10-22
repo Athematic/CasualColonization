@@ -9,6 +9,7 @@ import { GOODS, type GoodId } from '../rules/goods.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
 import { aiFight, disembarkAll, guardColony, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
+import { crownAffairs } from './royal.js';
 
 const SELLABLE: GoodId[] = ['sugar', 'tobacco', 'cotton', 'furs', 'ore', 'silver', 'rum', 'cigars', 'cloth', 'coats'];
 const BUILD_PREFERENCE: BuildingKind[] = ['docks', 'stockade', 'warehouse', 'carpenter', 'printingPress', 'church', 'schoolhouse', 'customHouse', 'armory'];
@@ -16,6 +17,8 @@ const BUILD_PREFERENCE: BuildingKind[] = ['docks', 'stockade', 'warehouse', 'car
 /** The Naive level: settles, works the land and trades, but plans nothing ahead. */
 export function runNaive(s: GameState, p: Player): void {
   aiPeace(s, p.id);
+  // The King's demands are paid whenever the treasury can (ai/royal.ts).
+  crownAffairs(s, p, null);
   const units = Object.values(s.units).filter((u) => u.owner === p.id);
   for (const u of units) {
     if (!s.units[u.id] || u.owner !== p.id) continue;

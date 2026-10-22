@@ -408,9 +408,9 @@ export class App {
     this.requestRender();
   }
 
-  /** Asks about decisions the rules left waiting mid-turn (a tax raise after a sale). */
+  /** Asks about decisions the rules left waiting mid-turn (a tax raise after a sale, a royal demand). */
   async answerPending(): Promise<void> {
-    if (this.me.pendingTax) await this.turnStart();
+    if (this.me.pendingTax || this.me.pendingDemand) await this.turnStart();
   }
 
   /** Opens the Congress choice in the briefing modal. */

@@ -5,6 +5,7 @@ import { advanceSailing, processImmigration, recoverMarkets } from './europe.js'
 import { advanceWork, continueOrders, placeOnMap } from './movement.js';
 import { processNatives } from './natives.js';
 import { processCongress } from './fathers.js';
+import { processCrown } from './crown.js';
 import { processIndependence } from './independence.js';
 import { processRoutes } from './routes.js';
 import { formatDate, maxMoves, message, unitName, unitPosition } from './queries.js';
@@ -71,6 +72,7 @@ function advance(s: GameState): void {
     s.current = 0;
     processNatives(s);
     recoverMarkets(s);
+    processCrown(s);
     processIndependence(s);
     recordStats(s);
     s.turn++;

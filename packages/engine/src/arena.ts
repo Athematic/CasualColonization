@@ -12,7 +12,8 @@ import type { DifficultyId } from './rules/difficulty.js';
 import { NATION_ORDER, type NationId } from './rules/nations.js';
 import { score } from './score.js';
 import { setFeatureSink } from './telemetry.js';
-import type { GameState, MapSize } from './types.js';
+import { royalForce } from './independence.js';
+import type { GameState, MapSize, Player } from './types.js';
 
 export interface ArenaOptions {
   games: number;
@@ -62,6 +63,14 @@ export interface RelationsTally {
   warsOnPartners: number;
   /** Tax raises the nation refused (boycotting a good). */
   taxRefusals: number;
+  /** The King's demands for gold made to the nation, paid and refused (crown.ts). */
+  demands: number;
+  demandsPaid: number;
+  demandsRefused: number;
+  /** Wars the King declared for the nation (also counted in `wars`). */
+  royalWars: number;
+  /** Land units the Crown added to the nation's Royal Expeditionary Force over the game. */
+  refAdded: number;
 }
 
 const TALLY: Record<string, keyof RelationsTally> = {
@@ -77,10 +86,18 @@ const TALLY: Record<string, keyof RelationsTally> = {
   'diplomacy:war on a trade partner': 'warsOnPartners',
   'diplomacy:war on a Favoured Nation': 'warsOnPartners',
   'tax:refused (boycott)': 'taxRefusals',
+  'crown:demand made': 'demands',
+  'crown:demand paid': 'demandsPaid',
+  'crown:demand refused': 'demandsRefused',
+  'crown:royal war': 'royalWars',
+  'crown:ref units added': 'refAdded',
 };
 
+/** Tally keys that add up the amount reported, not the number of reports. */
+const AMOUNTS = new Set<keyof RelationsTally>(['foreignStopSales', 'partnerPortSales', 'refAdded']);
+
 function emptyTally(): RelationsTally {
-  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0 };
+  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0 };
 }
 
 export interface ArenaEntry {
@@ -96,6 +113,14 @@ export interface ArenaEntry {
   independence: string;
   /** Units of goods spoiled in full warehouses over the game. */
   spoiled: number;
+  /**
+   * Land units of the Royal Expeditionary Force: at the declaration for a nation that declared,
+   * otherwise at the end; and what the old formula (`royalForce`, sized by colonies) gave then.
+   */
+  ref?: number;
+  refFormula?: number;
+  /** Turn of the declaration of independence, if any. */
+  declared?: number;
   /** The game was cheated in (arena games never cheat, but standings can come from any state). */
   cheated?: boolean;
   /** Highest score in its game (ties count for all). */
@@ -156,7 +181,7 @@ export function playArenaGame(
     if (key) {
       let r = tallies.get(nation);
       if (!r) tallies.set(nation, (r = emptyTally()));
-      r[key] += key === 'foreignStopSales' || key === 'partnerPortSales' ? n : 1;
+      r[key] += AMOUNTS.has(key) ? n : 1;
     }
     if (!features) return;
     let c = counts.get(nation);
@@ -203,8 +228,19 @@ export function standing(s: GameState, seed: number, nation: NationId, level: Ai
     fathers: p.fathers.length,
     independence: p.independence,
     spoiled: p.goodsSpoiled ?? 0,
+    ...royalStanding(p, colonies.length),
     ...(isCheated(s) ? { cheated: true } : {}),
   };
+}
+
+/** The Royal Expeditionary Force a nation faced: at its declaration, or at the end. */
+function royalStanding(p: Player, colonies: number): Pick<ArenaEntry, 'ref' | 'refFormula' | 'declared'> {
+  if (p.refAtDeclaration) {
+    const f = p.refAtDeclaration.force;
+    return { ref: f.regulars + f.dragoons + f.artillery, refFormula: p.refAtDeclaration.formula, declared: p.refAtDeclaration.turn };
+  }
+  const old = royalForce(p, colonies);
+  return { ref: p.ref.regulars + p.ref.dragoons + p.ref.artillery, refFormula: old.regulars + old.dragoons + old.artillery };
 }
 
 /** Plays a series of games, rotating nations and seats so no level keeps the same advantage. */
@@ -290,6 +326,26 @@ export function formatRelationsLine(entries: ArenaEntry[]): string {
     `${per(sum('foreignStopSales'))} units sold at partners' colonies and ${per(sum('partnerPortSales'))} in partners' ports, ${per(sum('triangles'))} triangle trades, ` +
     `${per(sum('wars'))} wars declared (${per(sum('warsOnPartners'))} on trade partners or Favoured Nations), ${per(sum('taxRefusals'))} tax raises refused.`
   );
+}
+
+/**
+ * A Markdown table of the Crown per level: independence declared, won and lost, the Royal
+ * Expeditionary Force at the declaration (or at the end) against the old formula, and the King's
+ * demands and wars, as averages per nation per game.
+ */
+export function formatCrown(entries: ArenaEntry[]): string {
+  const head = '| Level | Declared | Won / lost | Turn declared | REF at declaration | old formula then | REF at end (no declaration) | old formula then | Demands | paid | refused | Royal wars | REF units added |';
+  const rule = '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
+  const levels = [...new Set(entries.map((e) => e.level))];
+  const avg = (rows: ArenaEntry[], f: (e: ArenaEntry) => number) => (rows.length ? String(Math.round((rows.reduce((n, e) => n + f(e), 0) / rows.length) * 10) / 10) : '–');
+  const rows = levels.map((level) => {
+    const all = entries.filter((e) => e.level === level);
+    const declared = all.filter((e) => e.declared !== undefined);
+    const rest = all.filter((e) => e.declared === undefined);
+    const t = (k: keyof RelationsTally) => avg(all, (e) => e.relations?.[k] ?? 0);
+    return `| ${AI_LEVEL_INFO[level].name} | ${declared.length} | ${all.filter((e) => e.independence === 'won').length} / ${all.filter((e) => e.independence === 'lost').length} | ${avg(declared, (e) => e.declared!)} | ${avg(declared, (e) => e.ref ?? 0)} | ${avg(declared, (e) => e.refFormula ?? 0)} | ${avg(rest, (e) => e.ref ?? 0)} | ${avg(rest, (e) => e.refFormula ?? 0)} | ${t('demands')} | ${t('demandsPaid')} | ${t('demandsRefused')} | ${t('royalWars')} | ${t('refAdded')} |`;
+  });
+  return [head, rule, ...rows].join('\n');
 }
 
 /** A Markdown table of a summary. */

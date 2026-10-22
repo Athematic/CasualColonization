@@ -72,7 +72,13 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   p.boycotts = {};
   p.pendingTax = null;
   p.coloniesAtDeclaration = colonies.length;
-  p.ref = royalForce(p, colonies.length);
+  delete p.pendingDemand;
+  // The force the Crown has built up over the game sails (crown.ts); a nation the Crown never
+  // reviewed (a test position) gets the old formula's force for its colonies.
+  const formula = royalForce(p, colonies.length);
+  if (!p.royal) p.ref = formula;
+  p.refAtDeclaration = { turn: s.turn, force: { ...p.ref }, formula: formula.regulars + formula.dragoons + formula.artillery };
+  track(nation, 'independence:royal land units', p.ref.regulars + p.ref.dragoons + p.ref.artillery);
   ensureCrown(s);
   declareWar(s, nation, 'crown');
   // The home port is lost, and with it every Favoured Nation status (no penalties).
@@ -97,17 +103,19 @@ export function declareIndependence(s: GameState, nation: NationId): string {
       continentals++;
     } else if (committed) continentals++;
   }
-  const text = `${NATIONS[nation].name}'s colonies have declared independence! The Crown sends ${p.ref.regulars} regulars, ${p.ref.dragoons} dragoons and ${p.ref.artillery} artillery to crush the rebellion.`;
+  const text = `${NATIONS[nation].name}'s colonies have declared independence! The Crown sends ${p.ref.regulars} regulars, ${p.ref.dragoons} dragoons, ${p.ref.artillery} artillery and ${p.ref.menOfWar} men-of-war to crush the rebellion.`;
   message(s, text);
   return text;
 }
 
 /**
- * The Royal Expeditionary Force sent against a nation that declares with `n` colonies: a fixed
- * part plus a part per colony, each scaled by the nation's difficulty.
+ * The old formula for the Royal Expeditionary Force of a nation with `n` colonies: a fixed part
+ * plus a part per colony, each scaled by the nation's difficulty. Since 0.5 the force grows
+ * during the game instead (crown.ts); this sets the force at the start (n = 0), catches up
+ * saves from before 0.5, and is the yardstick the growth is tuned against.
  */
 export function royalForce(p: Player, n: number): Player['ref'] {
-  const { refBase: base, refPerColony: per } = difficultyRules(p);
+  const { refBase: base, refGrowth: per } = difficultyRules(p);
   const size = (fixed: number, perColony: number) => Math.max(1, Math.round(fixed * base + perColony * per));
   return { regulars: size(4, 2 * n), dragoons: size(2, n), artillery: size(1, Math.floor(n / 2)), menOfWar: size(2, 0) };
 }

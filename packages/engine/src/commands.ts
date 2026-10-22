@@ -22,6 +22,7 @@ import { chooseFather } from './fathers.js';
 import { proposePeace, startWar } from './diplomacy.js';
 import { answerProposal, cancelFavoured, cancelTrade, proposeFavoured, proposeTrade } from './relations.js';
 import { declareIndependence } from './independence.js';
+import { answerDemand } from './crown.js';
 import type { FatherId } from './rules/fathers.js';
 import { cargoRoomFor, colonyAt, currentPlayer, type Direction } from './queries.js';
 import type { GoodId } from './rules/goods.js';
@@ -70,6 +71,8 @@ export type Command =
   | { type: 'mission'; unitId: string; settlementId: string }
   | { type: 'cashTreasure'; unitId: string }
   | { type: 'answerTax'; accept: boolean }
+  /** Pays (or refuses) the King's demand for gold. */
+  | { type: 'answerDemand'; pay: boolean }
   | { type: 'payArrears'; good: GoodId }
   | { type: 'setExport'; colonyId: string; good: GoodId; on: boolean }
   | { type: 'declareWar'; nation: NationId }
@@ -299,6 +302,9 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'answerTax':
         text = answerTax(s, nation, cmd.accept);
+        break;
+      case 'answerDemand':
+        text = answerDemand(s, nation, cmd.pay);
         break;
       case 'payArrears':
         payArrears(s, nation, cmd.good);
