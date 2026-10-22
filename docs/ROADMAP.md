@@ -10,7 +10,7 @@ The one plan for Casual Colonization. We decide the priorities here together. Ne
 - Sizes: **S** = hours, **M** = a day, **L** = several days, **XL** = a release on its own.
 - Priority: **P1** is needed for the release, **P2** is wanted, **P3** goes in only if time allows.
 
-## 0.3: Quality of play (in progress)
+## 0.3: Quality of play (done)
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
@@ -26,7 +26,7 @@ The one plan for Casual Colonization. We decide the priorities here together. Ne
 | Difficulty levels (prices, taxes, native tension, size of the Royal Expeditionary Force, computer-player strength) | M | P2 | done (five levels in one `DIFFICULTY` table; they apply to the people's nations, computer players keep standard economics and their chosen level) |
 | Rivers follow-ups: draw roads along rivers only as bridges, smooth diagonal seams, river defence bonus, Cooper Creek and the Yukon | S | P3 | idea |
 
-## 0.4: Favoured Nation (the first thing the original could not do)
+## 0.4: Favoured Nation, the first thing the original could not do (done)
 
 Design: [design/favoured-nation.md](design/favoured-nation.md)
 
@@ -40,18 +40,21 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Triangle trading by the Creative computer players when prices allow | M | P2 | done (buys where a good is cheap and sells it in the port that pays clearly more) |
 | Diplomacy screen shows relations, years of peace, trade volume, and progress towards Favoured Nation | S | P1 | done (in words only, never the hidden thresholds) |
 
-## 0.5: The classic game, part 1 (natives and the Crown)
+## 0.5: The classic game, part 1 (natives and the Crown) (in progress)
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Visible native braves: wandering, visiting, trading, demanding, attacking | L | P1 | idea |
-| Armed and mounted braves | S | P2 | idea |
-| Buying goods from native settlements | S | P1 | idea |
-| Burial grounds; surrender of a tribe after its capital falls | S | P2 | idea |
-| Missionaries denouncing rival missions and inciting tribes | S | P3 | idea |
-| A Royal Expeditionary Force that grows during the game, visible to the player | M | P1 | idea |
-| Royal demands for gold; royal wars | M | P1 | idea |
-| Advisor reports (colony, trade, military, naval, religion, natives, Congress, history) | M | P1 | idea |
+| Visible native braves: wandering, visiting, trading, demanding, attacking | L | P1 | in progress |
+| Armed and mounted braves | S | P2 | in progress |
+| Buying goods from native settlements | S | P1 | in progress |
+| Burial grounds; surrender of a tribe after its capital falls | S | P2 | in progress |
+| Missionaries denouncing rival missions and inciting tribes | S | P3 | in progress |
+| A Royal Expeditionary Force that grows during the game, visible to the player | M | P1 | in progress |
+| Royal demands for gold; royal wars | M | P1 | in progress |
+| Advisor reports (colony, trade, military, naval, religion, natives, Congress, history) | M | P1 | in progress |
+| Port character: each home port gets its own starting prices, demand and ship prices (for example cheap trade goods in Amsterdam, furs dear in La Rochelle, silver in Seville, cheap ships in Lisbon), so Favoured Nation access and triangle trading pay off. Scenario data per nation | M | P2 | idea (noted after 0.4) |
+| Find why Creative scores about 14 points less with Favoured Nation on | S | P2 | idea |
+| Trade routes may call at a favoured partner's port, not only the home port | S | P3 | idea |
 
 ## 0.6: A living world
 
