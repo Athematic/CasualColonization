@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Uploads the release build in site/ to the web server and removes the bundles of earlier builds.
 #
-#   scripts/deploy-sftp.sh "<lftp open command>" <remote folder> [--dry-run]
+#   scripts/deploy.sh "<lftp open command>" <remote folder> [--dry-run]
 #
-# The GitHub Deploy workflow passes `open --env-password -u USER -p PORT sftp://HOST` (password in
+# The GitHub Deploy workflow passes `open --env-password -u USER -p PORT ftp://HOST` (password in
 # LFTP_PASSWORD). Order matters: assets first, then index.html, so the live page never points at a
 # file that is not there yet; old bundles go last. Only files named like Vite's bundles
 # (assets/index-*.js|css, assets/cover-*.webp) that the new build does not have are deleted, so the
@@ -23,8 +23,8 @@ stale=$(comm -23 \
   <(printf '%s\n' $remote_assets | grep -E '^(index|cover)-.*\.(js|css|webp)$' | sort -u) \
   <(printf '%s\n' $local_assets | sort -u) || true)
 
-echo "Upload to $REMOTE: index.html and $(printf '%s\n' $local_assets | wc -l) files in assets/"
-echo "Remove from $REMOTE/assets (earlier builds):"; printf '  %s\n' ${stale:-none}
+echo "Upload to ${REMOTE:-/}: index.html and $(printf '%s\n' $local_assets | wc -l) files in assets/"
+echo "Remove from ${REMOTE}/assets (earlier builds):"; printf '  %s\n' ${stale:-none}
 if [ "$DRY" = "--dry-run" ]; then echo "Dry run: nothing changed."; exit 0; fi
 
 L "mkdir -pf '$REMOTE/assets'; mput -O '$REMOTE/assets' site/assets/*; put -O '$REMOTE' site/index.html"
