@@ -10,11 +10,18 @@ background), then generates each image, resuming from a manifest in the output f
 sprites are requested with background=transparent and output_format=png, and every PNG is checked
 for a real alpha channel with transparent pixels (and for a painted checkerboard).
 
+-Variant thumb makes the THUMBNAIL version of every sprite instead: a separate text-to-image generation of
+the same subject with a prompt designed to read at 16 to 48 px (the full prompt plus the THUMBNAIL OVERRIDE
+from thumb-prompts.md). Thumbnails are their own manifest entries (thumbs/<category>/<id>) and files
+(output/thumbs/<category>/<id>.png). -Variant full (the default) is unchanged; -Variant both makes both.
+
 The API key is asked for at startup with hidden input, or taken from OPENAI_API_KEY after you
 confirm. It is held only as a SecureString in memory and is never written anywhere.
 
 .EXAMPLE
 pwsh ./tools/image-gen/Generate-Images.ps1 -List
+.EXAMPLE
+pwsh ./tools/image-gen/Generate-Images.ps1 -Variant thumb -Only 'units/expert-lumberjack*' -Quality medium
 .EXAMPLE
 pwsh ./tools/image-gen/Generate-Images.ps1 -Doc sprites -Only 'bible/*' -DryRun
 .EXAMPLE
@@ -27,6 +34,11 @@ param(
     # Wildcard patterns matched against the job id ("units/caravel__none") or key ("sprites/units/caravel__none").
     # A pattern without * or ? matches as a substring. Comma-separate or repeat for several.
     [string[]]$Only,
+    # full: the images the prompt documents describe (default, unchanged). thumb: only the thumbnail versions
+    # (thumbs/<category>/<id>.png; prompt = full prompt + THUMBNAIL OVERRIDE from thumb-prompts.md). both: each
+    # full image followed by its thumbnail. Box art and the style bible get no thumbnail.
+    # (Not to be confused with -Variants, the number of takes.)
+    [ValidateSet('full', 'thumb', 'both')][string]$Variant = 'full',
     # Takes per prompt; take 2 and later are saved as <id>__v2.png, <id>__v3.png ...
     [ValidateRange(1, 10)][int]$Variants = 1,
     # Show the job list and exit.
@@ -68,7 +80,9 @@ param(
     [switch]$NoContactSheet,
     # Override the prompt documents (mainly for tests).
     [string]$SpriteDoc,
-    [string]$BoxArtDoc
+    [string]$BoxArtDoc,
+    # The thumbnail prompt blocks (only read for -Variant thumb or both). Default: tools/image-gen/thumb-prompts.md
+    [string]$ThumbPromptFile
 )
 
 $ErrorActionPreference = 'Stop'
@@ -77,6 +91,7 @@ Import-Module (Join-Path $PSScriptRoot 'ImageGen.psm1') -Force
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if (-not $SpriteDoc) { $SpriteDoc = Join-Path $repoRoot 'docs/SPRITE_PROMPTS.md' }
 if (-not $BoxArtDoc) { $BoxArtDoc = Join-Path $repoRoot 'docs/BOX_ART_PROMPTS.md' }
+if (-not $ThumbPromptFile) { $ThumbPromptFile = Join-Path $PSScriptRoot 'thumb-prompts.md' }
 if (-not $OutDir) { $OutDir = Join-Path $PSScriptRoot 'output' }
 $OutDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutDir)
 $manifestPath = Join-Path $OutDir 'manifest.json'
@@ -90,8 +105,16 @@ if ($Model -match '^dall-e') {
 $resumeCommand = Get-ResumeCommand -ScriptPath $PSCommandPath -BoundParameters $PSBoundParameters
 
 # ------------------------------------------------------------------------- jobs
-$jobs = Get-ImageJobs -SpriteDoc $SpriteDoc -BoxArtDoc $BoxArtDoc -Doc $Doc -Only $Only -Variants $Variants -IncludeTitle:$IncludeTitle
-$byDoc = foreach ($d in 'sprites', 'boxart') {
+$thumbPrompts = $null
+if ($Variant -ne 'full') {
+    $thumbPrompts = Read-ThumbPrompts -Path $ThumbPromptFile
+    if ($Doc -eq 'boxart') {
+        Write-Host 'Note: box art has no thumbnail variant (covers are not needed small); no thumbnail jobs for -Doc boxart.' -ForegroundColor Yellow
+    }
+}
+$jobs = Get-ImageJobs -SpriteDoc $SpriteDoc -BoxArtDoc $BoxArtDoc -Doc $Doc -Only $Only -Variants $Variants -IncludeTitle:$IncludeTitle `
+    -Variant $Variant -ThumbPrompts $thumbPrompts
+$byDoc = foreach ($d in 'sprites', 'boxart', 'thumbs') {
     $n = @($jobs | Where-Object Doc -eq $d).Count
     if ($n) { "${d}: $n" }
 }
@@ -105,6 +128,7 @@ if ($List) {
 
 if ($jobs.Count -eq 0) {
     Write-Warning 'No jobs match the selection.'
+    if ($thumbPrompts) { Write-Host "Thumbnails are never made for box art, nor for these categories (settings block of $ThumbPromptFile): $(@($thumbPrompts.Skip) -join ', ')." }
     exit 0
 }
 
@@ -127,6 +151,8 @@ if ($DryRun) {
         Write-Output ('=' * 100)
         Write-Output "$($j.Key)   [$(if ($runs) { 'would run' } else { 'skip' }): $($p.Reason)]"
         Write-Output "section: $($j.Section)"
+        if ($j.Kind -eq 'thumb') { Write-Output "variant: thumb ($($j.ThumbStyle) blocks of $(Split-Path -Leaf $ThumbPromptFile)), full version: $($j.FullKey)" }
+        else { Write-Output 'variant: full' }
         Write-Output "output:  $(Join-Path $OutDir $j.OutputRel)"
         Write-Output "request: POST $($ApiBase.TrimEnd('/'))/images/generations model=$($body.model) size=$($body.size) quality=$($body.quality) background=$($body.background) output_format=$($body.output_format) n=$($body.n) moderation=$($body.moderation)"
         if ($j.Notes) { Write-Output "note:    $($j.Notes)" }
@@ -142,6 +168,10 @@ if ($DryRun) {
 $skippedCount = $plan.Count - @($plan | Where-Object Action -eq 'run').Count
 Write-Host "Selected $($jobs.Count) jobs ($countText). Already done or skipped: $skippedCount. To generate now: $($toRun.Count)." -ForegroundColor Cyan
 foreach ($g in ($plan | Where-Object Action -eq 'run' | Group-Object Reason)) { Write-Host "  $($g.Count) x $($g.Name)" }
+if ($Variant -ne 'full') {
+    $thumbRuns = @($toRun | Where-Object { $_.Job.Kind -eq 'thumb' }).Count
+    Write-Host "  thumbnails: $thumbRuns, full images: $($toRun.Count - $thumbRuns)"
+}
 
 # Record every selected job, so the manifest shows the whole picture even before it runs.
 Add-PlanToManifest -Plan $plan -Manifest $manifest
@@ -169,7 +199,7 @@ $apiKey = Get-ApiKeySecure -UseEnvKey:$UseEnvKey
 
 # ------------------------------------------------------------------------- run
 $manifest['lastRun'] = [ordered]@{
-    startedAt = Get-UtcStamp; model = $Model; quality = $Quality; moderation = $Moderation; apiBase = $ApiBase
+    startedAt = Get-UtcStamp; model = $Model; quality = $Quality; moderation = $Moderation; apiBase = $ApiBase; variant = $Variant
     selected = $jobs.Count; planned = $toRun.Count; finishedAt = $null; stopReason = $null
 }
 Save-Manifest -Manifest $manifest -Path $manifestPath

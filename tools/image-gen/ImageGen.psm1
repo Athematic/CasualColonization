@@ -12,6 +12,7 @@ if (-not ('ImageGenTool.PngInspector' -as [type])) {
 $script:Utf8NoBom = [Text.UTF8Encoding]::new($false)
 $script:StandardSizes = @('1024x1024', '1536x1024', '1024x1536')
 $script:FileHashCache = @{}
+$script:BiblePalette = '#1b1a17 (ink), #fffdf6 (white), #f3c9a0 (skin), #d23c2a (red), #3a6fb0 (slate blue), #fbf3df (cream), #a8743f (wood), #b9b2a6 (stone), #9a5b2e (hull brown), #ffd23f (gold), #8ed0ec (light blue), #58a548 (green)'
 
 # ---------------------------------------------------------------------------------------------
 # Parsing
@@ -31,6 +32,7 @@ function New-ImageJob {
         Id         = $Id
         BaseId     = $Id
         Variant    = 1
+        Kind       = 'full'
         Key        = "$Doc/$Id"
         Section    = $Section
         Category   = $Category
@@ -178,6 +180,15 @@ function Expand-JobVariants {
                 $c.Variant = $v
                 $c.Key = "$($j.Doc)/$($c.Id)"
                 $c.OutputRel = "$($j.Doc)/$($c.Id).png"
+                if ($c.PSObject.Properties['FullKey']) {
+                    # thumbnail take N sits next to full take N
+                    $c.FullKey = "sprites/$($c.Id)"
+                    $c.FullOutputRel = "sprites/$($c.Id).png"
+                    $extra = [ordered]@{}
+                    foreach ($k in $j.ManifestExtra.Keys) { $extra[$k] = $j.ManifestExtra[$k] }
+                    $extra['fullKey'] = $c.FullKey
+                    $c.ManifestExtra = $extra
+                }
             }
             $out.Add($c)
         }
@@ -210,13 +221,172 @@ function Get-ImageJobs {
         [ValidateSet('sprites', 'boxart', 'all')][string]$Doc = 'all',
         [string[]]$Only,
         [int]$Variants = 1,
-        [switch]$IncludeTitle
+        [switch]$IncludeTitle,
+        # full: the prompt documents' images, exactly as before; thumb: only the thumbnail versions; both: each
+        # full job followed by its thumbnail. Box art and the categories marked skip in thumb-prompts.md get none.
+        [ValidateSet('full', 'thumb', 'both')][string]$Variant = 'full',
+        # The Read-ThumbPrompts result; needed for thumb and both.
+        $ThumbPrompts
     )
     $jobs = @()
     if ($Doc -in 'sprites', 'all') { $jobs += Get-SpriteJobs -Path $SpriteDoc }
     if ($Doc -in 'boxart', 'all') { $jobs += Get-BoxArtJobs -Path $BoxArtDoc -IncludeTitle:$IncludeTitle }
+    if ($Variant -ne 'full') {
+        if (-not $ThumbPrompts) { throw "-Variant $Variant needs the thumbnail prompts (Read-ThumbPrompts thumb-prompts.md)." }
+        $thumbByFull = @{}
+        foreach ($t in (ConvertTo-ThumbJobs -Jobs $jobs -Prompts $ThumbPrompts)) { $thumbByFull[$t.FullKey] = $t }
+        $jobs = @(foreach ($j in $jobs) {
+                if ($Variant -eq 'both') { $j }
+                if ($thumbByFull.ContainsKey($j.Key)) { $thumbByFull[$j.Key] }
+            })
+    }
     $jobs = Select-JobsByPattern -Jobs $jobs -Only $Only
     return , (Expand-JobVariants -Jobs $jobs -Variants $Variants)
+}
+
+# ---------------------------------------------------------------------------------------------
+# Thumbnails (Generate-Images.ps1 -Variant thumb|both): thumb-prompts.md and the thumbnail jobs
+# ---------------------------------------------------------------------------------------------
+
+function Read-ThumbPrompts {
+    <#
+    .SYNOPSIS
+    Reads tools/image-gen/thumb-prompts.md. Only fenced blocks count; everything else is documentation.
+      ```settings                   lines "skip: <categories>" and "tile: <prompt-doc categories>"
+      ```lead icon|tile             stated before the full prompt
+      ```override icon|tile         the THUMBNAIL OVERRIDE, after the full prompt
+      ```background transparent|opaque
+      ```category <name>            added for jobs of that prompt-doc category (units, ships, goods, ...)
+      ```match <pattern>[,...]      added for sprite ids matching the wildcard(s)
+      ```final icon|tile            the closing reminder, last
+    Placeholders in any block: {WIDTH} {HEIGHT} {OUTLINE} {PALETTE}.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { throw "Thumbnail prompt file not found: $Path" }
+    $text = [IO.File]::ReadAllText($Path)
+    $r = [pscustomobject]@{
+        Path       = $Path
+        Skip       = [System.Collections.Generic.List[string]]::new()
+        Tile       = [System.Collections.Generic.List[string]]::new()
+        Lead       = @{}
+        Override   = @{}
+        Final      = @{}
+        Background = @{}
+        Category   = [System.Collections.Generic.List[object]]::new()
+        Match      = [System.Collections.Generic.List[object]]::new()
+    }
+    $lines = $text -split '\r?\n'
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -notmatch '^```([a-z][a-z-]*)(?:[ \t]+(.+?))?[ \t]*$') { continue }
+        $kind = $Matches[1]
+        $argText = if ($Matches.Count -gt 2 -and $Matches[2]) { $Matches[2].Trim() } else { '' }
+        $body = [System.Collections.Generic.List[string]]::new()
+        $i++
+        while ($i -lt $lines.Count -and -not $lines[$i].StartsWith('```')) { $body.Add($lines[$i]); $i++ }
+        $b = ($body -join "`n").Trim()
+        $words = @($argText -split '\s+' | Where-Object { $_ })
+        switch ($kind) {
+            'settings' {
+                foreach ($l in $body) {
+                    $l = ($l -replace '#.*$', '').Trim()
+                    if ($l -notmatch '^(skip|tile)\s*:\s*(.*)$') { continue }
+                    $which = $Matches[1]
+                    foreach ($c in ($Matches[2] -split '[,\s]+')) {
+                        if (-not $c) { continue }
+                        if ($which -eq 'skip') { $r.Skip.Add($c) } else { $r.Tile.Add($c) }
+                    }
+                }
+            }
+            { $_ -in 'lead', 'override', 'final' } {
+                if ($words.Count -lt 1 -or $words[0] -notin 'icon', 'tile') { throw "${Path}: ``````$kind needs 'icon' or 'tile'" }
+                $table = switch ($kind) { 'lead' { $r.Lead } 'override' { $r.Override } default { $r.Final } }
+                $table[$words[0]] = $b
+            }
+            'background' {
+                if ($words.Count -lt 1 -or $words[0] -notin 'transparent', 'opaque') { throw "${Path}: ``````background needs 'transparent' or 'opaque'" }
+                $r.Background[$words[0]] = $b
+            }
+            'category' {
+                if ($words.Count -lt 1) { throw "${Path}: ``````category needs a name" }
+                $r.Category.Add([pscustomobject]@{ Name = $words[0]; Text = $b })
+            }
+            'match' {
+                if ($words.Count -lt 1) { throw "${Path}: ``````match needs a pattern" }
+                $r.Match.Add([pscustomobject]@{ Patterns = @($words[0] -split ',' | Where-Object { $_ }); Text = $b })
+            }
+        }
+    }
+    foreach ($style in 'icon', 'tile') {
+        if (-not $r.Lead[$style]) { throw "${Path}: no ``````lead $style block" }
+        if (-not $r.Override[$style]) { throw "${Path}: no ``````override $style block" }
+        if (-not $r.Final[$style]) { throw "${Path}: no ``````final $style block" }
+    }
+    return $r
+}
+
+function Get-ThumbOutline {
+    <# The thumbnail line weight: 6 to 8 percent of the shorter side, in px ("61 to 82" for 1024). #>
+    param([Parameter(Mandatory)][int]$Width, [Parameter(Mandatory)][int]$Height)
+    $e = [Math]::Min($Width, $Height)
+    return ('{0} to {1}' -f [int][Math]::Round($e * 0.06), [int][Math]::Round($e * 0.08))
+}
+
+function ConvertTo-ThumbJobs {
+    <#
+    .SYNOPSIS
+    One thumbnail job per full sprite job (take 1; Expand-JobVariants makes the other takes). Its prompt is
+    the lead block, then the full prompt unchanged (master + category + SUBJECT), then the THUMBNAIL OVERRIDE
+    (override, background, category and match blocks), then the final block. Box art and the categories marked
+    skip in thumb-prompts.md get none. Key thumbs/<category>/<id>, output thumbs/<category>/<id>.png, and its
+    own prompt hash; the full job is not changed.
+    #>
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Jobs, [Parameter(Mandatory)]$Prompts)
+    $out = [System.Collections.Generic.List[object]]::new()
+    foreach ($j in $Jobs) {
+        if ($j.Doc -ne 'sprites') { continue }   # covers are not needed small
+        $folderCat = ($j.Id -split '/')[0]
+        if ($Prompts.Skip -contains $folderCat -or ($j.Category -and $Prompts.Skip -contains $j.Category)) { continue }
+        $style = if ($Prompts.Tile -contains $folderCat -or ($j.Category -and $Prompts.Tile -contains $j.Category)) { 'tile' } else { 'icon' }
+        if ($j.Size -notmatch '^(\d+)x(\d+)$') { throw "$($j.Key): bad size '$($j.Size)'" }
+        $w = [int]$Matches[1]; $h = [int]$Matches[2]
+        $vals = @{ WIDTH = $w; HEIGHT = $h; OUTLINE = (Get-ThumbOutline -Width $w -Height $h); PALETTE = $script:BiblePalette }
+        $over = [System.Collections.Generic.List[string]]::new()
+        $over.Add((Expand-EditPlaceholders $Prompts.Override[$style] $vals))
+        if ($Prompts.Background[$j.Background]) { $over.Add((Expand-EditPlaceholders $Prompts.Background[$j.Background] $vals)) }
+        $docCat = if ($j.Category) { $j.Category } else { $folderCat }
+        foreach ($c in @($Prompts.Category | Where-Object { $_.Name -eq $docCat })) { $over.Add((Expand-EditPlaceholders $c.Text $vals)) }
+        foreach ($m in @($Prompts.Match | Where-Object { $mt = $_; @($mt.Patterns | Where-Object { $j.Id -like $_ }).Count -gt 0 })) {
+            $over.Add((Expand-EditPlaceholders $m.Text $vals))
+        }
+        $prompt = @(
+            (Expand-EditPlaceholders $Prompts.Lead[$style] $vals),
+            $j.Prompt,
+            ($over -join "`n`n"),
+            (Expand-EditPlaceholders $Prompts.Final[$style] $vals)
+        ) -join "`n`n"
+        $out.Add([pscustomobject]@{
+                Doc           = 'thumbs'
+                Id            = $j.Id
+                BaseId        = $j.Id
+                Variant       = 1
+                Kind          = 'thumb'
+                Key           = "thumbs/$($j.Id)"
+                Section       = "$($j.Section) (thumbnail)"
+                Category      = $j.Category
+                Size          = $j.Size
+                Background    = $j.Background
+                Prompt        = $prompt
+                OutputRel     = "thumbs/$($j.Id).png"
+                Notes         = $j.Notes
+                Subject       = $j.Subject
+                ThumbStyle    = $style
+                FullKey       = $j.Key
+                FullOutputRel = $j.OutputRel
+                HashInput     = "thumb-v1|$($j.Size)|$($j.Background)|$prompt"
+                ManifestExtra = [ordered]@{ variant = 'thumb'; thumbStyle = $style; fullKey = $j.Key }
+            })
+    }
+    return , $out.ToArray()
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -991,27 +1161,72 @@ function Write-ContactSheet {
     $null = $sb.AppendLine('.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}.card{background:var(--card);border-radius:8px;padding:8px;box-shadow:0 1px 2px rgba(0,0,0,.15);min-width:0}')
     $null = $sb.AppendLine('.thumb{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:4px;background:repeating-conic-gradient(var(--chk1) 0 25%,var(--chk2) 0 50%) 0 0/24px 24px}')
     $null = $sb.AppendLine('.thumb img{max-width:100%;max-height:100%}.key{font-weight:600;word-break:break-all;margin-top:6px}.small{color:var(--muted);font-size:12px}.bad{color:var(--bad)}.okc{color:var(--ok)}')
-    $null = $sb.AppendLine('details{font-size:12px;margin-top:4px}details pre{white-space:pre-wrap;word-break:break-word;max-height:240px;overflow:auto}.empty{color:#dfe6ee;font-size:12px}</style></head><body>')
-    $null = $sb.AppendLine("<h1>Image Contact Sheet</h1><p class=""meta"">$(& $enc ((Get-Date).ToString('yyyy-MM-dd HH:mm'))) &middot; $($Jobs.Count) jobs. The dark blue checkerboard is the page background: real transparency shows it, a painted checkerboard hides it.</p><div class=""grid"">")
+    $null = $sb.AppendLine('details{font-size:12px;margin-top:4px}details pre{white-space:pre-wrap;word-break:break-word;max-height:240px;overflow:auto}.empty{color:#dfe6ee;font-size:12px}')
+    $null = $sb.AppendLine('.pair{grid-column:span 2}.imgs{display:grid;grid-template-columns:1fr 1fr;gap:6px}.lbl{font-size:12px;font-weight:600;text-align:center;margin-top:2px}')
+    $null = $sb.AppendLine('.minis{display:flex;gap:4px;justify-content:center;align-items:flex-end;margin-top:4px}.minis span{background:#a6d878;padding:2px;line-height:0;border-radius:2px}@media (max-width:480px){.pair{grid-column:auto}}</style></head><body>')
+    $null = $sb.AppendLine("<h1>Image Contact Sheet</h1><p class=""meta"">$(& $enc ((Get-Date).ToString('yyyy-MM-dd HH:mm'))) &middot; $($Jobs.Count) jobs. The dark blue checkerboard is the page background: real transparency shows it, a painted checkerboard hides it. Where a sprite has both a full and a thumbnail version, they are shown side by side, each also at 32 and 48 px (scaled by the browser; the real downscale is in the sprite pipeline).</p><div class=""grid"">")
+    $srcOf = { param($rel) ($rel -split '/' | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/' }
+    # A full job and its thumbnail share one card; the other half is taken from disk when this run selected only one.
+    $groups = [ordered]@{}
     foreach ($job in $Jobs) {
-        $e = $Manifest['jobs'][$job.Key]
-        $status = if ($e) { $e['status'] } else { 'pending' }
-        $file = Join-Path $OutDir $job.OutputRel
-        $null = $sb.Append('<div class="card"><div class="thumb">')
-        if (Test-Path -LiteralPath $file) {
-            $src = ($job.OutputRel -split '/' | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/'
-            $null = $sb.Append("<img loading=""lazy"" src=""$src"" alt=""$(& $enc $job.Key)"">")
-        } else {
-            $null = $sb.Append("<span class=""empty"">$(& $enc $status)</span>")
+        $isThumb = [bool]($job.PSObject.Properties['Kind'] -and $job.Kind -eq 'thumb')
+        $gk = if ($isThumb) { $job.FullKey } else { $job.Key }
+        if (-not $groups.Contains($gk)) { $groups[$gk] = @{ Full = $null; Thumb = $null } }
+        if ($isThumb) { $groups[$gk].Thumb = $job } else { $groups[$gk].Full = $job }
+    }
+    foreach ($gk in $groups.Keys) {
+        $g = $groups[$gk]
+        $cols = [System.Collections.Generic.List[object]]::new()
+        if ($g.Full) { $cols.Add(@{ Label = 'full'; Key = $g.Full.Key; Rel = $g.Full.OutputRel; Job = $g.Full }) }
+        elseif ($g.Thumb.FullOutputRel -and (Test-Path -LiteralPath (Join-Path $OutDir $g.Thumb.FullOutputRel))) {
+            $cols.Add(@{ Label = 'full'; Key = $g.Thumb.FullKey; Rel = $g.Thumb.FullOutputRel; Job = $null })
         }
-        $null = $sb.Append("</div><div class=""key"">$(& $enc $job.Key)</div><div class=""small"">$(& $enc $job.Size) &middot; $(& $enc $job.Background) &middot; $(& $enc $status)</div>")
-        if ($e -and $e['check'] -is [System.Collections.IDictionary]) {
-            $chk = $e['check']
-            if ($chk['ok']) { $null = $sb.Append("<div class=""small okc"">PNG check ok ($(& $enc $chk['colorTypeName']))</div>") }
-            else { $null = $sb.Append("<div class=""small bad"">$(& $enc (@($chk['issues']) -join '; '))</div>") }
+        if ($g.Thumb) { $cols.Add(@{ Label = 'thumb'; Key = $g.Thumb.Key; Rel = $g.Thumb.OutputRel; Job = $g.Thumb }) }
+        elseif ($g.Full.Doc -eq 'sprites' -and (Test-Path -LiteralPath (Join-Path $OutDir "thumbs/$($g.Full.Id).png"))) {
+            $cols.Add(@{ Label = 'thumb'; Key = "thumbs/$($g.Full.Id)"; Rel = "thumbs/$($g.Full.Id).png"; Job = $null })
         }
-        if ($e -and $e['status'] -eq 'failed' -and $e['lastError']) { $null = $sb.Append("<div class=""small bad"">$(& $enc $e['lastError'])</div>") }
-        $null = $sb.Append("<details><summary>$(& $enc $job.Section)</summary><pre>$(& $enc $job.Prompt)</pre></details></div>")
+        $pair = $cols.Count -gt 1
+        $null = $sb.Append($(if ($pair) { '<div class="card pair"><div class="imgs">' } else { '<div class="card">' }))
+        foreach ($c in $cols) {
+            $e = $Manifest['jobs'][$c.Key]
+            $status = if ($e) { $e['status'] } else { 'pending' }
+            $file = Join-Path $OutDir $c.Rel
+            $has = Test-Path -LiteralPath $file
+            if ($pair) { $null = $sb.Append('<div>') }
+            $null = $sb.Append('<div class="thumb">')
+            if ($has) { $null = $sb.Append("<img loading=""lazy"" src=""$(& $srcOf $c.Rel)"" alt=""$(& $enc $c.Key)"">") }
+            else { $null = $sb.Append("<span class=""empty"">$(& $enc $status)</span>") }
+            $null = $sb.Append('</div>')
+            if ($pair) {
+                $null = $sb.Append("<div class=""lbl"">$(& $enc $c.Label)</div>")
+                if ($has) {
+                    $null = $sb.Append('<div class="minis">')
+                    foreach ($n in 32, 48) { $null = $sb.Append("<span><img loading=""lazy"" src=""$(& $srcOf $c.Rel)"" width=""$n"" height=""$n"" alt=""""></span>") }
+                    $null = $sb.Append('</div>')
+                }
+                $null = $sb.Append('</div>')
+            }
+        }
+        if ($pair) { $null = $sb.Append('</div>') }
+        $first = $cols[0]
+        $keyText = if ($pair) { "$gk (full | thumb)" } elseif ($first) { $first.Key } else { $gk }
+        $null = $sb.Append("<div class=""key"">$(& $enc $keyText)</div>")
+        foreach ($c in $cols) {
+            $e = $Manifest['jobs'][$c.Key]
+            $status = if ($e) { $e['status'] } else { 'pending' }
+            $j = $c.Job
+            $pre = if ($pair) { "$($c.Label): " } else { '' }
+            $sizeText = if ($j) { "$($j.Size) &middot; $(& $enc $j.Background) &middot; " } else { '' }
+            $null = $sb.Append("<div class=""small"">$(& $enc $pre)$sizeText$(& $enc $status)$(if (-not $j) { ' (not selected in this run)' })</div>")
+            if ($e -and $e['check'] -is [System.Collections.IDictionary]) {
+                $chk = $e['check']
+                if ($chk['ok']) { $null = $sb.Append("<div class=""small okc"">$(& $enc $pre)PNG check ok ($(& $enc $chk['colorTypeName']))</div>") }
+                else { $null = $sb.Append("<div class=""small bad"">$(& $enc $pre)$(& $enc (@($chk['issues']) -join '; '))</div>") }
+            }
+            if ($e -and $e['status'] -eq 'failed' -and $e['lastError']) { $null = $sb.Append("<div class=""small bad"">$(& $enc $pre)$(& $enc $e['lastError'])</div>") }
+            if ($j) { $null = $sb.Append("<details><summary>$(& $enc $pre)$(& $enc $j.Section)</summary><pre>$(& $enc $j.Prompt)</pre></details>") }
+        }
+        $null = $sb.Append('</div>')
         $null = $sb.AppendLine()
     }
     $null = $sb.AppendLine('</div></body></html>')
@@ -1150,7 +1365,7 @@ function Get-EditJobs {
     )
     $warnings = [System.Collections.Generic.List[string]]::new()
     $jobs = [System.Collections.Generic.List[object]]::new()
-    $palette = '#1b1a17 (ink), #fffdf6 (white), #f3c9a0 (skin), #d23c2a (red), #3a6fb0 (slate blue), #fbf3df (cream), #a8743f (wood), #b9b2a6 (stone), #9a5b2e (hull brown), #ffd23f (gold), #8ed0ec (light blue), #58a548 (green)'
+    $palette = $script:BiblePalette
     $wantCats = @($Category | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     $styleOk = $false
     if ($StyleRef) {
@@ -1166,6 +1381,7 @@ function Get-EditJobs {
         $e = $SourceManifest['jobs'][$srcKey]
         if ($null -eq $e -or $e['status'] -ne 'done' -or -not $e['id']) { continue }
         $entryDoc = [string]$e['doc']
+        if ($entryDoc -eq 'thumbs') { continue }   # Generate-Images.ps1 -Variant thumb output is not a master
         if ($Doc -ne 'all' -and $entryDoc -ne $Doc) { continue }
         $id = [string]$e['id']
         $folderCat = if ($entryDoc -eq 'boxart') { 'boxart' } else { ($id -split '/')[0] }
@@ -1381,4 +1597,5 @@ Export-ModuleMember -Function ConvertTo-Slug, Get-SpriteJobs, Get-BoxArtJobs, Ex
     New-ImageRequestBody, Test-InputFidelitySupport, New-ImageEditForm, New-MultipartContent, Invoke-ImageRequest, Get-ErrorClass,
     ConvertFrom-RateLimitDuration, Get-RetryDelaySeconds, Invoke-JobGeneration, Test-ImageResult, Save-BytesAtomic,
     Test-EditJob, Get-ResumeCommand, Get-ApiKeySecure, Add-PlanToManifest, Invoke-ImageJobRun, Get-CostEstimate, Write-ContactSheet,
-    Read-EditPrompts, Get-PixelGridSize, Expand-EditPlaceholders, Get-EditJobs, Write-EditContactSheet
+    Read-EditPrompts, Get-PixelGridSize, Expand-EditPlaceholders, Get-EditJobs, Write-EditContactSheet,
+    Read-ThumbPrompts, Get-ThumbOutline, ConvertTo-ThumbJobs

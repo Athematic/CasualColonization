@@ -3,6 +3,7 @@
 //   node tools/sprite-pipeline/build.mjs [--in DIR|URL] [--out DIR] [--sizes 16,24,...] [--pixel-max 32]
 //   node tools/sprite-pipeline/build.mjs --in .../edited/bold --grid-in .../edited/pixel-32
 //   node tools/sprite-pipeline/build.mjs --in .../edited/pixel-32 --grid 32
+//   node tools/sprite-pipeline/build.mjs --in .../output/sprites --thumbs-in .../output/thumbs --thumb-max 48
 // See README.md in this folder.
 
 import crypto from 'node:crypto';
@@ -31,6 +32,11 @@ Usage: node tools/sprite-pipeline/build.mjs [options]
   --in DIR|URL        masters: a folder, or a base URL with the same layout
                       (default tools/image-gen/output/sprites). Edit-Images.ps1 redraws work too:
                       --in tools/image-gen/output/edited/bold
+  --thumbs-in DIR|URL thumbnail masters (Generate-Images.ps1 -Variant thumb): a folder laid out like
+                      tools/image-gen/output/thumbs, or a base URL (https://casual.spence.dk/assets/thumbs/).
+                      Sizes up to --thumb-max are made from the thumbnail, larger ones from --in; a sprite
+                      without a thumbnail uses its full master for every size
+  --thumb-max N       with --thumbs-in: the largest size made from the thumbnail (default: --pixel-max)
   --grid-in DIR       a folder of pixel-grid redraws (Edit-Images.ps1 -Mode pixel), e.g.
                       tools/image-gen/output/edited/pixel-32; repeatable. The grid size comes from the
                       folder name (pixel-N) or --grid. That size is snapped from the grid instead of
@@ -45,7 +51,8 @@ Usage: node tools/sprite-pipeline/build.mjs [options]
   --no-compare        no comparison section
   --ids FILE          ids to fetch for a URL source (one per line, or a JSON array);
                       default: tools/image-gen/output/manifest.json, else docs/SPRITE_PROMPTS.md
-  --cache DIR         download cache for a URL source (default tools/sprite-pipeline/cache)
+  --cache DIR         download cache for a URL source (default tools/sprite-pipeline/cache; thumbnails
+                      from a URL go to its _thumbs/ subfolder)
   --user-agent UA     User-Agent for downloads (default "${DEFAULT_USER_AGENT}",
                       falling back to a browser string if the server's firewall answers 455)
   --out DIR           output folder (default tools/sprite-pipeline/out)
@@ -74,6 +81,7 @@ function parse() {
       settings: { type: 'string' }, 'no-sheet': { type: 'boolean' }, 'no-tuning': { type: 'boolean' },
       grid: { type: 'string' }, 'grid-in': { type: 'string', multiple: true }, upscales: { type: 'string' },
       'grid-place': { type: 'string' }, 'compare-in': { type: 'string' }, 'no-compare': { type: 'boolean' },
+      'thumbs-in': { type: 'string' }, 'thumb-max': { type: 'string' },
       help: { type: 'boolean', short: 'h' },
     },
   });
@@ -95,7 +103,7 @@ async function main() {
   const a = parse();
   // Node's fetch() ignores HTTPS_PROXY unless NODE_USE_ENV_PROXY=1 (Node 22.21+):
   // behind a proxy, run ourselves again with it set.
-  if (a.in && isUrl(a.in) && hasProxyEnv() && !process.env.NODE_USE_ENV_PROXY) {
+  if (((a.in && isUrl(a.in)) || (a['thumbs-in'] && isUrl(a['thumbs-in']))) && hasProxyEnv() && !process.env.NODE_USE_ENV_PROXY) {
     const r = spawnSync(process.execPath, ['--disable-warning=UNDICI-EHPA', ...process.argv.slice(1)], { stdio: 'inherit', env: { ...process.env, NODE_USE_ENV_PROXY: '1' } });
     process.exit(r.status ?? 1);
   }
@@ -169,6 +177,11 @@ async function main() {
         + `point --in at ${path.join(dir, 'bold')} for the smooth sizes, and use --grid-in ${path.join(dir, 'pixel-32')} for a pixel grid`);
     }
   }
+  // Generate-Images.ps1 writes output/sprites/... and output/thumbs/...: the root itself is not a master folder.
+  const isOutputRoot = (list) => list.some((id) => /^(sprites|thumbs)\//.test(id));
+  const outputRootError = (dir) => new Error(`${dir} looks like the Generate-Images.ps1 output root (it holds sprites/ and thumbs/ folders): `
+    + `use --in ${path.join(dir, 'sprites')} and --thumbs-in ${path.join(dir, 'thumbs')}`);
+  if (srcDir && !isUrl(input) && isOutputRoot(ids)) throw outputRootError(srcDir);
   const mainSet = new Set(ids);
   for (const g of gridSources) {
     g.ids = new Set(await listLocalIds(g.dir));
@@ -179,6 +192,30 @@ async function main() {
     ids = ids.filter((id) => keys.some((k) => id.includes(k)));
   }
 
+  // ---- thumbnail masters (Generate-Images.ps1 -Variant thumb): the sizes up to --thumb-max come from them
+  const thumbsIn = a['thumbs-in'] ?? null;
+  const thumbMax = a['thumb-max'] !== undefined ? num(a['thumb-max'], 'thumb-max') : pixelMax;
+  let thumbSrc = null;
+  if (thumbsIn && gridOnly) throw new Error('--thumbs-in does not combine with a grid-only run (--grid without --grid-in)');
+  if (thumbsIn) {
+    const wanted = ids.filter((id) => mainSet.has(id) && classify(id).layout);
+    if (isUrl(thumbsIn)) {
+      const cacheDir = path.join(path.resolve(a.cache ?? path.join(HERE, 'cache')), '_thumbs');
+      console.log(`Fetching ${wanted.length} thumbnails from ${thumbsIn} into ${cacheDir}`);
+      const st = await syncRemote(thumbsIn, wanted, cacheDir, { log: console.log, userAgent: a['user-agent'] });
+      console.log(`  ${st.fetched.length} downloaded, ${st.cached.length} unchanged, ${st.missing.length} missing (those use the full master)`);
+      if (st.blocked) console.log(`  ${st.blocked} requests were blocked by the server's firewall (HTTP 455): try --user-agent "<a browser User-Agent>"`);
+      const missing = new Set(st.missing);
+      thumbSrc = { dir: cacheDir, ids: new Set(wanted.filter((id) => !missing.has(id))), label: thumbsIn };
+    } else {
+      const dir = path.resolve(thumbsIn);
+      if (!await exists(dir)) throw new Error(`--thumbs-in ${thumbsIn}: folder not found`);
+      const list = await listLocalIds(dir);
+      if (isOutputRoot(list)) throw outputRootError(dir);
+      thumbSrc = { dir, ids: new Set(list), label: label(dir) };
+    }
+  }
+
   // ---- comparison source: the original masters, when the input is something else (redraws)
   let compareDir = null;
   if (!a['no-compare'] && !(a['no-sheet'])) {
@@ -187,7 +224,8 @@ async function main() {
       if (!srcDir || path.resolve(srcDir) !== path.resolve(ORIGINAL_MASTERS)) compareDir = ORIGINAL_MASTERS;
     }
   }
-  const compareSizes = gridOnly ? [16, 24, 32, 48] : [...pixelSizes, ...smoothSizes.slice(0, 1)];
+  const cmpMax = Math.max(pixelMax, thumbSrc ? thumbMax : 0);
+  const compareSizes = gridOnly ? [16, 24, 32, 48] : [...sizes.filter((n) => n <= cmpMax), ...sizes.filter((n) => n > cmpMax).slice(0, 1)];
 
   // ---- clean previous output (only what we wrote before)
   const oldManifest = await fs.readFile(path.join(outDir, 'manifest.json'), 'utf8').then(JSON.parse).catch(() => null);
@@ -214,9 +252,12 @@ async function main() {
     pixelSizes,
     smoothSizes,
     gridSizes,
+    ...(thumbSrc ? { thumbs: { source: thumbSrc.label, maxSize: thumbMax } } : {}),
     settings: gridSources.length ? { ...settings, grid: gridSettings } : settings,
     sprites: {},
   };
+  const thumbUsed = [];
+  const thumbFallback = [];
   const sheet = [];
   const tuning = [];
   const compare = [];
@@ -242,7 +283,22 @@ async function main() {
       continue;
     }
     const bytes = inMain ? await fs.readFile(file) : null;
-    const { extras } = sp && pixelSizes.length ? spritePalette(sp, settings.pixel, refSize) : { extras: [] };
+    // the thumbnail master, when there is one: sizes up to thumbMax are made from it, the rest from the full master
+    let tsp = null;
+    const thumbNotes = [];
+    if (sp && thumbSrc) {
+      if (thumbSrc.ids.has(id)) {
+        tsp = await prepare(id, path.join(thumbSrc.dir, `${id}.png`), settings);
+        if (tsp && isGroundOverlay(id) && !tsp.transparent) {
+          thumbNotes.push('thumbnail is opaque (a ground overlay must be transparent): full master used');
+          tsp = null;
+        }
+      }
+      (tsp ? thumbUsed : thumbFallback).push(id);
+      thumbNotes.push(tsp ? `sizes up to ${thumbMax} from the thumbnail` : 'no thumbnail: full master for every size');
+    }
+    const srcFor = (n) => (tsp && n <= thumbMax ? tsp : sp);
+    const { extras } = sp && pixelSizes.length ? spritePalette(srcFor(refSize), settings.pixel, refSize) : { extras: [] };
     const entry = {
       category,
       layout,
@@ -253,6 +309,12 @@ async function main() {
     };
     // Back/front split line of an enclosure, in the square's coordinates (0..1 from the top).
     if (sp && SPLIT_SPRITES[id] !== undefined) entry.split = +(SPLIT_SPRITES[id] * sp.master.h * sp.place.scale + sp.place.oy).toFixed(4);
+    if (tsp) {
+      const tbytes = await fs.readFile(path.join(thumbSrc.dir, `${id}.png`));
+      entry.thumb = { file: `${id}.png`, sha256: sha256(tbytes), maxSize: thumbMax };
+      // the thumbnail is a separate drawing: its enclosure split line can sit a little elsewhere
+      if (SPLIT_SPRITES[id] !== undefined) entry.thumb.split = +(SPLIT_SPRITES[id] * tsp.master.h * tsp.place.scale + tsp.place.oy).toFixed(4);
+    }
     const row = { id, layout, extras, list: [], compare: {} };
     const grids = gridSources.filter((g) => g.ids.has(id));
     const gridN = new Set(grids.map((g) => g.n));
@@ -263,8 +325,9 @@ async function main() {
         if (gridN.has(n)) continue;
         const mode = n <= pixelMax ? 'pixel' : 'smooth';
         const rel = `${id}@${n}.png`;
-        await write(rel, await renderPng(sp, n, mode, settings, refSize));
-        entry.files[n] = { file: rel, mode };
+        const src = srcFor(n);
+        await write(rel, await renderPng(src, n, mode, settings, refSize));
+        entry.files[n] = src === tsp ? { file: rel, mode, from: 'thumb' } : { file: rel, mode };
       }
     }
 
@@ -305,13 +368,19 @@ async function main() {
         const orig = `_sheet/orig/${id}.png`;
         await write(orig, await sharp(bytes).resize(256, 256, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer());
         row.orig = orig;
+        if (tsp) {
+          const torig = `_sheet/thumb-orig/${id}.png`;
+          await write(torig, await sharp(path.join(thumbSrc.dir, `${id}.png`)).resize(256, 256, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer());
+          row.thumbOrig = torig;
+        }
       } else if (grids.length) {
         const orig = `_sheet/orig/${id}.png`;
         await write(orig, await sharp(path.join(grids[0].dir, `${id}.png`)).resize(256, 256, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer());
         row.orig = orig;
       }
       for (const [n, f] of Object.entries(entry.files)) {
-        row.list.push({ n: Number(n), mode: f.mode, file: f.file, note: f.mode === 'grid' ? `fidelity ${f.fidelity.toFixed(3)}${entry.grid[n].flagged ? ' · flagged' : ''}` : '', bad: f.mode === 'grid' && entry.grid[n].flagged });
+        const note = f.mode === 'grid' ? `fidelity ${f.fidelity.toFixed(3)}${entry.grid[n].flagged ? ' · flagged' : ''}` : f.from === 'thumb' ? 'from thumbnail' : '';
+        row.list.push({ n: Number(n), mode: f.mode, file: f.file, note, bad: f.mode === 'grid' && entry.grid[n].flagged });
       }
       if (sp) {
         for (const n of boundary) {
@@ -319,19 +388,19 @@ async function main() {
           for (const mode of ['smooth', 'pixel']) {
             const runtime = entry.files[n]?.mode === mode;
             const rel = runtime ? entry.files[n].file : `_sheet/compare/${id}@${n}.${mode}.png`;
-            if (!runtime) await write(rel, await renderPng(sp, n, mode, settings, refSize));
+            if (!runtime) await write(rel, await renderPng(srcFor(n), n, mode, settings, refSize));
             row.compare[n][mode] = rel;
           }
         }
       }
       sheet.push(row);
 
-      // original masters -> pipeline | this input -> pipeline | pixel grid(s)
+      // original masters -> pipeline | this input -> pipeline | thumbnail -> pipeline | pixel grid(s)
+      const cols = [];
       if (compareDir && await exists(path.join(compareDir, `${id}.png`))) {
         const osp = await prepare(id, path.join(compareDir, `${id}.png`), settings);
         if (osp) {
           const oref = Math.max(...compareSizes.filter((n) => n <= pixelMax), 0) || 32;
-          const cols = [];
           const ofiles = {};
           for (const n of compareSizes) {
             const mode = n <= pixelMax ? 'pixel' : 'smooth';
@@ -340,23 +409,27 @@ async function main() {
             ofiles[n] = { file: rel, mode };
           }
           cols.push({ label: 'original → pipeline', files: ofiles });
-          if (sp) {
-            const ifiles = {};
-            for (const n of compareSizes) {
-              const mode = n <= pixelMax ? 'pixel' : 'smooth';
-              let rel = entry.files[n]?.mode === mode ? entry.files[n].file : null;
-              if (!rel) { rel = `_sheet/compare-in/${id}@${n}.png`; await write(rel, await renderPng(sp, n, mode, settings, refSize)); }
-              ifiles[n] = { file: rel, mode };
-            }
-            cols.push({ label: `${inName} → pipeline`, files: ifiles });
-          }
-          for (const g of grids) {
-            const gr = entry.grid[g.n];
-            cols.push({ label: `pixel grid ${g.n}`, files: { [g.n]: { file: entry.files[g.n].file, mode: 'grid' } }, note: `fidelity ${gr.fidelity.toFixed(3)}${gr.flagged ? ' · flagged' : ''}`, bad: gr.flagged });
-          }
-          compare.push({ id, cols });
         }
       }
+      // one column per source, each rendered at every comparison size from that source alone
+      const sourceCol = async (src, key, lbl, isThumb) => {
+        const files = {};
+        for (const n of compareSizes) {
+          const mode = n <= pixelMax ? 'pixel' : 'smooth';
+          const f = entry.files[n];
+          let rel = f && f.mode === mode && (f.from === 'thumb') === isThumb ? f.file : null;
+          if (!rel) { rel = `_sheet/${key}/${id}@${n}.png`; await write(rel, await renderPng(src, n, mode, settings, refSize)); }
+          files[n] = { file: rel, mode };
+        }
+        return { label: lbl, files };
+      };
+      if (sp && (cols.length || tsp)) cols.push(await sourceCol(sp, 'compare-in', `${tsp ? 'full master' : inName} → pipeline`, false));
+      if (tsp) cols.push(await sourceCol(tsp, 'compare-thumb', 'thumbnail → pipeline', true));
+      for (const g of grids) {
+        const gr = entry.grid[g.n];
+        cols.push({ label: `pixel grid ${g.n}`, files: { [g.n]: { file: entry.files[g.n].file, mode: 'grid' } }, note: `fidelity ${gr.fidelity.toFixed(3)}${gr.flagged ? ' · flagged' : ''}`, bad: gr.flagged });
+      }
+      if (cols.length >= 2 && (cols[0].label === 'original → pipeline' || tsp)) compare.push({ id, cols });
 
       if (sp && !a['no-tuning'] && tuningIds.has(id)) {
         const t = { id, variants: [] };
@@ -365,7 +438,7 @@ async function main() {
           const files = {};
           for (const n of [16, 24, 32]) {
             const rel = `_sheet/tuning/${v.key}/${id}@${n}.png`;
-            await write(rel, await renderPng(sp, n, 'pixel', s, 32));
+            await write(rel, await renderPng(srcFor(n), n, 'pixel', s, 32));
             files[n] = rel;
           }
           t.variants.push({ label: v.label, files });
@@ -373,6 +446,7 @@ async function main() {
         tuning.push(t);
       }
     }
+    notes.push(...thumbNotes);
     console.log(`- ${id} (${layout}) ${Date.now() - t1} ms${extras.length ? `, extra colours ${extras.join(' ')}` : ''}${notes.length ? ', ' + notes.join(', ') : ''}`);
   }
 
@@ -386,10 +460,15 @@ async function main() {
     await write('index.html', contactSheet({
       sprites: sheet, pixelSizes, smoothSizes, boundary, tuning, tuningSizes: [16, 24, 32], settings: manifest.settings, sourceLabel,
       compare, compareLabel: compareDir ? label(compareDir) : null, gridReport: report, gridSettings,
+      thumbs: thumbSrc ? { label: thumbSrc.label, maxSize: thumbMax } : null,
     }));
   }
   console.log(`Wrote ${Object.keys(manifest.sprites).length} sprites (sizes ${manifest.sizes.join(', ')}) to ${outDir} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   if (skipped.length) console.log(`Skipped ${skipped.length} unusable master(s): ${skipped.join(', ')}`);
+  if (thumbSrc) {
+    console.log(`Thumbnails (${thumbSrc.label}): ${thumbUsed.length} sprites made sizes up to ${thumbMax} from their thumbnail; ${thumbFallback.length} had none and used the full master.`);
+    if (thumbFallback.length) console.log(`  without a thumbnail: ${thumbFallback.slice(0, 20).join(', ')}${thumbFallback.length > 20 ? `, ... (${thumbFallback.length - 20} more)` : ''}`);
+  }
   if (report.length) {
     const mean = report.reduce((s, r) => s + r.fidelity, 0) / report.length;
     console.log(`Grid fidelity: ${report.length} grid sprites, mean ${mean.toFixed(3)}, ${flagged.length} flagged (below ${gridSettings.minFidelity} or more than ${Math.round(gridSettings.maxBadShare * 100)}% non-uniform cells).`);

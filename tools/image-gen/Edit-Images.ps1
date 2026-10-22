@@ -4,6 +4,10 @@
 Redraws the generated sprite masters as small-size-optimised versions with the OpenAI image EDIT API
 (POST /v1/images/edits), so that tools/sprite-pipeline can downscale them without losing the style.
 
+DEPRECATED / EXPERIMENTAL: too costly (every edit also pays for its input images) and the results were not
+good enough (even "bold" kept lines too thin). Use Generate-Images.ps1 -Variant thumb instead, which makes a
+separate small-size generation of each sprite. This script and its tests are kept for reference.
+
 .DESCRIPTION
 The image models cannot output tiny images: GPT image models return about 1024 px and up (the standard
 sizes are 1024x1024, 1536x1024 and 1024x1536; 256x256 and 512x512 belong to the retired dall-e-2). So

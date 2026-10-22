@@ -31,7 +31,7 @@ node tools/sprite-pipeline/build.mjs
 That reads `tools/image-gen/output/sprites/`, writes `tools/sprite-pipeline/out/` and prints the path of the contact sheet, `out/index.html`. Open it in a browser. A run over the first batch (21 colonists) takes about 20 seconds.
 
 ```text
-node tools/sprite-pipeline/build.mjs [--in DIR|URL] [--out DIR] [--sizes 16,24,32,48,64,96,128] [--pixel-max 32]
+node tools/sprite-pipeline/build.mjs [--in DIR|URL] [--thumbs-in DIR|URL] [--thumb-max 48] [--out DIR] [--sizes 16,24,32,48,64,96,128] [--pixel-max 32]
 ```
 
 | Option | Meaning |
@@ -52,7 +52,9 @@ node tools/sprite-pipeline/build.mjs [--in DIR|URL] [--out DIR] [--sizes 16,24,3
 | `--sharpen X` | Unsharp-mask amount for smooth sizes (default 0.35, `0` = off). |
 | `--settings FILE` | JSON overrides for any setting in [`lib/config.mjs`](lib/config.mjs), e.g. `{"pixel": {"inkKeep": 0.5}, "smooth": {"sharpen": 0.2}}`. |
 | `--no-sheet`, `--no-tuning` | Skip the contact sheet, or only its tuning section. |
-| `--grid-in DIR` | A folder of pixel-grid redraws from `Edit-Images.ps1 -Mode pixel`, e.g. `tools/image-gen/output/edited/pixel-32`. Repeatable. The grid size N comes from the folder name (`pixel-N`) or `--grid`. Size N is then snapped from the grid instead of reduced from `--in`. See [Redraws](#redraws-from-edit-imagesps1). |
+| `--thumbs-in DIR\|URL` | Thumbnail masters from `Generate-Images.ps1 -Variant thumb`: a folder laid out like `tools/image-gen/output/thumbs`, or a base URL such as `https://casual.spence.dk/assets/thumbs/`. The sizes up to `--thumb-max` are made from the thumbnail, the larger ones from `--in`. A sprite without a thumbnail uses its full master for every size. See [Thumbnails](#thumbnails-from-generate-imagesps1--variant-thumb). |
+| `--thumb-max N` | With `--thumbs-in`: the largest size made from the thumbnail. Default: `--pixel-max` (32), so 16, 24 and 32; `48` adds the first smooth size. |
+| `--grid-in DIR` | A folder of pixel-grid redraws from `Edit-Images.ps1 -Mode pixel`, e.g. `tools/image-gen/output/edited/pixel-32`. Repeatable. The grid size N comes from the folder name (`pixel-N`) or `--grid`. Size N is then snapped from the grid instead of reduced from `--in`. See [Redraws](#redraws-from-edit-imagesps1-deprecated) (deprecated). |
 | `--grid N` | With `--grid-in`: the size for folders not named `pixel-N`. Without `--grid-in`, it starts a grid-only run: `--in` is the pixel-grid folder, and only the N×N sprites (and their upscales) are made. |
 | `--upscales LIST` | Nearest-neighbour integer upscales written next to every grid sprite (`<id>@32x2.png`, ...). Default `2,4`; `""` for none. |
 | `--grid-place layout\|none` | `layout` (default) moves a grid sprite by whole pixels so it sits on its category's baseline and centre, like the normalised masters. `none` keeps it where the model drew it. |
@@ -61,9 +63,31 @@ node tools/sprite-pipeline/build.mjs [--in DIR|URL] [--out DIR] [--sizes 16,24,3
 
 The output is deterministic: the same masters and settings give byte-identical PNGs, manifest and contact sheet on every machine.
 
-## Redraws from `Edit-Images.ps1`
+## Thumbnails from `Generate-Images.ps1 -Variant thumb`
 
-[`tools/image-gen/Edit-Images.ps1`](../image-gen/README.md#small-size-redraws-edit-imagesps1) uses the OpenAI image edit API to redraw every master as a version designed to be small. The image models cannot output tiny images, so the redraws are still about 1024 px, and this pipeline still does the downscale. The redraws keep the generator's layout under `tools/image-gen/output/edited/<mode>[-N]/`, with the same category rules:
+[`Generate-Images.ps1 -Variant thumb`](../image-gen/README.md#thumbnails--variant-thumb) makes a second master for every sprite: a separate generation of the same subject, drawn to read at 16 to 48 px (very thick outlines, few lines, oversized props). It writes them to `tools/image-gen/output/thumbs/`, in the same layout as `output/sprites/`, and they are uploaded next to the sprites, as `https://casual.spence.dk/assets/thumbs/units/<id>.png`. `--thumbs-in` takes the small sizes from them:
+
+```sh
+# local folders: 16, 24, 32 and 48 from the thumbnails, 64 and up from the full masters
+node tools/sprite-pipeline/build.mjs --in tools/image-gen/output/sprites --thumbs-in tools/image-gen/output/thumbs --thumb-max 48
+# both from the server
+node tools/sprite-pipeline/build.mjs --in https://casual.spence.dk/assets/sprites/ --thumbs-in https://casual.spence.dk/assets/thumbs/ --thumb-max 48
+# one sprite first
+node tools/sprite-pipeline/build.mjs --thumbs-in tools/image-gen/output/thumbs --thumb-max 48 --only expert-lumberjack
+```
+
+- **Which sizes.** Every size up to `--thumb-max` (default `--pixel-max`, i.e. 16, 24, 32) is rendered from the thumbnail, every larger one from the full master. The mode does not change: 16 to 32 are still pixel sizes, 48 is still a smooth size, only the source differs. Each master is normalised on its own (its own bounding box, core and baseline), so both land on the same layout.
+- **Fallback.** A sprite with no thumbnail (not generated yet, a 404 on the server, or an opaque thumbnail of a ground overlay) uses the full master for every size, as without `--thumbs-in`. The run lists them at the end. Sprites that exist only as a thumbnail are not built.
+- **From a URL.** The ids are those of `--in` (after `--only`). Downloads go to `<cache>/_thumbs/` with the same conditional requests, User-Agent handling (the HTTP 455 fallback, `--user-agent`) and proxy restart as the full masters.
+- **Manifest.** `thumbs: { source, maxSize }` at the top. Per sprite, `thumb: { file, sha256, maxSize }` (plus `split` for the stockade and fort, measured on the thumbnail), and `"from": "thumb"` on every file made from it. `source` stays the full master.
+- **Contact sheet.** Every runtime row shows the master and the thumbnail, and marks the sizes made "from thumbnail". The **Full master vs thumbnail** section shows each sprite at the small sizes (the pixel sizes, plus `--thumb-max` and the first smooth size above it) made from the full master and made from the thumbnail, side by side, 1:1 on paper and grass and enlarged.
+- Pointing `--in` or `--thumbs-in` at `tools/image-gen/output` itself is refused with a hint: its subfolders are `sprites/` and `thumbs/`, not categories.
+
+## Redraws from `Edit-Images.ps1` (deprecated)
+
+> `Edit-Images.ps1` is deprecated and experimental: too costly, and the results were not good enough. Use the thumbnails above. The options below still work.
+
+[`tools/image-gen/Edit-Images.ps1`](../image-gen/README.md#small-size-redraws-edit-imagesps1-deprecated) uses the OpenAI image edit API to redraw every master as a version designed to be small. The image models cannot output tiny images, so the redraws are still about 1024 px, and this pipeline still does the downscale. The redraws keep the generator's layout under `tools/image-gen/output/edited/<mode>[-N]/`, with the same category rules:
 
 ```sh
 # smooth sizes and 16/24 from the bold redraws, 32 from the pixel grid, with the three-way comparison
@@ -277,7 +301,7 @@ cd tools/sprite-pipeline
 npm test
 ```
 
-`node:test`, on synthetic images (no generated art needed). Grid snapping is tested on a perfect grid (exact N×N recovery, fidelity 1) at 16, 24 (on 1008 px) and 32 cells, and on a noisy grid with soft block edges (still exact, fidelity above 0.97). Other cases: mode beats mean, alpha by majority, a grid offset by 12 px (found by the phase search), a grid drawn with 29 cells (low fidelity, flagged, 29 detected), and a blurred non-pixel image (flagged). Placement, upscales, `--grid` and `--grid-in` runs with `--compare-in`, and the refusal of the `edited/` root are tested as well. The other tests cover normalising (bounding box, core box, baseline and scale, centring, margins), palette quantisation, alpha binarisation, the outline and orphan passes, thin-line detection, byte-identical output across runs, the `--pixel-max` boundary, and the remote source against a local HTTP server (download, conditional re-checks with ETag, Last-Modified or size, the 455 User-Agent fallback, id lists from the image-gen manifest, the docs and `--ids`). The real server was also tested by hand: a first run downloads, a second gets `304 Not Modified` for every file.
+`node:test`, on synthetic images (no generated art needed). Grid snapping is tested on a perfect grid (exact N×N recovery, fidelity 1) at 16, 24 (on 1008 px) and 32 cells, and on a noisy grid with soft block edges (still exact, fidelity above 0.97). Other cases: mode beats mean, alpha by majority, a grid offset by 12 px (found by the phase search), a grid drawn with 29 cells (low fidelity, flagged, 29 detected), and a blurred non-pixel image (flagged). Placement, upscales, `--grid` and `--grid-in` runs with `--compare-in`, and the refusal of the `edited/` root are tested as well. `--thumbs-in` is tested with a local folder and a local HTTP server: the sizes up to `--thumb-max` are byte-identical to the thumbnail run through the pipeline alone, the larger ones and every size of a sprite without a thumbnail byte-identical to the full master's, `--thumb-max` defaults to `--pixel-max`, a 404 falls back, the download is cached under `_thumbs/` and re-checked with a conditional request, the manifest records `from: "thumb"`, the contact sheet has the full-vs-thumbnail comparison, and the `output/` root is refused. The other tests cover normalising (bounding box, core box, baseline and scale, centring, margins), palette quantisation, alpha binarisation, the outline and orphan passes, thin-line detection, byte-identical output across runs, the `--pixel-max` boundary, and the remote source against a local HTTP server (download, conditional re-checks with ETag, Last-Modified or size, the 455 User-Agent fallback, id lists from the image-gen manifest, the docs and `--ids`). The real server was also tested by hand: a first run downloads, a second gets `304 Not Modified` for every file.
 
 ## Files
 

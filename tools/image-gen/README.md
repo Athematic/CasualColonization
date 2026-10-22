@@ -7,13 +7,21 @@
 
 It runs on PowerShell 7 or later (`pwsh`) on Windows, macOS and Linux, and needs nothing else.
 
-`Edit-Images.ps1` is its follow-up. It redraws the generated masters with the image **edit** API as versions designed to be small (bold ligne claire, or pixel art on an exact grid), which [`tools/sprite-pipeline`](../sprite-pipeline/README.md) then downscales. See [Small-size redraws](#small-size-redraws-edit-imagesps1).
+Each sprite prompt can produce two images:
+
+- the **full** version (`-Variant full`, the default): the prompt from the document, unchanged. All 294 sprite masters and the 8 covers are made (`output/manifest.json` is committed; the images are hosted at `https://casual.spence.dk/assets/sprites/...`).
+- the **thumbnail** version (`-Variant thumb`): a separate text-to-image generation of the same subject, with a prompt designed to read at 16 to 48 px: very thick outlines, few lines, oversized props. It goes to `output/thumbs/`. The two versions differ slightly, because they are two drawings. See [Thumbnails](#thumbnails--variant-thumb). **This is the next run to make: `-Variant thumb`.**
+
+`-Variant both` makes both. [`tools/sprite-pipeline`](../sprite-pipeline/README.md) then takes the small sizes from the thumbnails and the large ones from the full masters (`--thumbs-in`).
+
+`Edit-Images.ps1` (redraws through the image **edit** API) is **deprecated and experimental**: it was too expensive, and its results were not good enough (even its "bold" mode left the lines too thin). It and its tests are kept for reference. See [Small-size redraws](#small-size-redraws-edit-imagesps1-deprecated).
 
 ## What it does
 
 1. **Builds the job list** the way the docs describe it.
    - Sprites: the `master` block, then the nearest `category` block, then `SUBJECT: <row prompt>`. Size and background come from each table row.
    - Covers: the `cover` style block, then the concept text. Size comes from the concept ("portrait" → 1024x1536, "landscape" → 1536x1024, "square" → 1024x1024). Covers are always opaque.
+   - Thumbnails (`-Variant thumb` or `both`): the sprite prompt above, wrapped in the blocks of [`thumb-prompts.md`](thumb-prompts.md). Same size and background as the full job.
 2. **Calls** `POST https://api.openai.com/v1/images/generations` once per image, with `model`, `prompt`, `size`, `quality`, `background` (`transparent` or `opaque`, as the row says), `output_format: "png"`, `n: 1` and `moderation`. It decodes the `b64_json` it gets back.
 3. **Checks every PNG.** It reads the IHDR colour type and decodes the pixels. A transparent job needs an alpha channel with transparent pixels and no painted grey-and-white checkerboard in the corners; opaque jobs must have no transparent pixels. A job that fails the check is still saved, but it is flagged in the console, the manifest and the contact sheet. `-RedoFlagged` regenerates flagged jobs.
    The three `images/units/*.png` made earlier fail this check: they are RGB with no alpha channel, and the checkerboard is painted on. Asking the API for `background: "transparent"` fixes that. Typing "transparent background" into a chat prompt does not.
@@ -30,6 +38,8 @@ tools/image-gen/output/            (gitignored; change with -OutDir)
   boxart/front-a-landfall.png, boxart/back-cover.png, boxart/wide-banner.png, boxart/app-icon.png
   boxart/front-a-landfall__titled.png       (-IncludeTitle)
   sprites/units/caravel__none__v2.png       (-Variants 2 and more)
+  thumbs/units/free-colonist__none.png ...  thumbnails (-Variant thumb or both), the same layout as sprites/
+  thumbs/units/caravel__none__v2.png        (-Variant thumb -Variants 2)
   _replaced/...                             older takes of jobs whose prompt changed
 ```
 
@@ -114,6 +124,8 @@ Get a key at <https://platform.openai.com/api-keys>. GPT image models can requir
 | --- | --- | --- |
 | `-Doc sprites\|boxart\|all` | `all` | Which document(s) to read. |
 | `-Only <pattern>[,...]` | | Wildcards matched against the job id (`units/caravel__none`) or key (`sprites/units/caravel__none`). A pattern without `*` or `?` matches anywhere in the id. |
+| `-Variant full\|thumb\|both` | `full` | Which version of each sprite: the full image (as before), the [thumbnail](#thumbnails--variant-thumb), or both. Box art and the style bible have no thumbnail. Not the same as `-Variants`. |
+| `-ThumbPromptFile` | `thumb-prompts.md` | The thumbnail prompt blocks. Only read for `thumb` and `both`. |
 | `-Variants N` | 1 | Takes per prompt (1 to 10). Take 1 is `<id>.png`; the others are `<id>__v2.png` and so on, the doc's naming convention for variants. |
 | `-List`, `-DryRun` | | Show the jobs, or the prompts and request parameters, without calling the API. |
 | `-Model` | `gpt-image-2.5-flare` | Any GPT image model. See below. |
@@ -165,7 +177,74 @@ Exit codes: `0` everything ok, `1` some jobs failed, `2` the run stopped (quota,
 
 Before it starts, the script shows the number of calls and a rough estimate. The estimate uses the prices in SPRITE_PROMPTS.md for 1024×1024: about $0.01 at low quality, $0.04 at medium and $0.17 at high, with about 1.5× that for 1536-pixel sizes. Prices change, so check <https://openai.com/api/pricing/>. The full sprite set (294 images) at high quality comes to roughly $50, before retakes.
 
-## Small-size redraws: `Edit-Images.ps1`
+## Thumbnails: `-Variant thumb`
+
+The full masters look good at 1024 px, but they do not survive the downscale to 16 to 32 px: their lines are about 2.5 to 3 % of the width, which is under a pixel at 32 px, props are small, and the interior detail turns to noise. A thumbnail is a **second, separate text-to-image generation** of the same subject (`images/generations`, like the full one, with no input image), with a prompt that asks for an icon that reads at 32 px. It is not an edit of the full master, so it is cheap (one ordinary generation) and free to redraw the subject boldly. The two versions differ slightly; the game uses the thumbnail for the small sizes and the full master for the large ones.
+
+### The prompt
+
+[`thumb-prompts.md`](thumb-prompts.md) holds everything that is added, as fenced blocks you can edit. The thumbnail prompt is assembled as:
+
+1. a `lead` block: the line-weight rule, first, because the model weighs the start of a prompt;
+2. the full prompt, unchanged: the `master` block, the `category` block and `SUBJECT: ...` from `docs/SPRITE_PROMPTS.md`;
+3. the **THUMBNAIL OVERRIDE**, which says it takes precedence over the rules above: the shared `override` block, the `background` block (transparent: real alpha; opaque: full-bleed), the notes for the prompt-doc category (for example ships: "at most 3 thick lines for the masts and stays, no ratlines") and the notes for matching sprite ids (`units/expert-lumberjack__none`: "make the axe head very large and clearly separated from the head"; `units/*__missionary`: "a white collar and a broad white sash across the dark cassock");
+4. a `final` block: the line-weight rule again, because the model also weighs the end.
+
+The shared override (`icon`, for every free-standing sprite) asks for an icon for a 32-pixel game sprite: every outline a very thick, uniform, solid near-black (#1b1a17) line of 6 to 8 % of the image (61 to 82 px on 1024), like a road-sign pictogram or a children's sticker; no thin lines anywhere; at most 3 to 5 interior lines, each as thick as the outline; one flat fill per area from the 12 bible colours; a chunky silhouette filling 85 to 90 % of the frame; props 1.5 to 2× their size and held clear of the body; no shading, texture, gradients, glow or small details (faces reduced to 2 or 3 shapes). That is about twice the line weight the `bold` edit mode asked for, which was still too thin.
+
+Terrain tiles and ground overlays (`tile` in the `settings` block) get the `tile` blocks instead: the tile stays full-bleed, opaque and tileable (overlays stay transparent and edge-aligned), with two to four big, flat motifs and few marks, rather than outlines everywhere.
+
+`-DryRun` prints the assembled prompt of every job, override included.
+
+### Jobs, manifest and resume
+
+- **Separate jobs.** Each thumbnail is its own manifest entry, `thumbs/<category>/<id>` (for example `thumbs/units/expert-lumberjack__none`), with its own prompt hash, status, attempts, retries, PNG check and output `thumbs/<category>/<id>.png`. The entry also records `variant: "thumb"` and the `fullKey` of its full version.
+- **The full jobs do not change.** `-Variant full` is the default, and the full prompts, keys, paths and hashes are exactly as before, so the 302 done jobs in the committed manifest stay done. A thumbnail run adds entries and never touches the full ones.
+- **Resume, per variant.** Run the same command again: done thumbnails are skipped, failed ones retried (`-SkipFailed` skips them), a deleted thumbnail is made again. Editing `thumb-prompts.md` re-queues the thumbnails it affects (the old takes go to `_replaced/thumbs/`), never a full image. Editing a sprite's row or a master or category block in the docs re-queues both versions.
+- **Not made:** box art (covers are not needed small; `-Doc boxart -Variant thumb` says so and makes nothing) and the style bible (`skip: bible` in the `settings` block).
+- **The PNG checks, the cost confirmation, `-List`, `-DryRun`, `-Only`, `-Doc`, `-Variants`, `-Force`, `-MaxJobs`, the retries and the exit codes** work as for the full jobs. `-Only` matches the id (`units/expert-lumberjack*`) or the key (`thumbs/units/*`).
+- **Contact sheet.** `output/index.html` shows the full version and the thumbnail side by side when both files exist (also when the run selected only one of them), each also at 32 and 48 px.
+
+### Cost
+
+293 calls (294 sprites without the style bible; two of them, `ui/caption-frame` and `ui/title-emblem`, are 1536×1024). With the per-image prices above: about **$3.25 at `low`**, **$12.35 at `medium`** and $49 at `high`, before retakes. `low` or `medium` is the recommendation: a thumbnail has no fine detail to lose, and it is only ever shown at 48 px or less. Check <https://openai.com/api/pricing/>.
+
+**Sample first:** the six expert-lumberjack sprites (`__none`, `__soldier`, `__pioneer`, `__missionary`, `__dragoon`, `__scout`) are 6 calls, about $0.25 at medium and $0.07 at low.
+
+### Run it
+
+macOS / Linux, from the repository root:
+
+```bash
+pwsh ./tools/image-gen/Generate-Images.ps1 -Variant thumb -List                                    # 293 thumbnail jobs
+pwsh ./tools/image-gen/Generate-Images.ps1 -Variant thumb -Only 'units/expert-lumberjack*' -DryRun # the prompts
+pwsh ./tools/image-gen/Generate-Images.ps1 -Variant thumb -Only 'units/expert-lumberjack*' -Quality medium
+open tools/image-gen/output/index.html
+# the whole set, once the sample looks right
+pwsh ./tools/image-gen/Generate-Images.ps1 -Variant thumb -Quality medium
+```
+
+Windows (a `pwsh` window, PowerShell 7):
+
+```powershell
+pwsh .\tools\image-gen\Generate-Images.ps1 -Variant thumb -Only 'units/expert-lumberjack*' -Quality medium
+start .\tools\image-gen\output\index.html
+pwsh .\tools\image-gen\Generate-Images.ps1 -Variant thumb -Quality medium
+```
+
+Then upload `output/thumbs/` next to `sprites/`, as `https://casual.spence.dk/assets/thumbs/units/<id>.png` and so on, and build the runtime set with the small sizes from the thumbnails:
+
+```bash
+node tools/sprite-pipeline/build.mjs --in tools/image-gen/output/sprites --thumbs-in tools/image-gen/output/thumbs --thumb-max 48
+# or from the server
+node tools/sprite-pipeline/build.mjs --in https://casual.spence.dk/assets/sprites/ --thumbs-in https://casual.spence.dk/assets/thumbs/ --thumb-max 48
+```
+
+See [the sprite pipeline](../sprite-pipeline/README.md#thumbnails-from-generate-imagesps1--variant-thumb).
+
+## Small-size redraws: `Edit-Images.ps1` (deprecated)
+
+> **Deprecated, experimental.** Too costly (each edit also pays for its input images, 504 calls for the set) and the results were not good enough: `bold` was the best of the two modes, but its lines were still not bold enough. Use [`-Variant thumb`](#thumbnails--variant-thumb) instead. The script and its tests stay, for reference.
 
 The masters look good at 1024 px, but they do not survive the downscale to sprite sizes well. Their ink lines are about 5 px wide on 1024, which is about 0.15 px at 32 px. Props are small, so an axe or a spade becomes a grey blob. Interior detail turns to noise, and dark subjects (a missionary's black cassock) merge with the outline. `Edit-Images.ps1` sends every master to OpenAI's image **edit** endpoint and gets back a version **designed to be small**, in the same style. [`tools/sprite-pipeline`](../sprite-pipeline/README.md) then makes the runtime sizes from that version.
 
@@ -334,6 +413,7 @@ pwsh -NoProfile -NonInteractive -File ./tools/image-gen/tests/Run-Tests.ps1
 ```
 
 - **Parsing:** 294 sprite jobs and 8 box-art jobs (13 with titles), how prompts are assembled, filters and variants.
+- **Thumbnails:** `thumb-prompts.md` parses; `-Variant thumb` gives 293 jobs with their own keys, paths and hashes (no box art, no style bible), `both` gives 595 with each full job followed by its thumbnail and the full hashes unchanged; the prompt starts and ends with the line-weight rule and holds the full prompt unchanged, then the override, the background, category and per-sprite blocks; tiles get the tile blocks; takes pair with full takes. Against a copy of the committed `output/manifest.json`: every one of the 302 full prompt hashes still matches by default, the dry runs write nothing, and a thumbnail run against the fake server adds exactly one entry and leaves every full entry byte for byte as it was. Resume per variant, a deleted thumbnail, an edited `thumb-prompts.md` (only the thumbnail runs again, the old one goes to `_replaced/thumbs/`), `-SkipFailed`, `-Variants`, and the side-by-side contact sheet.
 - **Commands:** `-List` and `-DryRun`.
 - **PNG checks:** real alpha, missing alpha, all-opaque alpha and painted checkerboards. They also check the real `images/` files: the three unit sprites are flagged as fake transparency.
 - **Manifest:** atomic save and recovery from a corrupt file.

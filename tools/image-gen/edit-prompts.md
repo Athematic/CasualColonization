@@ -1,5 +1,7 @@
 # Redraw prompts for Edit-Images.ps1
 
+> `Edit-Images.ps1` is deprecated and experimental (too costly, results not good enough). The small-size versions are now made by `Generate-Images.ps1 -Variant thumb`, from [`thumb-prompts.md`](thumb-prompts.md).
+
 `Edit-Images.ps1` reads this file. It sends each master to `POST /v1/images/edits` with a prompt built from these blocks. Edit the blocks freely. Every edit changes the prompt hash of the jobs that use the block, so the next run redraws them. The old takes move to `_replaced/`, unless you pass `-KeepChanged`.
 
 Only fenced blocks are read; everything else in this file is notes. The order of the assembled prompt:

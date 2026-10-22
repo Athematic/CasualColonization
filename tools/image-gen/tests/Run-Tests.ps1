@@ -14,6 +14,8 @@ $repo = Split-Path -Parent (Split-Path -Parent $tool)
 $script = Join-Path $tool 'Generate-Images.ps1'
 $editScript = Join-Path $tool 'Edit-Images.ps1'
 $editPromptsReal = Join-Path $tool 'edit-prompts.md'
+$thumbPromptsReal = Join-Path $tool 'thumb-prompts.md'
+$committedManifest = Join-Path $tool 'output/manifest.json'
 $spriteDocReal = Join-Path $repo 'docs/SPRITE_PROMPTS.md'
 $boxDocReal = Join-Path $repo 'docs/BOX_ART_PROMPTS.md'
 Import-Module (Join-Path $tool 'ImageGen.psm1') -Force
@@ -169,6 +171,109 @@ try {
         Assert-Equal 'boxart/app-icon,boxart/app-icon__v2,boxart/app-icon__v3' ($v.Key -join ',')
         Assert-Equal 'boxart/app-icon__v3.png' $v[2].OutputRel
         Assert-Equal (Get-PromptHash $v[0]) (Get-PromptHash $v[2]) 'variants share the prompt'
+    }
+
+    # ------------------------------------------------------------------ thumbnails (-Variant thumb|both)
+    Test 'thumbs: prompt file, own keys, paths and hashes; full jobs unchanged' {
+        $tp = Read-ThumbPrompts -Path $thumbPromptsReal
+        Assert-True ($tp.Skip -contains 'bible') 'style bible skipped'
+        Assert-True ($tp.Tile -contains 'terrain' -and $tp.Tile -contains 'ground-overlays') 'tile categories'
+        $full = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal
+        $fullDefault = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Variant full -ThumbPrompts $tp
+        Assert-Equal (($full | ForEach-Object { "$($_.Key)=$(Get-PromptHash $_)" }) -join ';') (($fullDefault | ForEach-Object { "$($_.Key)=$(Get-PromptHash $_)" }) -join ';') '-Variant full is the default job list'
+        $thumbs = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Variant thumb -ThumbPrompts $tp
+        Assert-Equal 293 $thumbs.Count 'one thumbnail per sprite except the style bible; no box art'
+        Assert-True (@($thumbs | Where-Object { $_.Key -notlike 'thumbs/*' -or $_.OutputRel -ne "thumbs/$($_.Id).png" -or $_.Doc -ne 'thumbs' -or $_.Kind -ne 'thumb' }).Count -eq 0) 'thumbs/<category>/<id> keys and paths'
+        Assert-True (-not ($thumbs.Id -contains 'bible/style-bible')) 'no bible thumbnail'
+        $both = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Variant both -ThumbPrompts $tp
+        Assert-Equal 595 $both.Count 'both = 302 full + 293 thumbs'
+        Assert-Equal 'sprites/bible/style-bible,sprites/units/free-colonist__none,thumbs/units/free-colonist__none,sprites/units/free-colonist__soldier' (($both[0..3] | ForEach-Object Key) -join ',') 'each full job followed by its thumbnail'
+        $fullHashes = @{}; foreach ($j in $full) { $fullHashes[$j.Key] = Get-PromptHash $j }
+        foreach ($j in ($both | Where-Object Kind -eq 'full')) { Assert-Equal $fullHashes[$j.Key] (Get-PromptHash $j) "$($j.Key) hash unchanged with -Variant both" }
+
+        $f = $full | Where-Object Key -eq 'sprites/units/expert-lumberjack__none'
+        $t = $thumbs | Where-Object Key -eq 'thumbs/units/expert-lumberjack__none'
+        Assert-Equal 'sprites/units/expert-lumberjack__none' $t.FullKey
+        Assert-Equal 'transparent' $t.Background
+        Assert-Equal '1024x1024' $t.Size
+        Assert-Equal 'icon' $t.ThumbStyle
+        Assert-True ((Get-PromptHash $t) -ne (Get-PromptHash $f)) 'own prompt hash'
+        Assert-Match $t.Prompt '^THUMBNAIL VERSION\. This image is an icon for a 32-pixel game sprite' 'line rule first'
+        Assert-True ($t.Prompt.Contains($f.Prompt)) 'the full prompt is included unchanged'
+        $iSubject = $t.Prompt.IndexOf('SUBJECT: '); $iOverride = $t.Prompt.IndexOf('THUMBNAIL OVERRIDE.')
+        Assert-True ($iSubject -gt 0 -and $iOverride -gt $iSubject) 'the override comes after the full prompt'
+        Assert-Match $t.Prompt '61 to 82 pixels on this 1024x1024 image' 'outline placeholder'
+        Assert-Match $t.Prompt 'BACKGROUND: fully transparent' 'background block'
+        Assert-Match $t.Prompt 'FIGURE: a large head and hat' 'units category block'
+        Assert-Match $t.Prompt 'axe head very large' 'per-sprite block'
+        Assert-Match $t.Prompt 'REMEMBER, THE MOST IMPORTANT RULE: every outline is a very thick[\s\S]*with oversized props held clear of the body\.$' 'line rule last'
+        Assert-Match ($thumbs | Where-Object Id -eq 'units/expert-lumberjack__missionary').Prompt 'white \(#fffdf6\) collar and a broad white sash'
+        Assert-Match ($thumbs | Where-Object Id -eq 'units/caravel__none').Prompt 'at most 3 thick lines for the masts'
+        $o = $thumbs | Where-Object Id -eq 'terrain/ocean'
+        Assert-Equal 'tile' $o.ThumbStyle
+        Assert-Equal 'opaque' $o.Background
+        Assert-Match $o.Prompt '^THUMBNAIL VERSION of a map tile'
+        Assert-Match $o.Prompt 'TILE: keep it a seamless, full-bleed'
+        Assert-Match $o.Prompt 'BACKGROUND: an opaque, full-bleed square'
+        Assert-NoMatch $o.Prompt 'road-sign' 'tiles do not get the outline-everything icon rule'
+        Assert-Match ($thumbs | Where-Object Id -eq 'ui/caption-frame').Prompt '61 to 82 pixels on this 1536x1024 image' 'outline from the shorter side'
+
+        $v = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Variant thumb -ThumbPrompts $tp -Only 'units/caravel__none' -Variants 2
+        Assert-Equal 'thumbs/units/caravel__none,thumbs/units/caravel__none__v2' (($v | ForEach-Object Key) -join ',')
+        Assert-Equal 'thumbs/units/caravel__none__v2.png' $v[1].OutputRel
+        Assert-Equal 'sprites/units/caravel__none__v2' $v[1].FullKey 'take 2 pairs with full take 2'
+        Assert-Equal 'sprites/units/caravel__none__v2' $v[1].ManifestExtra['fullKey']
+        Assert-Equal 'sprites/units/caravel__none' $v[0].ManifestExtra['fullKey'] 'take 1 untouched by the copy'
+        Assert-Equal 0 (Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Doc boxart -Variant thumb -ThumbPrompts $tp).Count 'no box-art thumbnails'
+        Assert-Equal 8 (Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Doc boxart -Variant both -ThumbPrompts $tp).Count 'both: covers only as full'
+        Assert-Equal 0 (Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Variant thumb -ThumbPrompts $tp -Only 'bible/*').Count 'no bible thumbnail'
+    }
+
+    Test 'thumbs: the committed manifest keeps every full prompt hash (default -Variant full)' {
+        $out = Join-Path $scratch 'committed'
+        $null = New-Item -ItemType Directory -Force $out
+        Copy-Item $committedManifest (Join-Path $out 'manifest.json')
+        $before = [IO.File]::ReadAllText((Join-Path $out 'manifest.json'))
+        $m = Read-Manifest (Join-Path $out 'manifest.json')
+        Assert-Equal 302 $m['jobs'].Count 'committed manifest: 302 jobs'
+        $jobs = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal
+        $plan = @(Get-JobPlan -Jobs $jobs -Manifest $m -OutDir $out)
+        Assert-Equal 302 $plan.Count
+        foreach ($p in $plan) {
+            Assert-Equal $m['jobs'][$p.Job.Key]['promptHash'] $p.Hash "$($p.Job.Key) prompt hash"
+            Assert-True (-not $p.PromptChanged) "$($p.Job.Key) not changed"
+        }
+        $tp = Read-ThumbPrompts -Path $thumbPromptsReal
+        $tplan = @(Get-JobPlan -Jobs (Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Variant thumb -ThumbPrompts $tp) -Manifest $m -OutDir $out)
+        Assert-True (@($tplan | Where-Object { $_.Action -ne 'run' -or $_.Reason -ne 'new' }).Count -eq 0) 'every thumbnail is a new job'
+        # the CLI: no full job reads as changed; the dry runs write nothing
+        $r = Invoke-Tool @{ DryRun = $true; OutDir = $out }
+        Assert-Equal 0 $r.Exit
+        Assert-NoMatch $r.Out 'prompt changed' 'full jobs keep their hashes'
+        Assert-NoMatch $r.Out 'THUMBNAIL' 'no thumbnail by default'
+        $r = Invoke-Tool @{ DryRun = $true; OutDir = $out; Variant = 'thumb'; Only = 'units/expert-lumberjack__none' }
+        Assert-Equal 0 $r.Exit
+        Assert-Match $r.Out 'thumbs/units/expert-lumberjack__none   \[would run: new\]'
+        Assert-Match $r.Out 'variant: thumb \(icon blocks of thumb-prompts\.md\), full version: sprites/units/expert-lumberjack__none'
+        Assert-Match $r.Out ([regex]::Escape((Join-Path $out 'thumbs/units/expert-lumberjack__none.png')))
+        Assert-Match $r.Out 'THUMBNAIL OVERRIDE\. These rules replace'
+        Assert-Match $r.Out 'background=transparent'
+        Assert-Match $r.Out 'Dry run: 1 jobs \(thumbs: 1\); 1 would call the API'
+        Assert-Equal $before ([IO.File]::ReadAllText((Join-Path $out 'manifest.json'))) 'manifest untouched by the dry runs'
+    }
+
+    Test 'thumbs: -List counts and the box-art note' {
+        $r = Invoke-Tool @{ List = $true; Variant = 'thumb' }
+        Assert-Equal 0 $r.Exit
+        Assert-Match $r.Out 'Jobs: 293 \(thumbs: 293\)'
+        Assert-Match $r.Out 'thumbs/units/man-of-war__none'
+        $r = Invoke-Tool @{ List = $true; Variant = 'both' }
+        Assert-Match $r.Out 'Jobs: 595 \(sprites: 294, boxart: 8, thumbs: 293\)'
+        $r = Invoke-Tool @{ List = $true; Variant = 'thumb'; Doc = 'boxart' }
+        Assert-Match $r.Out 'box art has no thumbnail variant'
+        $r = Invoke-Tool @{ DryRun = $true; Variant = 'thumb'; Doc = 'boxart'; OutDir = (Join-Path $scratch 'dry-box') }
+        Assert-Equal 0 $r.Exit
+        Assert-Match $r.Out 'No jobs match the selection'
     }
 
     # ------------------------------------------------------------------ CLI: list / dry run
@@ -385,6 +490,119 @@ try {
         Assert-Equal 0 $r.Exit
         Assert-Equal 3 $srv.State.Requests.Count
         foreach ($n in 'vee__none.png', 'vee__none__v2.png', 'vee__none__v3.png') { Assert-True (Test-Path (Join-Path $out "sprites/units/$n")) $n }
+    }
+
+    Test 'thumbs: a thumb run on a copy of the committed manifest; full entries untouched; resume per variant' {
+        Reset-FakeOpenAIServer $srv
+        $out = Join-Path $scratch 'thumb-e2e'
+        $null = New-Item -ItemType Directory -Force $out
+        Copy-Item $committedManifest (Join-Path $out 'manifest.json')
+        $orig = Read-Manifest (Join-Path $out 'manifest.json')
+        $origJson = @{}
+        foreach ($k in $orig['jobs'].Keys) { $origJson[$k] = ConvertTo-Json -InputObject $orig['jobs'][$k] -Depth 10 -Compress }
+        $one = @{ Only = 'units/expert-lumberjack__none'; OutDir = $out }
+
+        $r = Invoke-Tool ($common + $one + @{ Variant = 'thumb' })
+        Assert-Equal 0 $r.Exit $r.Out
+        Assert-Equal 1 $srv.State.Requests.Count 'one thumbnail call'
+        Assert-Match $r.Out 'thumbnails: 1, full images: 0'
+        $q = $srv.State.Requests[0]
+        Assert-Equal '/v1/images/generations' $q.Path
+        Assert-Equal 'transparent' $q.Body.background
+        Assert-Match $q.Body.prompt '^THUMBNAIL VERSION'
+        Assert-Match $q.Body.prompt 'SUBJECT: an expert lumberjack'
+        Assert-Match $q.Body.prompt 'THUMBNAIL OVERRIDE\.'
+        Assert-True (Test-Path (Join-Path $out 'thumbs/units/expert-lumberjack__none.png')) 'thumbnail file'
+        Assert-True (-not (Test-Path (Join-Path $out 'sprites'))) 'no full image made'
+        $m = Read-Manifest (Join-Path $out 'manifest.json')
+        Assert-Equal 303 $m['jobs'].Count '302 full entries + 1 thumbnail'
+        $e = $m['jobs']['thumbs/units/expert-lumberjack__none']
+        Assert-Equal 'done' $e['status']
+        Assert-Equal 'thumbs' $e['doc']
+        Assert-Equal 'units/expert-lumberjack__none' $e['id']
+        Assert-Equal 'thumbs/units/expert-lumberjack__none.png' $e['output']
+        Assert-Equal 'thumb' $e['variant']
+        Assert-Equal 'icon' $e['thumbStyle']
+        Assert-Equal 'sprites/units/expert-lumberjack__none' $e['fullKey']
+        Assert-True $e['check']['ok'] 'PNG check'
+        Assert-True ($e['promptHash'] -ne $m['jobs']['sprites/units/expert-lumberjack__none']['promptHash']) 'own hash'
+        Assert-Equal 'thumb' $m['lastRun']['variant']
+        foreach ($k in $origJson.Keys) {
+            Assert-Equal $origJson[$k] (ConvertTo-Json -InputObject $m['jobs'][$k] -Depth 10 -Compress) "$k untouched"
+        }
+
+        # resume: the thumbnail is done
+        Reset-FakeOpenAIServer $srv
+        $r = Invoke-Tool ($common + $one + @{ Variant = 'thumb' })
+        Assert-Equal 0 $srv.State.Requests.Count 'thumbnail not made twice'
+        Assert-Match $r.Out 'Nothing to generate'
+        # the full image (done in the committed manifest; put a file there, as on the user's machine) is still done
+        $null = New-Item -ItemType Directory -Force (Join-Path $out 'sprites/units')
+        [IO.File]::WriteAllBytes((Join-Path $out 'sprites/units/expert-lumberjack__none.png'), [ImageGenTool.PngWriter]::Sample('alpha', 64))
+        $r = Invoke-Tool ($common + $one)
+        Assert-Equal 0 $srv.State.Requests.Count 'full: done in the committed manifest'
+        $r = Invoke-Tool ($common + $one + @{ Variant = 'both' })
+        Assert-Equal 0 $srv.State.Requests.Count 'both: both done'
+        $sheet = [IO.File]::ReadAllText((Join-Path $out 'index.html'))
+        Assert-Match $sheet 'sprites/units/expert-lumberjack__none \(full \| thumb\)' 'one card for both versions'
+        Assert-Match $sheet 'src="thumbs/units/expert-lumberjack__none\.png"'
+        Assert-Match $sheet 'src="sprites/units/expert-lumberjack__none\.png"'
+        # a deleted thumbnail is made again, only the thumbnail
+        Remove-Item (Join-Path $out 'thumbs/units/expert-lumberjack__none.png')
+        $r = Invoke-Tool ($common + $one)
+        Assert-Equal 0 $srv.State.Requests.Count '-Variant full ignores the thumbnails'
+        $sheet = [IO.File]::ReadAllText((Join-Path $out 'index.html'))
+        Assert-NoMatch $sheet '\(full \| thumb\)' 'no pair without a thumbnail file'
+        $r = Invoke-Tool ($common + $one + @{ Variant = 'both' })
+        Assert-Equal 1 $srv.State.Requests.Count 'the missing thumbnail only'
+        Assert-Match $srv.State.Requests[0].Body.prompt '^THUMBNAIL VERSION'
+        # a full-only run shows the thumbnail from disk next to the full image
+        $r = Invoke-Tool ($common + $one)
+        Assert-Match ([IO.File]::ReadAllText((Join-Path $out 'index.html'))) '\(full \| thumb\)' 'thumbnail from disk shown next to the full image'
+
+        # editing thumb-prompts.md re-queues the thumbnails, never the full images
+        $tpf = Join-Path $scratch 'thumb-prompts-edited.md'
+        [IO.File]::WriteAllText($tpf, ([IO.File]::ReadAllText($thumbPromptsReal) -replace 'THUMBNAIL VERSION\. This image is an icon', 'THUMBNAIL VERSION. This image is a bold icon'))
+        $r = Invoke-Tool ($common + $one + @{ Variant = 'both'; DryRun = $true; ThumbPromptFile = $tpf })
+        Assert-Match $r.Out 'thumbs/units/expert-lumberjack__none   \[would run: prompt changed\]'
+        Assert-Match $r.Out 'sprites/units/expert-lumberjack__none   \[skip: done\]'
+        Reset-FakeOpenAIServer $srv
+        $r = Invoke-Tool ($common + $one + @{ Variant = 'thumb'; ThumbPromptFile = $tpf })
+        Assert-Equal 1 $srv.State.Requests.Count
+        Assert-Match $srv.State.Requests[0].Body.prompt 'a bold icon'
+        Assert-True (@(Get-ChildItem (Join-Path $out '_replaced/thumbs') -Recurse -Filter '*.png').Count -eq 1) 'old thumbnail kept in _replaced/thumbs'
+        $m = Read-Manifest (Join-Path $out 'manifest.json')
+        Assert-Equal $origJson['sprites/units/expert-lumberjack__none'] (ConvertTo-Json -InputObject $m['jobs']['sprites/units/expert-lumberjack__none'] -Depth 10 -Compress) 'the full entry is still untouched'
+    }
+
+    Test 'thumbs: -Variant both on a fixture, variants, a failing thumbnail is retried on its own' {
+        Reset-FakeOpenAIServer $srv
+        $doc = Join-Path $scratch 'thumb-both.md'
+        $out = Join-Path $scratch 'thumb-both-out'
+        New-SpriteFixture $doc @(
+            (Row 'units/tb-one__none' 'transparent' 'first unit [[scenario:ok]]'),
+            (Row 'terrain/tb-flat' 'opaque' 'flat tile [[scenario:ok]]')
+        )
+        $r = Invoke-Tool ($common + @{ SpriteDoc = $doc; OutDir = $out; Variant = 'both'; Variants = 2 })
+        Assert-Equal 0 $r.Exit $r.Out
+        Assert-Equal 8 $srv.State.Requests.Count '2 sprites x 2 takes x (full + thumb)'
+        foreach ($rel in 'sprites/units/tb-one__none.png', 'sprites/units/tb-one__none__v2.png', 'thumbs/units/tb-one__none.png', 'thumbs/units/tb-one__none__v2.png', 'sprites/terrain/tb-flat.png', 'thumbs/terrain/tb-flat.png') {
+            Assert-True (Test-Path (Join-Path $out $rel)) $rel
+        }
+        $thumbTile = @($srv.State.Requests | Where-Object { $_.Body.prompt -match '^THUMBNAIL VERSION of a map tile' })
+        Assert-Equal 2 $thumbTile.Count 'tile thumbnails use the tile blocks'
+        Assert-Equal 'opaque' $thumbTile[0].Body.background 'terrain thumbnails stay opaque'
+        $m = Read-Manifest (Join-Path $out 'manifest.json')
+        Assert-Equal 'sprites/units/tb-one__none__v2' $m['jobs']['thumbs/units/tb-one__none__v2']['fullKey']
+        # one thumbnail fails (its entry alone), and is retried alone on the next run
+        $m['jobs']['thumbs/units/tb-one__none']['status'] = 'failed'
+        Save-Manifest -Manifest $m -Path (Join-Path $out 'manifest.json')
+        Reset-FakeOpenAIServer $srv
+        $r = Invoke-Tool ($common + @{ SpriteDoc = $doc; OutDir = $out; Variant = 'both'; Variants = 2; SkipFailed = $true })
+        Assert-Equal 0 $srv.State.Requests.Count '-SkipFailed applies to thumbnails too'
+        $r = Invoke-Tool ($common + @{ SpriteDoc = $doc; OutDir = $out; Variant = 'both'; Variants = 2 })
+        Assert-Equal 1 $srv.State.Requests.Count 'only the failed thumbnail'
+        Assert-Match $srv.State.Requests[0].Body.prompt '^THUMBNAIL VERSION\. This image is an icon'
     }
 
     Test '429 with Retry-After is honoured, then succeeds' {

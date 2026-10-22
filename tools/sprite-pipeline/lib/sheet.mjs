@@ -37,6 +37,7 @@ export function contactSheet(data) {
       <div class="name">${esc(s.id)} <span class="muted">${esc(s.layout)}${s.extras.length ? ' · extra colours ' + s.extras.map((h) => `<i class="sw" style="background:${h}" title="${h}"></i>`).join('') : ''}</span></div>
       <div class="line">
         ${s.orig ? `<div class="grp"><div class="h">master</div><div class="cells"><figure class="t paper"><img src="${esc(s.orig)}" width="112" height="112" alt=""></figure></div></div>` : ''}
+        ${s.thumbOrig ? `<div class="grp"><div class="h">thumbnail</div><div class="cells"><figure class="t paper"><img src="${esc(s.thumbOrig)}" width="112" height="112" alt=""></figure></div></div>` : ''}
         ${groups}
       </div></section>`;
   }).join('\n');
@@ -98,14 +99,16 @@ table.rep { border-collapse: collapse; font-size: 12px; background: #fffdf6; } t
 .settings { font: 11px/1.3 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; background: #fffdf6; border: 1px solid var(--line); padding: 6px; border-radius: 6px; max-height: 220px; overflow: auto; }
 </style></head><body>
 <h1>Sprite pipeline contact sheet</h1>
-<p class="muted">Source: ${esc(sourceLabel)} · ${sprites.length} sprites · pixel sizes ${pixelSizes.join(', ')} · smooth sizes ${smoothSizes.join(', ')}</p>
+<p class="muted">Source: ${esc(sourceLabel)}${data.thumbs ? ` · thumbnails: ${esc(data.thumbs.label)} (sizes up to ${data.thumbs.maxSize})` : ''} · ${sprites.length} sprites · pixel sizes ${pixelSizes.join(', ')} · smooth sizes ${smoothSizes.join(', ')}</p>
 <p>Each row: the master, then every runtime size at 1:1 on paper and on a grassland map tile. Pixel sizes are also shown 4× with nearest-neighbour so single pixels are visible.
 "True device pixels" draws 1:1 images at one image pixel per screen pixel on high-DPI screens, which is how the game will show them.</p>
 <div class="controls"><label><input type="checkbox" id="dev" checked> True device pixels</label>
- · <a href="#runtime">Runtime sizes</a>${compare.length ? ' · <a href="#compare">Original vs redraws</a>' : ''}${gridReport.length ? ' · <a href="#grid">Grid fidelity</a>' : ''} · <a href="#boundary">Boundary</a> · <a href="#tuning">Tuning</a> · <a href="#settings">Settings</a></div>
+ · <a href="#runtime">Runtime sizes</a>${compare.length ? ` · <a href="#compare">${data.thumbs ? 'Full vs thumbnail' : 'Original vs redraws'}</a>` : ''}${gridReport.length ? ' · <a href="#grid">Grid fidelity</a>' : ''} · <a href="#boundary">Boundary</a> · <a href="#tuning">Tuning</a> · <a href="#settings">Settings</a></div>
 <h2 id="runtime">Runtime sizes</h2>
 ${rows}
-${compare.length ? `<h2 id="compare">Original vs redraws</h2>
+${compare.length && data.thumbs ? `<h2 id="compare">Full master vs thumbnail</h2>
+<p>The same sprite from both masters, at the small sizes: the full master through this pipeline, and the thumbnail (<code>--thumbs-in</code>, a separate small-size generation) through this pipeline. The runtime set uses the thumbnail for sizes up to ${esc(data.thumbs.maxSize)} (<code>--thumb-max</code>) and the full master above that, or the full master everywhere when a sprite has no thumbnail.${data.compareLabel ? ` The first column is the original master (${esc(data.compareLabel)}).` : ''} Each size 1:1 on paper and on grass, small sizes also enlarged.</p>
+${cmp}` : compare.length ? `<h2 id="compare">Original vs redraws</h2>
 <p>The same sprite three ways: the original master (${esc(data.compareLabel ?? '')}) through this pipeline, the redraw given as <code>--in</code> through this pipeline, and the pixel-grid redraw snapped cell by cell (<code>--grid-in</code>). Each size 1:1 on paper and on grass, small sizes also enlarged.</p>
 ${cmp}` : ''}
 ${grep}
