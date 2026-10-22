@@ -130,6 +130,19 @@ export interface SpritePack {
   theme: StyleTheme | 'inherit';
   /** Stylesheets (web fonts), or 'inherit'. */
   stylesheets?: string[] | 'inherit';
+  /**
+   * Interface CSS for this pack, so it can restyle panels, buttons and dialogs beyond the theme
+   * variables (for example border-image frames from its ui/ sprites, and no hand-drawn look at all).
+   * Applied while the style is active, on top of the fallback's own `css` unless `fallbackCss` is false.
+   */
+  css?: string;
+  /**
+   * CSS files with the same lifetime. Relative paths resolve against the sprite folder (so a pack
+   * can ship `pack.css` next to its sprites, and `url()` inside it finds them); absolute URLs as given.
+   */
+  cssFiles?: string[];
+  /** Whether the fallback style's own interface CSS still applies (default true). */
+  fallbackCss?: boolean;
   source: SpriteSource;
   mapping: SpriteMapping;
   rules: DrawRules;

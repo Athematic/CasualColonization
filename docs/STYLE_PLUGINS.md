@@ -52,6 +52,10 @@ The `theme` values become CSS custom properties on the page while the style is a
 
 A style that loads images in the background can implement the optional `onAssetsChanged(listener)`: the shell then drops its cached icons and redraws whenever more assets have arrived.
 
+### Interface CSS
+
+`theme` covers the shell's colours, fonts, line width and corner radius. A style that wants a different interface beyond that (framed panels, painted buttons, no hand-drawn look at all) can also provide `css` (a string) and `cssUrls` (stylesheet files). The shell adds them while the style is active and removes them when another style is chosen. `stylesheets` (web fonts) stay loaded. Scope the rules to the style, for example `:root[data-style="my-style"] .panel { … }`. The shell sets `data-style` on the root element.
+
 ## Rules for styles
 
 - Do not import anything from the web shell. Depend only on `@cc/engine` (for types and rule tables) and `@cc/render-api`.
@@ -128,6 +132,22 @@ const australia = extendPack(ligneClairePaintedPack, {
 ### Ligne claire (painted)
 
 The first pack, `packages/style-sprites/packs/ligne-claire-painted.ts`, uses the default mapping and rules, with Ligne claire as the fallback and its theme and fonts. Its sprites live in `assets/runtime/` next to the page (https://casual.spence.dk/assets/runtime/ on the server). Point it elsewhere with `?sprites=https://casual.spence.dk/assets/runtime/` (remembered; `?sprites=default` forgets it, `?sprites=off` draws everything procedurally). Loading from another origin needs `Access-Control-Allow-Origin: *` on the server's `/assets/runtime/`. Without it the browser refuses the images and the style falls back to Ligne claire.
+
+### Interface CSS in a pack
+
+A pack can restyle the interface too, so a sprite style is not tied to the fallback's hand-drawn look:
+
+- `css`: inline CSS.
+- `cssFiles`: stylesheet files. A relative path such as `pack.css` is loaded from the sprite folder, next to the sprites, so `url(ui/panel-border@128.png)` inside it finds the pack's own UI art. Absolute URLs are used as given.
+- `fallbackCss: false`: drops the fallback style's own interface CSS. The fallback's theme variables still apply unless the pack sets `theme`.
+
+For example, a pack can frame panels with its `ui/panel-border` sprite:
+
+```css
+:root[data-style="my-pack"] .card { border: 24px solid transparent; border-image: url(ui/panel-border@128.png) 40 round; }
+```
+
+The map itself still falls back to the procedural style for any sprite the pack lacks.
 
 ### Adding a sprite pack
 

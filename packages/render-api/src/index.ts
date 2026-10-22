@@ -140,8 +140,16 @@ export interface StylePlugin {
   name: string;
   description: string;
   theme: StyleTheme;
-  /** Optional stylesheet URLs (for example web fonts) the style wants loaded. */
+  /** Optional stylesheet URLs (for example web fonts) the style wants loaded. They stay loaded. */
   stylesheets?: string[];
+  /**
+   * Optional CSS that restyles the shell's interface (panels, buttons, dialogs) while this style is
+   * active, for styles that want their own look beyond the theme variables. Removed again when
+   * another style is chosen. Scope rules to `:root[data-style="<id>"]` to be safe.
+   */
+  css?: string;
+  /** Optional CSS file URLs with the same lifetime as `css`; `url()` inside them resolves against the file. */
+  cssUrls?: string[];
   /** `hooks` lets another style paint some layers (see MapLayerHooks); a renderer may ignore it. */
   createMapRenderer(canvas: HTMLCanvasElement, hooks?: MapLayerHooks): MapRenderer;
   /** Draws an icon centred in a size×size box at the origin of the context. */
