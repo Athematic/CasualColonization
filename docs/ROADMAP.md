@@ -40,7 +40,7 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Triangle trading by the Creative computer players when prices allow | M | P2 | done (buys where a good is cheap and sells it in the port that pays clearly more) |
 | Diplomacy screen shows relations, years of peace, trade volume, and progress towards Favoured Nation | S | P1 | done (in words only, never the hidden thresholds) |
 
-## 0.5: The classic game, part 1 (natives and the Crown) (in progress)
+## 0.5: The classic game, part 1 (natives and the Crown) (done)
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
@@ -54,6 +54,8 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Advisor reports (colony, trade, military, naval, religion, natives, Congress, history) | M | P1 | done (eight tabs, `A`/`F1`–`F8`; engine keeps a capped history and a goods ledger) |
 | Port character: each home port gets its own starting prices, demand and ship prices (for example cheap trade goods in Amsterdam, furs dear in La Rochelle, silver in Seville, cheap ships in Lisbon), so Favoured Nation access and triangle trading pay off. Scenario data per nation | M | P2 | idea (noted after 0.4) |
 | Find why Creative scores about 14 points less with Favoured Nation on | S | P2 | idea |
+| Computer players reach a winnable War of Independence (they now only declare when their defence beats the grown royal army, and never get there: staff armories, build artillery, plan earlier) | M | P2 | idea |
+| Brave sprites (plain, armed, mounted) in SPRITE_PROMPTS.md | S | P3 | idea |
 | Trade routes may call at a favoured partner's port, not only the home port | S | P3 | idea |
 
 ## 0.6: A living world
