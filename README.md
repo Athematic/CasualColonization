@@ -24,7 +24,7 @@ Or build a static site with `npm run build` (output in `apps/web/dist`), or a si
 
 ### Deploying
 
-`.github/workflows/deploy.yml` uploads `site/` to the server whenever a merge to `main` changes it. You can also run it by hand from the **Actions** tab (**Deploy → Run workflow**), and tick *dry run* to only list what would change. It uses `scripts/deploy-sftp.sh`, which:
+`.github/workflows/deploy.yml` uploads `site/` to the server whenever a merge to `main` changes it. You can also run it by hand from the **Actions** tab (**Deploy → Run workflow**), and tick *dry run* to only list what would change. It uses `scripts/deploy.sh`, which:
 
 1. uploads the assets, then `index.html`, so the live page never points at a missing file;
 2. then deletes the bundles of earlier builds (`assets/index-*.js|css`, `assets/cover-*.webp`).
@@ -35,14 +35,18 @@ It never touches the images hosted on the server (`assets/sprites`, `thumbs`, `r
 
 | Secret | Value |
 | --- | --- |
-| `SFTP_HOST` | the server's host name |
-| `SFTP_PORT` | optional; 22 for SFTP, 21 for FTPS |
-| `SFTP_USER` | the deployment user (ideally one limited to the site's folder) |
-| `SFTP_PASSWORD` | its password |
-| `SFTP_PATH` | the site's folder on the server, as the user sees it, e.g. `/casual.spence.dk` or `/` |
-| `SFTP_KNOWN_HOSTS` | SFTP only: the server's host key line, from `ssh-keyscan -p 22 <host>`; check its fingerprint against the server |
+| `DEPLOY_HOST` | the FTP server's host name |
+| `DEPLOY_PORT` | optional; defaults to 21 (FTP) or 22 (SFTP) |
+| `DEPLOY_USER` | the FTP user (ideally one limited to the site's folder) |
+| `DEPLOY_PASSWORD` | its password |
+| `DEPLOY_PATH` | the site's folder as that user sees it after logging in, e.g. `/` or `/casual.spence.dk` |
 
-If the server offers FTP over TLS rather than SFTP (IIS's built-in FTP server does), add an environment **variable** `DEPLOY_PROTOCOL` = `ftps`; `SFTP_KNOWN_HOSTS` is then not needed. Secrets are encrypted: they can't be read back in GitHub's interface and are masked in the logs.
+The connection is **FTP with TLS** (FTPS, explicit) by default, so the password and files travel encrypted. IIS's FTP server supports this once a certificate is bound to the FTP site. Optional environment **variables** change that:
+- `DEPLOY_TLS_VERIFY` = `false`: the certificate is self-signed or issued for another name. The connection stays encrypted, but the server's identity isn't checked.
+- `DEPLOY_PROTOCOL` = `ftp`: plain FTP, only if the server has no TLS at all. The password is then sent unencrypted, and the workflow warns about it.
+- `DEPLOY_PROTOCOL` = `sftp`: SSH, with the secret `DEPLOY_KNOWN_HOSTS` set to the server's host key line (`ssh-keyscan <host>`).
+
+Secrets are encrypted: they can't be read back in GitHub's interface and are masked in the logs.
 
 ### Controls
 

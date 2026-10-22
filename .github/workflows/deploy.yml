@@ -1,6 +1,6 @@
 name: Deploy
 
-# Uploads the committed release build (site/) to https://casual.spence.dk/ over SFTP (or FTPS).
+# Uploads the committed release build (site/) to https://casual.spence.dk/ over FTP.
 # Runs when a merge to main changes site/, or by hand from the Actions tab.
 # Images hosted on the server (assets/sprites, assets/thumbs, assets/runtime, assets/boxart)
 # are never touched, and nothing outside site/'s own generated files is deleted.
@@ -35,34 +35,42 @@ jobs:
       - name: Install lftp
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
 
-      - name: Trust the server's host key
-        if: ${{ (vars.DEPLOY_PROTOCOL || 'sftp') == 'sftp' }}
+      - name: Trust the server's host key (SFTP only)
+        if: ${{ vars.DEPLOY_PROTOCOL == 'sftp' }}
         env:
-          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
-          test -n "$SFTP_KNOWN_HOSTS" || { echo "Secret SFTP_KNOWN_HOSTS is not set (see README, Deploying)."; exit 1; }
+          test -n "$DEPLOY_KNOWN_HOSTS" || { echo "Secret DEPLOY_KNOWN_HOSTS is not set (see README, Deploying)."; exit 1; }
           mkdir -p ~/.ssh
-          printf '%s\n' "$SFTP_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
       - name: Upload site/
         env:
-          SFTP_HOST: ${{ secrets.SFTP_HOST }}
-          SFTP_PORT: ${{ secrets.SFTP_PORT }}
-          SFTP_USER: ${{ secrets.SFTP_USER }}
-          LFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
-          SFTP_PATH: ${{ secrets.SFTP_PATH }}
-          PROTOCOL: ${{ vars.DEPLOY_PROTOCOL || 'sftp' }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          LFTP_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          # ftps (default): FTP with TLS, password and files encrypted. ftp: plain FTP, everything
+          # including the password travels unencrypted; only if the server offers no TLS. sftp: SSH.
+          PROTOCOL: ${{ vars.DEPLOY_PROTOCOL || 'ftps' }}
+          # Set the variable DEPLOY_TLS_VERIFY to false if the server's certificate is self-signed
+          # or issued for another name (the connection is still encrypted).
+          TLS_VERIFY: ${{ vars.DEPLOY_TLS_VERIFY || 'true' }}
           DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
         run: |
-          for v in SFTP_HOST SFTP_USER LFTP_PASSWORD SFTP_PATH; do
+          for v in DEPLOY_HOST DEPLOY_USER LFTP_PASSWORD DEPLOY_PATH; do
             test -n "${!v}" || { echo "Secret for $v is not set (see README, Deploying)."; exit 1; }
           done
           case "$PROTOCOL" in
-            sftp) PORT=${SFTP_PORT:-22}; SETTINGS="" ;;
-            # FTP over TLS (IIS's built-in FTP server): explicit TLS, certificate checked.
-            ftps) PROTOCOL=ftp; PORT=${SFTP_PORT:-21}; SETTINGS="set ftp:ssl-force true; set ftp:ssl-protect-data true;" ;;
-            *) echo "DEPLOY_PROTOCOL must be sftp or ftps"; exit 1 ;;
+            ftps) SCHEME=ftp; PORT=${DEPLOY_PORT:-21}
+                  SETTINGS="set ftp:ssl-force true; set ftp:ssl-protect-data true; set ftp:passive-mode true; set ssl:verify-certificate $TLS_VERIFY;" ;;
+            ftp)  SCHEME=ftp; PORT=${DEPLOY_PORT:-21}
+                  echo "::warning::Plain FTP: the password and files are sent unencrypted. Use ftps if the server supports it."
+                  SETTINGS="set ftp:ssl-allow false; set ftp:passive-mode true;" ;;
+            sftp) SCHEME=sftp; PORT=${DEPLOY_PORT:-22}; SETTINGS="" ;;
+            *) echo "DEPLOY_PROTOCOL must be ftps, ftp or sftp"; exit 1 ;;
           esac
-          OPEN="$SETTINGS open --env-password -u \"$SFTP_USER\" -p $PORT $PROTOCOL://$SFTP_HOST"
-          scripts/deploy-sftp.sh "$OPEN" "$SFTP_PATH" $DRY_RUN
+          OPEN="$SETTINGS open --env-password -u \"$DEPLOY_USER\" -p $PORT $SCHEME://$DEPLOY_HOST"
+          scripts/deploy.sh "$OPEN" "$DEPLOY_PATH" $DRY_RUN
