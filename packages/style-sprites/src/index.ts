@@ -8,7 +8,7 @@
  *
  * The packs that ship with the game are in ../packs.
  */
-export { createSpriteStyle, type SpriteStyleOptions } from './style.js';
+export { createSpriteStyle, packCssUrls, type SpriteStyleOptions } from './style.js';
 export {
   completePack,
   DEFAULT_MAPPING,

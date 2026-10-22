@@ -43,6 +43,16 @@ function resolveBase(pack: SpritePack): string | null {
   return spriteBase(location.search, storage, { base: pack.source.base, param: pack.source.queryParam, storageKey: pack.source.storageKey });
 }
 
+/** A pack's CSS files as URLs: relative paths sit in the sprite folder (skipped when sprites are off). */
+export function packCssUrls(files: readonly string[] | undefined, base: string | null): string[] {
+  const out: string[] = [];
+  for (const f of files ?? []) {
+    if (/^([a-z][a-z0-9+.-]*:|\/)/i.test(f)) out.push(f);
+    else if (base !== null) out.push(base + f);
+  }
+  return out;
+}
+
 export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts: SpriteStyleOptions = {}): StylePlugin {
   const pack = completePack(input);
   const ids = new SpriteIds(pack.mapping);
@@ -134,6 +144,12 @@ export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts
     description: pack.description,
     theme,
     stylesheets: pack.stylesheets === 'inherit' || pack.stylesheets === undefined ? fallback.stylesheets : pack.stylesheets,
+    css: [pack.fallbackCss === false ? undefined : fallback.css, pack.css].filter(Boolean).join('\n') || undefined,
+    // A getter: the sprite folder can change with ?sprites= between page loads.
+    get cssUrls() {
+      const base = opts.base !== undefined ? opts.base : resolveBase(pack);
+      return [...(pack.fallbackCss === false ? [] : fallback.cssUrls ?? []), ...packCssUrls(pack.cssFiles, base)];
+    },
     createMapRenderer,
     drawIcon,
     tileColor: (tile) => fallback.tileColor(tile),
