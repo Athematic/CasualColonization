@@ -72,6 +72,8 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Historical events (a starter set) | M | P1 | idea |
 | Random events in the Sim City spirit (a starter set) | M | P1 | idea |
 | Roads in the Civilization II style: auto-road along a path, later railroads | M | P3 | idea, needs scoping |
+| Rivers and roads meander a little instead of running straight between tile centres (drawn, with a fixed wobble per tile, so they don't move between frames) | S | P1 | in progress |
+| Title screen: add the new box covers once generated (F–K for the Americas; L–M and N–O later, with their scenarios) | S | P2 | planned |
 
 ## 0.7: The classic game, part 2
 
@@ -111,6 +113,12 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
   - Next: packs that use no hand-drawn graphics at all. A pack option (for example `fallback: 'placeholder'`) draws a plain placeholder (a flat tile colour, or a simple silhouette per category) instead of the procedural drawing for missing sprites. Packs can also supply sprite versions of the layers that are always procedural today: rivers (pieces per direction and size), coastline ink, fog edges, colony and unit flags, captions and badges. Plus a check that lists which ids a pack is missing.
 - A map editor in the game.
 - Network play (the deterministic engine already supports replays).
+
+## Agentic sprite pack generator
+
+| Item | Size | Prio | Status |
+| --- | --- | --- | --- |
+| Players write one prompt describing an art style and context (for example "science fiction", "mixed genders", "use a blue skin tone"). An agent turns it into a full sprite pack automatically: it writes the style bible and per-asset prompts, generates the full and thumbnail images, checks them (transparency, line weight, consistency) and redoes failures, runs the sprite pipeline and publishes a pack definition the game can load. Builds on tools/image-gen, tools/sprite-pipeline and sprite packs (including interface CSS). Needs a cost cap and a preview before the full run | XL | P3 | idea |
 
 ## Long-term ambition
 
