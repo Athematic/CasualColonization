@@ -453,13 +453,14 @@ export class LigneClaireMapRenderer implements MapRenderer {
     ctx.fill();
 
     // 5. Settlements and colonies.
-    for (const st of Object.values(s.settlements)) {
+    // Painted from the top row down, so a town that spills over its tile overlaps the ones above it.
+    for (const st of Object.values(s.settlements).sort((a, b) => a.y - b.y || a.x - b.x)) {
       if (!isTileExplored(scene, st.x, st.y) || st.x < range.x0 - 1 || st.x > range.x1 + 1 || st.y < range.y0 - 1 || st.y > range.y1 + 1) continue;
       const p = tileToScreen(scene, st.x, st.y);
       this.drawSettlement(st, p.x, p.y, z, lw);
     }
     const labels: (() => void)[] = [];
-    for (const c of Object.values(s.colonies)) {
+    for (const c of Object.values(s.colonies).sort((a, b) => a.y - b.y || a.x - b.x)) {
       if (!isTileExplored(scene, c.x, c.y) || c.x < range.x0 - 1 || c.x > range.x1 + 1 || c.y < range.y0 - 1 || c.y > range.y1 + 1) continue;
       const p = tileToScreen(scene, c.x, c.y);
       const size = colonyWorkers(s as GameState, c).length;
