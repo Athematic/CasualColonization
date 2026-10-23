@@ -226,8 +226,10 @@ export const DEFAULT_RULES: DrawRules = {
   bonus: { size: 0.44, x: 0.54, y: 0.02 },
   settlement: { scale: 1.08, x: 0.5, y: 0.98 },
   mission: { size: 0.42, x: 0.6, y: 0.48 },
-  colony: { scale: 1.25, x: 0.5, y: 0.95 },
-  defence: { scale: 1.5, x: 0.5, y: 1.02 },
+  // Towns spill over onto the neighbouring tiles (the town art fills about 87% of its square, so 1.75
+  // makes it about 150% of a tile wide); they are drawn after the whole landscape and before the units.
+  colony: { scale: 1.75, x: 0.5, y: 0.97 },
+  defence: { scale: 2.1, x: 0.5, y: 1.04 },
   colonyFlag: { x: 0.42, y: 0.56, height: 0.5 },
   unitIcon: { scale: 0.98, pennant: { size: 0.36, minIcon: 28 } },
 };
