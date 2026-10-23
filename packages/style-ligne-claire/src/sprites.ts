@@ -128,7 +128,9 @@ export function ruins(ctx: Ctx, x: number, y: number, s: number, lw: number): vo
   ctx.fillText('?', x + s * 0.14, y - s * 0.22);
 }
 
-export const FONT = "'Comic Neue', 'Trebuchet MS', 'Segoe UI', sans-serif";
+// A clean rounded sans for labels and text: friendly without the scrawl of a comic face.
+export const FONT = "'Nunito', 'Segoe UI', 'Helvetica Neue', sans-serif";
+export const HEADING_FONT = "'Fredoka', 'Nunito', 'Arial Rounded MT Bold', sans-serif";
 
 // ---- Colonies and settlements ----
 
