@@ -8,7 +8,8 @@ registerStyle(ligneClaire);
 registerStyle(ligneClairePainted);
 registerStyle(schematic);
 
-export const DEFAULT_STYLE = ligneClaire.id;
+// The painted pack falls back to plain Ligne claire wherever a sprite is missing or offline.
+export const DEFAULT_STYLE = ligneClairePainted.id;
 
 let active: StylePlugin = ligneClaire;
 const listeners = new Set<(s: StylePlugin) => void>();

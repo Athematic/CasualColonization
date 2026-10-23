@@ -1,17 +1,17 @@
 /**
  * Where a pack's runtime sprites come from, and the browser side of loading them.
  *
- * The pack names a default folder (the standard pack: `assets/runtime/` next to the page, which
+ * The pack names a default folder (the standard pack: `assets/sprites/` next to the page, which
  * is where `npm run release` and the server put them). A query parameter overrides it and is
  * remembered in localStorage (parameter and key are per pack; the defaults are shown):
  *
- *   ?sprites=https://casual.spence.dk/assets/runtime/   load from there (needs CORS when cross-origin)
+ *   ?sprites=https://casual.spence.dk/assets/sprites/   load from there (needs CORS when cross-origin)
  *   ?sprites=off                                          procedural drawing only
  *   ?sprites=default                                      forget the override
  */
 import type { SpriteImage, StoreEnv } from './store.js';
 
-export const DEFAULT_SPRITE_BASE = 'assets/runtime/';
+export const DEFAULT_SPRITE_BASE = 'assets/sprites/';
 
 export interface BaseOptions {
   /** The pack's folder when nothing overrides it. */
