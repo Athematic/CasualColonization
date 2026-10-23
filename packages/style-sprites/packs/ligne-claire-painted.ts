@@ -1,7 +1,7 @@
 /**
  * Ligne claire (painted): the first sprite pack. The painted ligne claire art from
  * docs/SPRITE_PROMPTS.md, generated with tools/image-gen, processed by tools/sprite-pipeline and
- * served from assets/runtime/ (https://casual.spence.dk/assets/runtime/). Ligne claire draws
+ * served from assets/sprites/ (https://casual.spence.dk/assets/sprites/), next to the masters. Ligne claire draws
  * everything the pack lacks, and the rivers, coastline, fog, captions and markers.
  *
  * It uses the default id scheme and draw rules unchanged; a pack for other art, or a scenario's
@@ -18,7 +18,7 @@ export const ligneClairePaintedPack: SpritePack = {
   theme: 'inherit',
   stylesheets: 'inherit',
   source: {
-    base: 'assets/runtime/',
+    base: 'assets/sprites/',
     manifest: 'manifest.json',
     queryParam: 'sprites',
     storageKey: 'cc.sprites',

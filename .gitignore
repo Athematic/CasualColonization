@@ -7,7 +7,9 @@ scripts/.*.mjs
 
 # Runtime sprite set (tools/sprite-pipeline output): uploaded to the server, not committed
 site/assets/runtime/
+site/assets/sprites/
 apps/web/public/assets/runtime/
+apps/web/public/assets/sprites/
 
 # image generator output (tools/image-gen)
 tools/image-gen/output/
