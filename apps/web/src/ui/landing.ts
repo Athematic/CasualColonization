@@ -87,9 +87,9 @@ export function landingScreen(host: HTMLElement, actions: LandingActions): HTMLE
     width: 1024,
     height: 1536,
   });
-  /** Swaps in a different cover, never the one already showing. */
+  /** Shows the next cover in turn (the first one is picked at random on load). */
   const nextCover = () => {
-    shown = (shown + 1 + Math.floor(Math.random() * (COVERS.length - 1))) % COVERS.length;
+    shown = (shown + 1) % COVERS.length;
     const next = COVERS[shown];
     img.setAttribute('srcset', `${next.small} 512w, ${next.src} 1024w`);
     img.setAttribute('src', next.src);
