@@ -164,8 +164,15 @@ The arena (`packages/engine/src/arena.ts`) and `npm run tournament` play a scena
 - `extras`: the chance per tile of bonus resources, coastal bonus resources and Lost City Rumours, and the terrains without rumours.
 - `settlements`: terrains without settlements (`avoid`) and the least `spacing` in tiles.
 - `crown`: `'entry'` (the Crown's forces sail in from the map's arrival edge) or a fixed edge.
+- `grid`: the shape of the tiles, see [The map grid](#the-map-grid). Optional; squares when absent.
 
 Settlement kinds are rows of `SETTLEMENT_KINDS` (`rules/natives.ts`): `camp`, `village` and `city`, each with its size, braves, respawn time, production rate and cap, incite and land prices, and treasure. A people has a `lifeway` (`nomadic`, `agricultural` or `urban`), and `Scenario.peoples.settlements` gives each lifeway the row it lives in. Every people in play needs its lifeway there. A scenario may write a row of its own.
+
+## The map grid
+
+`Scenario.map.grid` names the grid the scenario's maps use. `'square'` is the only grid so far, and a scenario that leaves `grid` out plays on squares, so no scenario needs to set it yet. Hexagons are planned as a later option (see "Hex maps as a scenario option" in [ROADMAP.md](ROADMAP.md)).
+
+The grid (`packages/engine/src/grid.ts`) is the one place that knows which tiles are next to which: the directions a unit can move in, the distance between two tiles, the tiles within a distance, and a colony's work area. Engine code asks the game's grid, `gridOf(s)` (or `gridIn(scenario)` while a map is being made), instead of looping over a square of tiles itself (`test/grid.test.ts` checks the square grid against the loops it replaced, orders included). The map stays a rectangle of rows (`y * width + x`) on every grid, so bounds checks and whole-map passes do not go through the grid. Rivers' direction masks, the movement keys and the colony screen's 3 × 3 layout are square-only for now.
 
 ## Events
 
