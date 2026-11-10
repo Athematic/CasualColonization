@@ -1,9 +1,10 @@
+import { gridOf } from '../grid.js';
 import { assignJob, bestJob, canBuild, charterCost, foundColony, jobOptions, setBuild } from '../colony.js';
 import { aiPeace } from '../diplomacy.js';
 import { boardInEurope, recruit, recruitPrice, sailToAmerica, sellGoods } from '../europe.js';
 import { canImprove, goTo, setDestination, startImprovement } from '../movement.js';
 import { aiColonyReport } from './reports.js';
-import { cargoFree, cargoRoomFor, colonyAt, colonyWorkers, distance, isCoastal, isShip, isWater, tileAt, unitsAboard, warehouseCapacity } from '../queries.js';
+import { cargoFree, cargoRoomFor, colonyAt, colonyWorkers, isCoastal, isShip, isWater, tileAt, unitsAboard, warehouseCapacity } from '../queries.js';
 import type { BuildingKind } from '../rules/buildings.js';
 import type { GoodId } from '../rules/goods.js';
 import { UNIT_TYPES } from '../rules/units.js';
@@ -45,6 +46,7 @@ function aiUnit(s: GameState, p: Player, u: Unit): void {
 }
 
 function aiColonist(s: GameState, p: Player, u: Unit): void {
+  const grid = gridOf(s);
   if (u.loc.kind !== 'map') return;
   // Stranded before the first colony (ai/common.ts): board the ship that came for them.
   if (boardRescue(s, p, u)) return;
@@ -73,14 +75,13 @@ function aiColonist(s: GameState, p: Player, u: Unit): void {
   if (expand) {
     const radius = here ? 7 : 4;
     let best = { x, y, score: siteScore(s, x, y) };
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (!tileAt(s, nx, ny)) continue;
-        const score = siteScore(s, nx, ny) - distance(x, y, nx, ny) * 1.2;
-        if (score > best.score) best = { x: nx, y: ny, score };
-      }
+    const within = grid.withinOffsets(x, y, radius);
+    for (let k = 0; k < within.length; k += 2) {
+      const nx = x + within[k];
+      const ny = y + within[k + 1];
+      if (!tileAt(s, nx, ny)) continue;
+      const score = siteScore(s, nx, ny) - grid.distance(x, y, nx, ny) * 1.2;
+      if (score > best.score) best = { x: nx, y: ny, score };
     }
     if (best.score > 15) {
       if (best.x === x && best.y === y) {

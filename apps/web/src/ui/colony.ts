@@ -10,6 +10,7 @@ import {
   colonyWorkers,
   foodToGrow,
   GOOD_DEFS,
+  gridOf,
   goodsOf,
   hurryPrice,
   isCarrier,
@@ -144,36 +145,39 @@ export class ColonyScreen implements Screen {
     this.landRenderer.render(scene);
 
     const cells: HTMLElement[] = [];
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const x = colony.x + dx;
-        const y = colony.y + dy;
-        const tile = tileAt(s, x, y);
-        const style = `left:${(dx + 1) * TILE}px;top:${(dy + 1) * TILE}px;width:${TILE}px;height:${TILE}px`;
-        if (!tile) {
-          cells.push(h('div', { class: 'cell off', style }));
-          continue;
-        }
-        if (dx === 0 && dy === 0) {
-          const out = centreProduction(s, colony);
-          cells.push(h('div', { class: 'cell centre', style, title: `${tileDescription(tile)} (colony square)` },
-            h('div', { class: 'yields' }, (Object.entries(out) as [GoodId, number][]).map(([g, n]) => h('span', { class: 'yield' }, icon({ kind: 'product', product: g }, 18), n)))));
-          continue;
-        }
-        const worker = colonyWorkers(s, colony).find((w) => w.loc.kind === 'colony' && w.loc.job.kind === 'tile' && w.loc.job.x === x && w.loc.job.y === y);
-        const other = !worker && Object.values(s.units).some((u) => u.loc.kind === 'colony' && u.loc.job.kind === 'tile' && u.loc.job.x === x && u.loc.job.y === y);
-        const settlement = Object.values(s.settlements).some((st) => st.x === x && st.y === y);
-        const native = nativeLandOwner(s, x, y);
-        const job = worker?.loc.kind === 'colony' ? (worker.loc.job as Extract<Job, { kind: 'tile' }>) : undefined;
-        cells.push(h('button', {
-          class: `cell${worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}${native ? ' native' : ''}`,
-          style,
-          title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : native ? ` (land of the ${TRIBES[native.tribe].name})` : ''}`,
-          onclick: () => this.clickTile(colony, x, y, worker),
-        },
-        worker ? icon({ kind: 'unit', type: worker.type, role: 'none', color: nationOf(this.app.state, worker.owner).color }, 40, unitName(worker)) : null,
-        job ? h('span', { class: 'yield' }, icon({ kind: 'product', product: job.good }, 18), workers[worker!.id] ?? 0) : null));
+    // The colony's tile and its work area, row by row, laid out as the 3 × 3 square they are on squares.
+    const grid = gridOf(s);
+    const area = grid.withinOffsets(colony.x, colony.y, grid.workRadius);
+    for (let k = 0; k < area.length; k += 2) {
+      const dx = area[k];
+      const dy = area[k + 1];
+      const x = colony.x + dx;
+      const y = colony.y + dy;
+      const tile = tileAt(s, x, y);
+      const style = `left:${(dx + 1) * TILE}px;top:${(dy + 1) * TILE}px;width:${TILE}px;height:${TILE}px`;
+      if (!tile) {
+        cells.push(h('div', { class: 'cell off', style }));
+        continue;
       }
+      if (dx === 0 && dy === 0) {
+        const out = centreProduction(s, colony);
+        cells.push(h('div', { class: 'cell centre', style, title: `${tileDescription(tile)} (colony square)` },
+          h('div', { class: 'yields' }, (Object.entries(out) as [GoodId, number][]).map(([g, n]) => h('span', { class: 'yield' }, icon({ kind: 'product', product: g }, 18), n)))));
+        continue;
+      }
+      const worker = colonyWorkers(s, colony).find((w) => w.loc.kind === 'colony' && w.loc.job.kind === 'tile' && w.loc.job.x === x && w.loc.job.y === y);
+      const other = !worker && Object.values(s.units).some((u) => u.loc.kind === 'colony' && u.loc.job.kind === 'tile' && u.loc.job.x === x && u.loc.job.y === y);
+      const settlement = Object.values(s.settlements).some((st) => st.x === x && st.y === y);
+      const native = nativeLandOwner(s, x, y);
+      const job = worker?.loc.kind === 'colony' ? (worker.loc.job as Extract<Job, { kind: 'tile' }>) : undefined;
+      cells.push(h('button', {
+        class: `cell${worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}${native ? ' native' : ''}`,
+        style,
+        title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : native ? ` (land of the ${TRIBES[native.tribe].name})` : ''}`,
+        onclick: () => this.clickTile(colony, x, y, worker),
+      },
+      worker ? icon({ kind: 'unit', type: worker.type, role: 'none', color: nationOf(this.app.state, worker.owner).color }, 40, unitName(worker)) : null,
+      job ? h('span', { class: 'yield' }, icon({ kind: 'product', product: job.good }, 18), workers[worker!.id] ?? 0) : null));
     }
     return h('div', { class: 'card land' }, h('h3', null, 'Fields'), h('div', { class: 'land-wrap', style: `width:${TILE * 3}px;height:${TILE * 3}px` }, this.landCanvas, cells));
   }

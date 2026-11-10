@@ -6,7 +6,7 @@ import {
   createGame,
   createUnit,
   deserialize,
-  distance,
+  SQUARE,
   foundColony,
   isWater,
   migrate,
@@ -133,7 +133,7 @@ describe('natives', () => {
   it('turns furious tribes hostile and lets them raid', () => {
     const s = game();
     const c = colony(s);
-    const st = Object.values(s.settlements).sort((a, b) => distance(a.x, a.y, c.x, c.y) - distance(b.x, b.y, c.x, c.y))[0];
+    const st = Object.values(s.settlements).sort((a, b) => SQUARE.distance(a.x, a.y, c.x, c.y) - SQUARE.distance(b.x, b.y, c.x, c.y))[0];
     st.x = c.x + 3 < s.map.width ? c.x + 3 : c.x - 3;
     st.tension.england = 1000;
     c.goods.furs = 100;

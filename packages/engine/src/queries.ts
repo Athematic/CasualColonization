@@ -5,28 +5,10 @@ import { FOREST_DEFENCE, TERRAIN, type TerrainDef } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeDef } from './rules/units.js';
 import type { Colony, GameState, Player, Settlement, Tile, Unit, UnitLocation } from './types.js';
 import type { UnitTypeId } from './rules/units.js';
+import { gridOf } from './grid.js';
 import { goodsOf } from './scenarios/index.js';
 import { modifiers } from './scenarios/modifiers.js';
 import { addUnit, indexedColonyAt, indexedColonyPopulation, indexedColonyWorkers, indexedTileWorker, indexedUnitsAboard, indexedUnitsAt } from './unitindex.js';
-
-export const DIRECTIONS = [
-  { id: 'n', dx: 0, dy: -1 },
-  { id: 'ne', dx: 1, dy: -1 },
-  { id: 'e', dx: 1, dy: 0 },
-  { id: 'se', dx: 1, dy: 1 },
-  { id: 's', dx: 0, dy: 1 },
-  { id: 'sw', dx: -1, dy: 1 },
-  { id: 'w', dx: -1, dy: 0 },
-  { id: 'nw', dx: -1, dy: -1 },
-] as const;
-
-export type Direction = (typeof DIRECTIONS)[number]['id'];
-
-export function dirOffset(dir: Direction): { dx: number; dy: number } {
-  const d = DIRECTIONS.find((d) => d.id === dir);
-  if (!d) throw new Error(`Unknown direction ${dir}`);
-  return d;
-}
 
 export function inBounds(s: GameState, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < s.map.width && y < s.map.height;
@@ -59,22 +41,20 @@ export function tileDefence(tile: Tile): number {
   return tile.f ? FOREST_DEFENCE : TERRAIN[tile.t].defence;
 }
 
-export function distance(ax: number, ay: number, bx: number, by: number): number {
-  return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+/** The tile's neighbours on the map, in the grid's direction order (grid.ts). */
+export function neighbours(s: GameState, x: number, y: number): { x: number; y: number }[] {
+  return gridOf(s).neighbours(s.map, x, y);
 }
 
-export function neighbours(s: GameState, x: number, y: number): { x: number; y: number }[] {
-  const out: { x: number; y: number }[] = [];
-  for (const d of DIRECTIONS) {
-    const nx = x + d.dx;
-    const ny = y + d.dy;
-    if (inBounds(s, nx, ny)) out.push({ x: nx, y: ny });
-  }
-  return out;
+/** The work area on the map of a colony on this tile, its own tile left out (grid.ts). */
+export function workArea(s: GameState, x: number, y: number): { x: number; y: number }[] {
+  return gridOf(s).workArea(s.map, x, y);
 }
 
 export function isCoastal(s: GameState, x: number, y: number): boolean {
-  return neighbours(s, x, y).some((p) => isWater(tileAt(s, p.x, p.y)));
+  const near = gridOf(s).neighbourOffsets(x, y);
+  for (let k = 0; k < near.length; k += 2) if (isWater(tileAt(s, x + near[k], y + near[k + 1]))) return true;
+  return false;
 }
 
 export function player(s: GameState, id: NationId): Player {
@@ -208,12 +188,11 @@ export function sightRadius(u: Unit, s: GameState): number {
 
 export function reveal(s: GameState, nation: NationId, x: number, y: number, radius: number): void {
   const p = player(s, nation);
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (inBounds(s, nx, ny)) p.explored[ny * s.map.width + nx] = 1;
-    }
+  const within = gridOf(s).withinOffsets(x, y, radius);
+  for (let k = 0; k < within.length; k += 2) {
+    const nx = x + within[k];
+    const ny = y + within[k + 1];
+    if (inBounds(s, nx, ny)) p.explored[ny * s.map.width + nx] = 1;
   }
 }
 
@@ -223,7 +202,8 @@ export function tileWorkedBy(s: GameState, x: number, y: number): Unit | undefin
 }
 
 export function colonyOwningTile(s: GameState, x: number, y: number): Colony | undefined {
-  return Object.values(s.colonies).find((c) => distance(c.x, c.y, x, y) <= 1);
+  const grid = gridOf(s);
+  return Object.values(s.colonies).find((c) => grid.distance(c.x, c.y, x, y) <= grid.workRadius);
 }
 
 export function buildingWorkers(s: GameState, colony: Colony, kind: keyof typeof BUILDINGS): Unit[] {

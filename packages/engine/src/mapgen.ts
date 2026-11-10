@@ -5,6 +5,7 @@ import type { UnitTypeId } from './rules/units.js';
 import { FIRST_BRAVE_AFTER } from './rules/natives.js';
 import { random, randInt, pick } from './rng.js';
 import { generateRivers } from './rivers.js';
+import { gridIn, SQUARE, type Grid } from './grid.js';
 import type { GameMap, MapSize, Settlement, Tile } from './types.js';
 import { AMERICAS, AMERICAS_GENERATOR } from './scenarios/americas.js';
 import { peopleIn, settlementKindIn } from './scenarios/index.js';
@@ -73,6 +74,7 @@ export function generateMap(rng: { rng: number }, size: MapSize, scenario: Scena
   const gen = scenario.map.generator;
   if (!gen) throw new Error(`${scenario.name} has no generated maps.`);
   const { width, height } = gen.sizes[size];
+  const grid = gridIn(scenario);
   const land = octaves(rng, width, height, gen.noise.land);
   const heat = octaves(rng, width, height, gen.noise.heat);
   const wet = octaves(rng, width, height, gen.noise.wet);
@@ -115,12 +117,11 @@ export function generateMap(rng: { rng: number }, size: MapSize, scenario: Scena
 
   const idx = (x: number, y: number) => y * width + x;
   const landNear = (x: number, y: number, r: number) => {
-    for (let dy = -r; dy <= r; dy++) {
-      for (let dx = -r; dx <= r; dx++) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx >= 0 && ny >= 0 && nx < width && ny < height && isLand[idx(nx, ny)]) return true;
-      }
+    const within = grid.withinOffsets(x, y, r);
+    for (let k = 0; k < within.length; k += 2) {
+      const nx = x + within[k];
+      const ny = y + within[k + 1];
+      if (nx >= 0 && ny >= 0 && nx < width && ny < height && isLand[idx(nx, ny)]) return true;
     }
     return false;
   };
@@ -142,8 +143,8 @@ export function generateMap(rng: { rng: number }, size: MapSize, scenario: Scena
   const map = { width, height, tiles };
   // Rivers draw on their own generator, seeded from this one without advancing it, so the rest of
   // the world (bonuses, rumours, settlements) stays what the seed has always made.
-  generateRivers({ rng: (rng.rng ^ 0x2c1b3c6d) | 0 }, map, elev, wet);
-  sprinkleExtras(rng, map, scenario.map.extras);
+  generateRivers({ rng: (rng.rng ^ 0x2c1b3c6d) | 0 }, map, elev, wet, grid);
+  sprinkleExtras(rng, map, scenario.map.extras, grid);
   const settlements = placeSettlements(rng, tiles, width, height, scenario, gen.peoples);
   for (const st of settlements) {
     const tile = tiles[idx(st.x, st.y)];
@@ -165,15 +166,14 @@ export function entryPoints(map: GameMap, n: number, rows: [number, number] = [0
 }
 
 /** Scatters bonus resources (on land and on coastal ocean) and Lost City Rumours, at the scenario's odds. */
-export function sprinkleExtras(rng: { rng: number }, map: GameMap, extras: MapExtras = AMERICAS.map.extras): void {
+export function sprinkleExtras(rng: { rng: number }, map: GameMap, extras: MapExtras = AMERICAS.map.extras, grid: Grid = SQUARE): void {
   const { width, height, tiles } = map;
   const landNear = (x: number, y: number) => {
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx >= 0 && ny >= 0 && nx < width && ny < height && !TERRAIN[tiles[ny * width + nx].t].water) return true;
-      }
+    const within = grid.withinOffsets(x, y, 1);
+    for (let k = 0; k < within.length; k += 2) {
+      const nx = x + within[k];
+      const ny = y + within[k + 1];
+      if (nx >= 0 && ny >= 0 && nx < width && ny < height && !TERRAIN[tiles[ny * width + nx].t].water) return true;
     }
     return false;
   };
@@ -213,6 +213,7 @@ export function settlementGround(scenario: Scenario, t: TerrainId): boolean {
 function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, height: number, scenario: Scenario, rules: GeneratorSettings['peoples']): Settlement[] {
   const peoples = scenario.peoples.ids;
   const { spacing } = scenario.map.settlements;
+  const grid = gridIn(scenario);
   const edge = rules.edgeRows;
   const candidates: { x: number; y: number }[] = [];
   for (let y = edge; y < height - edge; y++) {
@@ -230,7 +231,7 @@ function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, he
   const capitals = new Set<TribeId>();
   for (const c of candidates) {
     if (placed.length >= target) break;
-    if (placed.some((p) => Math.max(Math.abs(p.x - c.x), Math.abs(p.y - c.y)) < spacing)) continue;
+    if (placed.some((p) => grid.distance(p.x, p.y, c.x, c.y) < spacing)) continue;
     const band = Math.min(peoples.length - 1, Math.floor(((c.y - edge) / (height - 2 * edge)) * peoples.length));
     const tribe = peoples[band];
     const capital = !capitals.has(tribe);

@@ -2,10 +2,11 @@
  * Native affairs for the advanced computer levels: buying goods from settlements with wagon
  * trains (see logistics.ts), and Combative's missionaries inciting tribes against its enemies.
  */
+import { gridOf } from '../grid.js';
 import { nativeUnitPrice, settlementForSale } from '../braves.js';
 import { sellPrice } from '../europe.js';
 import { buyFromSettlement, incitePrice, inciteTribe, tensionOf } from '../natives.js';
-import { cargoRoomFor, distance, isCoastal } from '../queries.js';
+import { cargoRoomFor, isCoastal } from '../queries.js';
 import { TENSION } from '../rules/natives.js';
 import type { NationId } from '../rules/nations.js';
 import type { GameState, Player, Settlement, Unit } from '../types.js';
@@ -49,6 +50,7 @@ export function buyFromNatives(s: GameState, p: Player, wagon: Unit, st: Settlem
  * European enemy with a colony nearby, at most once every INCITE_EVERY turns, with gold to spare.
  */
 export function maybeIncite(s: GameState, p: Player, u: Unit, st: Settlement, prof: AiProfile): boolean {
+  const grid = gridOf(s);
   if (prof.aggression < 1 || prof.adaptive) return false;
   const memory = (p.aiMemory = p.aiMemory ?? {});
   if (memory.lastIncite !== undefined && s.turn - memory.lastIncite < INCITE_EVERY) return false;
@@ -57,7 +59,7 @@ export function maybeIncite(s: GameState, p: Player, u: Unit, st: Settlement, pr
   if (p.gold < price + prof.reserve + 1000) return false;
   const tribe = s.tribes.find((t) => t.id === st.tribe)!;
   const enemy = (Object.keys(p.stance) as NationId[]).find(
-    (n) => n !== 'crown' && p.stance[n] === 'war' && tribe.stance[n] !== 'war' && Object.values(s.colonies).some((c) => c.owner === n && distance(c.x, c.y, st.x, st.y) <= 6),
+    (n) => n !== 'crown' && p.stance[n] === 'war' && tribe.stance[n] !== 'war' && Object.values(s.colonies).some((c) => c.owner === n && grid.distance(c.x, c.y, st.x, st.y) <= 6),
   );
   if (!enemy) return false;
   let ok = false;

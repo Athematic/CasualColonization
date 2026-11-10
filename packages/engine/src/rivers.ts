@@ -8,14 +8,17 @@
  *   production.ts), and a colony built on a river gets the bonus on its centre tile.
  *
  * A tile stores its river's size and a bit mask of the neighbours the river runs to (`rd`, bits in
- * `DIRECTIONS` order). The mask makes the course unambiguous where two rivers run side by side,
- * lets renderers draw smooth curves, and marks the mouth with a bit towards the water.
+ * the square grid's direction order, grid.ts). The mask makes the course unambiguous where two
+ * rivers run side by side, lets renderers draw smooth curves, and marks the mouth with a bit
+ * towards the water. The mask, the courses and the stored maps' river lines are square-only: rivers
+ * on other grids run along tile edges (docs/ROADMAP.md, hex maps step 3).
  */
+import { SQUARE, type Grid } from './grid.js';
 import { random } from './rng.js';
 import { TERRAIN } from './rules/terrain.js';
 import type { GameMap, Tile } from './types.js';
 
-/** Neighbour offsets in `DIRECTIONS` order: n, ne, e, se, s, sw, w, nw. */
+/** Neighbour offsets in the square grid's direction order (grid.ts `SQUARE`): n, ne, e, se, s, sw, w, nw. */
 export const RIVER_DIRS: readonly [number, number][] = [
   [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1],
 ];
@@ -127,7 +130,7 @@ export const MAJOR_RIVER_LENGTH = 9;
  * highlands, follow that drainage downhill and merge where they meet; a river grows into a major
  * river once MAJOR_RIVER_LENGTH river tiles drain through it. Deterministic from `rng`.
  */
-export function generateRivers(rng: { rng: number }, map: GameMap, height: (x: number, y: number) => number, wetness: (x: number, y: number) => number): void {
+export function generateRivers(rng: { rng: number }, map: GameMap, height: (x: number, y: number) => number, wetness: (x: number, y: number) => number, grid: Grid = SQUARE): void {
   const { width, height: rows, tiles } = map;
   const n = width * rows;
   const land = (i: number) => !water(tiles[i]);
@@ -230,12 +233,12 @@ export function generateRivers(rng: { rng: number }, map: GameMap, height: (x: n
   const near = (i: number, r: number) => {
     const x = i % width;
     const y = (i - x) / width;
-    for (let dy = -r; dy <= r; dy++)
-      for (let dx = -r; dx <= r; dx++) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx >= 0 && ny >= 0 && nx < width && ny < rows && onRiver[ny * width + nx]) return true;
-      }
+    const within = grid.withinOffsets(x, y, r);
+    for (let k = 0; k < within.length; k += 2) {
+      const nx = x + within[k];
+      const ny = y + within[k + 1];
+      if (nx >= 0 && ny >= 0 && nx < width && ny < rows && onRiver[ny * width + nx]) return true;
+    }
     return false;
   };
   const flow = new Int32Array(n);

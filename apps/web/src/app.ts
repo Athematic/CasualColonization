@@ -9,8 +9,7 @@ import {
   charterCost,
   colonyAt,
   describeMove,
-  DIRECTIONS,
-  distance,
+  gridOf,
   findPath,
   formatDate,
   Game,
@@ -413,7 +412,7 @@ export class App {
   private hoverIsFar(): boolean {
     const u = this.selectedUnit();
     const pos = u && unitPosition(this.state, u);
-    return !!pos && !!this.hover && distance(pos.x, pos.y, this.hover.x, this.hover.y) > 1;
+    return !!pos && !!this.hover && gridOf(this.state).distance(pos.x, pos.y, this.hover.x, this.hover.y) > 1;
   }
 
   private draw(): void {
@@ -998,7 +997,7 @@ export class App {
     }
     const u = this.selectedUnit();
     const pos = u && unitPosition(s, u);
-    const adjacent = !!pos && distance(pos.x, pos.y, t.x, t.y) === 1;
+    const adjacent = !!pos && gridOf(s).distance(pos.x, pos.y, t.x, t.y) === 1;
     if (u && pos && this.roadToMode && this.isMyTurn()) {
       this.roadToMode = false;
       if (this.dispatch({ type: 'roadTo', unitId: u.id, x: t.x, y: t.y }, true)) this.afterUnitAction();
@@ -1032,7 +1031,7 @@ export class App {
   }
 
   private dirTo(a: Point, b: Point): Direction {
-    return DIRECTIONS.find((d) => d.dx === Math.sign(b.x - a.x) && d.dy === Math.sign(b.y - a.y))!.id;
+    return gridOf(this.state).directionTowards(a.x, a.y, b.x, b.y)!;
   }
 
   private onKey(e: KeyboardEvent): void {

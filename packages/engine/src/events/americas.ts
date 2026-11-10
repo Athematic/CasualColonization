@@ -6,7 +6,7 @@
  * epidemics that devastated Indigenous peoples, or of violence for flavour.
  */
 import { buyPrice } from '../europe.js';
-import { colonyWorkers, isWater, neighbours, player, tileAt } from '../queries.js';
+import { colonyWorkers, isWater, player, tileAt, workArea } from '../queries.js';
 import type { GoodId } from '../rules/goods.js';
 import { TERRAIN } from '../rules/terrain.js';
 import type { UnitTypeId } from '../rules/units.js';
@@ -204,7 +204,7 @@ const SKILLED: UnitTypeId[] = ['expertFarmer', 'expertFisherman', 'expertLumberj
 
 /** Whether a tile next to the colony could get a bonus resource. */
 const hasFindSpot = (s: GameState, c: { x: number; y: number }) =>
-  neighbours(s, c.x, c.y).some(({ x, y }) => {
+  workArea(s, c.x, c.y).some(({ x, y }) => {
     const t = tileAt(s, x, y);
     return !!t && !isWater(t) && !t.b && !t.f && !!TERRAIN[t.t].bonusGood;
   });
