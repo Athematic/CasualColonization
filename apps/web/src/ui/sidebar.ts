@@ -263,10 +263,24 @@ export class Sidebar {
         h('button', { class: 'btn small', onclick: () => app.openReports(), title: 'Advisor reports (A, or F1–F8)' }, 'Reports…'),
         h('button', { class: 'btn small', onclick: () => app.openCheats(), title: 'Cheats for testing (Ctrl+Shift+C)' }, 'Cheats…')),
       this.difficultyLine(),
+      this.eventSwitches(),
       app.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used')) : null,
       h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · D foreign affairs · H progress graphs · A or F1–F8 reports · T trade routes · Enter end turn · Right-click or Shift-click to send a unit.'));
     details.addEventListener('toggle', () => (this.menuOpen = details.open));
     return details;
+  }
+
+  /** Switches for historical and random events; each change is a `setEvents` command, so it replays. */
+  private eventSwitches(): HTMLElement {
+    const app = this.app;
+    const cfg = app.state.config;
+    const toggle = (label: string, note: string, on: boolean, cmd: (on: boolean) => { historical?: boolean; random?: boolean }) =>
+      h('label', { class: 'check small', title: note },
+        h('input', { type: 'checkbox', checked: on || undefined, onchange: (e: Event) => { app.dispatch({ type: 'setEvents', ...cmd((e.target as HTMLInputElement).checked) }); app.requestRender(); } }),
+        ' ', label);
+    return h('div', { class: 'row wrap event-switches' },
+      toggle('Historical events', 'Dated events from the period: wars in Europe, the Great Frost, famous voyages, financial bubbles.', !!cfg.historicalEvents, (on) => ({ historical: on })),
+      toggle('Random events', 'Storms, fires, bumper harvests, gold fever, pirates and other surprises.', !!cfg.randomEvents, (on) => ({ random: on })));
   }
 
   private difficultyLine(): HTMLElement {

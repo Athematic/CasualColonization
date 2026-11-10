@@ -1,6 +1,6 @@
 # Design note: Events
 
-Status: **in progress (0.6)**. Engine in `packages/engine/src/events/`.
+Status: **done (0.6)**: framework and starter set. Engine in `packages/engine/src/events/`.
 
 ## Goal
 A living world: dated **historical events** from the period, and **random events** in the Sim City spirit (storms, fires, bumper harvests). Both are switched on or off per game, and can be toggled during play. Events are data, so a scenario can later bring its own set (see [scenarios.md](scenarios.md)).
@@ -22,7 +22,7 @@ An **event definition** (`EventDef`, `events/types.ts`) is a plain object:
 | `choices` | Optional. Each has a label and effects; a choice with a gold `cost` is offered only when it can be paid. |
 | `endText` | Message when a temporary modifier the event set runs out. |
 
-**Effects** are tagged data (`events/effects.ts`): gold, goods in a colony, a production modifier for N turns (a colony or the whole nation; any products, bells included), native tension with a tribe, prices in the home port, crosses (immigration), tax, a unit gained (in a colony or on the docks), a ship laid up with cargo lost, a building damaged, goods lost, a new bonus resource, a chance (a sub-list applied with probability p) and a follow-up event N turns later. Numbers may name a variable (`'$cost'`).
+**Effects** are tagged data (`events/effects.ts`): gold, goods in a colony, a production modifier for N turns (a colony or the whole nation; any products, bells included), native tension with a tribe, prices in the home port, crosses (immigration), tax, a unit gained (in a colony or on the docks), a ship laid up with cargo lost, a building damaged, goods lost, a new bonus resource, a chance (a sub-list applied with probability p) and a follow-up event N turns later (it picks its own target again then). Numbers may name a variable (`'$cost'`). A production modifier runs for N rounds of production: from the next turn when the event fires at the end of a round, from the current turn when a person's answer sets it.
 
 **Historical** events are world events: when one fires, every European nation still loyal to the Crown gets its own target and, if the event has choices, its own choice. They are public history. **Random** events strike one nation: each round, each nation has `RANDOM_EVENT_RATE` (4%) chance of one, picked by weight among the events that have a target and are off cooldown. They are that nation's secret history.
 

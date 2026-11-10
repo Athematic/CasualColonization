@@ -25,7 +25,7 @@ function showLanding(): void {
     resume: resumeGame,
     newGame: showMenu,
     quickGame: () =>
-      startGame({ seed: randomSeed(), mapSize: 'medium', nations: ['england', 'france', 'netherlands', 'spain'], humans: ['england'], ai: { france: 'competent', netherlands: 'competent', spain: 'competent' } }),
+      startGame({ seed: randomSeed(), mapSize: 'medium', nations: ['england', 'france', 'netherlands', 'spain'], humans: ['england'], ai: { france: 'competent', netherlands: 'competent', spain: 'competent' }, historicalEvents: true, randomEvents: true }),
     watch: () =>
       startGame({ seed: randomSeed(), mapSize: 'medium', nations: ['england', 'france', 'netherlands', 'spain'], humans: [], ai: { england: 'naive', france: 'competent', netherlands: 'combative', spain: 'creative' } }),
     load: async () => {

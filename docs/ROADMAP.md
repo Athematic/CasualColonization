@@ -68,9 +68,9 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Event framework: seeded, toggleable from the Game menu, off in tournaments by default | M | P1 | idea |
-| Historical events (a starter set) | M | P1 | idea |
-| Random events in the Sim City spirit (a starter set) | M | P1 | idea |
+| Event framework: seeded, toggleable from the Game menu, off in tournaments by default | M | P1 | done (`events/`, [design note](design/events.md); own seeded stream, `setEvents` command, `--events` for tournaments) |
+| Historical events (a starter set) | M | P1 | done (9 events, 1522–1763) |
+| Random events in the Sim City spirit (a starter set) | M | P1 | done (12 events, 7 with a choice) |
 | Roads in the Civilization II style: auto-road along a path, later railroads | M | P3 | idea, needs scoping |
 | Rivers and roads meander a little instead of running straight between tile centres (drawn, with a fixed wobble per tile, so they don't move between frames) | S | P1 | in progress |
 | Title screen: add the new box covers once generated (F–K for the Americas; L–M and N–O later, with their scenarios) | S | P2 | planned |
