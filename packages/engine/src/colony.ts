@@ -146,9 +146,32 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
 /** All jobs open to a unit in a colony, with the amount it would produce. */
 export function jobOptions(s: GameState, colony: Colony, u: Unit): { job: Job; amount: number }[] {
   const out: { job: Job; amount: number }[] = [];
-  const bonus = libertyBonus(s, colony);
-  for (const p of neighbours(s, colony.x, colony.y)) {
-    const worker = tileWorkedBy(s, p.x, p.y);
+  const tiles = neighbours(s, colony.x, colony.y);
+  // One pass over the units (a hot path for the computer players): who works each nearby tile
+  // (the first found, as tileWorkedBy), and how many others work in each of this colony's
+  // buildings. The colony's own size gives the liberty bonus.
+  const w = s.map.width;
+  const near = new Set<number>();
+  for (const p of tiles) near.add(p.y * w + p.x);
+  const worked = new Map<number, Unit>();
+  const inBuilding = new Map<string, number>();
+  let pop = 0;
+  for (const id in s.units) {
+    const v = s.units[id];
+    if (v.loc.kind !== 'colony') continue;
+    const job = v.loc.job;
+    if (v.loc.colonyId === colony.id) {
+      pop++;
+      if (job.kind === 'building' && v.id !== u.id) inBuilding.set(job.building, (inBuilding.get(job.building) ?? 0) + 1);
+    }
+    if (job.kind === 'tile') {
+      const i = job.y * w + job.x;
+      if (near.has(i) && !worked.has(i)) worked.set(i, v);
+    }
+  }
+  const bonus = libertyBonus(s, colony, pop);
+  for (const p of tiles) {
+    const worker = worked.get(p.y * w + p.x);
     if (worker && worker.id !== u.id) continue;
     if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y) || nativeLandOwner(s, p.x, p.y)) continue;
     for (const g of GOODS) {
@@ -159,10 +182,7 @@ export function jobOptions(s: GameState, colony: Colony, u: Unit): { job: Job; a
   for (const kind of BUILDING_ORDER) {
     const def = BUILDINGS[kind];
     if (def.workplaces === 0 || colony.buildings[kind] === 0 || !def.output) continue;
-    const here = colonyWorkers(s, colony).filter(
-      (w) => w.id !== u.id && w.loc.kind === 'colony' && w.loc.job.kind === 'building' && w.loc.job.building === kind,
-    );
-    if (here.length >= def.workplaces) continue;
+    if ((inBuilding.get(kind) ?? 0) >= def.workplaces) continue;
     out.push({ job: { kind: 'building', building: kind }, amount: buildingCapacityPerWorker(s, colony, kind, u.type, bonus) });
   }
   if (canTeachHere(s, colony, u, u.id)) out.push({ job: { kind: 'building', building: 'schoolhouse' }, amount: 0 });

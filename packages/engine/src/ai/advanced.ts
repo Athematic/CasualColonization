@@ -303,9 +303,8 @@ function currentValue(p: Player, c: Colony, u: Unit, report: ColonyReport, prof:
   return jobValueFor(p, c, u, job, amount, report, prof, sol);
 }
 
-function bestJobFor(s: GameState, p: Player, c: Colony, u: Unit, prof: AiProfile): { job: Job; value: number } | null {
-  const report = colonyReport(s, c);
-  const sol = sonsOfLiberty(s, c);
+/** `report` and `sol` are the colony's current report and Sons of Liberty share. */
+function bestJobFor(s: GameState, p: Player, c: Colony, u: Unit, prof: AiProfile, report: ColonyReport, sol: number): { job: Job; value: number } | null {
   let best: { job: Job; value: number } | null = null;
   for (const opt of jobOptions(s, c, u)) {
     const v = jobValueFor(p, c, u, opt.job, opt.amount, report, prof, sol);
@@ -318,22 +317,29 @@ function bestJobFor(s: GameState, p: Player, c: Colony, u: Unit, prof: AiProfile
 function optimiseWorkers(s: GameState, p: Player, c: Colony, prof: AiProfile): void {
   let changes = 0;
   const workers = colonyWorkers(s, c).sort((a, b) => UNIT_TYPES[b.type].skill - UNIT_TYPES[a.type].skill);
+  // The report and Sons of Liberty share only change when someone changes jobs.
+  let report = colonyReport(s, c);
+  let sol = sonsOfLiberty(s, c);
   for (const u of workers) {
     if (changes >= 3) break;
-    const report = colonyReport(s, c);
-    const now = currentValue(p, c, u, report, prof, sonsOfLiberty(s, c));
-    const best = bestJobFor(s, p, c, u, prof);
+    const now = currentValue(p, c, u, report, prof, sol);
+    const best = bestJobFor(s, p, c, u, prof, report, sol);
     if (best && best.value > now * 1.15 + 0.5) {
       assignJob(s, u.id, c.id, best.job);
       changes++;
+      report = colonyReport(s, c);
+      sol = sonsOfLiberty(s, c);
     }
   }
   // Never starve: move people onto food until the colony breaks even.
   for (const u of colonyWorkers(s, c)) {
-    if (colonyReport(s, c).net.food >= 0) break;
+    if (report.net.food >= 0) break;
     if (u.loc.kind === 'colony' && u.loc.job.kind === 'tile' && u.loc.job.good === 'food') continue;
     const food = jobOptions(s, c, u).filter((o) => o.job.kind === 'tile' && o.job.good === 'food').sort((a, b) => b.amount - a.amount)[0];
-    if (food && food.amount > 2) assignJob(s, u.id, c.id, food.job);
+    if (food && food.amount > 2) {
+      assignJob(s, u.id, c.id, food.job);
+      report = colonyReport(s, c);
+    }
   }
 }
 
