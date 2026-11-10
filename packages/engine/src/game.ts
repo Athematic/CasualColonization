@@ -112,10 +112,10 @@ export function newPlayer(s: GameState, nation: NationId, human: boolean, entry:
 function startingUnits(s: GameState, nation: NationId, at: { x: number; y: number }): void {
   const ship = createUnit(s, nation, 'caravel', { kind: 'map', x: at.x, y: at.y });
   placeOnMap(s, ship, at.x, at.y);
-  const aboard = { kind: 'carrier' as const, carrierId: ship.id };
-  const soldier = createUnit(s, nation, 'veteranSoldier', aboard);
+  const aboard = () => ({ kind: 'carrier' as const, carrierId: ship.id });
+  const soldier = createUnit(s, nation, 'veteranSoldier', aboard());
   soldier.role = 'soldier';
-  const pioneer = createUnit(s, nation, 'hardyPioneer', aboard);
+  const pioneer = createUnit(s, nation, 'hardyPioneer', aboard());
   pioneer.role = 'pioneer';
   pioneer.tools = 60;
   for (const u of [soldier, pioneer]) u.state = 'sentry';

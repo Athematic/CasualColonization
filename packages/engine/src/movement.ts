@@ -579,7 +579,8 @@ export function setDestination(s: GameState, unitId: string, dest: Unit['dest'])
   const path = dest && 'x' in dest ? findPath(s, u, dest.x, dest.y) : null;
   if (dest && 'x' in dest && !path) fail('There is no known route there.');
   delete u.roadTo;
-  u.dest = dest;
+  // A copy: callers pass tiles, jobs and goals that other parts of the state hold (see GameState).
+  u.dest = dest && { ...dest };
   u.state = 'active';
   track(u.owner, dest && 'europe' in dest ? 'cmd:gotoEurope' : 'cmd:goto');
   continueOrders(s, u, path && dest && 'x' in dest ? pathHint(u, dest, path) : undefined);
