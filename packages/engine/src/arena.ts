@@ -104,6 +104,13 @@ function emptyTally(): RelationsTally {
   return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0 };
 }
 
+/** What one event did to one nation over a game: times it fired, the choices taken (by index) and the computer players' gold value of the outcomes. */
+export interface EventTally {
+  fired: number;
+  choices: Record<number, number>;
+  value: number;
+}
+
 export interface ArenaEntry {
   game: number;
   seed: number;
@@ -137,6 +144,8 @@ export interface ArenaEntry {
   features?: FeatureCounts;
   /** Relations and trade with the other Europeans (arena games always count them). */
   relations?: RelationsTally;
+  /** Events that struck the nation, by event id (only with events on). */
+  events?: Record<string, EventTally>;
 }
 
 export interface ArenaSummary {
@@ -187,8 +196,21 @@ export function playArenaGame(
   };
   const counts = new Map<string, FeatureCounts>();
   const tallies = new Map<string, RelationsTally>();
+  const eventTallies = new Map<string, Record<string, EventTally>>();
   // The sink only counts; it never touches the game, so scores do not depend on it.
   const previous = setFeatureSink((nation, feature, n) => {
+    if (feature.startsWith('event')) {
+      // `event:<id>` a strike, `event:choice <id> <index>` a choice taken, `eventvalue <id>` its gold value.
+      const m = /^(event:choice |event:|eventvalue )(\S+)(?: (\d+))?$/.exec(feature);
+      if (m) {
+        let per = eventTallies.get(nation);
+        if (!per) eventTallies.set(nation, (per = {}));
+        const tally = (per[m[2]] ??= { fired: 0, choices: {}, value: 0 });
+        if (m[1] === 'event:choice ') tally.choices[Number(m[3])] = (tally.choices[Number(m[3])] ?? 0) + n;
+        else if (m[1] === 'eventvalue ') tally.value += n;
+        else tally.fired += n;
+      }
+    }
     const key = TALLY[feature];
     if (key) {
       let r = tallies.get(nation);
@@ -209,7 +231,7 @@ export function playArenaGame(
     setFeatureSink(previous);
   }
   const entries = line.map((l) => {
-    const e = { ...standing(s, seed, l.nation, l.level), relations: endRelations(s, l.nation, tallies.get(l.nation)) };
+    const e = { ...standing(s, seed, l.nation, l.level), relations: endRelations(s, l.nation, tallies.get(l.nation)), ...(events ? { events: eventTallies.get(l.nation) ?? {} } : {}) };
     return features ? { ...e, features: { ...counts.get(l.nation), ...endStateFeatures(s, l.nation) } } : e;
   });
   return { state: s, entries };
@@ -388,4 +410,32 @@ export function formatArena(summary: ArenaSummary[]): string {
   const cheated = summary.reduce((n, r) => n + r.cheated, 0);
   const note = cheated ? [`\nCheats used: ${cheated} of these entries come from cheated games.`] : [];
   return [head, rule, ...rows, ...note].join('\n');
+}
+
+/**
+ * A Markdown table of events (only games with events on): per event, how often it struck a nation
+ * per game, the share of its choices taken (by index), and its average gold value per strike and
+ * per game in score points (the value is the computer players' own estimate; 400 gold is taken as about one score point, as measured in docs/design/events.md).
+ */
+export const GOLD_PER_POINT = 400;
+
+export function formatEvents(entries: ArenaEntry[]): string {
+  const withEvents = entries.filter((e) => e.events);
+  if (!withEvents.length) return '';
+  const ids = [...new Set(withEvents.flatMap((e) => Object.keys(e.events!)))].sort();
+  const games = withEvents.length;
+  const round = (n: number, d = 2) => String(Math.round(n * 10 ** d) / 10 ** d);
+  const lines = ids.map((id) => {
+    const rows = withEvents.map((e) => e.events![id]).filter(Boolean);
+    const fired = rows.reduce((n, r) => n + r.fired, 0);
+    const value = rows.reduce((n, r) => n + r.value, 0);
+    const choices: Record<number, number> = {};
+    for (const r of rows) for (const [i, c] of Object.entries(r.choices)) choices[Number(i)] = (choices[Number(i)] ?? 0) + c;
+    const picks = Object.entries(choices).map(([i, c]) => `#${i} ${c}`).join(', ') || '–';
+    return { fired, text: `| ${id} | ${round(fired / games)} | ${picks} | ${fired ? Math.round(value / fired) : 0} | ${round(value / games, 1)} | ${round(value / games / GOLD_PER_POINT)} |` };
+  });
+  const total = lines.reduce((n, l) => n + l.fired, 0);
+  const head = '| Event | Per nation per game | Choices taken | Gold value per strike | per nation per game | score points (400 gold = 1) |';
+  const rule = '| --- | ---: | --- | ---: | ---: | ---: |';
+  return [`Events: ${round(total / games, 1)} per nation per game.`, '', head, rule, ...lines.map((l) => l.text)].join('\n');
 }

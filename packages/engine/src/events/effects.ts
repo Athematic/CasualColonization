@@ -14,6 +14,9 @@ import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState } from '../types.js';
 import type { Effect, EventVars, EventsState, GoodRef, Num } from './types.js';
 
+/** What a point of tax is worth to a nation over the rest of a game, in gold (measured against 30-turn outcomes in docs/design/events.md). */
+export const TAX_POINT_VALUE = 150;
+
 let roundEnd = false;
 
 /** Runs `fn` as part of the end of a round (processEvents), when this turn's production is done. */
@@ -176,6 +179,24 @@ function productionValue(s: GameState, colony: Colony, products?: ProductId[]): 
 }
 
 /**
+ * What natives' tension is worth to a nation, as a cost that grows steeply as a tribe nears
+ * anger and war (TENSION.angry 600, TENSION.war 800): from a content tribe 80 points cost about
+ * 120 gold, on an already angry one several hundred. Positive for tension taken off.
+ */
+export function tensionCost(tension: number): number {
+  return 1.5 * tension + 0.01 * Math.max(0, tension - 300) ** 2;
+}
+
+/** The gold value of changing the tension of the event's tribe towards the nation by `amount`. */
+export function tensionValue(s: GameState, v: EventVars, amount: number): number {
+  const towards = Object.values(s.settlements).filter((st) => st.tribe === v.tribe).map((st) => st.tension[v.nation] ?? 0);
+  if (!towards.length) return -amount * 1.5;
+  const mean = towards.reduce((n, t) => n + t, 0) / towards.length;
+  const after = Math.max(0, Math.min(1000, mean + amount));
+  return tensionCost(mean) - tensionCost(after);
+}
+
+/**
  * The value of effects to the nation, in gold: how the advanced computer players compare choices.
  * Rough on purpose: a few round numbers that put the effects in a sensible order.
  */
@@ -204,7 +225,7 @@ export function valueEffects(s: GameState, effects: Effect[], v: EventVars): num
         break;
       }
       case 'tension':
-        total -= e.amount * 1.5;
+        total += tensionValue(s, v, e.amount);
         break;
       case 'price': {
         const g = goodOf(e.good, v);
@@ -218,7 +239,8 @@ export function valueEffects(s: GameState, effects: Effect[], v: EventVars): num
         total += num(e.amount, v) * 4;
         break;
       case 'tax':
-        total -= e.delta * 60;
+        // A tax point lasts for the rest of the game and takes a share of every sale in Europe.
+        total -= e.delta * TAX_POINT_VALUE;
         break;
       case 'unit': {
         const type = e.type ?? v.unit;

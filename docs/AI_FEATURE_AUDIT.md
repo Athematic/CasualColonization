@@ -401,6 +401,10 @@ What the numbers say:
 
 Left to do: a war AI that concentrates troops where the royal troops land and strikes them on the beach with dragoons and artillery from neighbouring colonies; a stronger Creative economy (gifts, shipping) so it can afford the army; and longer tournaments (408 turns, to 1850) to judge declarations that come after turn 300.
 
+## Event choices (0.8)
+
+Naive takes the first choice it can afford; Competent, Combative and Creative take the one with the best gold value (`valueEffects`, `events/effects.ts`). Checked against paired runs (an event fired with each choice from the same mid-game state, 30 turns played): fire repair, pirate guards, festival gifts and the Huguenot passage were each the better choice and the advanced levels take them; wolves and fever make no measurable difference. Two valuations were wrong and are fixed: a tax point was worth too little (60, now 150 gold), so the Seven Years' War levy was refused for a lasting tax rise; and native tension was a flat 1.5 per point, so prospectors were welcomed onto the land of an angry tribe (now a cost that grows towards anger, 600, and war, 800). `npm run tournament -- --events` prints the choices taken per event. See [design/events.md](design/events.md#tuning-08).
+
 ## Colony spacing and pace (0.6)
 
 Players watching head starts saw computer nations found colonies almost in a grid, two tiles apart (sharing work tiles), and far too eagerly. The rules stay as in the original (any colonist founds; no colony next to another); only the computer players changed, together with a new rule, the colony charter (founding costs gold, see the README).
