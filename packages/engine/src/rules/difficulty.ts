@@ -67,7 +67,17 @@ export interface DifficultyRules {
   demandSize: number;
   /** Multiplier on the chance each round that the King drags the nation into a war with another European nation. */
   royalWarChance: number;
+  /** Multiplier on the price of a colony charter (COLONY_CHARTER), when the game uses the rule. */
+  colonyCharter: number;
 }
+
+/**
+ * The colony charter (`GameConfig.colonyCharter`): founding a colony costs gold paid to the Crown.
+ * The first colony is free; after that the price is `base` times the colonies the nation already
+ * has, at most `cap`, times the level's `colonyCharter` multiplier. No charter is needed once the
+ * nation has declared independence. A scenario can replace these values.
+ */
+export const COLONY_CHARTER = { base: 100, cap: 2000 };
 
 export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
   discoverer: {
@@ -93,6 +103,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     demandChance: 0.5,
     demandSize: 0.7,
     royalWarChance: 0.5,
+    colonyCharter: 0.5,
   },
   explorer: {
     name: 'Explorer',
@@ -117,6 +128,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     demandChance: 0.75,
     demandSize: 0.85,
     royalWarChance: 0.75,
+    colonyCharter: 0.75,
   },
   conquistador: {
     name: 'Conquistador',
@@ -141,6 +153,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     demandChance: 1,
     demandSize: 1,
     royalWarChance: 1,
+    colonyCharter: 1,
   },
   governor: {
     name: 'Governor',
@@ -165,6 +178,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     demandChance: 1.25,
     demandSize: 1.15,
     royalWarChance: 1.25,
+    colonyCharter: 1.25,
   },
   viceroy: {
     name: 'Viceroy',
@@ -189,6 +203,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     demandChance: 1.5,
     demandSize: 1.3,
     royalWarChance: 1.5,
+    colonyCharter: 1.5,
   },
 };
 

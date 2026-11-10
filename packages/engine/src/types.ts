@@ -1,5 +1,6 @@
 import type { AiLevel, AiMemory } from './ai/profiles.js';
 import type { CheatId } from './cheats.js';
+import type { EventsState } from './events/types.js';
 import type { BuildingKind } from './rules/buildings.js';
 import type { DifficultyId } from './rules/difficulty.js';
 import type { FatherCategory, FatherId } from './rules/fathers.js';
@@ -32,6 +33,18 @@ export interface GameConfig {
    * people's proposals). For tournaments that measure what the feature brings (`--no-favoured`).
    */
   noFavoured?: boolean;
+  /** Dated events from the period (events/, docs/design/events.md). Missing means off; the web game switches it on. */
+  historicalEvents?: boolean;
+  /** Random events in the Sim City spirit (storms, fires, bumper harvests). Missing means off. */
+  randomEvents?: boolean;
+  /** Id of the registered event set (events/index.ts); missing means 'americas'. Scenarios will set it. */
+  eventSet?: string;
+  /**
+   * Colony charter: founding a colony after the first costs gold paid to the Crown (see
+   * COLONY_CHARTER in rules/difficulty.ts and charterCost). Missing means off, so older saves and
+   * games built without it are unchanged; the web game and tournaments switch it on.
+   */
+  colonyCharter?: boolean;
 }
 
 export interface Tile {
@@ -168,6 +181,8 @@ export interface Unit {
   against?: NationId;
   /** Where the unit is going; for Europe, `port` is a Favoured Nation partner's port (missing: its own). */
   dest?: { x: number; y: number } | { europe: true; port?: NationId };
+  /** "Road to…": a pioneer roads each tile on the way to this one, then steps on (see `continueRoadTo`). Missing in older saves. */
+  roadTo?: { x: number; y: number };
   cargo?: Partial<Record<GoodId, number>>;
   /** The trade route a ship or wagon train follows, and the index of the stop it is heading for. */
   route?: { id: string; stop: number };
@@ -385,6 +400,8 @@ export interface GameState {
   history?: HistoryEntry[];
   /** Goods sold and delivered per nation, for the Trade report (see history.ts). Missing in older saves. */
   ledger?: Partial<Record<NationId, Ledger>>;
+  /** The event framework's state: fired events, temporary modifiers, pending choices (events/). Missing until first used. */
+  events?: EventsState;
 }
 
 export type HistoryKind =
@@ -401,7 +418,9 @@ export type HistoryKind =
   | 'independence'
   | 'tribe'
   /** The King's demands for gold (paid or refused) and the wars he declares (crown.ts). */
-  | 'crown';
+  | 'crown'
+  /** Historical and random events (events/). */
+  | 'event';
 
 /** One event in the game's history (see history.ts). */
 export interface HistoryEntry {

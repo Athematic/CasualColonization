@@ -16,7 +16,7 @@ import {
   train,
   unboardInEurope,
 } from './europe.js';
-import { boardShip, leaveShip, moveUnit, setDestination, startImprovement } from './movement.js';
+import { boardShip, leaveShip, moveUnit, setDestination, setRoadTo, startImprovement } from './movement.js';
 import { answerNativeDemand } from './braves.js';
 import { buyFromSettlement, buyLand, denounceMission, establishMission, giftToTribe, inciteTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
 import { chooseFather } from './fathers.js';
@@ -24,6 +24,7 @@ import { proposePeace, startWar } from './diplomacy.js';
 import { answerProposal, cancelFavoured, cancelTrade, proposeFavoured, proposeTrade } from './relations.js';
 import { declareIndependence } from './independence.js';
 import { answerDemand } from './crown.js';
+import { answerEvent, setEvents } from './events/index.js';
 import type { FatherId } from './rules/fathers.js';
 import { cargoRoomFor, colonyAt, currentPlayer, type Direction } from './queries.js';
 import type { GoodId } from './rules/goods.js';
@@ -36,6 +37,7 @@ import type { BuildTarget, GameState, ImprovementKind, Job, RouteStop } from './
 export type Command =
   | { type: 'move'; unitId: string; dir: Direction }
   | { type: 'goto'; unitId: string; x: number; y: number }
+  | { type: 'roadTo'; unitId: string; x: number; y: number }
   /** `port`: a Favoured Nation partner's home port to sail to; missing means the ship's own. */
   | { type: 'gotoEurope'; unitId: string; port?: NationId }
   | { type: 'clearOrders'; unitId: string }
@@ -82,6 +84,10 @@ export type Command =
   | { type: 'answerTax'; accept: boolean }
   /** Pays (or refuses) the King's demand for gold. */
   | { type: 'answerDemand'; pay: boolean }
+  /** Answers a pending event (events/): `choice` is the index of the choice taken. */
+  | { type: 'answerEvent'; eventId: string; choice: number }
+  /** Switches historical and/or random events on or off for the rest of the game. */
+  | { type: 'setEvents'; historical?: boolean; random?: boolean }
   | { type: 'payArrears'; good: GoodId }
   | { type: 'setExport'; colonyId: string; good: GoodId; on: boolean }
   | { type: 'declareWar'; nation: NationId }
@@ -153,12 +159,16 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
     if (DIRECT_COMMANDS.has(cmd.type)) track(nation, `cmd:${cmd.type}`);
     switch (cmd.type) {
       case 'move':
-        ownUnit(s, nation, cmd.unitId);
+        delete ownUnit(s, nation, cmd.unitId).roadTo;
         moveUnit(s, cmd.unitId, cmd.dir);
         break;
       case 'goto':
         ownUnit(s, nation, cmd.unitId);
         setDestination(s, cmd.unitId, { x: cmd.x, y: cmd.y });
+        break;
+      case 'roadTo':
+        ownUnit(s, nation, cmd.unitId);
+        setRoadTo(s, cmd.unitId, cmd.x, cmd.y);
         break;
       case 'gotoEurope':
         ownUnit(s, nation, cmd.unitId);
@@ -167,6 +177,7 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
       case 'clearOrders': {
         const u = ownUnit(s, nation, cmd.unitId);
         delete u.dest;
+        delete u.roadTo;
         delete u.work;
         delete u.route;
         u.state = 'active';
@@ -212,12 +223,14 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         u.state = 'fortified';
         u.moves = 0;
         delete u.dest;
+        delete u.roadTo;
         break;
       }
       case 'sentry': {
         const u = ownUnit(s, nation, cmd.unitId);
         u.state = 'sentry';
         delete u.dest;
+        delete u.roadTo;
         break;
       }
       case 'activate': {
@@ -231,7 +244,7 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       }
       case 'improve':
-        ownUnit(s, nation, cmd.unitId);
+        delete ownUnit(s, nation, cmd.unitId).roadTo;
         startImprovement(s, cmd.unitId, cmd.kind);
         break;
       case 'assignJob':
@@ -329,6 +342,12 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'answerDemand':
         text = answerDemand(s, nation, cmd.pay);
+        break;
+      case 'answerEvent':
+        text = answerEvent(s, nation, cmd.eventId, cmd.choice);
+        break;
+      case 'setEvents':
+        text = setEvents(s, { historical: cmd.historical, random: cmd.random });
         break;
       case 'payArrears':
         payArrears(s, nation, cmd.good);

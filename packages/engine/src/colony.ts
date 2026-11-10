@@ -24,7 +24,8 @@ import {
 } from './queries.js';
 import { BUILDINGS, BUILDING_ORDER, SCHOOL_TEACHERS, TEACH_TURNS, type BuildingKind } from './rules/buildings.js';
 import { GOOD_DEFS, GOODS, emptyGoods, type GoodId } from './rules/goods.js';
-import { NATIONS, TRIBES } from './rules/nations.js';
+import { COLONY_CHARTER, difficultyRules } from './rules/difficulty.js';
+import { NATIONS, TRIBES, type NationId } from './rules/nations.js';
 import { COLONY_BUILDS, PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
 import { runCustomHouse } from './europe.js';
 import { hasFather } from './fathers.js';
@@ -36,7 +37,25 @@ export function canFoundColony(s: GameState, u: Unit): string | null {
   if (UNIT_TYPES[u.type].kind !== 'colonist') return 'Only colonists can found colonies.';
   if (u.loc.kind !== 'map') return 'The unit must be on land.';
   if (u.moves <= 0) return 'The unit has no moves left this turn.';
-  return colonySiteProblem(s, u.loc.x, u.loc.y);
+  const problem = colonySiteProblem(s, u.loc.x, u.loc.y);
+  if (problem) return problem;
+  const cost = charterCost(s, u.owner);
+  if (cost > player(s, u.owner).gold) return `A colony charter costs ${cost} gold.`;
+  return null;
+}
+
+/**
+ * Gold the nation pays the Crown for its next colony under the colony charter rule
+ * (`GameConfig.colonyCharter`, COLONY_CHARTER in rules/difficulty.ts): 0 with the rule off, for
+ * the first colony, and once the nation has declared independence (there is no Crown to pay).
+ */
+export function charterCost(s: GameState, nation: NationId): number {
+  if (!s.config.colonyCharter) return 0;
+  const p = s.players.find((o) => o.id === nation);
+  if (!p || p.independence !== 'none') return 0;
+  const held = Object.values(s.colonies).filter((c) => c.owner === nation).length;
+  if (held === 0) return 0;
+  return Math.round(Math.min(COLONY_CHARTER.cap, COLONY_CHARTER.base * held) * difficultyRules(p).colonyCharter);
 }
 
 /** Why a colony cannot stand on this tile, or null if it can. */
@@ -82,6 +101,8 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
   if (reason) fail(reason);
   if (u.loc.kind !== 'map') fail('The unit must be on land.');
   const { x, y } = u.loc;
+  const charter = charterCost(s, u.owner);
+  if (charter > 0) player(s, u.owner).gold -= charter;
   const buildings = Object.fromEntries(BUILDING_ORDER.map((k) => [k, BUILDINGS[k].initialLevel])) as Record<BuildingKind, number>;
   const colony: Colony = {
     id: newId(s, 'c'),
@@ -108,14 +129,16 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
   u.loc = { kind: 'colony', colonyId: colony.id, job };
   u.state = 'active';
   delete u.dest;
+  delete u.roadTo;
   delete u.work;
   colony.build = isCoastal(s, x, y) ? { kind: 'building', id: 'docks' } : { kind: 'building', id: 'stockade' };
   if (!canBuild(s, colony, colony.build)) colony.build = { kind: 'building', id: 'warehouse' };
   reveal(s, u.owner, x, y, 2);
   onColonyFounded(s, colony);
   track(u.owner, 'cmd:foundColony');
-  message(s, `${colony.name} has been founded.`, u.owner, { x, y });
-  noteHistory(s, 'colony', [u.owner], `${colony.name} is founded.`, { secret: true, at: { x, y } });
+  const paid = charter > 0 ? ` The colony charter cost ${charter} gold.` : '';
+  message(s, `${colony.name} has been founded.${paid}`, u.owner, { x, y });
+  noteHistory(s, 'colony', [u.owner], `${colony.name} is founded.${paid}`, { secret: true, at: { x, y } });
   return colony;
 }
 
@@ -246,6 +269,7 @@ export function assignJob(s: GameState, unitId: string, colonyId: string, job?: 
   u.moves = 0;
   track(u.owner, 'cmd:assignJob');
   delete u.dest;
+  delete u.roadTo;
   delete u.work;
 }
 

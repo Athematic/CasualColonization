@@ -55,6 +55,12 @@ export interface Scene {
   /** Planned route of the selected unit. */
   path?: Point[];
   /**
+   * What `path` is for. `'road'` marks a "Road to…" plan (roads to be built along it); renderers
+   * should then draw it as a dashed road-coloured line instead of the plain route dots. Optional;
+   * missing means an ordinary movement route.
+   */
+  pathKind?: 'road';
+  /**
    * Turns of movement the selected unit needs to reach the end of `path`. Optional; when it is
    * above 1, renderers should show it as a small counter badge on the target tile.
    */
@@ -336,3 +342,5 @@ export function hash2(x: number, y: number, salt = 0): number {
 }
 
 export type { GoodId };
+
+export * from './meander.js';

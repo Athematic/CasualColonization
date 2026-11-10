@@ -29,6 +29,7 @@ export * from './relations.js';
 export * from './cheats.js';
 export * from './stats.js';
 export * from './history.js';
+export * from './events/index.js';
 export * from './reports.js';
 export { RIVER_DIRS, MAJOR_RIVER_LENGTH, riverLinked, riverName, parseRivers } from './rivers.js';
 export { MAP_SIZES, entryPoints, type EntrySide } from './mapgen.js';

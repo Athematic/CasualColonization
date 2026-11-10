@@ -37,6 +37,7 @@ Every setting the game can be played in is a **scenario**: a data package the en
 - Move the hard-coded tables (`TRIBES`, the goods, `NATIONS`, years, Founding Fathers, independence rules, `mapgen` settings) behind a `Scenario` interface.
 - Store the scenario's id (and version) in the `GameState`.
 - Let a scenario adjust or replace the difficulty table (`DIFFICULTY` in `rules/difficulty.ts`: named multipliers and values per level).
+- Let a scenario tune or switch off the colony charter (`COLONY_CHARTER` base and cap and the per-level `colonyCharter` multiplier in `rules/difficulty.ts`, and `GameConfig.colonyCharter`), for example free founding in a scenario about a crowded coast, or dearer charters in one about a distant colony.
 - Show a choice of scenario on the New game screen.
 - Run tournaments for each scenario.
 - Tests run for every scenario.

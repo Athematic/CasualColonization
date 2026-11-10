@@ -1,6 +1,7 @@
 import {
   AI_LEVEL_INFO,
   AI_LEVELS,
+  COLONY_CHARTER,
   DEFAULT_DIFFICULTY,
   DIFFICULTY,
   DIFFICULTY_LEVELS,
@@ -53,8 +54,6 @@ function plannedSelect(label: string, release: string, choices: string[], note?:
 
 /** Rule options from the roadmap, shown as disabled switches. */
 const PLANNED_OPTIONS: { label: string; release: string; note: string }[] = [
-  { label: 'Historical events', release: '0.6', note: 'Dated events from the period: wars in Europe, plagues, famous voyages.' },
-  { label: 'Random events', release: '0.6', note: 'Sim City style surprises: storms, fires, bumper harvests, gold strikes.' },
   { label: 'Favoured Nation', release: '0.4', note: 'Years of peace and shared trade routes let two nations trade and buy ships in each other\'s home ports.' },
   { label: 'A market for every home port', release: '0.4', note: 'Each nation\'s port has its own prices and taxes, which makes triangle trading possible.' },
   { label: 'Visible native braves', release: '0.5', note: 'Braves wander, visit, trade, demand tribute and fight as units on the map.' },
@@ -79,6 +78,9 @@ export function newGameScreen(
   let headYear = 0;
   let watchHeadStart = true;
   let difficulty: DifficultyId = DEFAULT_DIFFICULTY;
+  let historicalEvents = true;
+  let randomEvents = true;
+  let colonyCharter = true;
 
   const el = h('main', { class: 'menu-screen' });
   const render = () => {
@@ -146,6 +148,16 @@ export function newGameScreen(
             h('select', { onchange: (e: Event) => { setStyle((e.target as HTMLSelectElement).value); render(); } },
               availableStyles().map((st) => h('option', { value: st.id, selected: st.id === activeStyle().id || undefined }, st.name))))),
         h('p', { class: 'muted small' }, activeStyle().description),
+        h('div', { class: 'row wrap rule-options' },
+          h('label', { class: 'rule-option', title: 'Dated events from the period, each once per game: wars in Europe, the Great Frost, famous voyages, refugees, financial bubbles, the Age of Reason. Can be switched in the Game menu during play.' },
+            h('input', { type: 'checkbox', checked: historicalEvents || undefined, 'aria-label': 'Historical events', onchange: (e: Event) => (historicalEvents = (e.target as HTMLInputElement).checked) }),
+            h('span', null, h('b', null, 'Historical events'), h('br'), h('span', { class: 'muted small' }, 'Wars in Europe, the Great Frost, famous voyages, bubbles.'))),
+          h('label', { class: 'rule-option', title: 'Surprises in the Sim City spirit: storms, fires, bumper harvests, gold fever, pirates, a skilled immigrant. Some ask you to choose. Can be switched in the Game menu during play.' },
+            h('input', { type: 'checkbox', checked: randomEvents || undefined, 'aria-label': 'Random events', onchange: (e: Event) => (randomEvents = (e.target as HTMLInputElement).checked) }),
+            h('span', null, h('b', null, 'Random events'), h('br'), h('span', { class: 'muted small' }, 'Storms, fires, bumper harvests, pirates.'))),
+          h('label', { class: 'rule-option', title: `Every colony after the first needs a charter from the Crown: ${COLONY_CHARTER.base} gold for each colony the nation already has, at most ${COLONY_CHARTER.cap}, scaled by difficulty. Free after the declaration of independence.` },
+            h('input', { type: 'checkbox', checked: colonyCharter || undefined, 'aria-label': 'Colony charter (founding costs gold)', onchange: (e: Event) => (colonyCharter = (e.target as HTMLInputElement).checked) }),
+            h('span', null, h('b', null, 'Colony charter (founding costs gold)'), h('br'), h('span', { class: 'muted small' }, 'The Crown charges for each new colony after the first.')))),
         h('details', { class: 'planned-options' },
           h('summary', null, 'Rules and options ', planned('coming')),
           h('p', { class: 'muted small' }, 'On the roadmap and not playable yet. Hover or tap for details.'),
@@ -183,6 +195,9 @@ export function newGameScreen(
               humans: chosen.filter((s) => s.controller === 'human').map((s) => s.nation),
               ai: Object.fromEntries(chosen.flatMap((s) => (s.controller === 'human' ? [] : [[s.nation, s.controller]]))),
               difficulty,
+              historicalEvents,
+              randomEvents,
+              colonyCharter,
             }, humans > 0 && headYear ? { turn: turnOfYear(headYear), watch: watchHeadStart } : undefined),
           }, humans === 0 ? 'Watch the computers play' : 'Set sail'),
           h('button', {

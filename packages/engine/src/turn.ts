@@ -2,10 +2,11 @@ import { runAi } from './ai/index.js';
 import { track } from './telemetry.js';
 import { processColony } from './colony.js';
 import { advanceSailing, processImmigration, recoverMarkets } from './europe.js';
-import { advanceWork, continueOrders, placeOnMap } from './movement.js';
+import { advanceWork, continueOrders, continueRoadTo, placeOnMap } from './movement.js';
 import { processNatives } from './natives.js';
 import { processCongress } from './fathers.js';
 import { processCrown } from './crown.js';
+import { processEvents } from './events/index.js';
 import { processIndependence } from './independence.js';
 import { processRoutes } from './routes.js';
 import { formatDate, maxMoves, message, unitName, unitPosition } from './queries.js';
@@ -35,6 +36,7 @@ export function beginPlayerTurn(s: GameState, p: Player): void {
   }
   for (const u of Object.values(s.units)) {
     if (u.owner === p.id && u.dest && !u.route && s.units[u.id]) continueOrders(s, u);
+    if (u.owner === p.id && u.roadTo && s.units[u.id]) continueRoadTo(s, u);
   }
   // Trade routes run here, before the player or the computer gives any orders this turn.
   processRoutes(s, p.id);
@@ -73,6 +75,7 @@ function advance(s: GameState): void {
     processNatives(s);
     recoverMarkets(s);
     processCrown(s);
+    processEvents(s);
     processIndependence(s);
     recordStats(s);
     s.turn++;
@@ -85,7 +88,7 @@ function advance(s: GameState): void {
 /** Units of a player that still want orders this turn. */
 export function unitsAwaitingOrders(s: GameState, nation: Player['id']): string[] {
   return Object.values(s.units)
-    .filter((u) => u.owner === nation && u.moves > 0 && u.state === 'active' && !u.work && !u.dest && !u.route)
+    .filter((u) => u.owner === nation && u.moves > 0 && u.state === 'active' && !u.work && !u.dest && !u.roadTo && !u.route)
     .filter((u) => u.loc.kind === 'map')
     .map((u) => u.id);
 }

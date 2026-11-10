@@ -8,6 +8,7 @@ import {
   buildTargetCost,
   canBuild,
   canTeachHere,
+  charterCost,
   equipInColony,
   foundColony,
   hurryBuild,
@@ -45,7 +46,7 @@ import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
 import { GOODS, type GoodId, type ProductId } from '../rules/goods.js';
 import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import type { BuildTarget, Colony, GameState, Job, Player, Unit } from '../types.js';
-import { aiFight, disembarkAll, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
+import { aiFight, bestColonySite, disembarkAll, keenSiteScore, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
 import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
@@ -61,6 +62,8 @@ const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
 /** Plays one turn with the given profile. */
 export function runAdvanced(s: GameState, p: Player, prof: AiProfile): void {
   turnShare = rebelShare(s, p.id);
+  turnExpansion = expansionCheck(s, p, prof);
+  turnSaving = turnExpansion === 'ready' || turnExpansion === 'gold' ? charterCost(s, p.id) : 0;
   const plan = prof.independence;
   turnArmy = plan ? (plan.arm ? armyForIndependence(s, p, plan) : plan.armyPerColony) : 0;
   turnArming = !!plan?.arm && preparingIndependence(prof) && armingPays(s, p, plan.ratio);
@@ -71,6 +74,7 @@ export function runAdvanced(s: GameState, p: Player, prof: AiProfile): void {
   crownAffairs(s, p, prof, preparingIndependence(prof, 20), strength);
   safely(() => diplomacy(s, p, prof));
   for (const c of ownColonies(s, p)) safely(() => manageColony(s, p, c, prof));
+  safely(() => sendSettler(s, p, prof));
   safely(() => manageLogistics(s, p));
   const units = Object.values(s.units).filter((u) => u.owner === p.id);
   for (const u of units) {
@@ -133,6 +137,97 @@ function garrisonFor(p: Player, prof: AiProfile): number {
   if (atWar) n += 1;
   if (preparing && prof.independence) n = Math.max(n, turnArmy);
   return n;
+}
+
+/** What holds back the nation's next colony this turn (expansionCheck), worked out once per turn. */
+let turnExpansion: ExpansionCheck = 'ready';
+
+/** Gold put aside for the next colony charter: purchases in Europe leave it alone. */
+let turnSaving = 0;
+
+export type ExpansionCheck = 'ready' | 'enough' | 'population' | 'pace' | 'defence' | 'gold';
+
+/**
+ * Whether the nation is ready to invest in another colony (AiProfile.expansion), or what it waits
+ * for: 'enough' colonies for now, the colonies' 'population', the 'pace' of founding, a spare
+ * 'defence', or the charter's 'gold'. The first colony is always ready.
+ */
+export function expansionCheck(s: GameState, p: Player, prof: AiProfile, colonies = ownColonies(s, p)): ExpansionCheck {
+  if (!colonies.length) return 'ready';
+  if (colonies.length >= prof.colonyTarget(s.turn)) return 'enough';
+  const rule = prof.expansion;
+  // The established colonies: the youngest (founded within two founding intervals) are still
+  // being settled. A lone first colony only needs to be more than a camp, so that a poor site
+  // does not stall the nation.
+  const established = colonies.length === 1 ? colonies : colonies.filter((c) => s.turn - c.founded >= rule.everyTurns * 2);
+  const population = established.reduce((n, c) => n + colonyWorkers(s, c).length, 0);
+  if (!established.length || population < (colonies.length === 1 ? 2 : rule.minPopulation * established.length)) return 'population';
+  if (s.turn - Math.max(...colonies.map((c) => c.founded)) < rule.everyTurns) return 'pace';
+  // A defender to spare: as many armed units and stockades as colonies beyond the first few that
+  // have had the time and the people (three, as a stockade needs) to raise one. buildPlan puts the
+  // stockade first there; soldiers and militia fill garrisons.
+  const settled = outposts(colonies, prof).filter((c) => s.turn - c.founded >= rule.graceTurns && colonyWorkers(s, c).length >= 3).length;
+  if (settled > 0) {
+    const defences = countOwned(s, p, (u) => isArmed(u) && u.loc.kind !== 'europe') + colonies.filter((c) => c.buildings.stockade > 0 && !armedAt(s, p, c.x, c.y).length).length;
+    if (defences < settled) return 'defence';
+  }
+  const charter = charterCost(s, p.id);
+  if (charter > 0 && p.gold < charter + prof.reserve) return 'gold';
+  return 'ready';
+}
+
+/** The colonies beyond the first `undefended` founded, which must be defended before the nation expands further. */
+function outposts(colonies: Colony[], prof: AiProfile): Colony[] {
+  return [...colonies].sort((a, b) => a.founded - b.founded || (a.id < b.id ? -1 : 1)).slice(prof.expansion.undefended);
+}
+
+export const expansionReady = (s: GameState, p: Player, prof: AiProfile, colonies = ownColonies(s, p)) => expansionCheck(s, p, prof, colonies) === 'ready';
+
+/** A site's penalty for native villages within two tiles: colonies there raise tension. */
+const nativeCrowding = (s: GameState) => {
+  const villages = Object.values(s.settlements);
+  return (x: number, y: number) => villages.filter((st) => distance(st.x, st.y, x, y) <= 2).length * 4;
+};
+
+/** The colonists sent out to found colonies, while they are on their way (forgetting the others). */
+function settlersOnTheWay(s: GameState, p: Player): Unit[] {
+  const memory = p.aiMemory;
+  if (!memory?.settlers) return [];
+  // Out of the colony and still a plain colonist (one that rejoined a colony or took up a role is not).
+  const out = memory.settlers.map((id) => s.units[id]).filter((u) => u && u.owner === p.id && u.loc.kind === 'map' && u.role === 'none');
+  if (out.length) memory.settlers = out.map((u) => u.id);
+  else delete memory.settlers;
+  return out;
+}
+
+function markSettler(p: Player, u: Unit): void {
+  const memory = (p.aiMemory = p.aiMemory ?? {});
+  if (!memory.settlers?.includes(u.id)) memory.settlers = [...(memory.settlers ?? []), u.id];
+}
+
+/**
+ * Once the nation is ready for another colony and fewer than `expansion.settlers` are on their way,
+ * its largest colony sends one out: the least skilled colonist of the colony with the most people,
+ * if a good site lies within walking distance. Once sent, the settler only needs the charter in
+ * hand and the pace of founding to found (colonistTurn), so it does not turn back half way.
+ */
+function sendSettler(s: GameState, p: Player, prof: AiProfile): void {
+  const colonies = ownColonies(s, p);
+  if (!colonies.length || turnExpansion !== 'ready' || settlersOnTheWay(s, p).length >= prof.expansion.settlers) return;
+  const keep = Math.max(3, Math.ceil(prof.expansion.minPopulation));
+  const from = colonies
+    .map((c) => ({ c, workers: colonyWorkers(s, c) }))
+    .filter((e) => e.workers.length > keep)
+    .sort((a, b) => b.workers.length - a.workers.length || (a.c.id < b.c.id ? -1 : 1))[0];
+  if (!from) return;
+  const site = bestColonySite(s, from.c.x, from.c.y, { radius: 8, score: (x, y) => keenSiteScore(s, x, y), perTile: 1.1, stay: false, overLand: true, penalty: nativeCrowding(s) });
+  if (site.score <= 14) return;
+  const settler = from.workers
+    .filter((w) => w.type !== 'nativeConvert' && !w.teach)
+    .sort((a, b) => UNIT_TYPES[a.type].skill - UNIT_TYPES[b.type].skill || (a.id < b.id ? -1 : 1))[0];
+  if (!settler) return;
+  leaveColony(s, settler.id);
+  markSettler(p, settler);
 }
 
 function adjacentTileTowards(s: GameState, u: Unit, tx: number, ty: number): { x: number; y: number } | null {
@@ -245,7 +340,9 @@ function buildPlan(s: GameState, p: Player, c: Colony, prof: AiProfile): BuildTa
   const staffed = (k: BuildingKind) => colonyWorkers(s, c).filter((w) => w.loc.kind === 'colony' && w.loc.job.kind === 'building' && w.loc.job.building === k).length;
   const plan: BuildTarget[] = [];
   const b = (id: BuildingKind) => plan.push({ kind: 'building', id });
-  if (threatened || preparing || prof.garrison > 1) b('stockade');
+  // An outpost without soldiers holds up expansion until it has a stockade (expansionCheck).
+  const outpost = !armedAt(s, p, c.x, c.y).length && outposts(ownColonies(s, p), prof).includes(c);
+  if (threatened || preparing || prof.garrison > 1 || outpost) b('stockade');
   // Goods about to rot: more storage, and a wagon train to carry them to a port.
   const overflow = overflowSoon(s, c, 6);
   if (wantsWagon(s, p, c)) plan.push({ kind: 'unit', id: 'wagonTrain' });
@@ -286,7 +383,7 @@ function manageColony(s: GameState, p: Player, c: Colony, prof: AiProfile): void
       hurryBuild(s, c.id);
       return manageRest(s, p, c, prof);
     }
-    if (price > 0 && price < 1500 && p.gold > prof.reserve + price * 1.5 && colonyReport(s, c).produced.hammers > 0 && c.hammers >= cost.hammers / 3) {
+    if (price > 0 && price < 1500 && p.gold > prof.reserve + turnSaving + price * 1.5 && colonyReport(s, c).produced.hammers > 0 && c.hammers >= cost.hammers / 3) {
       hurryBuild(s, c.id);
     }
   }
@@ -321,11 +418,12 @@ function raiseMilitia(s: GameState, p: Player, c: Colony, prof: AiProfile): void
   if (workers.length < 3 || c.goods.muskets < 50) return;
   // Arming for independence, a port with the muskets also raises troops for colonies still short
   // of their garrison (they march there); otherwise only for its own garrison.
-  const short = turnArming && countOwned(s, p, isArmed) < ownColonies(s, p).length * garrisonFor(p, prof);
+  // So does a nation whose expansion waits for a defender for an outpost.
+  const short = (turnArming || turnExpansion === 'defence') && countOwned(s, p, isArmed) < ownColonies(s, p).length * garrisonFor(p, prof);
   if (armedAt(s, p, c.x, c.y).length >= garrisonFor(p, prof) && !short) return;
   // Arming, experts take up muskets too once no unskilled colonist is left (veterans first).
   const recruit = workers
-    .filter((w) => (UNIT_TYPES[w.type].skill <= 0 || (turnArming && (w.type === 'veteranSoldier' || workers.length >= 4))) && w.type !== 'nativeConvert')
+    .filter((w) => (UNIT_TYPES[w.type].skill <= 0 || ((turnArming || turnExpansion === 'defence') && (w.type === 'veteranSoldier' || workers.length >= 4))) && w.type !== 'nativeConvert')
     .sort((a, b) => Number(b.type === 'veteranSoldier') - Number(a.type === 'veteranSoldier') || UNIT_TYPES[a.type].skill - UNIT_TYPES[b.type].skill)[0];
   if (!recruit) return;
   leaveColony(s, recruit.id);
@@ -347,7 +445,7 @@ function acquireLand(s: GameState, p: Player, c: Colony, prof: AiProfile): void 
       return;
     }
     const price = landPrice(s, p.id, n.x, n.y);
-    if (p.gold > prof.reserve + price) {
+    if (p.gold > prof.reserve + turnSaving + price) {
       buyLand(s, p.id, n.x, n.y);
       return;
     }
@@ -563,21 +661,32 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
     }
   }
   const colonies = ownColonies(s, p);
-  const expand = colonies.length < prof.colonyTarget(s.turn) && (!here || colonyWorkers(s, here).length >= 3);
+  let reachable: Colony[] | undefined;
+  const reachableColonies = () => (reachable ??= colonies.filter((c) => findPath(s, u, c.x, c.y)));
+  // A new colony is an investment: settlers go out (a few at a time) once the colonies are
+  // established (expansionCheck); one on its way only needs the charter in hand and the pace of
+  // founding. A colonist with no colony to go to founds one anyway.
+  const sent = colonies.length ? settlersOnTheWay(s, p) : [];
+  const charterInHand = charterCost(s, p.id) <= p.gold;
+  const paced = !colonies.length || s.turn - Math.max(...colonies.map((c) => c.founded)) >= prof.expansion.everyTurns;
+  const expand =
+    colonies.length < prof.colonyTarget(s.turn) &&
+    (!here || colonyWorkers(s, here).length >= 3) &&
+    (sent.some((o) => o.id === u.id)
+      ? charterInHand && paced
+      : (sent.length < prof.expansion.settlers && expansionReady(s, p, prof, colonies)) || (!here && !reachableColonies().length && charterInHand));
   if (expand) {
-    const radius = here ? 8 : 5;
-    let best = { x: pos.x, y: pos.y, score: here ? -Infinity : siteScore(s, pos.x, pos.y) };
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        const nx = pos.x + dx;
-        const ny = pos.y + dy;
-        if (!tileAt(s, nx, ny)) continue;
-        // Keep a little distance from the natives so tension stays low.
-        const crowding = Object.values(s.settlements).filter((st) => distance(st.x, st.y, nx, ny) <= 2).length * 4;
-        const score = siteScore(s, nx, ny) - distance(pos.x, pos.y, nx, ny) * 1.1 - crowding;
-        if (score > best.score) best = { x: nx, y: ny, score };
-      }
-    }
+    const best = bestColonySite(s, pos.x, pos.y, {
+      radius: here ? 8 : 5,
+      // The first colony is placed as it always was; later ones chase the best land, away from other colonies.
+      score: colonies.length ? (x, y) => keenSiteScore(s, x, y) : (x, y) => siteScore(s, x, y),
+      perTile: 1.1,
+      stay: !here,
+      // Later colonies only where the colonist can walk (an unreachable site would leave it idle).
+      overLand: colonies.length > 0,
+      // Keep a little distance from the natives so tension stays low.
+      penalty: nativeCrowding(s),
+    });
     if (best.score > 14) {
       if (best.x === pos.x && best.y === pos.y) {
         foundColony(s, u.id);
@@ -585,6 +694,7 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
       }
       if (findPath(s, u, best.x, best.y)) {
         setDestination(s, u.id, { x: best.x, y: best.y });
+        if (colonies.length) markSettler(p, u);
         const now = unitPosition(s, u)!;
         if (now.x === best.x && now.y === best.y && u.moves > 0) foundColony(s, u.id);
         return;
@@ -596,8 +706,8 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
     assignJob(s, u.id, here.id);
     return;
   }
-  const home = colonies
-    .filter((c) => findPath(s, u, c.x, c.y))
+  const home = reachableColonies()
+    .slice()
     .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - colonyReport(s, a).net.food / 2 - (distance(b.x, b.y, pos.x, pos.y) - colonyReport(s, b).net.food / 2))[0];
   if (home) {
     setDestination(s, u.id, { x: home.x, y: home.y });
@@ -754,7 +864,8 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
   // a partner's port lets two wait on the docks for the next ship home (port choice brings it).
   const abroad = ships.some((sh) => !inHomePort(sh)) ? 2 : 0;
   const room = () => ships.filter((sh) => UNIT_TYPES[sh.type].offence === 0 && inHomePort(sh)).reduce((n, sh) => n + cargoFree(s, sh), 0) + liners * 2 + abroad - docks().length;
-  const afford = (price: number) => p.gold >= prof.reserve + price;
+  // The next colony charter is saved for, on top of the reserve.
+  const afford = (price: number) => p.gold >= prof.reserve + turnSaving + price;
   const buyUnit = (type: UnitTypeId) => {
     if (room() > 0 && afford(equippedPrice(p, type))) safely(() => trainEquipped(s, p, type));
   };
@@ -793,6 +904,10 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
     if (turnArming && !warship) {
       for (let i = 0; i < 6 && cargoFree(s, ship) > 1 && afford(buyPrice(market, 'muskets') * 100); i++) safely(() => buyGoods(s, ship.id, 'muskets', 100));
     }
+    // Expansion waits for a defender: muskets, loaded before the colonists board, let a colony arm
+    // a colonist as militia (raiseMilitia).
+    const stored = colonies.reduce((n, c) => n + c.goods.muskets, 0) + (ship.cargo?.muskets ?? 0);
+    if (turnExpansion === 'defence' && !warship && stored < 50 && afford(buyPrice(market, 'muskets') * 50)) safely(() => buyGoods(s, ship.id, 'muskets', 50));
     if (!warship && inHomePort(ship)) for (const u of docks()) if (cargoFree(s, ship) > 0) safely(() => boardInEurope(s, u.id, ship.id));
     // Supplies: tools for builds and pioneers, muskets when war or independence is coming.
     const toolsNeeded = colonies.reduce((n, c) => (c.build ? n + Math.max(0, buildTargetCost(c.build, c).tools - c.goods.tools) : n), 0) + pioneerToolsWanted(s, p);

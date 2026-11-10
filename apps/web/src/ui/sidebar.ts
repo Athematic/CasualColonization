@@ -1,5 +1,6 @@
 import {
   canFoundColony,
+  charterCost,
   canImprove,
   canUseRoutes,
   routeStopName,
@@ -24,7 +25,6 @@ import {
   serialize,
   tileAt,
   tileDescription,
-  RIVER_DIRS,
   unitName,
   unitPosition,
   unitsAboard,
@@ -34,6 +34,7 @@ import {
   type NationId,
   type Unit,
 } from '@cc/engine';
+import { riverCourse, traceStrand } from '@cc/render-api';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
 import { downloadSave, saveManual } from '../save.js';
@@ -187,7 +188,7 @@ export class Sidebar {
     const aboard = unitsAboard(s, u);
     const cargo = GOODS.filter((g) => (u.cargo?.[g] ?? 0) > 0);
     const route = u.route && s.routes?.[u.route.id];
-    const orders = u.repair ? `Under repair (${u.repair} turns)` : route ? `Trade route: ${route.name}${route.stops.length ? `, next ${routeStopName(s, route.stops[u.route!.stop % route.stops.length], route.owner)}` : ''}` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? (u.dest.port ? `Sailing for ${portName(u.dest.port)}` : 'Sailing for Europe') : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
+    const orders = u.repair ? `Under repair (${u.repair} turns)` : route ? `Trade route: ${route.name}${route.stops.length ? `, next ${routeStopName(s, route.stops[u.route!.stop % route.stops.length], route.owner)}` : ''}` : u.roadTo ? `Building a road to ${u.roadTo.x},${u.roadTo.y}` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? (u.dest.port ? `Sailing for ${portName(u.dest.port)}` : 'Sailing for Europe') : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
     const mine = u.owner === app.viewer;
     const can = (fn: () => string | null) => mine && app.isMyTurn() && fn() === null;
     const terrain = tile?.f ? 'clear' : 'plow';
@@ -195,10 +196,11 @@ export class Sidebar {
     const btn = (label: string, key: string, onclick: () => void, enabled = true) =>
       actions.push(h('button', { class: 'btn small', onclick, disabled: !enabled, title: key ? `Shortcut: ${key}` : undefined }, label, key ? h('kbd', null, key) : null));
     if (mine && u.loc.kind === 'map') {
-      if (def.kind === 'colonist') btn('Found colony', 'B', () => void app.foundColony(), can(() => canFoundColony(s, u)));
+      if (def.kind === 'colonist') btn(charterCost(s, u.owner) > 0 ? `Found colony (${charterCost(s, u.owner)} gold)` : 'Found colony', 'B', () => void app.foundColony(), can(() => canFoundColony(s, u)));
       if (u.role === 'pioneer') {
         btn(terrain === 'clear' ? 'Clear forest' : 'Plow', 'P', () => app.improve(), can(() => canImprove(s, u, terrain)));
         btn('Build road', 'R', () => app.buildRoad(), can(() => canImprove(s, u, 'road')));
+        btn('Road to…', 'Shift+R', () => app.startRoadTo(), mine && app.isMyTurn() && u.tools > 0);
       }
       btn('Go to…', 'G', () => {
         app.gotoMode = true;
@@ -210,7 +212,7 @@ export class Sidebar {
       btn('Fortify', 'F', () => app.unitCommand('fortify'), !isShip(u));
       btn('Sentry', 'S', () => app.unitCommand('sentry'));
       btn('Skip', 'Space', () => app.unitCommand('skip'));
-      if (u.state !== 'active' || u.dest || u.work || u.route) btn('Clear orders', '', () => app.unitCommand('clearOrders'));
+      if (u.state !== 'active' || u.dest || u.roadTo || u.work || u.route) btn('Clear orders', '', () => app.unitCommand('clearOrders'));
       const colony = pos && colonyAt(s, pos.x, pos.y);
       if (colony && colony.owner === app.viewer) btn('Open colony', '', () => app.openColony(colony.id));
       btn('Disband', '', () => app.unitCommand('disband'));
@@ -263,10 +265,24 @@ export class Sidebar {
         h('button', { class: 'btn small', onclick: () => app.openReports(), title: 'Advisor reports (A, or F1–F8)' }, 'Reports…'),
         h('button', { class: 'btn small', onclick: () => app.openCheats(), title: 'Cheats for testing (Ctrl+Shift+C)' }, 'Cheats…')),
       this.difficultyLine(),
+      this.eventSwitches(),
       app.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used')) : null,
       h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · D foreign affairs · H progress graphs · A or F1–F8 reports · T trade routes · Enter end turn · Right-click or Shift-click to send a unit.'));
     details.addEventListener('toggle', () => (this.menuOpen = details.open));
     return details;
+  }
+
+  /** Switches for historical and random events; each change is a `setEvents` command, so it replays. */
+  private eventSwitches(): HTMLElement {
+    const app = this.app;
+    const cfg = app.state.config;
+    const toggle = (label: string, note: string, on: boolean, cmd: (on: boolean) => { historical?: boolean; random?: boolean }) =>
+      h('label', { class: 'check small', title: note },
+        h('input', { type: 'checkbox', checked: on || undefined, onchange: (e: Event) => { app.dispatch({ type: 'setEvents', ...cmd((e.target as HTMLInputElement).checked) }); app.requestRender(); } }),
+        ' ', label);
+    return h('div', { class: 'row wrap event-switches' },
+      toggle('Historical events', 'Dated events from the period: wars in Europe, the Great Frost, famous voyages, financial bubbles.', !!cfg.historicalEvents, (on) => ({ historical: on })),
+      toggle('Random events', 'Storms, fires, bumper harvests, gold fever, pirates and other surprises.', !!cfg.randomEvents, (on) => ({ random: on })));
   }
 
   private difficultyLine(): HTMLElement {
@@ -304,11 +320,7 @@ export class Sidebar {
       const cy = Math.floor(i / s.map.width) * scale + scale / 2;
       ctx.lineWidth = tile.rv === 2 ? 1.6 : 1;
       ctx.beginPath();
-      RIVER_DIRS.forEach(([dx, dy], d) => {
-        if (!(tile.rd! & (1 << d))) return;
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + (dx * scale) / 2, cy + (dy * scale) / 2);
-      });
+      for (const st of riverCourse(s, i % s.map.width, Math.floor(i / s.map.width)).strands) traceStrand(ctx, st, cx, cy, scale, true);
       ctx.stroke();
     }
     for (const col of Object.values(s.colonies)) {

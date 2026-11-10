@@ -35,6 +35,10 @@ export interface ArenaOptions {
   difficulty?: DifficultyId;
   /** Computer players make no trade or Favoured Nation proposals (`GameConfig.noFavoured`), to measure what the feature brings. */
   noFavoured?: boolean;
+  /** Switch historical and random events on (`--events`); arena games run without them by default. */
+  events?: boolean;
+  /** Play without the colony charter (`--no-charter`); arena games use it by default, like new games. */
+  noCharter?: boolean;
 }
 
 /**
@@ -161,6 +165,8 @@ export function playArenaGame(
   features = false,
   difficulty?: DifficultyId,
   noFavoured = false,
+  events = false,
+  charter = true,
 ): { state: GameState; entries: Omit<ArenaEntry, 'game' | 'won'>[] } {
   const ai = Object.fromEntries(line.map((l) => [l.nation, l.level]));
   const config = {
@@ -172,6 +178,8 @@ export function playArenaGame(
     ...(map ? { map } : {}),
     ...(difficulty ? { difficulty, difficultyForAll: true } : {}),
     ...(noFavoured ? { noFavoured: true } : {}),
+    ...(events ? { historicalEvents: true, randomEvents: true } : {}),
+    ...(charter ? { colonyCharter: true } : {}),
   };
   const counts = new Map<string, FeatureCounts>();
   const tallies = new Map<string, RelationsTally>();
@@ -252,7 +260,7 @@ export function runArena(opts: ArenaOptions, onGame?: (entries: ArenaEntry[], ga
     const seed = (opts.firstSeed ?? 1000) + g;
     const nations = [...NATION_ORDER.slice(g % 8), ...NATION_ORDER.slice(0, g % 8)].slice(0, n);
     const line = nations.map((nation, i) => ({ nation, level: opts.levels[(i + g) % n] }));
-    const { entries: game } = playArenaGame(seed, line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured);
+    const { entries: game } = playArenaGame(seed, line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured, opts.events, !opts.noCharter);
     const best = Math.max(...game.map((e) => e.score));
     const rows = game.map((e) => ({ ...e, game: g, won: e.score === best }));
     entries.push(...rows);

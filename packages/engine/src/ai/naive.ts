@@ -1,4 +1,4 @@
-import { assignJob, bestJob, canBuild, foundColony, jobOptions, setBuild } from '../colony.js';
+import { assignJob, bestJob, canBuild, charterCost, foundColony, jobOptions, setBuild } from '../colony.js';
 import { aiPeace } from '../diplomacy.js';
 import { boardInEurope, recruit, recruitPrice, sailToAmerica, sellGoods } from '../europe.js';
 import { canImprove, findPath, setDestination, startImprovement } from '../movement.js';
@@ -61,7 +61,8 @@ function aiColonist(s: GameState, p: Player, u: Unit): void {
   const wanted = 2 + Math.floor(s.turn / 12);
   const here = colonyAt(s, x, y);
   // Established colonies send settlers out until the nation has enough colonies.
-  const expand = colonies.length < wanted && (!here || colonyWorkers(s, here).length >= 3);
+  // Under the colony charter, only when the treasury can pay for it.
+  const expand = colonies.length < wanted && (!here || colonyWorkers(s, here).length >= 3) && charterCost(s, p.id) <= p.gold;
   if (here && here.owner === p.id && !expand) {
     if (bestJob(s, here, u)) assignJob(s, u.id, here.id);
     return;

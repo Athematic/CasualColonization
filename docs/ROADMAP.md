@@ -68,12 +68,15 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Event framework: seeded, toggleable from the Game menu, off in tournaments by default | M | P1 | idea |
-| Historical events (a starter set) | M | P1 | idea |
-| Random events in the Sim City spirit (a starter set) | M | P1 | idea |
-| Roads in the Civilization II style: auto-road along a path, later railroads | M | P3 | idea, needs scoping |
-| Rivers and roads meander a little instead of running straight between tile centres (drawn, with a fixed wobble per tile, so they don't move between frames) | S | P1 | in progress |
-| Title screen: add the new box covers once generated (F–K for the Americas; L–M and N–O later, with their scenarios) | S | P2 | planned |
+| Event framework: seeded, toggleable from the Game menu, off in tournaments by default | M | P1 | done (`events/`, [design note](design/events.md); own seeded stream, `setEvents` command, `--events` for tournaments) |
+| Historical events (a starter set) | M | P1 | done (9 events, 1522–1763) |
+| Random events in the Sim City spirit (a starter set) | M | P1 | done (12 events, 7 with a choice) |
+| Road to…: a pioneer builds a road along a path to a chosen tile (as in Civilization II). Each turn it roads its tile (skipping tiles that already have one), then moves to the next. It stops with a report if its tools run out, the path is blocked or the target becomes unreachable. Path preview before confirming; the computer players use it for their road plans | M | P2 | done for human players (the computer players still plan single tiles and are unchanged) |
+| Railroads (from about 1830, needs a Founding Father or a building): faster than roads, built on top of a road | M | P3 | idea (later release) |
+| Rivers and roads meander a little instead of running straight between tile centres (drawn, with a fixed wobble per tile, so they don't move between frames) | S | P1 | done (shared curves in `@cc/render-api` `meander.ts`, used by Ligne claire, Schematic and the minimap) |
+| Title screen: add the new box covers once generated (F–K for the Americas; L–M and N–O later, with their scenarios) | S | P2 | done for F–K (L–O wait for their scenarios) |
+| Computer players space colonies and expand at a measured pace: sites that share work tiles with another colony count those tiles at a quarter, bonus resources, rivers, rich food and the coast are chased; a new colony only once the others average three colonists (2.5 Combative), at most one every 6 turns (4 Combative), with a defender or stockade for each colony beyond the first two, and the charter paid with the reserve kept | M | P1 | done ([audit note](AI_FEATURE_AUDIT.md#colony-spacing-and-pace-06); `ai/common.ts` `siteScore`, `keenSiteScore`, `bestColonySite`; `ai/advanced.ts` `expansionCheck`, `sendSettler`; `AiProfile.expansion`) |
+| Colony charter: founding costs gold (100 × colonies held, at most 2,000, times difficulty; free after independence; `GameConfig.colonyCharter`, on in new games and tournaments, `--no-charter`) | S | P1 | done (`charterCost`, `COLONY_CHARTER` and `DifficultyRules.colonyCharter` in `rules/difficulty.ts`) |
 
 ## 0.7: The classic game, part 2
 

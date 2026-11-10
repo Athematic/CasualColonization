@@ -53,6 +53,15 @@ export interface AiProfile {
   independence: { minTurn: number; minShare: number; armyPerColony: number; ratio: number; arm?: boolean } | null;
   /** Re-plans its focus every few turns (Creative). */
   adaptive: boolean;
+  /**
+   * A new colony is an investment (ai/advanced.ts, expansionReady). Beyond the first colony, a
+   * colonist founds one only when the colonies have on average `minPopulation` colonists, the last
+   * colony is at least `everyTurns` old, the charter (if the game uses it) leaves `reserve` gold,
+   * and the nation can spare a defender: every colony beyond the first `undefended` has an armed
+   * unit or a stockade once it is `graceTurns` old, with one more armed unit for the new colony.
+   * A colonist with no colony to reach founds one anyway.
+   */
+  expansion: { minPopulation: number; everyTurns: number; undefended: number; graceTurns: number; settlers: number };
 }
 
 const competent: AiProfile = {
@@ -71,6 +80,7 @@ const competent: AiProfile = {
   gifts: true,
   independence: { minTurn: 200, minShare: 55, armyPerColony: 1, ratio: 1.25 },
   adaptive: false,
+  expansion: { minPopulation: 3, everyTurns: 6, undefended: 2, graceTurns: 20, settlers: 2 },
 };
 
 export const AI_PROFILES: Record<Exclude<AiLevel, 'naive'>, AiProfile> = {
@@ -85,6 +95,8 @@ export const AI_PROFILES: Record<Exclude<AiLevel, 'naive'>, AiProfile> = {
     piracy: true,
     gifts: false,
     independence: { minTurn: 170, minShare: 50, armyPerColony: 1.5, ratio: 1.1 },
+    // Grabs land sooner and faster than the others, but still not with one-man colonies.
+    expansion: { minPopulation: 2.5, everyTurns: 4, undefended: 2, graceTurns: 20, settlers: 2 },
   },
   creative: { ...competent, adaptive: true },
 };
@@ -114,4 +126,6 @@ export interface AiMemory {
   nativeHaul?: Record<string, string>;
   /** Turn a missionary last incited a tribe (Combative). */
   lastIncite?: number;
+  /** Colonists sent out to found colonies, by unit id (ai/advanced.ts, sendSettler). */
+  settlers?: string[];
 }

@@ -364,6 +364,7 @@ export function setDestination(s: GameState, unitId: string, dest: Unit['dest'])
     }
   }
   if (dest && 'x' in dest && !findPath(s, u, dest.x, dest.y)) fail('There is no known route there.');
+  delete u.roadTo;
   u.dest = dest;
   u.state = 'active';
   track(u.owner, dest && 'europe' in dest ? 'cmd:gotoEurope' : 'cmd:goto');
@@ -406,6 +407,65 @@ export function continueOrders(s: GameState, u: Unit): void {
       // Something got in the way; try again next turn.
       return;
     }
+    moveUnit(s, u.id, dir);
+  }
+}
+
+/** Whether a pioneer may be sent to build a road to a tile; the reason when not. */
+export function canRoadTo(s: GameState, u: Unit, x: number, y: number): string | null {
+  if (u.role !== 'pioneer' || u.tools < TOOLS_PER_IMPROVEMENT) return 'Only pioneers with tools can build roads.';
+  if (u.loc.kind !== 'map') return 'The pioneer must be on land.';
+  const tile = tileAt(s, x, y);
+  if (!tile || isWater(tile)) return 'Roads can only be built on land.';
+  if (!findPath(s, u, x, y)) return 'There is no known route there.';
+  return null;
+}
+
+/** Gives a pioneer the "Road to…" order and starts on it. */
+export function setRoadTo(s: GameState, unitId: string, x: number, y: number): void {
+  const u = s.units[unitId];
+  const reason = canRoadTo(s, u, x, y);
+  if (reason) fail(reason);
+  delete u.dest;
+  delete u.route;
+  delete u.work;
+  u.roadTo = { x, y };
+  u.state = 'active';
+  track(u.owner, 'cmd:roadTo');
+  continueRoadTo(s, u);
+}
+
+/**
+ * Carries on a "Road to…" order: build the road on this tile if it has none, otherwise step along
+ * the cheapest path (planned afresh each time) and repeat while moves remain. Ends with a report
+ * when the road is finished, or when tools, the way or the pioneer give out.
+ */
+export function continueRoadTo(s: GameState, u: Unit): void {
+  let guard = 64;
+  const stop = (why: string) => {
+    delete u.roadTo;
+    message(s, `${unitName(u)} stops building the road: ${why}`, u.owner, unitPosition(s, u));
+  };
+  while (u.roadTo && u.loc.kind === 'map' && !u.work && u.moves > 0 && guard-- > 0) {
+    const { x: tx, y: ty } = u.roadTo;
+    const here = { x: u.loc.x, y: u.loc.y };
+    const tile = tileAt(s, here.x, here.y)!;
+    const roaded = tile.r || !!colonyAt(s, here.x, here.y);
+    if (roaded && here.x === tx && here.y === ty) {
+      delete u.roadTo;
+      message(s, `Road finished to ${tx},${ty}.`, u.owner, here);
+      return;
+    }
+    if (!roaded) {
+      const reason = canImprove(s, u, 'road');
+      if (reason) return stop(u.role !== 'pioneer' || u.tools < TOOLS_PER_IMPROVEMENT ? 'out of tools.' : reason);
+      startImprovement(s, u.id, 'road');
+      return;
+    }
+    const path = findPath(s, u, tx, ty);
+    if (!path || !path.length) return stop('the target cannot be reached.');
+    const dir = directionTo(here.x, here.y, path[0].x, path[0].y);
+    if (describeMove(s, u.id, dir).kind !== 'move') return stop('the way is blocked.');
     moveUnit(s, u.id, dir);
   }
 }

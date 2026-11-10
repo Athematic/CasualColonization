@@ -284,6 +284,29 @@ What the numbers say:
 - **Demands are almost always paid**, and **royal wars** are now most of the wars between Europeans; Combative uses them (0.8 a game) to attack, the others make peace.
 - Royal wars hit trade partners more often than the quarter weight suggests (most nations have agreements with every neighbour); never a Favoured Nation.
 
+## Colony spacing and pace (0.6)
+
+Players watching head starts saw computer nations found colonies almost in a grid, two tiles apart (sharing work tiles), and far too eagerly. The rules stay as in the original (any colonist founds; no colony next to another); only the computer players changed, together with a new rule, the colony charter (founding costs gold, see the README).
+
+- **Sites** (`ai/common.ts`): `siteScore` counts a tile next to another colony (any nation's) at 25%, so two tiles apart a site loses up to three tiles and three tiles apart nothing (Naive gets this too). The advanced levels use `keenSiteScore`, which adds 5 for each bonus resource, 1.5 for each river tile and each land tile with 4+ food, and 2 for the coast, on unshared tiles; their later colonies are only sought where the colonist can walk. The first colony is placed exactly as before.
+- **Pace** (`ai/advanced.ts` `expansionCheck`, `AiProfile.expansion`): a new colony only once the colonies older than two founding intervals average 3 colonists (Combative 2.5; a lone first colony needs 2), the last one is 6 turns old (Combative 4), every colony beyond the first two that has had 20 turns and 3 colonists is matched by an armed unit or a stockade (such outposts build the stockade first; a nation short of a defender ships 50 muskets for militia), and the charter leaves the reserve (gold is saved for it). When ready, the largest colony sends out its least skilled colonist (`sendSettler`, at most two settlers on the way); a settler on its way only needs the charter in hand and the pace. Otherwise colonists join colonies as before. A colonist with no colony to reach still founds one.
+
+Measured with the same games as `npm run tournament -- --games 2 --turns 200 --size medium` (seeds 1000–1001), plus a measurement script outside the product: colonists per colony, mean distance to the nearest own colony, and the share of colonies with any colony two tiles away. After = these changes with the charter (the default); the last block is the same without the charter (`--no-charter`).
+
+| Level | Score before | after | after, no charter | Colonies before | after | no charter | Colonists/colony before | after | no charter | Nearest own colony before | after | no charter | Colonies 2 tiles from another before | after | no charter |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Creative | 244.5 | 121.5 | 128 | 24 | 8.5 | 11 | 3.31 | 6.35 | 4.68 | 2.04 | 3.00 | 3.23 | 100% | 18% | 36% |
+| Competent | 154 | 99 | 73.5 | 23 | 7 | 7.5 | 2.76 | 5.79 | 4.13 | 2.57 | 3.71 | 3.80 | 98% | 21% | 20% |
+| Combative | 132 | 67.5 | 112.5 | 22.5 | 8.5 | 15 | 2.64 | 3.53 | 3.60 | 2.02 | 3.24 | 3.03 | 98% | 18% | 47% |
+| Naive | 129.5 | 76.5 | 110 | 16.5 | 8.5 | 18 | 3.36 | 3.76 | 2.61 | 2.48 | 3.06 | 2.47 | 91% | 47% | 67% |
+
+What the numbers say:
+
+- **The grid is gone**: almost every colony had another two tiles away; now about a fifth with the charter. Own colonies are 3–4 tiles apart on average, and each holds about twice the people.
+- **Scores fall by about half** (all levels). The score counts colonists, and many small colonies grow more of them: every colony works its centre tile for free and adds a food surplus. Fewer, larger colonies are what was asked for, but they cost points at turn 200; the levels keep their order (Creative first). Two games are few: Competent's second game (seed 1001) starts on a poor site and scores 24–76, which drags its average.
+- **The charter** mostly hits Naive and Combative (they expanded fastest): 18 → 8.5 and 15 → 8.5 colonies.
+- Tuning was done on other seeds (2000–2001), with short probe games; the full tournament was not rerun. Older tournament tables in this file were played without the charter and these pacing rules.
+
 ## Appendix: full feature tables (seeds 1000–1005, 6 games, 300 turns, medium)
 
 ### Before
