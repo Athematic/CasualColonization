@@ -183,12 +183,58 @@ What the numbers say:
 - **The feature is used.** Every advanced level ends most games with one Favoured Nation partner. Agreements come early, often within the first 50 turns; Favoured Nation follows once routes between the two reach the hidden threshold.
 - **No war on a Favoured Nation, ever, and no cancellation** in 16 games. The few wars are Combative's, on nations it had only a trade agreement with (it proposes agreements to all its neighbours, including the weak ones it may attack later; the agreement simply ends with the war).
 - **Partners' ports are used about twice a game per nation** (1–1.6 trips), when the cargo fetches clearly more there. Sales there never bring a tax raise, so the advanced levels accept fewer raises (6.0–6.3 a game, against 6.4–7.5 without proposals).
-- **Triangle trades are rare** (31 units bought a game by Creative, one completed trade in 16 games): the markets drift back to their starting prices and the nations sell raw goods that sit near their lowest price everywhere, so gaps of 10% after tax seldom appear.
+- **Triangle trades are rare** (31 units bought a game by Creative, one completed trade in 16 games): the markets drift back to their starting prices and the nations sell raw goods that sit near their lowest price everywhere, so gaps of 10% after tax seldom appear. (0.8 gave each port its own prices; triangle trades still do not happen, for want of free holds rather than gaps: see "Port character (0.8)".)
 - **Tax refusals** went from 0 (step 1) to 0.3–0.6 a game. The first rule (refuse any raise on a good under 10% of exports) refused 1.3–2.5 a game and cost points, so the rule became a break-even one: refuse only when losing the good's sales costs less than 70% of what the raise costs on everything else.
 - **Scores.** Combative gains (+8) and Competent is unchanged. Creative loses about 14 points a game (two standard errors). Its losses are not where it trades most: in game 2 (seed 1001) it lost 38 points with no trade at all, so part of it is the games simply taking another course. Earlier versions lost more and were fixed: routes that passed the same goods back and forth between partners and drained their treasuries (every level lost 10–30 points); ships going to partners' ports too readily, so colonists waited and gold sat idle (Creative's gold doubled); wagon trains taken from native trade in the early game. Naive's code did not change; it loses a little against stronger opponents.
 - **Runtime** did not grow: 21 min 10 s with Favoured Nation against 21 min 2 s without proposals (+0.7%), two runs side by side on the same machine; the step-1 code took 22 min 35 s when run beside them.
 
 Features still never used: buying a ship in a partner's port (prices are the same for every computer nation, so home is never dearer), and paying arrears (refusals are now rare and only for minor goods).
+
+## Port character (0.8)
+
+0.8 gave each home port its own character (`rules/ports.ts`; see [design/favoured-nation.md](design/favoured-nation.md), "Port character and partner ports for routes"), let trade routes call at a Favoured Nation partner's port, and looked again at why Creative scored less with Favoured Nation on.
+
+### The Creative dip
+
+Measured with `--no-favoured` on the same seeds (408 turns, which is 1750; medium map). Every game in these runs ends before turn 408, so `--turns 608` (1850) gives the same results. Differences are per game, with the same seed, ± one standard error.
+
+| Run | Games | Creative with − without | Its development points (colonists to wealth) | Peace points | Competent | Combative |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0.8 before this work | 16 | +19.8 ± 36.8 | −20 | +8.7 | +24.9 ± 32.2 | −79.9 ± 31.3 |
+| With port character | 48 | −27.0 ± 13.9 | −25 | +8.2 | +6.1 ± 17.1 | −6.4 ± 16.8 |
+| After the fix | 48 | +6.0 ± 16.9 | −2 | +7.7 | +1.3 ± 15.8 | +3.6 ± 14.2 |
+
+The development points (colonists, experts, buildings, production, liberty, fathers, wealth) are the steady part; independence swings of ±250 make the totals noisy. To find the cause, single behaviours were switched off for Creative only (32 games each, seeds 1000–1031, against Favoured Nation on):
+
+| Switched off for Creative | Change |
+| --- | ---: |
+| Its own proposals (others still propose to it) | +5.2 ± 15.7 |
+| Stops at partners' colonies on ship routes | **+24.3 ± 14.0** |
+| Wagon trains on routes to partners' colonies, and wagon trains built for them | **+20.9 ± 14.3** |
+| Routes calling at a partner's port | −0.4 ± 0.6 |
+
+**Cause.** While building ties towards Favoured Nation, the advanced levels took trade with partners' colonies that gained nothing: ship routes detoured up to six tiles to a partner's colony (a detour scored 10 gold a tile against a 200-gold bonus for ties), and colonies built wagon trains to serve partners while idle wagon trains left native trade, which pays several times what a partner's colony does. With Favoured Nation on, Creative sold a third less in Europe (981 against 1,486 units a game by routes) and its buildings, liberty and colonists fell behind. It hit Creative hardest because it traded most at partners' colonies (250 units a game, against 76–142 for the other advanced levels).
+
+**Fix** (`ai/logistics.ts`): a detour costs 40 gold a tile and ties count 100 gold, so a stop that gains nothing is only worth two tiles; wagon trains trade with partners' colonies only when no settlement nearby buys, and none are built just for ties. Cost: Favoured Nation forms less often, 0.17–0.29 times per advanced nation and game against about 0.6, and trade at partners' colonies falls from 76–250 to 11–35 units a game.
+
+### Triangle trades and partner ports
+
+Triangle trades still did not happen in any run. Prices were not the gate: in 16 games Creative's `triangleBuy` was reached 580 times, 26 of them with a second port open, and only once with a spare hold (its cargo ships run routes, and the one free ship is full of colonists and supplies). Partner-port sales: 90–180 units a game for Creative with port character (80–100 of them by routes calling at a partner's port), before the fix; after it, 45–175 units per advanced nation. No computer ship was bought in a partner's port.
+
+### Tournament: 4 games, 608 turns (1850), seeds 1000–1003
+
+```sh
+npm run tournament -- --games 4 --turns 608 --features [--no-favoured]
+```
+
+| Level | Before, with | Before, without | After, with | After, without |
+| --- | ---: | ---: | ---: | ---: |
+| Creative | 283.3 | 308.5 | 288.5 | 309.5 |
+| Combative | 231.0 | 217.3 | 370.3 | 303.0 |
+| Competent | 394.8 | 241.3 | 316.0 | 215.8 |
+| Naive | 168.0 | 142.3 | 178.3 | 166.5 |
+
+Independence won / lost (all levels, 4 games): before 2/2 with, 1/3 without; after 2/2 with, 1/3 without. Per game with Favoured Nation, before → after: 7 → 9 trade agreements, 1 → 0 Favoured Nation pairs, 618 → 119 units sold at partners' colonies, 311 → 0 in partners' ports, no triangle trades either way. Runtime: 56 s → 63 s with, 50 s → 54 s without (the two arms run side by side). Four games are far too few to compare levels (one independence war is worth 250 points); the 48-game runs above are the ones to go by.
 
 ## Natives: visible braves (0.5)
 
