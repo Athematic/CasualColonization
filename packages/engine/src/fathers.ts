@@ -5,8 +5,7 @@ import { applyEffects } from './events/effects.js';
 import { message, player } from './queries.js';
 import { random, weightedPick } from './rng.js';
 import { FATHERS, fatherCost, type FatherCategory, type FatherId } from './rules/fathers.js';
-import { NATIONS } from './rules/nations.js';
-import { councilOf, scenarioOf } from './scenarios/index.js';
+import { councilOf, nationOf, scenarioOf, term } from './scenarios/index.js';
 import { memberEffects } from './scenarios/modifiers.js';
 import type { GameState, Player } from './types.js';
 
@@ -63,10 +62,10 @@ export function joinCongress(s: GameState, p: Player, id: FatherId): void {
   p.currentFather = null;
   track(p.id, 'fathers:joined');
   const def = FATHERS[id];
-  message(s, `${def.name} joins the Continental Congress of ${NATIONS[p.id].name}. ${def.effect}`, p.id);
-  noteHistory(s, 'father', [p.id], `${def.name} joins the Continental Congress of ${NATIONS[p.id].name}.`);
+  message(s, `${def.name} joins the ${term(s, 'council')} of ${nationOf(s, p.id).name}. ${def.effect}`, p.id);
+  noteHistory(s, 'father', [p.id], `${def.name} joins the ${term(s, 'council')} of ${nationOf(s, p.id).name}.`);
   for (const other of s.players) {
-    if (other.id !== p.id) message(s, `${def.name} has joined the Continental Congress of ${NATIONS[p.id].name}.`, other.id);
+    if (other.id !== p.id) message(s, `${def.name} has joined the ${term(s, 'council')} of ${nationOf(s, p.id).name}.`, other.id);
   }
   // The member's one-off effects, in order (none of today's draws a random number).
   const onJoin = memberEffects(scenarioOf(s), id).onJoin;

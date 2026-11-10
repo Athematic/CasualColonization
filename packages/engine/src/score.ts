@@ -1,6 +1,6 @@
 import { sellPrice } from './europe.js';
 import { sonsOfLiberty } from './production.js';
-import { AMERICAS_CALENDAR, buildingsOf, goodsOf, scoreWeightsOf } from './scenarios/index.js';
+import { AMERICAS_CALENDAR, buildingsOf, goodsOf, scoreWeightsOf, Term } from './scenarios/index.js';
 import { hasTradeAgreement, isFavoured } from './relations.js';
 import { BUILDINGS } from './rules/buildings.js';
 import { UNIT_TYPES } from './rules/units.js';
@@ -98,7 +98,7 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreW
     line('buildings', 'Buildings', levels, 'building levels', levels * w.building),
     line('production', 'Production', production, 'goods per turn', production * w.production),
     line('liberty', 'Liberty', rebels, 'rebel colonists', rebels * w.rebel + halfColonies * w.libertyHalf + fullColonies * w.libertyFull),
-    line('fathers', 'Founding Fathers', p.fathers.length, 'fathers', p.fathers.length * w.father),
+    line('fathers', Term(s, 'members'), p.fathers.length, 'fathers', p.fathers.length * w.father),
     line('wealth', 'Wealth', wealth, 'gold and goods', wealth * w.wealth),
     line('peace', 'Peace and cooperation', agreements + tribes, 'agreements and tribes', agreements * w.tradeAgreement + favoured * w.favoured + tribes * w.peacefulTribe),
     line('independence', 'Independence won', p.independence === 'won' ? 1 : 0, 'won', p.independence === 'won' ? w.independence : 0),

@@ -1,4 +1,4 @@
-import { aBrave, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, TRIBES, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { aBrave, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, TRIBES, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import { icon } from '../styles.js';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -19,14 +19,15 @@ const ROUTINE = [
   /custom house in .* sold goods/,
   /has been taught to be/,
   /has been repaired\./,
-  /has arrived in (Europe|the New World)\b/,
-  /Religious unrest in Europe/,
+  // The scenario's terms ("Europe", "the New World", the council's name) are left out, so these match in every scenario.
+  /has arrived in /,
+  /^Religious unrest in /,
   /Clearing the forest brought/,
   /has used up all of their tools/,
   /convert has joined/,
   /as a gift\./,
   /has been founded\./,
-  /has joined the Continental Congress of/,
+  /has joined the .+ of /,
   /You decide in the turn-start briefing\.$/,
 ];
 
@@ -68,7 +69,7 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
       required: true,
       render: (done) =>
         h('div', { class: 'decision-body' },
-          h('p', null, `His Majesty raises the tax rate from ${me.tax}% to ${tax.rate}%. If you refuse, colonists will dump their ${good} in protest and ${good} will be boycotted in Europe until you pay the arrears.`),
+          h('p', null, `${Term(app.state, 'majesty')} raises the tax rate from ${me.tax}% to ${tax.rate}%. If you refuse, colonists will dump their ${good} in protest and ${good} will be boycotted in ${term(app.state, 'homeland')} until you pay the arrears.`),
           h('div', { class: 'decision-actions' },
             h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerTax', accept: true }) && done(`Accepted: the tax is now ${tax.rate}%.`) }, `Accept ${tax.rate}% tax`),
             h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerTax', accept: false }) && done(`Refused: ${good} is boycotted.`) }, `Refuse and hold a ${good} party`))),
@@ -83,9 +84,9 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
       required: true,
       render: (done) =>
         h('div', { class: 'decision-body' },
-          h('p', null, `His Majesty demands ${demand.gold.toLocaleString()} gold from your treasury (${me.gold.toLocaleString()} gold). If you refuse, ${colony ? `royal officials will seize the goods in ${colony.name}'s warehouse (all but food) and ` : ''}the King will send ${REF_ON_REFUSAL} more regulars to the Royal Expeditionary Force.`),
+          h('p', null, `${Term(app.state, 'majesty')} demands ${demand.gold.toLocaleString()} gold from your treasury (${me.gold.toLocaleString()} gold). If you refuse, ${colony ? `royal officials will seize the goods in ${colony.name}'s warehouse (all but food) and ` : ''}${term(app.state, 'king')} will send ${REF_ON_REFUSAL} more regulars to the ${term(app.state, 'ref')}.`),
           h('div', { class: 'decision-actions' },
-            h('button', { class: 'btn primary', disabled: short, title: short ? 'The treasury cannot pay this much.' : undefined, onclick: () => app.dispatch({ type: 'answerDemand', pay: true }, true) && done(`Paid ${demand.gold.toLocaleString()} gold to the King.`) }, `Pay ${demand.gold.toLocaleString()} gold`),
+            h('button', { class: 'btn primary', disabled: short, title: short ? 'The treasury cannot pay this much.' : undefined, onclick: () => app.dispatch({ type: 'answerDemand', pay: true }, true) && done(`Paid ${demand.gold.toLocaleString()} gold to ${term(app.state, 'king')}.`) }, `Pay ${demand.gold.toLocaleString()} gold`),
             h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerDemand', pay: false }, true) && done(colony ? `Refused: the goods in ${colony.name} were seized.` : 'Refused.') }, 'Refuse'))),
     });
   }
@@ -168,10 +169,10 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
     const p = rel.proposal;
     if (!p || p.from === me.id || (rel.a !== me.id && rel.b !== me.id)) continue;
     const from = p.from;
-    const name = NATIONS[from].name;
+    const name = nationOf(app.state, from).name;
     const text = p.kind === 'trade'
-      ? `${nationTitle(from)} proposes a trade agreement. Your trade routes may then call at each other's colonies: goods unloaded there are sold to the colony at its owner's home-market prices, and its surplus can be bought.`
-      : `${nationTitle(from)} proposes Favoured Nation status. Your ships may then trade, and buy merchant ships, in each other's home ports, and computer players never declare war on a Favoured Nation. Either side can cancel later, but goods near the other side's colonies are then seized and the trade routes between you end.`;
+      ? `${nationTitle(app.state, from)} proposes a trade agreement. Your trade routes may then call at each other's colonies: goods unloaded there are sold to the colony at its owner's home-market prices, and its surplus can be bought.`
+      : `${nationTitle(app.state, from)} proposes Favoured Nation status. Your ships may then trade, and buy merchant ships, in each other's home ports, and computer players never declare war on a Favoured Nation. Either side can cancel later, but goods near the other side's colonies are then seized and the trade routes between you end.`;
     list.push({
       id: `proposal-${from}`,
       title: p.kind === 'trade' ? `A trade agreement with ${name}` : `Favoured Nation status with ${name}`,
@@ -191,12 +192,12 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
       required: false,
       render: (done) =>
         h('div', { class: 'decision-body' },
-          h('p', null, `Choose the next Founding Father to join Congress. ${me.fatherBells}/${nextFatherCost(app.state, me)} liberty bells collected.${me.currentFather ? ` Congress currently works towards ${FATHERS[me.currentFather].name}.` : ''} You can also decide later.`),
+          h('p', null, `Choose the next ${term(app.state, 'member')} to join ${term(app.state, 'councilShort')}. ${me.fatherBells}/${nextFatherCost(app.state, me)} liberty bells collected.${me.currentFather ? ` ${term(app.state, 'councilShort')} currently works towards ${FATHERS[me.currentFather].name}.` : ''} You can also decide later.`),
           h('div', { class: 'decision-actions father-choices' },
             offer.map((id) =>
               h('button', {
                 class: id === me.currentFather ? 'btn father primary' : 'btn father',
-                onclick: () => app.dispatch({ type: 'chooseFather', father: id }, true) && done(`Congress will work towards ${FATHERS[id].name}.`),
+                onclick: () => app.dispatch({ type: 'chooseFather', father: id }, true) && done(`${Term(app.state, 'councilShort')} will work towards ${FATHERS[id].name}.`),
               },
               icon({ kind: 'father', id, category: FATHERS[id].category, variant: 'figure' }, 160, FATHERS[id].name),
               h('span', { class: 'father-text' },
@@ -207,7 +208,8 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
   return list;
 }
 
-const TITLES: Record<string, string> = { tax: 'The Crown raises taxes', demand: 'The King demands gold', mercenaries: 'Mercenaries offer their services', father: 'Continental Congress' };
+/** Decision headings; `{…}` are the scenario's terms. */
+const TITLES: Record<string, string> = { tax: '{Crown} raises taxes', demand: '{King} demands gold', mercenaries: 'Mercenaries offer their services', father: '{council}' };
 
 let open = false;
 
@@ -267,7 +269,7 @@ export function showTurnStart(app: App, news: TurnNews, opts: { father?: boolean
     const body = h('div', { class: 'turn-body' });
     const goOn = h('button', { class: 'btn primary', onclick: close }, 'Continue');
     const box = h('div', { class: 'dialog turn-modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'turn-modal-title' },
-      h('h2', { id: 'turn-modal-title' }, opts.heading ?? `${formatDate(app.state.turn, calendarOf(app.state))}: ${nationTitle(app.viewer)}`),
+      h('h2', { id: 'turn-modal-title' }, opts.heading ?? `${formatDate(app.state.turn, calendarOf(app.state))}: ${nationTitle(app.state, app.viewer)}`),
       body,
       h('div', { class: 'turn-footer' }, goOn));
     const backdrop = h('div', { class: 'backdrop turn-backdrop' }, box);
@@ -285,7 +287,7 @@ export function showTurnStart(app: App, news: TurnNews, opts: { father?: boolean
             h('h3', null, todo.length > 1 ? 'Decisions' : 'Decision'),
             todo.map((d) =>
               h('div', { class: `decision${d.answered ? ' answered' : ''}${d.required ? ' required' : ''}` },
-                h('h4', null, d.title ?? TITLES[d.id] ?? d.id, d.required && !d.answered ? h('span', { class: 'pill bad' }, 'Answer needed') : null),
+                h('h4', null, d.title ?? (TITLES[d.id] ? withTerms(app.state, TITLES[d.id]) : d.id), d.required && !d.answered ? h('span', { class: 'pill bad' }, 'Answer needed') : null),
                 d.answered
                   ? h('p', { class: 'answer' }, '✓ ', d.answered)
                   : d.render((summary) => {

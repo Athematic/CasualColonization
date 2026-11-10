@@ -2,7 +2,7 @@ import { fail } from './errors.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { hasModifier, modifiers, mulOf } from './scenarios/modifiers.js';
-import { settlementKindOf } from './scenarios/index.js';
+import { nationOf, nationTitle, settlementKindOf, term, Term } from './scenarios/index.js';
 import { canAttack } from './movement.js';
 import { braveDefence, braveName, bravesOf, killBrave } from './braves.js';
 import { addTension, settlementName } from './natives.js';
@@ -15,7 +15,6 @@ import {
   isCoastal,
   isShip,
   message,
-  nationTitle,
   player,
   tileAt,
   tileDefence,
@@ -31,7 +30,7 @@ import { riverLinked } from './rivers.js';
 import { isFavoured, onWar } from './relations.js';
 import { STOCKADE_DEFENCE } from './rules/buildings.js';
 import { AMBUSH_BONUS, BOMBARD_CHANCE, CAPTURE_CHANCE, REPAIR_COST, RIVER_DEFENCE } from './rules/combat.js';
-import { NATIONS, TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
 import { SURRENDER_CHANCE, SURRENDER_TRIBUTE } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
@@ -136,8 +135,8 @@ export function declareWar(s: GameState, a: string, b: string): void {
   pa.warSince[b] = s.turn;
   pb.warSince[a] = s.turn;
   if (b !== 'crown') track(a, 'diplomacy:war started');
-  if (a !== 'crown' && b !== 'crown') message(s, `${NATIONS[pa.id].name} has declared war on ${NATIONS[pb.id].name}!`);
-  if (a !== 'crown' && b !== 'crown') noteHistory(s, 'war', [pa.id, pb.id], `${nationTitle(pa.id)} declares war on ${NATIONS[pb.id].name}.`);
+  if (a !== 'crown' && b !== 'crown') message(s, `${nationOf(s, pa.id).name} has declared war on ${nationOf(s, pb.id).name}!`);
+  if (a !== 'crown' && b !== 'crown') noteHistory(s, 'war', [pa.id, pb.id], `${nationTitle(s, pa.id)} declares war on ${nationOf(s, pb.id).name}.`);
 }
 
 /** Sends a beaten ship to the nearest drydock, or home to Europe, for repairs. Cargo and passengers are lost. */
@@ -158,7 +157,7 @@ function damageShip(s: GameState, ship: Unit): string {
   if (player(s, ship.owner).independence === 'none' && ship.owner !== 'crown') {
     ship.loc = { kind: 'europe' };
     ship.repair = 6;
-    return `${name} is damaged and returns to Europe for repairs`;
+    return `${name} is damaged and returns to ${term(s, 'homeland')} for repairs`;
   }
   delete s.units[ship.id];
   return `${name} is sunk`;
@@ -258,7 +257,7 @@ export function repairArtillery(s: GameState, nation: NationId, unitId: string):
     if (colony.hammers < REPAIR_COST.hammers || colony.goods.tools < REPAIR_COST.tools) fail(`Repairs need ${REPAIR_COST.hammers} hammers (built up) and ${REPAIR_COST.tools} tools in the warehouse.`);
     colony.hammers -= REPAIR_COST.hammers;
     colony.goods.tools -= REPAIR_COST.tools;
-  } else fail('The artillery must be in a colony or in Europe.');
+  } else fail(`The artillery must be in a colony or in ${term(s, 'homeland')}.`);
   u.type = 'artillery';
   u.moves = 0;
   return `${unitName(u)} has been repaired.`;
@@ -375,9 +374,9 @@ function captureColony(s: GameState, attacker: Unit, colony: Colony): string {
     else o.owner = attacker.owner;
   }
   if (attacker.loc.kind === 'map') attacker.loc = { kind: 'map', x: colony.x, y: colony.y };
-  const by = attacker.owner === 'crown' ? 'Royal troops' : nationTitle(attacker.owner);
-  noteHistory(s, 'captured', [attacker.owner, previous], `${by} capture${attacker.owner === 'crown' ? '' : 's'} ${colony.name} from ${NATIONS[previous].name}.`, { secret: true, at: colony });
-  return `${NATIONS[attacker.owner].name} captures ${colony.name}!`;
+  const by = attacker.owner === 'crown' ? `${Term(s, 'royalTroops')}` : nationTitle(s, attacker.owner);
+  noteHistory(s, 'captured', [attacker.owner, previous], `${by} capture${attacker.owner === 'crown' ? '' : 's'} ${colony.name} from ${nationOf(s, previous).name}.`, { secret: true, at: colony });
+  return `${nationOf(s, attacker.owner).name} captures ${colony.name}!`;
 }
 
 /** Attacking a tribe makes it an enemy, and ends any submission to the attacker. */
@@ -386,7 +385,7 @@ function hostile(s: GameState, tribeId: TribeId, nation: NationId, at: { x: numb
   if (tribe.submitted?.includes(nation)) tribe.submitted = tribe.submitted.filter((n) => n !== nation);
   if (tribe.stance[nation] !== 'war') {
     tribe.stance[nation] = 'war';
-    message(s, `The ${TRIBES[tribeId].name} now consider ${NATIONS[nation].name} an enemy.`, nation, at);
+    message(s, `The ${TRIBES[tribeId].name} now consider ${nationOf(s, nation).name} an enemy.`, nation, at);
     noteHistory(s, 'tribe', [nation], `War with the ${TRIBES[tribeId].name}, after ${cause}.`, { secret: true, at });
   }
 }
@@ -509,7 +508,7 @@ function surrender(s: GameState, tribeId: TribeId, nation: NationId, at: { x: nu
   }
   player(s, nation).gold += tribute;
   track(nation, 'natives:tribe surrendered');
-  noteHistory(s, 'tribe', [nation], `The ${TRIBES[tribeId].name} surrender to ${NATIONS[nation].name} after losing their capital, and pay ${tribute} gold.`, { at });
+  noteHistory(s, 'tribe', [nation], `The ${TRIBES[tribeId].name} surrender to ${nationOf(s, nation).name} after losing their capital, and pay ${tribute} gold.`, { at });
   return ` The remaining ${TRIBES[tribeId].name} settlements surrender and pay a tribute of ${tribute} gold; their land is now open to you.`;
 }
 
@@ -520,7 +519,7 @@ export function cashTreasure(s: GameState, unitId: string): string {
   const colony = colonyAt(s, u.loc.x, u.loc.y);
   if (!colony || colony.owner !== u.owner) fail('Bring the treasure into one of your colonies first.');
   const p = player(s, u.owner);
-  if (p.independence !== 'none') fail('The Crown will not carry treasure for rebels; use your own galleon.');
+  if (p.independence !== 'none') fail(`${Term(s, 'crown')} will not carry treasure for rebels; use your own galleon.`);
   if (!isCoastal(s, colony.x, colony.y)) fail('The treasure must reach a coastal colony.');
   const gross = u.treasure ?? 0;
   const fee = modifiers(s, u.owner, 'treasureFee').at(-1)?.set ?? Math.round(gross / 2);
@@ -529,8 +528,8 @@ export function cashTreasure(s: GameState, unitId: string): string {
   p.gold += net;
   delete s.units[u.id];
   track(u.owner, 'cmd:cashTreasure');
-  const text = `The Crown carries the treasure to Europe${fee ? ` for half its value` : ''}: ${net} gold after tax.`;
+  const text = `${Term(s, 'crown')} carries the treasure to ${term(s, 'homeland')}${fee ? ` for half its value` : ''}: ${net} gold after tax.`;
   message(s, text, u.owner, colony);
-  noteHistory(s, 'treasure', [u.owner], `A treasure of ${gross} gold reaches Europe from ${colony.name}: ${net} gold after the Crown's share and tax.`, { secret: true, at: colony });
+  noteHistory(s, 'treasure', [u.owner], `A treasure of ${gross} gold reaches ${term(s, 'homeland')} from ${colony.name}: ${net} gold after ${term(s, 'crown')}'s share and tax.`, { secret: true, at: colony });
   return text;
 }

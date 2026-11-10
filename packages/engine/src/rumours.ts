@@ -5,8 +5,8 @@ import { randInt, weightedPick } from './rng.js';
 import { randomImmigrant } from './europe.js';
 import { modifiers } from './scenarios/modifiers.js';
 import type { RumourOutcome } from './rules/modifiers.js';
-import { difficultyOf, rumoursOf } from './scenarios/index.js';
-import { NATIONS, TRIBES } from './rules/nations.js';
+import { difficultyOf, nationOf, rumoursOf, term } from './scenarios/index.js';
+import { TRIBES } from './rules/nations.js';
 import { BURIAL_RADIUS } from './rules/natives.js';
 import type { GameState, Settlement, Unit } from './types.js';
 
@@ -63,37 +63,37 @@ export function resolveRumour(s: GameState, u: Unit): void {
   if (outcome === 'lost') track(u.owner, 'explore:expedition lost');
   switch (outcome) {
     case 'nothing':
-      message(s, 'The rumour proves to be nothing more than tall tales.', u.owner, pos);
+      message(s, term(s, 'rumour.nothing'), u.owner, pos);
       break;
     case 'tales':
       reveal(s, u.owner, pos.x, pos.y, 6);
-      message(s, 'You meet travellers who describe the lands around you.', u.owner, pos);
+      message(s, term(s, 'rumour.tales'), u.owner, pos);
       break;
     case 'smallTreasure': {
       const gold = (50 + randInt(s, 150)) * (expert ? 2 : 1);
       p.gold += gold;
-      message(s, `You find a small trinket cache worth ${gold} gold.`, u.owner, pos);
+      message(s, term(s, 'rumour.smallTreasure', { gold }), u.owner, pos);
       break;
     }
     case 'colonist':
       createUnit(s, u.owner, 'freeColonist', { kind: 'map', x: pos.x, y: pos.y });
-      message(s, 'You find survivors of a lost colony; they join you as free colonists.', u.owner, pos);
+      message(s, term(s, 'rumour.colonist'), u.owner, pos);
       break;
     case 'treasure': {
       const gold = 300 + randInt(s, 700);
       p.gold += gold;
-      message(s, `You discover the ruins of a lost civilisation and recover ${gold} gold!`, u.owner, pos);
-      noteHistory(s, 'treasure', [u.owner], `Explorers find the ruins of a lost civilisation and recover ${gold} gold.`, { secret: true, at: pos });
+      message(s, term(s, 'rumour.treasure', { gold }), u.owner, pos);
+      noteHistory(s, 'treasure', [u.owner], term(s, 'rumour.treasure.history', { gold }), { secret: true, at: pos });
       break;
     }
     case 'fountain':
       for (let i = 0; i < 4; i++) createUnit(s, u.owner, randomImmigrant(s, u.owner), { kind: 'europe' });
-      message(s, 'You have found the Fountain of Youth! Four new colonists wait on the docks in Europe.', u.owner, pos);
-      noteHistory(s, 'treasure', [u.owner], 'Explorers find the Fountain of Youth: four colonists come from Europe.', { secret: true, at: pos });
+      message(s, term(s, 'rumour.fountain'), u.owner, pos);
+      noteHistory(s, 'treasure', [u.owner], term(s, 'rumour.fountain.history'), { secret: true, at: pos });
       break;
     case 'lost':
       delete s.units[u.id];
-      message(s, 'The expedition vanishes without a trace.', u.owner, pos);
+      message(s, term(s, 'rumour.lost'), u.owner, pos);
       break;
     case 'burial': {
       // The tribe is furious for good and at war until it is destroyed (see processNatives).
@@ -104,9 +104,10 @@ export function resolveRumour(s: GameState, u: Unit): void {
       tribe.stance[u.owner] = 'war';
       for (const st of Object.values(s.settlements)) if (st.tribe === tribeId) st.tension[u.owner] = 1000;
       track(u.owner, 'natives:burial ground disturbed');
-      noteHistory(s, 'tribe', [u.owner], `${NATIONS[u.owner].adjective} explorers disturb a ${TRIBES[tribeId].name} burial ground; the ${TRIBES[tribeId].name} swear eternal war.`, { at: pos });
+      const vars = { tribe: TRIBES[tribeId].name, nation: nationOf(s, u.owner).name, adjective: nationOf(s, u.owner).adjective };
+      noteHistory(s, 'tribe', [u.owner], term(s, 'rumour.burial.history', vars), { at: pos });
       track(u.owner, 'natives:tribe went to war');
-      message(s, `You have disturbed a ${TRIBES[tribeId].name} burial ground! The ${TRIBES[tribeId].name} swear eternal vengeance on ${NATIONS[u.owner].name}.`, u.owner, pos);
+      message(s, term(s, 'rumour.burial', vars), u.owner, pos);
       break;
     }
   }

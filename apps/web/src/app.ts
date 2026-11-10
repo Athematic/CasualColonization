@@ -1,41 +1,42 @@
 import {
-  canFoundColony,
-  charterCost,
   braveName,
   bravesAt,
   buildMapIndex,
-  incitePrice,
-  pendingDemands,
-  pendingEvents,
-  canUseRoutes,
+  calendarOf,
+  canFoundColony,
   canImprove,
-  IMPROVEMENT_TURNS,
+  canUseRoutes,
+  charterCost,
   colonyAt,
   describeMove,
   DIRECTIONS,
   distance,
   findPath,
-  calendarOf,
   formatDate,
   Game,
   handOver,
-  nationTitle,
-  portName,
-  portsFor,
-  tensionLabel,
-  unitName,
+  IMPROVEMENT_TURNS,
+  incitePrice,
   isShip,
   isWater,
   mapRevealed,
   maxMoves,
   moveCost,
-  NATIONS,
+  nationOf,
+  nationTitle,
+  pendingDemands,
+  pendingEvents,
   player,
+  portName,
+  portsFor,
+  serialize,
   settlementAt,
   settlementName,
-  serialize,
+  tensionLabel,
+  term,
   tileAt,
   tileDescription,
+  unitName,
   unitPosition,
   unitsAboard,
   unitsAt,
@@ -178,7 +179,7 @@ export class App {
   ) {
     this.observer = !game.state.players.some((p) => p.human);
     this.viewer = this.humanViewer();
-    this.canvas = h('canvas', { class: 'map', 'aria-label': 'Map of the New World' });
+    this.canvas = h('canvas', { class: 'map', 'aria-label': `Map of ${term(this.state, 'colonyLand')}` });
     this.mapWrap = h('div', { class: 'map-wrap' }, this.canvas);
     this.sidebar = new Sidebar(this);
     this.screenHost = h('div', { class: 'screen-host' });
@@ -317,7 +318,7 @@ export class App {
     }
     saveAuto(serialize(this.state));
     this.game.emit();
-    toast(`${formatDate(this.state.turn, calendarOf(this.state))}: ${nations.length > 1 ? 'your nations are' : `${nationTitle(this.viewer)} is`} yours to command.`);
+    toast(`${formatDate(this.state.turn, calendarOf(this.state))}: ${nations.length > 1 ? 'your nations are' : `${nationTitle(this.state, this.viewer)} is`} yours to command.`);
     void this.turnStart();
   }
 
@@ -556,10 +557,10 @@ export class App {
     const st = this.state.settlements[settlementId];
     const labels = {
       speak: 'Speak with the chief',
-      mission: st.mission ? `A ${NATIONS[st.mission].adjective} mission is already here` : 'Establish a mission',
+      mission: st.mission ? `A ${nationOf(this.state, st.mission).adjective} mission is already here` : 'Establish a mission',
       learn: st.skill ? `Live among the natives (learn: ${st.skill.replace(/([A-Z])/g, ' $1').toLowerCase()})` : 'Live among the natives (nothing left to teach)',
       trade: 'Trade: sell and buy goods',
-      denounce: st.mission ? `Denounce the ${NATIONS[st.mission].adjective} mission` : 'Denounce a rival mission',
+      denounce: st.mission ? `Denounce the ${nationOf(this.state, st.mission).adjective} mission` : 'Denounce a rival mission',
       incite: `Incite the natives against a rival (${incitePrice(this.state, st)} gold)`,
       attack: 'Attack the settlement',
     } as const;
@@ -603,9 +604,9 @@ export class App {
   }
 
   private suggestedName(): string {
-    const names = NATIONS[this.viewer].colonyNames;
+    const names = nationOf(this.state, this.viewer).colonyNames;
     const used = new Set(Object.values(this.state.colonies).map((c) => c.name));
-    return names.find((n) => !used.has(n)) ?? `${NATIONS[this.viewer].adjective} Colony`;
+    return names.find((n) => !used.has(n)) ?? `${nationOf(this.state, this.viewer).adjective} Colony`;
   }
 
   improve(): void {
@@ -645,7 +646,7 @@ export class App {
     let port: NationId | undefined;
     if (ports.length > 1) {
       const choice = await choose<NationId>('Sail to which port?', `${unitName(u)} can sail to your own home port or to a Favoured Nation's. In a partner's port you trade at its prices and tax and can buy merchant ships; colonists are recruited and go ashore only at home.`,
-        ports.map((p, i) => ({ label: `${portName(p)}${i === 0 ? ' (home)' : ` (${NATIONS[p].adjective})`}`, value: p, primary: i === 0 })));
+        ports.map((p, i) => ({ label: `${portName(this.state, p)}${i === 0 ? ' (home)' : ` (${nationOf(this.state, p).adjective})`}`, value: p, primary: i === 0 })));
       if (!choice) return;
       port = choice === u.owner ? undefined : choice;
     }
@@ -699,7 +700,7 @@ export class App {
       const veil = h(
         'div',
         { class: 'handoff' },
-        h('div', { class: 'dialog' }, h('h2', null, `${nationTitle(nation)} to move`), h('p', null, `${formatDate(this.state.turn, calendarOf(this.state))}. Pass the device to the player of ${NATIONS[nation].name}.`),
+        h('div', { class: 'dialog' }, h('h2', null, `${nationTitle(this.state, nation)} to move`), h('p', null, `${formatDate(this.state.turn, calendarOf(this.state))}. Pass the device to the player of ${nationOf(this.state, nation).name}.`),
           h('button', { class: 'btn primary', onclick: () => { veil.remove(); resolve(); } }, 'Begin turn')),
       );
       document.body.appendChild(veil);

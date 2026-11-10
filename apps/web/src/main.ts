@@ -1,4 +1,4 @@
-import { calendarOf, createGame, deserialize, gameCodeFromSearch, searchWithoutGameCode, formatDate, Game, handOver, headStartConfig, playUntil, serialize, type GameConfig, type GameState } from '@cc/engine';
+import { calendarOf, createGame, term, deserialize, gameCodeFromSearch, searchWithoutGameCode, formatDate, Game, handOver, headStartConfig, playUntil, serialize, type GameConfig, type GameState } from '@cc/engine';
 import { h } from './dom.js';
 import { App } from './app.js';
 import { savedStyle, setStyle } from './styles.js';
@@ -66,7 +66,7 @@ function startGame(config: GameConfig, head?: HeadStart): void {
 function skipAhead(state: GameState, turn: number): void {
   let cancelled = false;
   const bar = h('span', { style: 'width:0%' });
-  const label = h('p', null, 'Preparing the New World…');
+  const label = h('p', null, `Preparing ${term(state, 'colonyLand')}…`);
   host.replaceChildren(
     h('main', { class: 'menu-screen' },
       h('div', { class: 'menu-card' },

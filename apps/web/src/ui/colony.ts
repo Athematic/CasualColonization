@@ -1,31 +1,35 @@
 import {
   abandonProblem,
+  buildingName,
   BUILDINGS,
+  buildingsOf,
   buildOptions,
   buildTargetCost,
-  buildingName,
   centreProduction,
   colonyReport,
   colonyWorkers,
   foodToGrow,
   GOOD_DEFS,
+  goodsOf,
   hurryPrice,
   isCarrier,
   isWater,
   landPrice,
+  nationOf,
   nativeLandOwner,
-  SCHOOL_TEACHERS,
-  TEACH_TURNS,
-  TRIBES,
   PRODUCT_NAMES,
   ROLES,
+  SCHOOL_TEACHERS,
+  TEACH_TURNS,
+  term,
   tileAt,
   tileDescription,
   tileYield,
+  TRIBES,
+  UNIT_TYPES,
   unitName,
   unitsAboard,
   unitsAt,
-  UNIT_TYPES,
   warehouseCapacity,
   type BuildTarget,
   type BuildingKind,
@@ -35,8 +39,6 @@ import {
   type ProductId,
   type RoleId,
   type Unit,
-  goodsOf,
-  buildingsOf,
 } from '@cc/engine';
 import type { MapRenderer } from '@cc/render-api';
 import type { App, Screen } from '../app.js';
@@ -169,7 +171,7 @@ export class ColonyScreen implements Screen {
           title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : native ? ` (land of the ${TRIBES[native.tribe].name})` : ''}`,
           onclick: () => this.clickTile(colony, x, y, worker),
         },
-        worker ? icon({ kind: 'unit', type: worker.type, role: 'none', nation: worker.owner }, 40, unitName(worker)) : null,
+        worker ? icon({ kind: 'unit', type: worker.type, role: 'none', color: nationOf(this.app.state, worker.owner).color }, 40, unitName(worker)) : null,
         job ? h('span', { class: 'yield' }, icon({ kind: 'product', product: job.good }, 18), workers[worker!.id] ?? 0) : null));
       }
     }
@@ -256,7 +258,7 @@ export class ColonyScreen implements Screen {
       for (let i = 0; i < places; i++) {
         const w = here[i];
         slots.push(w
-          ? h('span', { class: `slot${w.id === this.selected ? ' selected' : ''}`, onclick: (e: Event) => { e.stopPropagation(); this.toggleSelect(w.id); } }, icon({ kind: 'unit', type: w.type, role: 'none', nation: w.owner }, 36, unitName(w)))
+          ? h('span', { class: `slot${w.id === this.selected ? ' selected' : ''}`, onclick: (e: Event) => { e.stopPropagation(); this.toggleSelect(w.id); } }, icon({ kind: 'unit', type: w.type, role: 'none', color: nationOf(this.app.state, w.owner).color }, 36, unitName(w)))
           : h('span', { class: 'slot empty' }));
       }
       const production = out && def.output
@@ -354,7 +356,7 @@ export class ColonyScreen implements Screen {
     }
 
     const chip = (u: Unit) => h('button', { class: `chip${u.id === this.selected ? ' selected' : ''}`, onclick: () => this.toggleSelect(u.id) },
-      icon({ kind: 'unit', type: u.type, role: u.role, nation: u.owner }, 32), unitName(u));
+      icon({ kind: 'unit', type: u.type, role: u.role, color: nationOf(this.app.state, u.owner).color }, 32), unitName(u));
 
     return h('div', { class: 'card side' },
       h('h3', null, 'Production'),
@@ -366,7 +368,7 @@ export class ColonyScreen implements Screen {
       carriers.length ? h('h3', null, 'In port') : null,
       carriers.map((c) => h('div', { class: `carrier${c.id === this.carrier ? ' selected' : ''}` },
         h('button', { class: 'chip', onclick: () => { this.carrier = this.carrier === c.id ? undefined : c.id; this.app.requestRender(); } },
-          icon({ kind: 'unit', type: c.type, role: 'none', nation: c.owner }, 36), `${unitName(c)}${c.repair ? ` (repairing, ${c.repair} turns)` : c.id === this.carrier ? ' (loading)' : ''}`),
+          icon({ kind: 'unit', type: c.type, role: 'none', color: nationOf(this.app.state, c.owner).color }, 36), `${unitName(c)}${c.repair ? ` (repairing, ${c.repair} turns)` : c.id === this.carrier ? ' (loading)' : ''}`),
         h('div', { class: 'chips' },
           unitsAboard(s, c).map(chip),
           goodsOf(s).filter((g) => (c.cargo?.[g] ?? 0) > 0).map((g) => h('button', { class: 'chip', title: 'Unload', onclick: () => this.dispatch({ type: 'unloadGoods', carrierId: c.id, good: g, amount: c.cargo![g]! }) },
@@ -379,7 +381,7 @@ export class ColonyScreen implements Screen {
     const customs = colony.buildings.customHouse > 0;
     return h('div', { class: 'card warehouse' },
       h('h3', null, this.carrier ? 'Warehouse — click a good to load 100 onto the ship' : 'Warehouse'),
-      customs ? h('p', { class: 'muted small' }, 'Custom house: ticked goods above 50 are sold in Europe at the end of each turn.') : null,
+      customs ? h('p', { class: 'muted small' }, `Custom house: ticked goods above 50 are sold in ${term(this.app.state, 'homeland')} at the end of each turn.`) : null,
       h('div', { class: 'goods' }, goodsOf(this.app.state).map((g) => {
         const amount = colony.goods[g];
         const over = g !== 'food' && amount > cap;

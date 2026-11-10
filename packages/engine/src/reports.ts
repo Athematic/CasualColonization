@@ -20,7 +20,7 @@ import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { ledgerFor } from './history.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
-import { goodsOf } from './scenarios/index.js';
+import { goodsOf, term } from './scenarios/index.js';
 
 // ---- Colonies ----
 
@@ -185,9 +185,9 @@ function forceKind(u: Unit): ForceKind {
 function whereIs(s: GameState, u: Unit): { where: string; colonyId?: string; at?: { x: number; y: number } } {
   switch (u.loc.kind) {
     case 'europe':
-      return { where: 'In Europe' };
+      return { where: `In ${term(s, 'homeland')}` };
     case 'sailing':
-      return { where: u.loc.to === 'europe' ? 'Sailing to Europe' : 'Sailing to the New World' };
+      return { where: u.loc.to === 'europe' ? `Sailing to ${term(s, 'homeland')}` : `Sailing to ${term(s, 'colonyLand')}` };
     case 'carrier': {
       const ship = s.units[u.loc.carrierId];
       const at = ship && unitPosition(s, ship);
@@ -252,7 +252,7 @@ export function navalOverview(s: GameState, nation: NationId): ShipOverview[] {
       else if (route) orders = `Route: ${route.name}`;
       else if (u.loc.kind === 'sailing') orders = `Arrives in ${u.loc.turnsLeft} turn${u.loc.turnsLeft > 1 ? 's' : ''}`;
       else if (u.roadTo) orders = `Road to ${u.roadTo.x},${u.roadTo.y}`;
-      else if (u.dest) orders = 'europe' in u.dest ? 'Bound for Europe' : `Going to ${u.dest.x},${u.dest.y}`;
+      else if (u.dest) orders = 'europe' in u.dest ? `Bound for ${term(s, 'homeland')}` : `Going to ${u.dest.x},${u.dest.y}`;
       else if (u.state === 'sentry') orders = 'Sentry';
       const w = whereIs(s, u);
       return { unit: u, name: unitName(u), where: w.where, at: w.at, holds: UNIT_TYPES[u.type].cargo, used, cargo, passengers, orders, repair: u.repair ?? null };

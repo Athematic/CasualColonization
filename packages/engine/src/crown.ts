@@ -14,10 +14,10 @@ import { royalForce } from './independence.js';
 import { message, player } from './queries.js';
 import { hasTradeAgreement, isFavoured, pairRandom } from './relations.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
-import { NATIONS, type NationId } from './rules/nations.js';
+import { type NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, Player } from './types.js';
-import { difficultyOf, goodsOf, mechanicsOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, mechanicsOf, nationOf, term, Term } from './scenarios/index.js';
 
 // ---------------------------------------------------------------------------
 // The Royal Expeditionary Force
@@ -91,7 +91,7 @@ function growForce(s: GameState, p: Player, colonies: number): void {
   crown.points -= n;
   const added = addToForce(p, n);
   track(p.id, 'crown:ref units added', n);
-  message(s, `The King adds ${listForce(added)} to the Royal Expeditionary Force. Royal forces: ${describeForce(p.ref)}.`, p.id);
+  message(s, `${Term(s, 'king')} adds ${listForce(added)} to the ${term(s, 'ref')}. Royal forces: ${describeForce(p.ref)}.`, p.id);
 }
 
 /** Only the kinds that are there: "2 regulars and 1 dragoon". */
@@ -139,7 +139,7 @@ function maybeDemand(s: GameState, p: Player, colonies: number): void {
   const seize = seizureColony(s, p.id);
   p.pendingDemand = { gold, colony: seize?.colony.id ?? null, turn: s.turn };
   track(p.id, 'crown:demand made');
-  message(s, `His Majesty demands ${gold} gold from the treasury of ${NATIONS[p.id].name}.`, p.id);
+  message(s, `${Term(s, 'majesty')} demands ${gold} gold from the treasury of ${nationOf(s, p.id).name}.`, p.id);
 }
 
 /** What refusing the pending demand would cost: the goods seized, and the regulars added. */
@@ -158,22 +158,22 @@ export function demandPenalty(s: GameState, nation: NationId): { colony: Colony 
 export function answerDemand(s: GameState, nation: NationId, pay: boolean): string {
   const p = player(s, nation);
   const demand = p.pendingDemand;
-  if (!demand) fail('The King has demanded nothing.');
-  if (pay && p.gold < demand.gold) fail(`The King demands ${demand.gold} gold; the treasury holds ${p.gold}.`);
+  if (!demand) fail(`${Term(s, 'king')} has demanded nothing.`);
+  if (pay && p.gold < demand.gold) fail(`${Term(s, 'king')} demands ${demand.gold} gold; the treasury holds ${p.gold}.`);
   track(nation, 'cmd:answerDemand');
   if (pay) {
     delete p.pendingDemand;
     p.gold -= demand.gold;
     track(nation, 'crown:demand paid');
-    noteHistory(s, 'crown', [nation], `${NATIONS[nation].name} pays the King ${demand.gold} gold.`, { secret: true });
-    const text = `You pay the King ${demand.gold} gold.`;
+    noteHistory(s, 'crown', [nation], `${nationOf(s, nation).name} pays ${term(s, 'king')} ${demand.gold} gold.`, { secret: true });
+    const text = `You pay ${term(s, 'king')} ${demand.gold} gold.`;
     message(s, text, nation);
     return text;
   }
   const { colony } = demandPenalty(s, nation);
   delete p.pendingDemand;
   track(nation, 'crown:demand refused');
-  noteHistory(s, 'crown', [nation], `${NATIONS[nation].name} refuses the King's demand for ${demand.gold} gold${colony ? `; the goods in ${colony.name} are seized` : ''}.`, { secret: true, at: colony ?? undefined });
+  noteHistory(s, 'crown', [nation], `${nationOf(s, nation).name} refuses ${term(s, 'king')}'s demand for ${demand.gold} gold${colony ? `; the goods in ${colony.name} are seized` : ''}.`, { secret: true, at: colony ?? undefined });
   const seized: string[] = [];
   if (colony) {
     for (const g of goodsOf(s)) {
@@ -186,7 +186,7 @@ export function answerDemand(s: GameState, nation: NationId, pay: boolean): stri
   const ref = mechanicsOf(s).ref;
   if (ref) p.ref.regulars += REF_ON_REFUSAL;
   const goods = colony && seized.length ? ` Royal officials seize the goods in ${colony.name}: ${seized.join(', ')}.` : '';
-  const text = `You refuse the King's demand for ${demand.gold} gold.${goods}${ref ? ` The King sends ${REF_ON_REFUSAL} more regulars to the Royal Expeditionary Force.` : ''}`;
+  const text = `You refuse ${term(s, 'king')}'s demand for ${demand.gold} gold.${goods}${ref ? ` ${Term(s, 'king')} sends ${REF_ON_REFUSAL} more regulars to the ${term(s, 'ref')}.` : ''}`;
   message(s, text, nation, colony ?? undefined);
   return text;
 }
@@ -220,16 +220,16 @@ export function royalWarTargets(s: GameState, nation: NationId): { nation: Natio
 /** The King declares war on another European nation for this nation. */
 export function royalWar(s: GameState, nation: NationId, target: NationId): void {
   const p = player(s, nation);
-  if (p.independence !== 'none' || player(s, target).independence !== 'none') fail('The King declares no wars for or on independent nations.');
-  if (isFavoured(s, nation, target)) fail('The King declares no war on a Favoured Nation.');
+  if (p.independence !== 'none' || player(s, target).independence !== 'none') fail(`${Term(s, 'king')} declares no wars for or on independent nations.`);
+  if (isFavoured(s, nation, target)) fail(`${Term(s, 'king')} declares no war on a Favoured Nation.`);
   declareWar(s, nation, target);
   const crown = (p.royal = p.royal ?? { bells: p.bells, points: 0, added: 0 });
   crown.lastWar = s.turn;
   crown.warOn = target;
   track(nation, 'crown:royal war');
-  noteHistory(s, 'crown', [nation, target], `The King of ${NATIONS[nation].name} declares war on ${NATIONS[target].name}.`);
-  message(s, `The King has declared war on ${NATIONS[target].name}! Your colonies are at war with ${NATIONS[target].name}, whether you want it or not. Peace can be made later, as usual.`, nation);
-  message(s, `The King of ${NATIONS[nation].name} has declared war on ${NATIONS[target].name}.`, target);
+  noteHistory(s, 'crown', [nation, target], `${Term(s, 'king')} of ${nationOf(s, nation).name} declares war on ${nationOf(s, target).name}.`);
+  message(s, `${Term(s, 'king')} has declared war on ${nationOf(s, target).name}! Your colonies are at war with ${nationOf(s, target).name}, whether you want it or not. Peace can be made later, as usual.`, nation);
+  message(s, `${Term(s, 'king')} of ${nationOf(s, nation).name} has declared war on ${nationOf(s, target).name}.`, target);
 }
 
 function maybeRoyalWar(s: GameState, p: Player, colonies: number): void {

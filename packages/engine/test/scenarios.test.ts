@@ -80,10 +80,12 @@ describe('the Americas scenario is today’s tables', () => {
     expect(max).toBe(8);
     expect(sets.alternative.map((e) => e.id)).toEqual(NATION_ORDER);
     expect(sets.real?.map((e) => e.id)).toEqual(['england', 'france', 'netherlands', 'spain']);
-    for (const e of [...sets.alternative, ...(sets.real ?? [])]) {
+    for (const e of [...sets.alternative, ...(sets.real ?? []), AMERICAS.nations.crown]) {
+      // Q2: nations are per scenario; the Americas' are the catalogue's values.
+      expect([e.name, e.adjective, e.color]).toEqual([NATIONS[e.id].name, NATIONS[e.id].adjective, NATIONS[e.id].color]);
       expect(e.bonus.text).toBe(NATIONS[e.id].bonus);
       expect(e.colonyNames).toEqual(NATIONS[e.id].colonyNames);
-      expect(e.port).toEqual(PORT_CHARACTER[e.id]);
+      expect(e.port).toEqual(PORT_CHARACTER[e.id] ?? { name: HOME_PORTS[e.id] });
       expect(e.port.name).toBe(HOME_PORTS[e.id]);
     }
   });
@@ -161,6 +163,7 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
       for (const e of set) {
         expect(NATIONS[e.id]).toBeDefined();
         expect(e.id).not.toBe('crown');
+        expect(e.name && e.adjective && e.color).toBeTruthy();
         expect(e.port.name).toBeTruthy();
         expect(e.colonyNames.length).toBeGreaterThan(0);
       }

@@ -30,7 +30,7 @@ import { riverLinked } from './rivers.js';
 import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
 import type { TribeId } from './rules/nations.js';
 import type { GameState, ImprovementKind, Player, Unit } from './types.js';
-import { mechanicsOf } from './scenarios/index.js';
+import { mechanicsOf, term } from './scenarios/index.js';
 
 export type MoveOption =
   | { kind: 'move' }
@@ -486,7 +486,7 @@ function directionTo(fx: number, fy: number, tx: number, ty: number): Direction 
 export function setDestination(s: GameState, unitId: string, dest: Unit['dest']): void {
   const u = s.units[unitId];
   if (u.loc.kind !== 'map') fail('Only units on the map can be given orders.');
-  if (dest && 'europe' in dest && !isShip(u)) fail('Only ships can sail to Europe.');
+  if (dest && 'europe' in dest && !isShip(u)) fail(`Only ships can sail to ${term(s, 'homeland')}.`);
   if (dest && 'europe' in dest && dest.port) {
     if (dest.port === u.owner) dest = { europe: true };
     else {

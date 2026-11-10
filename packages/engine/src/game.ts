@@ -2,7 +2,7 @@ import { applyCommand, type Command, type CommandResult } from './commands.js';
 import { initialMarket, randomImmigrant } from './europe.js';
 import { placeOnMap } from './movement.js';
 import { createUnit, message, reveal } from './queries.js';
-import { NATIONS, type NationId } from './rules/nations.js';
+import type { NationId } from './rules/nations.js';
 import { DEFAULT_DIFFICULTY, resolveDifficulty } from './rules/difficulty.js';
 import { beginPlayerTurn, runAiUntilHuman } from './turn.js';
 import type { GameConfig, GameState, Player } from './types.js';
@@ -11,7 +11,7 @@ import { createWorld } from './world.js';
 import { initRelations } from './relations.js';
 import { initCrown } from './crown.js';
 import { entryPoints } from './mapgen.js';
-import { checkSavedScenario, checkScenarioConfig, difficultyOf, goodsOf, peoplesOf } from './scenarios/index.js';
+import { checkSavedScenario, checkScenarioConfig, difficultyOf, goodsOf, nationOf, peoplesOf, portMarketOf, term } from './scenarios/index.js';
 import { modifiers } from './scenarios/modifiers.js';
 
 /** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
@@ -25,7 +25,10 @@ import { SaveVersionError } from './errors.js';
 export { SaveVersionError };
 
 export function createGame(config: GameConfig): GameState {
-  checkScenarioConfig(config);
+  const scenario = checkScenarioConfig(config);
+  // A game in another scenario records the version it was made with (section 3.14); the Americas
+  // (version 1, the default) write nothing, so their saves and hashes stay as they were.
+  if (config.scenario && config.scenarioVersion === undefined && scenario.version !== 1) config = { ...config, scenarioVersion: scenario.version };
   if (new Set(config.nations).size !== config.nations.length) throw new Error('Each nation can only take part once.');
   for (const h of config.humans) if (!config.nations.includes(h)) throw new Error(`${h} is not taking part.`);
 
@@ -70,7 +73,7 @@ export function createGame(config: GameConfig): GameState {
     reveal(s, nation, entry.x, entry.y, 1);
     startingUnits(s, nation, entry);
     const heading = world.entrySide === 'west' ? 'east' : 'west';
-    message(s, `Your Majesty's expedition for ${NATIONS[nation].name} has reached the New World. Sail ${heading} to find land!`, nation, entry);
+    message(s, term(s, 'arrival', { nation: nationOf(s, nation).name, heading }), nation, entry);
   });
 
   beginPlayerTurn(s, s.players[0]);
@@ -84,7 +87,7 @@ export function newPlayer(s: GameState, nation: NationId, human: boolean, entry:
     human,
     gold: 1000,
     tax: 0,
-    market: initialMarket(nation, goodsOf(s)),
+    market: initialMarket(portMarketOf(s, nation), goodsOf(s)),
     crosses: 0,
     crossesRequired: 30,
     recruitPool: [],

@@ -4,21 +4,24 @@ import {
   EUROPE_STOP,
   foreignStopColonies,
   GOOD_DEFS,
+  goodsOf,
   isCoastal,
   isForeignStop,
   isShip,
   MAX_ROUTE_STOPS,
-  NATIONS,
+  nationOf,
   portName,
   portOf,
   portsFor,
   portSummary,
-  stopPort,
   ROUTE_NAME_MAX,
   routeProblem,
   routesOf,
   routeStopName,
   routeUnits,
+  stopPort,
+  term,
+  Term,
   unitName,
   unitPosition,
   type GoodId,
@@ -26,7 +29,6 @@ import {
   type RouteStop,
   type TradeRoute,
   type Unit,
-  goodsOf,
 } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -36,8 +38,8 @@ import { confirmDialog } from './dialogs.js';
 /** Where a unit on a route is: its position, or Europe / at sea. */
 function whereIs(app: App, u: Unit): string {
   const s = app.state;
-  if (u.loc.kind === 'europe') return portOf(u) === u.owner ? 'in Europe' : `in ${portName(portOf(u))}`;
-  if (u.loc.kind === 'sailing') return u.loc.to === 'europe' ? 'sailing to Europe' : 'sailing to the New World';
+  if (u.loc.kind === 'europe') return portOf(u) === u.owner ? `in ${term(app.state, 'homeland')}` : `in ${portName(app.state, portOf(u))}`;
+  if (u.loc.kind === 'sailing') return u.loc.to === 'europe' ? `sailing to ${term(app.state, 'homeland')}` : `sailing to ${term(app.state, 'colonyLand')}`;
   const pos = unitPosition(s, u);
   const colony = pos && Object.values(s.colonies).find((c) => c.x === pos.x && c.y === pos.y);
   return colony ? `in ${colony.name}` : pos ? `at ${pos.x},${pos.y}` : '';
@@ -101,8 +103,8 @@ export class RoutesScreen implements Screen {
   private help(): HTMLElement {
     return h('div', { class: 'card' },
       h('h3', null, 'How trade routes work'),
-      h('p', { class: 'small' }, 'A route is a round trip of stops: your colonies, and Europe for ships. At each stop a ship or wagon train first unloads, then loads, the goods you choose. Units on a route move by themselves at the start of each of your turns and never wait for orders.'),
-      h('p', { class: 'small' }, 'Goods unloaded in Europe are sold at market prices, less tax; boycotted goods stay aboard. A Europe stop can call at a Favoured Nation partner’s port instead of your own, at its prices and tax. Unloading in a colony stops when its warehouse is full, so nothing spoils.'),
+      h('p', { class: 'small' }, `A route is a round trip of stops: your colonies, and ${term(this.app.state, 'homeland')} for ships. At each stop a ship or wagon train first unloads, then loads, the goods you choose. Units on a route move by themselves at the start of each of your turns and never wait for orders.`),
+      h('p', { class: 'small' }, `Goods unloaded in ${term(this.app.state, 'homeland')} are sold at market prices, less tax; boycotted goods stay aboard. A ${term(this.app.state, 'homeland')} stop can call at a Favoured Nation partner’s port instead of your own, at its prices and tax. Unloading in a colony stops when its warehouse is full, so nothing spoils.`),
       h('p', { class: 'small' }, 'With a trade agreement (Foreign Affairs), a route can also call at the other nation’s colonies, marked with its flag. The ship or wagon train stops next to the colony: unloading sells goods to it at its nation’s home-market prices, as far as its warehouse has room and its treasury can pay; loading buys what it has above 50 of each good.'));
   }
 
@@ -128,13 +130,13 @@ export class RoutesScreen implements Screen {
         } },
           h('option', { value: '' }, route.stops.length >= MAX_ROUTE_STOPS ? 'No more stops' : 'Add a stop…'),
           colonies.map((c) => h('option', { value: c.id }, `${c.name}${isCoastal(s, c.x, c.y) ? '' : ' (inland)'}`)),
-          h('option', { value: EUROPE_STOP }, 'Europe (ships only)'),
-          [...new Set(foreign.map((c) => c.owner))].map((owner) => h('optgroup', { label: `${NATIONS[owner].adjective} colonies (trade agreement)` },
-            foreign.filter((c) => c.owner === owner).map((c) => h('option', { value: c.id }, `⚑ ${c.name} (${NATIONS[owner].adjective})${isCoastal(s, c.x, c.y) ? '' : ' (inland)'}`)))))),
+          h('option', { value: EUROPE_STOP }, `${Term(this.app.state, 'homeland')} (ships only)`),
+          [...new Set(foreign.map((c) => c.owner))].map((owner) => h('optgroup', { label: `${nationOf(this.app.state, owner).adjective} colonies (trade agreement)` },
+            foreign.filter((c) => c.owner === owner).map((c) => h('option', { value: c.id }, `⚑ ${c.name} (${nationOf(this.app.state, owner).adjective})${isCoastal(s, c.x, c.y) ? '' : ' (inland)'}`)))))),
       h('h3', null, 'Units on this route'),
       units.length
         ? h('ul', { class: 'route-units' }, units.map((u) => h('li', null,
-            icon({ kind: 'unit', type: u.type, role: u.role, nation: u.owner }, 28),
+            icon({ kind: 'unit', type: u.type, role: u.role, color: nationOf(this.app.state, u.owner).color }, 28),
             h('button', { class: 'link', onclick: () => this.show(u) }, unitName(u)),
             h('span', { class: 'muted small' }, ` ${whereIs(this.app, u)}, next: ${route.stops.length ? routeStopName(s, route.stops[u.route!.stop % route.stops.length], route.owner) : '—'}`),
             h('button', { class: 'btn tiny', disabled: !my, onclick: () => this.app.dispatch({ type: 'unassignRoute', unitId: u.id }) }, 'Take off'))))
@@ -144,7 +146,7 @@ export class RoutesScreen implements Screen {
         free.map((u) => {
           const problem = routeProblem(s, u, route);
           return h('button', { class: `chip${u.id === unit?.id ? ' selected' : ''}`, disabled: !!problem || !my, title: problem ?? `Put ${unitName(u)} on this route`, onclick: () => this.assign(u.id, route.id) },
-            icon({ kind: 'unit', type: u.type, role: u.role, nation: u.owner }, 24), `${unitName(u)}${u.route ? ' (on another route)' : ''}`);
+            icon({ kind: 'unit', type: u.type, role: u.role, color: nationOf(this.app.state, u.owner).color }, 24), `${unitName(u)}${u.route ? ' (on another route)' : ''}`);
         })) : null);
   }
 
@@ -164,13 +166,13 @@ export class RoutesScreen implements Screen {
     const owner = foreign ? s.colonies[stop.at].owner : undefined;
     return h('li', { class: `stop${foreign ? ' foreign' : ''}` },
       h('div', { class: 'stop-head' },
-        h('strong', null, owner ? h('span', { class: 'foreign-flag', style: `background:${NATIONS[owner].color}`, title: `${NATIONS[owner].adjective} colony` }) : null, routeStopName(s, stop, route.owner)),
+        h('strong', null, owner ? h('span', { class: 'foreign-flag', style: `background:${nationOf(this.app.state, owner).color}`, title: `${nationOf(this.app.state, owner).adjective} colony` }) : null, routeStopName(s, stop, route.owner)),
         h('span', { class: 'muted small' }, describeStop(stop)),
         h('span', { class: 'stop-tools' },
           h('button', { class: 'btn tiny', disabled: !my || i === 0, 'aria-label': 'Move stop up', onclick: () => move(-1) }, '↑'),
           h('button', { class: 'btn tiny', disabled: !my || i === route.stops.length - 1, 'aria-label': 'Move stop down', onclick: () => move(1) }, '↓'),
           h('button', { class: 'btn tiny', disabled: !my, 'aria-label': 'Remove stop', onclick: () => this.setStops(route, route.stops.filter((_, k) => k !== i)) }, '✕'))),
-      foreign ? h('div', { class: 'muted small' }, `Trading stop: goods unloaded are sold to the colony, goods loaded are bought from it, at ${NATIONS[owner!].adjective} prices.`) : null,
+      foreign ? h('div', { class: 'muted small' }, `Trading stop: goods unloaded are sold to the colony, goods loaded are bought from it, at ${nationOf(this.app.state, owner!).adjective} prices.`) : null,
       europe ? this.portPicker(route, stop, (port) => update({ port })) : null,
       this.cargoRules(foreign ? 'Sell' : 'Unload', stop.unload, europe ? null : 'up to', europe ? 'sold' : 'fill', (unload) => update({ unload })),
       this.cargoRules(foreign ? 'Buy' : 'Load', stop.load, europe ? 'buy to' : 'keep', europe ? '100' : foreign ? '50' : '0', (load) => update({ load })),
@@ -187,11 +189,11 @@ export class RoutesScreen implements Screen {
     const current = stopPort(s, owner, stop);
     return h('div', { class: 'small route-port' },
       h('label', null, 'Port ',
-        h('select', { 'aria-label': 'Port in Europe', disabled: !this.app.isMyTurn() || ports.length < 2, onchange: (e: Event) => {
+        h('select', { 'aria-label': `Port in ${term(this.app.state, 'homeland')}`, disabled: !this.app.isMyTurn() || ports.length < 2, onchange: (e: Event) => {
           const v = (e.target as HTMLSelectElement).value as RouteStop['port'];
           set(v === owner ? undefined : v);
-        } }, ports.map((port) => h('option', { value: port, selected: port === current }, `${portName(port)}${port === owner ? ' (home)' : ` (${NATIONS[port].adjective}, Favoured Nation)`}`)))),
-      h('span', { class: 'muted' }, ` ${portSummary(current, goodsOf(s))}.${current !== owner ? ` Sold and bought at ${NATIONS[current].adjective} prices and tax; colonists board only at home. If the partnership ends, the stop falls back to ${portName(owner)}.` : ''}`));
+        } }, ports.map((port) => h('option', { value: port, selected: port === current }, `${portName(this.app.state, port)}${port === owner ? ' (home)' : ` (${nationOf(this.app.state, port).adjective}, Favoured Nation)`}`)))),
+      h('span', { class: 'muted' }, ` ${portSummary(current, goodsOf(s))}.${current !== owner ? ` Sold and bought at ${nationOf(this.app.state, current).adjective} prices and tax; colonists board only at home. If the partnership ends, the stop falls back to ${portName(this.app.state, owner)}.` : ''}`));
   }
 
   /** One list of cargo rules with an amount each, and a picker to add more. */
@@ -201,7 +203,7 @@ export class RoutesScreen implements Screen {
     const titles: Record<string, string> = {
       keep: 'Units left in the colony warehouse (empty: load everything)',
       'up to': 'Fill the colony warehouse up to this amount (empty: up to its capacity)',
-      'buy to': 'Buy in Europe until this many are aboard (empty: 100)',
+      'buy to': `Buy in ${term(this.app.state, 'homeland')} until this many are aboard (empty: 100)`,
     };
     return h('div', { class: 'cargo-rules' },
       h('span', { class: 'muted small rule-label' }, label),

@@ -9,7 +9,7 @@ function drawIcon(ctx: CanvasRenderingContext2D, icon: IconRequest, size: number
   const c = size / 2;
   switch (icon.kind) {
     case 'unit':
-      unitSprite(ctx, c, c + size * 0.04, size * 0.92, icon.type, icon.role, icon.nation, lw);
+      unitSprite(ctx, c, c + size * 0.04, size * 0.92, icon.type, icon.role, icon.color, lw);
       break;
     case 'product':
       productIcon(ctx, c, c, size, icon.product, lw);

@@ -15,7 +15,7 @@ import type { NationId } from '../rules/nations.js';
 import { track } from '../telemetry.js';
 import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
 import type { GoodId } from '../rules/goods.js';
-import { aiGoodsOf, goodsOf, mechanicsOf } from '../scenarios/index.js';
+import { aiGoodsOf, goodsOf, mechanicsOf, term } from '../scenarios/index.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, RouteCargo, RouteStop, TradeRoute, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
@@ -174,7 +174,7 @@ export function manageLogistics(s: GameState, p: Player): void {
 /** A route name like "Port to Europe", numbered if the nation already has one by that name. */
 function routeName(s: GameState, p: Player, stops: RouteStop[], except?: string): string {
   const first = s.colonies[stops[0].at]?.name ?? 'Route';
-  const last = stops[stops.length - 1].at === EUROPE_STOP ? 'Europe' : s.colonies[stops[stops.length - 1].at]?.name ?? 'port';
+  const last = stops[stops.length - 1].at === EUROPE_STOP ? term(s, 'homeland') : s.colonies[stops[stops.length - 1].at]?.name ?? 'port';
   const base = `${first} to ${last}`;
   const taken = new Set(routesOf(s, p.id).filter((r) => r.id !== except).map((r) => r.name));
   for (let i = 1; ; i++) {

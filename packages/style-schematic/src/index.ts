@@ -2,7 +2,7 @@
  * A deliberately plain board-game style. It exists to show (and test) that the game
  * shell works with any style plugin, and is a starting point for new styles.
  */
-import { NATIONS, RIVER_DIRS, TERRAIN, TRIBES, UNIT_TYPES, colonyWorkers, type GameState, type Tile, type TerrainId } from '@cc/engine';
+import { nationOf, RIVER_DIRS, TERRAIN, TRIBES, UNIT_TYPES, colonyWorkers, type GameState, type Tile, type TerrainId } from '@cc/engine';
 import {
   braveMarkers,
   isTileExplored,
@@ -164,7 +164,7 @@ class SchematicRenderer implements MapRenderer {
     for (const c of Object.values(s.colonies)) {
       if (!isTileExplored(scene, c.x, c.y)) continue;
       const p = tileToScreen(scene, c.x, c.y);
-      ctx.fillStyle = NATIONS[c.owner].color;
+      ctx.fillStyle = nationOf(s, c.owner).color;
       ctx.fillRect(p.x + z * 0.12, p.y + z * 0.12, z * 0.76, z * 0.76);
       // Walls: one frame for a stockade, a thicker one for a fort, a double frame for a fortress.
       const walls = c.buildings.stockade;
@@ -200,7 +200,7 @@ class SchematicRenderer implements MapRenderer {
     for (const stack of unitStacks(scene)) {
       const p = tileToScreen(scene, stack.x, stack.y);
       const selected = stack.top.id === scene.selectedUnitId;
-      ctx.fillStyle = NATIONS[stack.top.owner].color;
+      ctx.fillStyle = nationOf(s, stack.top.owner).color;
       ctx.beginPath();
       ctx.arc(p.x + z * 0.5, p.y + z * 0.5, z * 0.3, 0, Math.PI * 2);
       ctx.fill();
@@ -252,7 +252,7 @@ function drawIcon(ctx: CanvasRenderingContext2D, icon: IconRequest, size: number
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   if (icon.kind === 'unit') {
-    ctx.fillStyle = NATIONS[icon.nation].color;
+    ctx.fillStyle = icon.color;
     ctx.beginPath();
     ctx.arc(size / 2, size / 2, size * 0.42, 0, Math.PI * 2);
     ctx.fill();

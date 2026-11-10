@@ -1,4 +1,4 @@
-import { colonyWorkers, NATIONS, RIVER_DIRS, settlementKindOf, TERRAIN, type Colony, type GameState, type Settlement, type SettlementLook, type Tile } from '@cc/engine';
+import { colonyWorkers, nationOf, RIVER_DIRS, settlementKindOf, TERRAIN, type Colony, type GameState, type Settlement, type SettlementLook, type Tile } from '@cc/engine';
 import {
   braveMarkers,
   hash2,
@@ -453,15 +453,15 @@ export class LigneClaireMapRenderer implements MapRenderer {
     for (const st of Object.values(s.settlements).sort((a, b) => a.y - b.y || a.x - b.x)) {
       if (!isTileExplored(scene, st.x, st.y) || st.x < range.x0 - 1 || st.x > range.x1 + 1 || st.y < range.y0 - 1 || st.y > range.y1 + 1) continue;
       const p = tileToScreen(scene, st.x, st.y);
-      this.drawSettlement(st, p.x, p.y, z, lw, settlementKindOf(s, st).look);
+      this.drawSettlement(st, p.x, p.y, z, lw, settlementKindOf(s, st).look, s);
     }
     const labels: (() => void)[] = [];
     for (const c of Object.values(s.colonies).sort((a, b) => a.y - b.y || a.x - b.x)) {
       if (!isTileExplored(scene, c.x, c.y) || c.x < range.x0 - 1 || c.x > range.x1 + 1 || c.y < range.y0 - 1 || c.y > range.y1 + 1) continue;
       const p = tileToScreen(scene, c.x, c.y);
       const size = colonyWorkers(s as GameState, c).length;
-      this.drawColony(c, size, p.x, p.y, z, lw);
-      if (scene.labels !== false) labels.push(() => caption(ctx, c.name, p.x + z / 2, p.y + z * 0.86, z, lw, { text: String(size), color: NATIONS[c.owner].color }));
+      this.drawColony(c, size, p.x, p.y, z, lw, s);
+      if (scene.labels !== false) labels.push(() => caption(ctx, c.name, p.x + z / 2, p.y + z * 0.86, z, lw, { text: String(size), color: nationOf(scene.state, c.owner).color }));
     }
 
     // 6. Route and selection markers under the units.
@@ -536,13 +536,13 @@ export class LigneClaireMapRenderer implements MapRenderer {
       const ux = inColony ? p.x + z * 0.78 : cx;
       const uy = inColony ? p.y + z * 0.28 : cy;
       const us = inColony ? z * 0.62 : z * 0.86;
-      this.drawUnit(stack, ux, uy, us, lw);
+      this.drawUnit(stack, ux, uy, us, lw, s);
       // Pennant in the owner's colour, with the unit's standing order.
       const fx = inColony ? p.x + z * 0.55 : p.x + z * 0.06;
       const fy = p.y + z * 0.06;
       const fw = z * 0.24;
       const fh = z * 0.2;
-      inked(ctx, NATIONS[stack.top.owner].color, lw * 0.8, () => ctx.rect(fx, fy, fw, fh));
+      inked(ctx, nationOf(scene.state, stack.top.owner).color, lw * 0.8, () => ctx.rect(fx, fy, fw, fh));
       const letter = stack.top.working ? 'W' : stack.top.state === 'fortified' ? 'F' : stack.top.state === 'sentry' ? 'S' : stack.count > 1 ? String(stack.count) : '';
       if (letter) {
         ctx.fillStyle = WHITE;
@@ -665,14 +665,14 @@ export class LigneClaireMapRenderer implements MapRenderer {
     ruins(this.ctx, t.px + z / 2, t.py + z / 2, z * 0.7, lw);
   }
 
-  protected drawSettlement(st: Readonly<Settlement>, px: number, py: number, z: number, lw: number, look: SettlementLook): void {
-    if (this.hooks.settlement?.(this.ctx, st, px, py, z)) return;
+  protected drawSettlement(st: Readonly<Settlement>, px: number, py: number, z: number, lw: number, look: SettlementLook, state: Readonly<GameState>): void {
+    if (this.hooks.settlement?.(this.ctx, st, px, py, z, state)) return;
     settlementSprite(this.ctx, px + z / 2, py + z / 2, z * 0.9, st.tribe, st.capital, lw, look);
   }
 
-  protected drawColony(c: Readonly<Colony>, size: number, px: number, py: number, z: number, lw: number): void {
-    if (this.hooks.colony?.(this.ctx, c, size, px, py, z)) return;
-    colonySprite(this.ctx, px + z / 2, py + z / 2, z * 0.95, c.owner, size, c.buildings.stockade, lw);
+  protected drawColony(c: Readonly<Colony>, size: number, px: number, py: number, z: number, lw: number, state: Readonly<GameState>): void {
+    if (this.hooks.colony?.(this.ctx, c, size, px, py, z, state)) return;
+    colonySprite(this.ctx, px + z / 2, py + z / 2, z * 0.95, nationOf(state, c.owner).color, size, c.buildings.stockade, lw);
   }
 
   /** A native brave, centred at (x, y) in a box of size s. */
@@ -682,8 +682,8 @@ export class LigneClaireMapRenderer implements MapRenderer {
   }
 
   /** The unit on top of a stack, centred at (x, y) in a box of size s. */
-  protected drawUnit(stack: MapUnitStack, x: number, y: number, s: number, lw: number): void {
+  protected drawUnit(stack: MapUnitStack, x: number, y: number, s: number, lw: number, state: Readonly<GameState>): void {
     if (this.hooks.unit?.(this.ctx, stack, x, y, s)) return;
-    unitSprite(this.ctx, x, y, s, stack.top.type, stack.top.role, stack.top.owner, lw);
+    unitSprite(this.ctx, x, y, s, stack.top.type, stack.top.role, nationOf(state, stack.top.owner).color, lw);
   }
 }

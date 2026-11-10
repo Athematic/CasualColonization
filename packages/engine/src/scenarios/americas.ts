@@ -10,7 +10,7 @@ import { COLONY_CHARTER } from '../rules/difficulty.js';
 import { FATHER_CATEGORIES, FATHERS, type FatherId } from '../rules/fathers.js';
 import { GOODS } from '../rules/goods.js';
 import type { Modifier } from '../rules/modifiers.js';
-import { NATION_ORDER, NATIONS, TRIBE_ORDER, type NationId } from '../rules/nations.js';
+import { HOME_PORTS, NATION_ORDER, NATIONS, TRIBE_ORDER, type NationId } from '../rules/nations.js';
 import { BURIAL_WEIGHT, NATIVE_PRODUCE, SETTLEMENT_KINDS } from '../rules/natives.js';
 import { PORT_CHARACTER } from '../rules/ports.js';
 import { TERRAIN, type TerrainId } from '../rules/terrain.js';
@@ -20,6 +20,7 @@ import { AUSTRALIA_PLACEHOLDER_PEOPLES } from '../maps/australia.js';
 import { NORTH_AMERICA_PEOPLES } from '../maps/north-america.js';
 import { SOUTH_AMERICA_PEOPLES } from '../maps/south-america.js';
 import { AMERICAS_CALENDAR } from './calendar.js';
+import { AMERICAS_TEXT } from './terms.js';
 import type { GeneratorSettings, NationEntry, RumourEntry, Scenario } from './types.js';
 
 /**
@@ -76,9 +77,18 @@ const BONUSES: Partial<Record<NationId, Modifier[]>> = {
   russia: [{ hook: 'sight', add: 1, roles: ['scout', 'dragoon'] }],
 };
 
+/** A nation of the Americas: the catalogue's identity, bonus and colony names (NATIONS) and port (PORT_CHARACTER). */
 function entry(id: NationId): NationEntry {
   const def = NATIONS[id];
-  return { id, bonus: { text: def.bonus, modifiers: BONUSES[id] ?? [] }, colonyNames: def.colonyNames, port: PORT_CHARACTER[id]! };
+  return {
+    id,
+    name: def.name,
+    adjective: def.adjective,
+    color: def.color,
+    bonus: { text: def.bonus, modifiers: BONUSES[id] ?? [] },
+    colonyNames: def.colonyNames,
+    port: PORT_CHARACTER[id] ?? { name: HOME_PORTS[id] },
+  };
 }
 
 /**
@@ -126,6 +136,7 @@ export const AMERICAS: Scenario = {
     sets: { alternative: NATION_ORDER.map(entry), real: REAL_RIVALS.map(entry) },
     default: 'alternative',
     max: 8,
+    crown: entry('crown'),
   },
   peoples: {
     ids: [...TRIBE_ORDER],
@@ -162,4 +173,10 @@ export const AMERICAS: Scenario = {
   victory: [{ id: 'independence-war' }, { id: 'time' }],
   rumours: AMERICAS_RUMOURS,
   // No `difficulty` or `score`: the Americas play by the engine's own DIFFICULTY and SCORE_WEIGHTS.
+  // The Americas' terms are the defaults every scenario starts from (scenarios/terms.ts).
+  text: AMERICAS_TEXT,
+  art: {
+    covers: ['landfall', 'trade', 'colony', 'map', 'liberty', 'winter', 'river', 'feast', 'harbours', 'silver', 'lostcity'],
+    councilHall: 'ui/congress-hall',
+  },
 };
