@@ -30,3 +30,4 @@ export { SpriteStore, type SpriteManifest, type StoreEnv } from './store.js';
 export { DEFAULT_SPRITE_BASE, spriteBase, transitionsOverride } from './source.js';
 export { DEFAULT_TRANSITION_ORDER, transitionPieces, type TransitionMode, type TransitionPiece, type TransitionPieces } from './transitions.js';
 export { coastPieces } from './coast.js';
+export { variantIndex, variantSet, withVariants, VARIANT_MODES, type VariantContext, type VariantMode } from './variants.js';

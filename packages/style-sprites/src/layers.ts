@@ -8,6 +8,7 @@ import type { SpriteIds } from './ids.js';
 import type { PackLayer, Placement, SpritePack } from './pack.js';
 import type { Painter } from './painter.js';
 import { coastPieces } from './coast.js';
+import { isTakeOf, type VariantContext } from './variants.js';
 import { transitionPieces, type TransitionPieces } from './transitions.js';
 
 export { coastPieces };
@@ -57,6 +58,10 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
   const rules = pack.rules;
   let dpr = 1;
   const plowed = new Set<LayerTile>();
+  let seed = 0;
+  // The variant choice of a tile: its position, the map seed, and what the manifest has (nothing, until it has loaded).
+  const vary = (t: LayerTile): VariantContext | undefined =>
+    rules.variants === 'off' ? undefined : { mode: rules.variants, seed, x: t.x, y: t.y, has: (id) => painter.store?.has(id) ?? false };
 
   const placed = (ctx: CanvasRenderingContext2D, list: string[], p: Placement, px: number, py: number, z: number) =>
     painter.anchored(ctx, list, px + p.x * z, py + p.y * z, p.scale * z, dpr);
@@ -64,12 +69,13 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
   const hooks: MapLayerHooks = {
     beginFrame(_ctx, scene) {
       dpr = scene.pixelRatio;
+      seed = scene.state?.config?.seed ?? 0;
       plowed.clear();
     },
   };
 
   if (!off.has('water')) {
-    hooks.water = (ctx, t, z) => painter.square(ctx, ids.water(t.tile.t), t.px, t.py, z, dpr, { fill: true, bleed: 0.5 });
+    hooks.water = (ctx, t, z) => painter.square(ctx, ids.water(t.tile.t, vary(t)), t.px, t.py, z, dpr, { fill: true, bleed: 0.5 });
   }
 
   // Terrain transitions: bands of the higher-ranked neighbour over a tile's ground (rules.transitions).
@@ -101,7 +107,7 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
       };
     }
     hooks.land = (ctx, t, z, shape, s) => {
-      const list = ids.terrain(t.tile);
+      const list = ids.terrain(t.tile, vary(t));
       const pick = painter.pick(list, z, dpr, true);
       if (!pick) return false;
       // Clip only where the outline is rounded: elsewhere tiles overlap a little, without seams.
@@ -115,7 +121,7 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
       painter.square(ctx, list, t.px, t.py, z, dpr, { fill: true, bleed: clip ? 0 : 0.5 });
       if (blend) blendBorders(ctx, t, z, s);
       if (clip) ctx.restore();
-      if (t.tile.p && ids.plowed(t.tile.t).includes(pick.id)) plowed.add(t);
+      if (t.tile.p && ids.plowed(t.tile.t).some((p) => isTakeOf(pick.id, p))) plowed.add(t);
       return true;
     };
     hooks.plowed = (_ctx, t) => plowed.has(t);
@@ -163,7 +169,7 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
 
   if (!off.has('relief')) {
     hooks.relief = (ctx, t, z) => {
-      const r = ids.relief(t.tile);
+      const r = ids.relief(t.tile, vary(t));
       return !!r && placed(ctx, r.ids, rules[r.kind], t.px, t.py, z);
     };
   }
