@@ -109,6 +109,7 @@ Ids are templates. `{type}`, `{role}`, `{terrain}`, `{tribe}`, `{building}`, `{l
 | Road | `decor/road__hub`, `decor/road__spoke` and `decor/road__spoke-diagonal`, turned in quarter steps |
 | Shore | `terrain/coast__edge`, `__inner` and `__outer`, turned in quarter steps |
 | Terrain border (trial; `rules.transitions: 'overlay'`) | `terrain/blend__{terrain}__edge`, `__inner`, `__outer` of the higher-ranked neighbour (`rules.transitionOrder`), over the lower tile, turned in quarter steps. See [design/tessellated-tiles.md](design/tessellated-tiles.md) |
+| Terrain variants (`rules.variants`) | `<id>__v2`, `<id>__v3` … next to a ground, plowed ground, forest, hills or mountains sprite (and ocean ground). See [Terrain variants](#terrain-variants) |
 | Colony | `colonies/colony__small` (0 to 3 colonists), `__medium` (4 to 7), `__large` (8 or more); walls `colonies/stockade` (level 1) and `colonies/fort` (level 2), split at the manifest's `split` line into a back and a front part |
 | Settlement | `settlements/{tribe}`; a capital tries `settlements/{tribe}__capital` first |
 | Building icon | `buildings/{building}__{level}`, then the lower levels |
@@ -138,6 +139,16 @@ const australia = extendPack(ligneClairePaintedPack, {
 ### Ligne claire (painted)
 
 The first pack, `packages/style-sprites/packs/ligne-claire-painted.ts`, uses the default mapping and rules, with Ligne claire as the fallback and its theme and fonts. Its sprites live in `assets/sprites/` next to the page, beside the masters (https://casual.spence.dk/assets/sprites/ on the server). Point it elsewhere with `?sprites=https://casual.spence.dk/assets/sprites/` (remembered; `?sprites=default` forgets it, `?sprites=off` draws everything procedurally). Loading from another origin needs `Access-Control-Allow-Origin: *` on the server's `/assets/sprites/`. Without it the browser refuses the images and the style falls back to Ligne claire. Terrain transition pieces (`rules.transitions`) can be switched per browser with `?transitions=on` or `?transitions=off` (remembered; `?transitions=default` goes back to the pack's setting), so the effect can be compared in the live game.
+
+### Terrain variants
+
+Generate several takes of a terrain (`Generate-Images.ps1 -Variants 3 -Only 'terrain/*'` makes `terrain/plains`, `terrain/plains__v2`, `terrain/plains__v3`; likewise `terrain/<t>__plowed`, `decor/forest__<t>`, `decor/hills`, `decor/mountains`). The sprite pipeline treats `__vN` masters as ordinary ids, so they appear in the manifest without further work. At runtime, for every one of those ids the manifest has two or more takes of (the base and `__v2` … `__v16`, gaps allowed), a tile picks one, deterministically from its map position, the map seed (`state.config.seed`) and the number of takes: no `Math.random`, so it is the same on every frame, zoom level, reload and device. The chosen take is tried first and the base id second, so a take that is missing or not loaded yet falls back to the base sprite. Transition pieces, coast bands, roads and the ocean under land tiles stay single-variant. With one take, or none, nothing changes.
+
+`rules.variants` (default `'hash-no-repeat'`):
+
+- `'off'`: always the base sprite.
+- `'hash'`: `hash(x, y, seed, n) % n`.
+- `'hash-no-repeat'`: never the same take as the west or north neighbour (for any two or more takes). Each tile gets a class `(X(x) + Y(y)) mod M` with `M = min(n, 3)`, where `X` and `Y` are running sums of hashed steps in `1..M-1` along columns and rows, so the class always differs from the west and north tile's. Take `i` belongs to class `i mod M`, and the tile picks among its class's takes by hash. Two takes make a checkerboard, three a warped lattice, four or more scatter. The choice depends on position only, so it needs no neighbour lookups.
 
 ### Interface CSS in a pack
 

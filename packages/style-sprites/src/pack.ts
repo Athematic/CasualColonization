@@ -12,6 +12,7 @@
  */
 import type { BuildingKind, ProductId, RoleId, TerrainId, TribeId, UnitTypeId } from '@cc/engine';
 import type { StyleTheme } from '@cc/render-api';
+import type { VariantMode } from './variants.js';
 import { DEFAULT_TRANSITION_ORDER, type TransitionMode } from './transitions.js';
 
 /** One template, several in order of preference, or null for "keep this procedural". */
@@ -123,6 +124,13 @@ export interface DrawRules {
    */
   transitions: TransitionMode;
   transitionOrder: readonly TerrainId[];
+  /**
+   * Terrain variants: when the manifest has `<id>__v2`, `<id>__v3` ... next to a ground, plowed ground, forest, hills or
+   * mountains sprite, tiles pick one of them from their position and the map seed. 'off' always uses the base sprite;
+   * 'hash' picks by hash; 'hash-no-repeat' (default) also never gives a tile its west or north neighbour's variant.
+   * Transition pieces stay single-variant. Without variants in the manifest nothing changes.
+   */
+  variants: VariantMode;
   /** Unit icons: sprite size relative to the icon, and the owner's pennant on ships and soldiers. */
   unitIcon: { scale: number; pennant: { size: number; minIcon: number } | null };
 }
@@ -262,6 +270,7 @@ export const DEFAULT_RULES: DrawRules = {
   colonyFlag: { x: 0.42, y: 0.56, height: 0.5 },
   transitions: 'none',
   transitionOrder: DEFAULT_TRANSITION_ORDER,
+  variants: 'hash-no-repeat',
   unitIcon: { scale: 0.98, pennant: { size: 0.36, minIcon: 28 } },
 };
 
