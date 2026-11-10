@@ -15,6 +15,7 @@ import type { NationId } from '../rules/nations.js';
 import { track } from '../telemetry.js';
 import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
 import type { GoodId } from '../rules/goods.js';
+import { aiGoodsOf, goodsOf } from '../scenarios/index.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, RouteCargo, RouteStop, TradeRoute, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
@@ -22,7 +23,8 @@ import { portNet, wagonSteps } from './foreign.js';
 import { buyFromNatives } from './natives.js';
 
 /** Goods worth carrying away from a colony to sell. */
-export const TRADE_GOODS: GoodId[] = ['silver', 'furs', 'sugar', 'tobacco', 'cotton', 'ore', 'rum', 'cigars', 'cloth', 'coats', 'horses'];
+/** Goods ships move between colonies and sell, most valuable first (the scenario's `ai.goods.trade`). */
+const tradeGoods = (s: GameState): readonly GoodId[] => aiGoodsOf(s).trade;
 
 /** Turns between reviews of the computer's routes. */
 const REVIEW_EVERY = 10;
@@ -42,7 +44,7 @@ export const ROUTE_PORT_GAIN = 150;
 export function overflowSoon(s: GameState, c: Colony, turns = 4, report: ColonyReport = colonyReport(s, c)): number {
   const cap = warehouseCapacity(c);
   let lost = 0;
-  for (const g of TRADE_GOODS) {
+  for (const g of tradeGoods(s)) {
     if (c.buildings.customHouse && c.exports[g]) continue;
     lost += Math.max(0, c.goods[g] + Math.max(0, report.net[g]) * turns - cap);
   }
@@ -61,13 +63,13 @@ function keepFor(c: Colony, report: ColonyReport, g: GoodId): number {
 
 function loadRules(s: GameState, c: Colony, skip: (g: GoodId) => boolean = () => false): RouteCargo[] {
   const report = colonyReport(s, c);
-  return TRADE_GOODS.filter((g) => !skip(g)).map((g) => {
+  return tradeGoods(s).filter((g) => !skip(g)).map((g) => {
     const keep = keepFor(c, report, g);
     return keep > 0 ? { good: g, amount: keep } : { good: g };
   });
 }
 
-const unloadRules = (): RouteCargo[] => TRADE_GOODS.map((good) => ({ good }));
+const unloadRules = (s: GameState): RouteCargo[] => tradeGoods(s).map((good) => ({ good }));
 
 function ghostAt(u: Unit, c: Colony): Unit {
   return { ...u, loc: { kind: 'map', x: c.x, y: c.y } };
@@ -105,7 +107,7 @@ function wagonServed(s: GameState, p: Player): Set<string> {
 /** Inland colonies with goods to carry away. */
 function needsCarting(s: GameState, c: Colony, report: ColonyReport = colonyReport(s, c)): boolean {
   if (isCoastal(s, c.x, c.y)) return false;
-  const surplus = TRADE_GOODS.reduce((n, g) => n + Math.max(0, report.net[g]), 0);
+  const surplus = tradeGoods(s).reduce((n, g) => n + Math.max(0, report.net[g]), 0);
   return surplus >= 3 || overflowSoon(s, c, 8, report) > 0;
 }
 
@@ -266,9 +268,9 @@ function withRules(s: GameState, p: Player, stop: RouteStop, all: RouteStop[]): 
   const europe = end.at === EUROPE_STOP;
   const banned = (g: GoodId) => !!p.boycotts[g] && (europe || !exportable(s, p, g));
   if (stop === end) {
-    return europe ? { at: stop.at, load: [], unload: unloadRules().filter((r) => !banned(r.good)), passengers: true } : { at: stop.at, load: [], unload: unloadRules() };
+    return europe ? { at: stop.at, load: [], unload: unloadRules(s).filter((r) => !banned(r.good)), passengers: true } : { at: stop.at, load: [], unload: unloadRules(s) };
   }
-  return { at: stop.at, load: loadRules(s, s.colonies[stop.at], banned), unload: TRADE_GOODS.filter(banned).map((good) => ({ good })) };
+  return { at: stop.at, load: loadRules(s, s.colonies[stop.at], banned), unload: tradeGoods(s).filter(banned).map((good) => ({ good })) };
 }
 
 // ---------------------------------------------------------------------------
@@ -311,7 +313,7 @@ function partnerColonies(s: GameState, p: Player): Colony[] {
 }
 
 /** Goods a nation sells at partners' colonies: its exports, plus lumber and tools for their workshops and builds. */
-const FOREIGN_GOODS: GoodId[] = [...TRADE_GOODS.filter((g) => g !== 'horses'), 'lumber', 'tools'];
+const foreignGoods = (s: GameState): GoodId[] => [...tradeGoods(s).filter((g) => g !== 'horses'), ...goodsOf(s).filter((g) => g === 'lumber' || g === 'tools')];
 
 /** A partner whose treasury is this full also buys goods its workshops do not use. */
 const RICH_PARTNER = 4000;
@@ -352,7 +354,7 @@ function foreignStop(s: GameState, p: Player, f: Colony, goods: GoodId[]): { sto
     sells.push(g);
     gain += per * Math.min(room, 100) + (demand > 0 ? 20 : 0);
   }
-  const buys = TRADE_GOODS.filter((g) => g !== 'horses' && !p.boycotts[g] && f.goods[g] >= FOREIGN_KEEP + 30 && buyGain(s, p, f, g) >= 1);
+  const buys = tradeGoods(s).filter((g) => g !== 'horses' && !p.boycotts[g] && f.goods[g] >= FOREIGN_KEEP + 30 && buyGain(s, p, f, g) >= 1);
   for (const g of buys) gain += buyGain(s, p, f, g) * Math.min(100, f.goods[g] - FOREIGN_KEEP);
   if (!unload.length && !buys.length) return null;
   return { stop: { at: f.id, load: buys.map((good) => ({ good })), unload }, gain, sells, buys };
@@ -391,7 +393,7 @@ function withForeignShipStop(s: GameState, p: Player, stops: RouteStop[]): Route
  */
 function spareGoods(s: GameState, c: Colony): GoodId[] {
   const report = colonyReport(s, c);
-  return FOREIGN_GOODS.filter((g) => report.produced[g] > 0 && (c.goods[g] - keepFor(c, report, g) >= 30 || report.net[g] >= 3));
+  return foreignGoods(s).filter((g) => report.produced[g] > 0 && (c.goods[g] - keepFor(c, report, g) >= 30 || report.net[g] >= 3));
 }
 
 /** The two stops of a wagon train's route between one of the nation's colonies and a partner's, or null when it does not pay. */
@@ -475,7 +477,7 @@ function routeWagon(s: GameState, p: Player, wagon: Unit): void {
   const served = wagonServed(s, p);
   const candidates = ownColonies(s, p)
     .filter((c) => !served.has(c.id) && needsCarting(s, c) && distance(c.x, c.y, pos.x, pos.y) <= 12)
-    .map((c) => ({ c, score: overflowSoon(s, c, 8) + TRADE_GOODS.reduce((n, g) => n + c.goods[g], 0) - distance(c.x, c.y, pos.x, pos.y) * 10 }))
+    .map((c) => ({ c, score: overflowSoon(s, c, 8) + tradeGoods(s).reduce((n, g) => n + c.goods[g], 0) - distance(c.x, c.y, pos.x, pos.y) * 10 }))
     .sort((a, b) => b.score - a.score);
   for (const { c } of candidates.slice(0, 3)) {
     const port = portFor(s, p, c, wagon);
@@ -544,7 +546,7 @@ function nativeTrade(s: GameState, p: Player, wagon: Unit): void {
   if (haulNativeGoods(s, p, wagon)) return;
   const pos = unitPosition(s, wagon)!;
   const cargo = wagon.cargo ?? {};
-  const carrying = TRADE_GOODS.filter((g) => (cargo[g] ?? 0) > 0);
+  const carrying = tradeGoods(s).filter((g) => (cargo[g] ?? 0) > 0);
   const buyers = nativeBuyers(s, p, pos).sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y));
   if (carrying.length) {
     const st = buyers.find((o) => carrying.some((g) => nativeOffer(o, g, Math.min(100, cargo[g]!)) >= 40));
@@ -562,7 +564,7 @@ function nativeTrade(s: GameState, p: Player, wagon: Unit): void {
   const here = colonyAt(s, pos.x, pos.y);
   if (here && here.owner === p.id && buyers.length) {
     const report = colonyReport(s, here);
-    const spare = TRADE_GOODS.map((g) => ({ g, n: here.goods[g] - keepFor(here, report, g) })).filter((r) => r.n >= 50).sort((a, b) => b.n - a.n);
+    const spare = tradeGoods(s).map((g) => ({ g, n: here.goods[g] - keepFor(here, report, g) })).filter((r) => r.n >= 50).sort((a, b) => b.n - a.n);
     for (const { g, n } of spare) {
       const amount = Math.min(n, cargoRoomFor(s, wagon, g));
       if (amount <= 0) continue;
@@ -574,7 +576,7 @@ function nativeTrade(s: GameState, p: Player, wagon: Unit): void {
   }
   const fullest = ownColonies(s, p)
     .filter((c) => distance(c.x, c.y, pos.x, pos.y) <= 10 && (!here || c.id !== here.id))
-    .map((c) => ({ c, n: TRADE_GOODS.reduce((m, g) => m + Math.max(0, c.goods[g] - 50), 0) }))
+    .map((c) => ({ c, n: tradeGoods(s).reduce((m, g) => m + Math.max(0, c.goods[g] - 50), 0) }))
     .filter((r) => r.n >= 80)
     .sort((a, b) => b.n - a.n)[0];
   if (fullest && findPath(s, wagon, fullest.c.x, fullest.c.y)) setDestination(s, wagon.id, { x: fullest.c.x, y: fullest.c.y });
@@ -608,7 +610,7 @@ function busiestPorts(s: GameState, p: Player, skip: Set<string>): Colony[] {
     .filter((c) => isCoastal(s, c.x, c.y) && !skip.has(c.id))
     .map((c) => {
       const report = colonyReport(s, c);
-      const score = TRADE_GOODS.reduce((n, g) => n + Math.max(0, c.goods[g] - keepFor(c, report, g)) + Math.max(0, report.net[g]) * 8, 0);
+      const score = tradeGoods(s).reduce((n, g) => n + Math.max(0, c.goods[g] - keepFor(c, report, g)) + Math.max(0, report.net[g]) * 8, 0);
       return { c, score };
     })
     .filter((r) => r.score >= 120)

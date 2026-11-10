@@ -19,8 +19,8 @@ import {
   unitsAt,
   type Direction,
 } from '../queries.js';
-import { GOODS } from '../rules/goods.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
+import { goodsOf } from '../scenarios/index.js';
 
 /** Runs an AI action, ignoring moves the rules turn down. */
 export function safely(fn: () => void): void {
@@ -60,7 +60,7 @@ export function siteScore(s: GameState, x: number, y: number): number {
     }
     if (colonyAt(s, p.x, p.y)) continue;
     let best = 0;
-    for (const g of GOODS) if (g !== 'food') best = Math.max(best, baseTileYield(tile, g));
+    for (const g of goodsOf(s)) if (g !== 'food') best = Math.max(best, baseTileYield(tile, g));
     score += (baseTileYield(tile, 'food') * 1.2 + best * 0.6) * weight;
   }
   // A river through the centre: road-speed travel inland, and its yield bonus counted above.

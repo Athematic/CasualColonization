@@ -5,13 +5,13 @@ import { canImprove, findPath, setDestination, startImprovement } from '../movem
 import { colonyReport } from '../production.js';
 import { cargoFree, cargoRoomFor, colonyAt, colonyWorkers, distance, isCoastal, isShip, isWater, tileAt, unitsAboard, warehouseCapacity } from '../queries.js';
 import type { BuildingKind } from '../rules/buildings.js';
-import { GOODS, type GoodId } from '../rules/goods.js';
+import type { GoodId } from '../rules/goods.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
 import { aiFight, disembarkAll, guardColony, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
 import { crownAffairs } from './royal.js';
+import { aiGoodsOf, goodsOf } from '../scenarios/index.js';
 
-const SELLABLE: GoodId[] = ['sugar', 'tobacco', 'cotton', 'furs', 'ore', 'silver', 'rum', 'cigars', 'cloth', 'coats'];
 const BUILD_PREFERENCE: BuildingKind[] = ['docks', 'stockade', 'warehouse', 'carpenter', 'printingPress', 'church', 'schoolhouse', 'customHouse', 'armory'];
 
 /** The Naive level: settles, works the land and trades, but plans nothing ahead. */
@@ -147,7 +147,7 @@ function aiShip(s: GameState, p: Player, ship: Unit): void {
   if (here && here.owner === p.id) {
     // Full loads, or anything about to spill out of the warehouse.
     const nearlyFull = (g: GoodId) => here.goods[g] >= 30 && here.goods[g] >= warehouseCapacity(here) - 30;
-    for (const g of SELLABLE) {
+    for (const g of aiGoodsOf(s).export) {
       if ((here.goods[g] >= 100 || nearlyFull(g)) && cargoFree(s, ship) > 0) {
         const amount = Math.min(here.goods[g], cargoRoomFor(s, ship, g));
         here.goods[g] -= amount;
@@ -166,7 +166,7 @@ function aiShip(s: GameState, p: Player, ship: Unit): void {
   if (ship.dest) return;
   const rotting = ownColonies(s, p)
     .filter((c) => c.id !== here?.id && isCoastal(s, c.x, c.y))
-    .map((c) => ({ c, n: Math.max(...SELLABLE.map((g) => c.goods[g] - (warehouseCapacity(c) - 30))) }))
+    .map((c) => ({ c, n: Math.max(...aiGoodsOf(s).export.map((g) => c.goods[g] - (warehouseCapacity(c) - 30))) }))
     .filter((r) => r.n >= 0)
     .sort((a, b) => b.n - a.n)[0];
   if (rotting && findPath(s, ship, rotting.c.x, rotting.c.y)) setDestination(s, ship.id, { x: rotting.c.x, y: rotting.c.y });
@@ -175,7 +175,7 @@ function aiShip(s: GameState, p: Player, ship: Unit): void {
 function aiEurope(s: GameState, p: Player): void {
   const ships = Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && isShip(u) && !u.route);
   for (const ship of ships) {
-    for (const g of GOODS) if ((ship.cargo?.[g] ?? 0) > 0) sellGoods(s, ship.id, g, ship.cargo![g]!);
+    for (const g of goodsOf(s)) if ((ship.cargo?.[g] ?? 0) > 0) sellGoods(s, ship.id, g, ship.cargo![g]!);
     const totalUnits = Object.values(s.units).filter((u) => u.owner === p.id).length;
     while (cargoFree(s, ship) > 0 && p.gold >= recruitPrice(p) + 300 && totalUnits < 60) {
       const docksCount = Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u)).length;

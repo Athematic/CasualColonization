@@ -10,9 +10,9 @@ import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import type { BuildTarget, Colony, GameState, Player } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
+import { aiGoodsOf } from '../scenarios/index.js';
 
 /** Goods the merchant fleet carries to Europe. */
-const EXPORTS = ['sugar', 'tobacco', 'cotton', 'furs', 'ore', 'silver', 'rum', 'cigars', 'cloth', 'coats'] as const;
 
 export interface FleetReport {
   /** Cargo ships, and their holds in units of 100. */
@@ -44,7 +44,7 @@ export function fleetReport(s: GameState, p: Player): FleetReport {
   for (const c of ownColonies(s, p)) {
     if (!isCoastal(s, c.x, c.y)) continue;
     r.coastal++;
-    for (const g of EXPORTS) if (c.goods[g] >= 50) r.waiting += c.goods[g] / 100;
+    for (const g of aiGoodsOf(s).export) if (c.goods[g] >= 50) r.waiting += c.goods[g] / 100;
   }
   return r;
 }

@@ -46,7 +46,7 @@ import {
   warehouseCapacity,
 } from '../queries.js';
 import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
-import { GOODS, type GoodId, type ProductId } from '../rules/goods.js';
+import type { GoodId, ProductId } from '../rules/goods.js';
 import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import type { BuildTarget, Colony, GameState, Job, Player, Unit } from '../types.js';
 import { aiFight, bestColonySite, disembarkAll, keenSiteScore, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
@@ -60,8 +60,8 @@ import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './p
 import { equippedPrice, trainEquipped } from './outfit.js';
 import type { AiProfile } from './profiles.js';
 import { buildRoads, equipPioneer, pioneerToolsWanted } from './roads.js';
+import { aiGoodsOf, goodsOf } from '../scenarios/index.js';
 
-const SELLABLE: GoodId[] = ['sugar', 'tobacco', 'cotton', 'furs', 'ore', 'silver', 'rum', 'cigars', 'cloth', 'coats'];
 const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
 
 /** Plays one turn with the given profile. */
@@ -478,7 +478,7 @@ function manageColony(s: GameState, p: Player, c: Colony, prof: AiProfile): void
 }
 
 function manageRest(s: GameState, p: Player, c: Colony, prof: AiProfile): void {
-  if (c.buildings.customHouse) for (const g of SELLABLE) c.exports[g] = true;
+  if (c.buildings.customHouse) for (const g of aiGoodsOf(s).export) c.exports[g] = true;
   acquireLand(s, p, c, prof);
   raiseMilitia(s, p, c, prof);
   equipPioneer(s, p, c, c.build ? buildTargetCost(c.build, c).tools : 0);
@@ -811,7 +811,7 @@ function pioneerTurn(s: GameState, p: Player, u: Unit): void {
     for (const t of spots) {
       const tile = tileAt(s, t.x, t.y)!;
       if (isWater(tile)) continue;
-      const farm = t.good === 'food' || t.good === 'sugar' || t.good === 'tobacco' || t.good === 'cotton';
+      const farm = aiGoodsOf(s).farm.includes(t.good);
       const kind = farm ? (tile.f ? 'clear' : tile.p ? null : 'plow') : tile.r ? null : 'road';
       if (!kind || (kind === 'plow' && (tile.t === 'hills' || tile.t === 'mountains'))) continue;
       if (pos.x === t.x && pos.y === t.y) {
@@ -968,7 +968,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
   const shippable = (g: GoodId) => outlet || !p.boycotts[g];
   // Deliver supplies bought in Europe.
   if (mine) {
-    for (const g of SELLABLE) {
+    for (const g of aiGoodsOf(s).export) {
       const n = shippable(g) ? 0 : Math.min(ship.cargo?.[g] ?? 0, Math.max(0, warehouseCapacity(mine) - mine.goods[g]));
       if (n > 0) {
         ship.cargo![g]! -= n;
@@ -983,7 +983,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
         mine.goods[g] += n;
       }
     }
-    for (const g of SELLABLE) {
+    for (const g of aiGoodsOf(s).export) {
       if (shippable(g) && mine.goods[g] >= 50 && cargoFree(s, ship) + (ship.cargo?.[g] ? 1 : 0) > 0) {
         const amount = Math.min(mine.goods[g], cargoRoomFor(s, ship, g));
         if (amount <= 0) continue;
@@ -993,7 +993,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
       }
     }
   }
-  const carrying = SELLABLE.reduce((n, g) => n + (ship.cargo?.[g] ?? 0), 0);
+  const carrying = aiGoodsOf(s).export.reduce((n, g) => n + (ship.cargo?.[g] ?? 0), 0);
   const supplies = SUPPLIES.reduce((n, g) => n + (ship.cargo?.[g] ?? 0), 0);
   if (supplies > 0) {
     const room = (c: Colony) => SUPPLIES.some((g) => (ship.cargo?.[g] ?? 0) > 0 && c.goods[g] < warehouseCapacity(c) - 20);
@@ -1013,7 +1013,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
   if (carrying < capacity * 0.5) {
     const pickup = ownColonies(s, p)
       .filter((c) => isCoastal(s, c.x, c.y) && c.id !== mine?.id)
-      .map((c) => ({ c, goods: SELLABLE.reduce((n, g) => n + (c.goods[g] >= 50 && shippable(g) ? c.goods[g] : 0), 0) }))
+      .map((c) => ({ c, goods: aiGoodsOf(s).export.reduce((n, g) => n + (c.goods[g] >= 50 && shippable(g) ? c.goods[g] : 0), 0) }))
       .filter((r) => r.goods >= 100)
       .sort((a, b) => b.goods - a.goods)[0];
     if (pickup && findPath(s, ship, pickup.c.x, pickup.c.y)) {
@@ -1079,7 +1079,7 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
   // Sell everything but supplies, in whichever port the ship is in; goods bought for a triangle
   // trade wait for the port they were bought for (foreign.ts).
   for (const ship of ships) {
-    for (const g of GOODS) {
+    for (const g of goodsOf(s)) {
       if ((ship.cargo?.[g] ?? 0) <= 0 || SUPPLIES.includes(g) || !sellHere(s, p, ship, g)) continue;
       safely(() => {
         sellGoods(s, ship.id, g, ship.cargo![g]!);
