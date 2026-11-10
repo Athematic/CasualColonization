@@ -11,7 +11,7 @@ import { colonyAt, colonyWorkers, distance, isCoastal, isWater, neighbours, sett
 import { riverLinked } from '../rivers.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
-import { ownColonies } from './common.js';
+import { countUnits, ownColonies } from './common.js';
 import { aiGoodsOf } from '../scenarios/index.js';
 
 /** Colonies further apart than this are not worth joining by road. */
@@ -154,10 +154,11 @@ export function pioneersWanted(colonies: number): number {
  * is short of pioneers and has land to improve. A hardy pioneer goes first.
  */
 export function equipPioneer(s: GameState, p: Player, c: Colony, toolsNeeded: number): boolean {
-  const colonies = ownColonies(s, p).length;
-  const pioneers = Object.values(s.units).filter((u) => u.owner === p.id && u.role === 'pioneer').length;
-  if (pioneers >= pioneersWanted(colonies)) return false;
+  // The cheap test first: both only read the state.
   if (c.goods.tools - toolsNeeded < 60) return false;
+  const colonies = ownColonies(s, p).length;
+  const pioneers = countUnits(s, p, (u) => u.role === 'pioneer');
+  if (pioneers >= pioneersWanted(colonies)) return false;
   const workers = colonyWorkers(s, c);
   const hardy = workers.find((u) => u.type === 'hardyPioneer');
   const plain = workers.length >= 5 ? workers.find((u) => UNIT_TYPES[u.type].skill === 0 && u.type !== 'nativeConvert') : undefined;
@@ -171,7 +172,7 @@ export function equipPioneer(s: GameState, p: Player, c: Colony, toolsNeeded: nu
 /** Tools to bring from Europe so a colony can send out another pioneer; 0 when none are short. */
 export function pioneerToolsWanted(s: GameState, p: Player): number {
   const colonies = ownColonies(s, p);
-  const pioneers = Object.values(s.units).filter((u) => u.owner === p.id && u.role === 'pioneer').length;
+  const pioneers = countUnits(s, p, (u) => u.role === 'pioneer');
   if (pioneers >= pioneersWanted(colonies.length)) return 0;
   const stored = Math.max(0, ...colonies.map((c) => c.goods.tools - (c.build ? buildTargetCost(c.build, c).tools : 0)));
   return stored >= 60 ? 0 : 60;

@@ -75,7 +75,13 @@ export function maxBraves(s: GameState, st: Settlement): number {
 /** The braves standing on a tile. */
 export function bravesAt(s: GameState, x: number, y: number): Brave[] {
   const out: Brave[] = [];
-  for (const b of Object.values(s.braves ?? {})) if (b.x === x && b.y === y) out.push(b);
+  const braves = s.braves;
+  if (!braves) return out;
+  // A plain loop visits them in Object.values order without building the array.
+  for (const id in braves) {
+    const b = braves[id];
+    if (b.x === x && b.y === y) out.push(b);
+  }
   return out;
 }
 

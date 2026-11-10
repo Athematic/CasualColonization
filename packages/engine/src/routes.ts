@@ -35,7 +35,12 @@ export function routesOf(s: GameState, nation: NationId): TradeRoute[] {
 
 /** Units following a route. */
 export function routeUnits(s: GameState, routeId: string): Unit[] {
-  return Object.values(s.units).filter((u) => u.route?.id === routeId);
+  const out: Unit[] = [];
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (u.route?.id === routeId) out.push(u);
+  }
+  return out;
 }
 
 /** A stop's name; with `owner` (the route's owner), a foreign colony's name carries its nation, e.g. "Québec (French)". */
