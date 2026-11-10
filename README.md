@@ -9,7 +9,7 @@ A browser clone of Sid Meier's *Colonization*. The game engine is kept separate 
 
 ## Play
 
-The game opens on a title screen showing one of the five front covers at random (`docs/BOX_ART_PROMPTS.md`, section 3), with Continue, Quick game, New game, Watch the computers play and Load.
+The game opens on a title screen showing one of the front covers at random (`docs/BOX_ART_PROMPTS.md`; the covers and text of the autosaved game's scenario, else of every playable scenario), with Continue, Quick game, New game, Watch the computers play and Load.
 
 ```sh
 npm install
@@ -69,6 +69,29 @@ Secrets are encrypted: they can't be read back in GitHub's interface and are mas
 
 In a colony, click a colonist and then a field or building to put them to work. Click a worker's own field again to switch what it produces.
 
+## Scenarios
+
+A scenario is the world a game is played in: its years, map, nations, peoples, goods, Founding Fathers (or their counterparts), events, rules and ways to win. The engine provides the mechanics; the scenario provides the data. Two are playable:
+
+- **The Americas, 1492–1850**: the original game. Alternative history (all eight nations) or real rivals (England, France, the Netherlands and Spain); generated worlds or the stored maps. It ends with the War of Independence or in 1850.
+- **The Caribbean, 1650–1750**: the lesser powers (Courland, Brandenburg, Scotland and the Order of Malta, beside England, France, the Netherlands, Spain and Denmark) among the sugar islands. 202 spring and autumn turns, a generated archipelago, the Arawak, the Kalinago and the Tupi, no furs, a Colonial Council, its own events. The Crown taxes and makes demands but sends no army, and nobody declares independence: it ends in 1750 and the highest score wins.
+
+Australia (1788–1901) and Vinland (around 1000) are planned and shown on the New game screen as disabled choices.
+
+**Choosing one.** The New game screen has a *Scenario* select. Changing it resets the nations, the map, the size and the start year to what the scenario offers. The *Rivals* select chooses the nations that were there (when the scenario has them) or alternative history. Game codes and share links carry the scenario.
+
+**Tools.** `--scenario <id>` (`americas` or `caribbean`) works for `npm run tournament`, the arena and `npm run bench`. Give a tournament the scenario's length with `--turns` (609 for the Americas, 202 for the Caribbean). `--rivals real` (or `alternative`) picks the nation set. `--play-on` (tournament) lets the computer players go on after a War of Independence, so every nation is measured to the end year; a nation that has fought its war keeps the score it had then.
+
+```sh
+npm run tournament -- --scenario caribbean --games 6 --turns 202 --events
+npm run tournament -- --rivals real --play-on
+npm run bench -- --verify --scenario caribbean
+```
+
+**Keeping the Americas identical.** Every engine change from 0.9 on must leave `npm run bench -- --verify` saying "same" and the golden test green (see [Performance](#performance)). A scenario's own bench hashes are kept under `<id>: …` keys in `scripts/bench-hashes.json`.
+
+To write a scenario, see [docs/SCENARIOS.md](docs/SCENARIOS.md). The design is in [docs/design/scenario-framework.md](docs/design/scenario-framework.md).
+
 ## What is in the alpha
 
 - **Map**: generated from a seed, or one of four hand-made stored maps (North America, South America, The Americas, and Australia as a geography-only preview with placeholder peoples; see `packages/engine/src/maps/`), with 13 terrain types and their forested variants, hills, mountains, bonus resources and Lost City Rumours. **Rivers**, minor and major, are fixed features of the land, as in the original game: moving along a river costs 1/3 of a move, like a road (the two do not add up), and a river tile yields more of the goods it already gives: +1 on a minor and +2 on a major river for food, sugar, tobacco, cotton, furs, lumber and ore, and +1 silver on either (one table, `RIVER_YIELD_BONUS` in `production.ts`). A colony built on a river gets the bonus on its centre tile. A unit in the open on a river tile defends 25% better against an attacker across the river (on land the river does not link to its tile; `RIVER_DEFENCE` in `rules/combat.ts`, none inside colonies). Roads are drawn along a river only where they cross it (a short bridge of two plank lines) or leave it for another tile, never over the river's whole length. Generated maps grow rivers from hills, mountains and wet highlands down to the sea or a lake, merging into major rivers once long enough; the stored maps carry the great rivers (the Mississippi with the Missouri and the Ohio, the St. Lawrence, the Amazon and its tributaries, the Orinoco, the Paraná, the Murray–Darling, Cooper Creek into Lake Eyre and more), written as courses in tile coordinates (`parseRivers` in `packages/engine/src/rivers.ts`). Computer players favour colony sites on rivers and leave out roads along stretches a river already makes fast. High seas lead to Europe: expeditions arrive from the east, or from the west on the Australia map (via the Cape of Good Hope). Fog of war shows explored land and what your units can currently see.
@@ -100,7 +123,7 @@ In a colony, click a colonist and then a field or building to put them to work. 
   - **Foreign intervention**: as in the later versions of the original, where a rival power steps in once the rebels have rung enough liberty bells after the declaration. Once the war has lasted 8 turns, your colonies have rung 500 liberty bells since the declaration (times the difficulty: 0.6 Discoverer to 1.5 Viceroy) and you still hold two thirds of your colonies, a European power sends an intervention force: four tenths of the land units of the Royal Expeditionary Force that sailed (at least 6; half soldiers, a quarter each dragoons and artillery) and 2 men-of-war. It prefers a nation that was your Favoured Nation, then a trade partner or the nation your King last made war on; otherwise a European power not in the game sends it. It lands in your most threatened colony, fights the Crown on its own (it takes no orders), and sails home when the war ends. Everyone is told.
   - **Tories**: after the declaration a colony with Sons of Liberty below 30% resists the cause: each worker produces one less, now and then (8% a round) a soldier or dragoon there deserts (never Continentals or mercenaries), and a colony below 10% with no troops at its gates may declare for the King (10% a round). Royal landings prefer Tory colonies, and Tories guide 8 royal units ashore there instead of 6.
   - All of it is seeded per nation and purpose, in the news and in the History report; the Military report shows your mercenaries, the intervention force and how far the intervention is. Computer players count the mercenaries they can pay and, if their bells would bring it within 20 turns, six tenths of the intervention force when deciding whether to declare, and hire a company at the declaration or later when their defence is short; Naive never declares.
-- **Game end and score**: the game ends with independence or in 1850, with scores. The score rewards development as well as headcount: colonists (0.5 each), experts working in their speciality (2), building levels (1.5), production (a quarter point per good a turn, averaged over 10 turns), liberty (rebels and Sons of Liberty colonies), Founding Fathers (5), wealth (gold and warehouse goods, 1 per 800), peace and cooperation (trade agreements, Favoured Nation partners, native settlements at low tension) and 250 for winning independence. All weights are in one table, `SCORE_WEIGHTS` in `packages/engine/src/score.ts`, so a scenario can override them; `scoreBreakdown(state, player)` splits any score into its components, shown as a table under the Progress graphs and on the game-over screen. The recorded `score` graph uses the new formula; saves from before 0.7 keep the old numbers for turns already recorded.
+- **Game end and score**: the game ends with independence or in 1850 (in the Americas; other scenarios end by their own rules), with scores. The score rewards development as well as headcount: colonists (0.5 each), experts working in their speciality (2), building levels (1.5), production (a quarter point per good a turn, averaged over 10 turns), liberty (rebels and Sons of Liberty colonies), Founding Fathers (5), wealth (gold and warehouse goods, 1 per 800), peace and cooperation (trade agreements, Favoured Nation partners, native settlements at low tension) and 250 for winning independence. All weights are in one table, `SCORE_WEIGHTS` in `packages/engine/src/score.ts`, so a scenario can override them; `scoreBreakdown(state, player)` splits any score into its components, shown as a table under the Progress graphs and on the game-over screen. The recorded `score` graph uses the new formula; saves from before 0.7 keep the old numbers for turns already recorded.
 - **Mines running out** (0.7, `packages/engine/src/mines.ts`, numbers in `rules/mines.ts`): the silver and ore dug from a mining tile is counted (`GameState.mined`, optional). A silver deposit loses its bonus after 500 silver and an ore bonus after 1,000 ore (a message and a History entry); a silver mountain, deposit or not, is "worked out" after 1,500 silver and yields half (at least 1). Deterministic, no randomness.
 - **Abandoning a colony and retiring** (0.7, `packages/engine/src/leaving.ts`): *Abandon* in the colony screen (with a confirmation) gives up a colony of at most 3 colonists and no stockade; the colonists step out onto the tile as units, goods and buildings are lost, and it is entered in the History. Computer players abandon a colony only just before declaring independence, and only a tiny outpost (2 colonists or fewer) that could not hold. *Retire…* in the Game menu ends the game at once after a confirmation; the score is counted as usual and the game-over screen reads "Retired in <year>".
 - **Opponents**: 1–8 European nations, each with a national bonus. Each one is a person (several people take turns on one device, hot seat) or a computer player at one of four levels:
@@ -161,7 +184,7 @@ The 0.7 performance pass brought that head start from 43–46 seconds to 12–14
 
 ```
 packages/
-  engine/              Rules and game state. Pure TypeScript, no DOM, deterministic.
+  engine/              Rules and game state. Pure TypeScript, no DOM, deterministic. Scenarios are in src/scenarios/.
   render-api/          The contract between the game shell and graphical styles.
   style-ligne-claire/  Default style plugin.
   style-sprites/       Styles from bitmap sprite packs over a procedural fallback; packs/ has Ligne claire (painted).
