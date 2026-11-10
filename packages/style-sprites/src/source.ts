@@ -86,3 +86,33 @@ export function browserEnv(timeoutMs = 10_000): StoreEnv {
     },
   };
 }
+
+/**
+ * The ?transitions= switch for terrain transition pieces: `on` (or `overlay`) and `off` (or `none`)
+ * override the pack's rules.transitions and are remembered; `default` forgets the choice. Returns
+ * undefined when nothing is set, so the pack's own setting applies.
+ */
+export function transitionsOverride(search: string, storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>, storageKey = 'cc.transitions'): 'overlay' | 'none' | undefined {
+  const parse = (v: string | null | undefined) => {
+    const t = v?.trim().toLowerCase();
+    if (t === 'on' || t === 'overlay') return 'overlay' as const;
+    if (t === 'off' || t === 'none') return 'none' as const;
+    return undefined;
+  };
+  const param = new URLSearchParams(search).get('transitions');
+  if (param !== null) {
+    const mode = parse(param);
+    try {
+      if (mode) storage?.setItem(storageKey, mode);
+      else storage?.removeItem(storageKey);
+    } catch {
+      // Storage may be unavailable; the switch then lasts for this page only.
+    }
+    return mode;
+  }
+  try {
+    return parse(storage?.getItem(storageKey));
+  } catch {
+    return undefined;
+  }
+}

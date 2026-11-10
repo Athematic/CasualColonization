@@ -12,7 +12,7 @@ import { SpriteIds } from './ids.js';
 import { createLayerHooks } from './layers.js';
 import { completePack, type SpritePack } from './pack.js';
 import { Painter } from './painter.js';
-import { browserEnv, spriteBase } from './source.js';
+import { browserEnv, spriteBase, transitionsOverride } from './source.js';
 import { SpriteStore, type StoreEnv } from './store.js';
 
 export interface SpriteStyleOptions {
@@ -20,6 +20,8 @@ export interface SpriteStyleOptions {
   env?: StoreEnv;
   /** Sprite folder, overriding the pack's source and any ?sprites= setting; null: procedural only. */
   base?: string | null;
+  /** Terrain transitions, overriding the pack's rules.transitions and any ?transitions= setting. */
+  transitions?: 'overlay' | 'none';
 }
 
 /** The head of a full-length figure: a square starting 8% down the image and 30% of its height tall. */
@@ -56,6 +58,23 @@ export function packCssUrls(files: readonly string[] | undefined, base: string |
   return out;
 }
 
+/** The ?transitions= switch in a browser; undefined elsewhere or when not set. */
+function browserTransitions(): 'overlay' | 'none' | undefined {
+  if (typeof location === 'undefined') return undefined;
+  let storage: Storage | undefined;
+  try {
+    storage = typeof localStorage !== 'undefined' ? localStorage : undefined;
+  } catch {
+    storage = undefined;
+  }
+  return transitionsOverride(location.search, storage);
+}
+
+/** The pack with its terrain transition mode replaced, when a switch says so. */
+export function withTransitions(pack: SpritePack, mode: 'overlay' | 'none' | undefined): SpritePack {
+  return mode && mode !== pack.rules.transitions ? { ...pack, rules: { ...pack.rules, transitions: mode } } : pack;
+}
+
 export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts: SpriteStyleOptions = {}): StylePlugin {
   const pack = completePack(input);
   const ids = new SpriteIds(pack.mapping);
@@ -76,7 +95,7 @@ export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts
   function createMapRenderer(canvas: HTMLCanvasElement): MapRenderer {
     const p = getPainter();
     p.store.start();
-    const inner = fallback.createMapRenderer(canvas, createLayerHooks(pack, ids, p, ink));
+    const inner = fallback.createMapRenderer(canvas, createLayerHooks(withTransitions(pack, opts.transitions ?? browserTransitions()), ids, p, ink));
     let last: Scene | undefined;
     let frame = 0;
     let disposed = false;

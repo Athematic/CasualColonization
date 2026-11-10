@@ -3,11 +3,11 @@ import { FATHERS, type FatherId } from '@cc/engine';
 import { fatherInitials, type StylePlugin } from '@cc/render-api';
 import { fill, kebab, SpriteIds } from '../src/ids.js';
 import { coastPieces, roadTurns } from '../src/layers.js';
-import { createSpriteStyle, packCssUrls } from '../src/style.js';
+import { createSpriteStyle, packCssUrls, withTransitions } from '../src/style.js';
 import { completePack, DEFAULT_MAPPING, DEFAULT_RULES, extendPack, type SpritePack } from '../src/pack.js';
 import { Painter, type PaintContext } from '../src/painter.js';
 import { chooseSize } from '../src/sizes.js';
-import { normaliseBase, spriteBase, DEFAULT_SPRITE_BASE } from '../src/source.js';
+import { normaliseBase, spriteBase, transitionsOverride, DEFAULT_SPRITE_BASE } from '../src/source.js';
 import { SpriteStore, type SpriteImage, type SpriteManifest, type StoreEnv } from '../src/store.js';
 
 const SET = { pixelSizes: [16, 24, 32], smoothSizes: [48, 64, 96, 128] };
@@ -471,5 +471,33 @@ describe('createSpriteStyle', () => {
     r.render({} as never);
     expect(calls.rendered).toBe(1);
     r.dispose();
+  });
+});
+
+describe('?transitions= switch', () => {
+  const store = () => {
+    const m = new Map<string, string>();
+    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) };
+  };
+
+  it('turns transitions on or off, remembers the choice, and forgets it with default', () => {
+    const st = store();
+    expect(transitionsOverride('', st)).toBeUndefined();
+    expect(transitionsOverride('?transitions=on', st)).toBe('overlay');
+    expect(transitionsOverride('', st)).toBe('overlay');
+    expect(transitionsOverride('?transitions=off', st)).toBe('none');
+    expect(transitionsOverride('?transitions=overlay', st)).toBe('overlay');
+    expect(transitionsOverride('?transitions=default', st)).toBeUndefined();
+    expect(transitionsOverride('', st)).toBeUndefined();
+  });
+
+  it('replaces only the pack rule when a mode is given', () => {
+    const pack = completePack({ id: 't', name: 'T', description: '', source: { base: 'x/' } });
+    expect(withTransitions(pack, undefined)).toBe(pack);
+    expect(withTransitions(pack, 'none')).toBe(pack);
+    const on = withTransitions(pack, 'overlay');
+    expect(on.rules.transitions).toBe('overlay');
+    expect(on.rules.colony).toEqual(pack.rules.colony);
+    expect(pack.rules.transitions).toBe('none');
   });
 });

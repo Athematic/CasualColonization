@@ -137,7 +137,7 @@ const australia = extendPack(ligneClairePaintedPack, {
 
 ### Ligne claire (painted)
 
-The first pack, `packages/style-sprites/packs/ligne-claire-painted.ts`, uses the default mapping and rules, with Ligne claire as the fallback and its theme and fonts. Its sprites live in `assets/sprites/` next to the page, beside the masters (https://casual.spence.dk/assets/sprites/ on the server). Point it elsewhere with `?sprites=https://casual.spence.dk/assets/sprites/` (remembered; `?sprites=default` forgets it, `?sprites=off` draws everything procedurally). Loading from another origin needs `Access-Control-Allow-Origin: *` on the server's `/assets/sprites/`. Without it the browser refuses the images and the style falls back to Ligne claire.
+The first pack, `packages/style-sprites/packs/ligne-claire-painted.ts`, uses the default mapping and rules, with Ligne claire as the fallback and its theme and fonts. Its sprites live in `assets/sprites/` next to the page, beside the masters (https://casual.spence.dk/assets/sprites/ on the server). Point it elsewhere with `?sprites=https://casual.spence.dk/assets/sprites/` (remembered; `?sprites=default` forgets it, `?sprites=off` draws everything procedurally). Loading from another origin needs `Access-Control-Allow-Origin: *` on the server's `/assets/sprites/`. Without it the browser refuses the images and the style falls back to Ligne claire. Terrain transition pieces (`rules.transitions`) can be switched per browser with `?transitions=on` or `?transitions=off` (remembered; `?transitions=default` goes back to the pack's setting), so the effect can be compared in the live game.
 
 ### Interface CSS in a pack
 
