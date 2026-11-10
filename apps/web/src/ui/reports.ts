@@ -13,6 +13,7 @@ import {
   navalOverview,
   player,
   portName,
+  portSummary,
   powerName,
   PRODUCT_NAMES,
   religionOverview,
@@ -252,7 +253,9 @@ function tradeTab(ctx: ReportContext): Child[] {
       stat('Favoured ports', partners.length, partners.length ? partners.map((n) => portName(n)).join(', ') : 'none')),
     card(null,
       sortableTable('trade', cols, rows, ctx.rerender, (r) => (r.boycotted ? 'boycott' : undefined)),
-      h('p', { class: 'muted small' }, `Prices are sell / buy per unit before tax. ${partners.length ? 'Favoured Nation ports are shown at their own prices; green means they pay more than home. ' : ''}Sales are counted from the moment this report was added; games saved before start counting when loaded.`)),
+      h('p', { class: 'muted small' }, `Prices are sell / buy per unit before tax. ${partners.length ? 'Favoured Nation ports are shown at their own prices; green means they pay more than home. ' : ''}Sales are counted from the moment this report was added; games saved before start counting when loaded.`),
+      // Each home port has its own character (rules/ports.ts): what it pays more for, what is cheap there.
+      [nation, ...partners].map((port) => h('p', { class: 'muted small port-character' }, portSummary(port) + '.'))),
   ];
 }
 
@@ -482,10 +485,13 @@ function congressTab(ctx: ReportContext): Child[] {
       stat('Bells rung', c.bells.toLocaleString()),
       stat('Rebels', `${c.rebels}%`, p.independence === 'none' ? (c.rebels >= 50 ? 'enough to declare independence' : '50% needed to declare') : p.independence === 'declared' ? 'at war with the Crown' : p.independence),
       stat('Founding Fathers', `${c.fathers.length}/25`)),
+    h('p', null, h('button', { class: 'btn', onclick: () => app.openCongress() }, 'Open the Congress hall')),
     card('Next Founding Father',
       cur
         ? h('div', null,
-            h('p', null, h('strong', null, cur.name), h('span', { class: 'muted small' }, ` (${cur.category})`), ` — ${cur.effect}`),
+            h('div', { class: 'congress-sought' },
+              icon({ kind: 'father', id: c.current!, category: cur.category }, 96, cur.name),
+              h('p', null, h('strong', null, cur.name), h('span', { class: 'muted small' }, ` (${cur.category})`), ` — ${cur.effect}`)),
             bar(c.fatherBells, c.fatherCost, 'Bells towards the next Founding Father'),
             h('p', { class: 'small' }, `${c.fatherBells} of ${c.fatherCost} bells · ${c.turnsToFather ? `joins in about ${turns(c.turnsToFather)}` : 'no bells are being rung'}`))
         : h('p', null, `No candidate chosen (${c.fatherBells} bells collected). `, mine ? h('button', { class: 'btn small', onclick: () => { app.closeScreen(); void app.chooseFather(); } }, 'Choose one') : null)),
@@ -501,7 +507,9 @@ function congressTab(ctx: ReportContext): Child[] {
         ], c.colonies, ctx.rerender)
       : empty('No colonies.')),
     card('Members of the Congress', c.fathers.length
-      ? h('ul', { class: 'report-fathers' }, c.fathers.map((id) => h('li', null, h('strong', null, FATHERS[id].name), h('span', { class: 'muted small' }, ` ${FATHERS[id].category}`), h('div', { class: 'small' }, FATHERS[id].effect))))
+      ? h('ul', { class: 'report-fathers' }, c.fathers.map((id) => h('li', null,
+          icon({ kind: 'father', id, category: FATHERS[id].category }, 48, FATHERS[id].name),
+          h('div', null, h('strong', null, FATHERS[id].name), h('span', { class: 'muted small' }, ` ${FATHERS[id].category}`), h('div', { class: 'small' }, FATHERS[id].effect)))))
       : empty('No Founding Fathers have joined yet.')),
   ];
 }

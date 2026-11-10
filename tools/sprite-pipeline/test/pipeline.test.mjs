@@ -91,9 +91,12 @@ test('full-bleed art keeps its geometry: square fills the square, wide art is ce
 test('ground overlays and enclosure splits are recognised by id', () => {
   assert.ok(isGroundOverlay('terrain/coast__edge'));
   assert.ok(isGroundOverlay('decor/road__spoke'));
+  assert.ok(isGroundOverlay('terrain/blend__grassland__edge'));
+  assert.equal(classify('terrain/blend__grassland__outer').layout, 'fullbleed');
   assert.ok(!isGroundOverlay('terrain/plains'));
   assert.ok(!isGroundOverlay('decor/forest__plains'));
   assert.equal(SPLIT_SPRITES['colonies/stockade'], 0.58);
+  assert.equal(SPLIT_SPRITES['colonies/fortress'], 0.58);
 });
 
 test('classify picks the layout from the id', () => {
@@ -104,6 +107,14 @@ test('classify picks the layout from the id', () => {
   assert.equal(classify('units/artillery__none').layout, 'vehicle');
   assert.equal(classify('goods/furs').layout, 'good');
   assert.equal(classify('bible/style-bible').layout, null);
+});
+
+test('terrain variants (__v2, __v3 ...) are ordinary ids with the layout of their base', () => {
+  assert.equal(classify('terrain/plains__v2').layout, 'fullbleed');
+  assert.equal(classify('terrain/plains__plowed__v3').layout, 'fullbleed');
+  assert.equal(classify('decor/forest__plains__v2').layout, classify('decor/forest__plains').layout);
+  assert.equal(classify('decor/hills__v2').layout, classify('decor/hills').layout);
+  assert.equal(isGroundOverlay('terrain/plains__v2'), false);
 });
 
 // A Founding Father master on a 2:3 canvas: a head (or hat) from `top`, a body below it, feet at `feet`,

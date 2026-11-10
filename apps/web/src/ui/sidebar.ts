@@ -1,4 +1,5 @@
 import {
+  describeSeed,
   canFoundColony,
   charterCost,
   canImprove,
@@ -40,6 +41,7 @@ import { clear, h } from '../dom.js';
 import { downloadSave, saveManual } from '../save.js';
 import { activeStyle, availableStyles, icon, setStyle } from '../styles.js';
 import { toast } from './dialogs.js';
+import { shareDialog } from './share.js';
 
 function movesText(u: Unit, s: GameState): string {
   const m = u.moves / 3;
@@ -91,7 +93,9 @@ export class Sidebar {
         h('div', { class: 'muted' }, `Crosses ${me.crosses}/${me.crossesRequired} · Recruit ${recruitPrice(me)}`),
         h('div', { class: 'muted' },
           h('button', { class: 'link', onclick: () => void app.chooseFather() },
-            me.currentFather ? `Congress: ${FATHERS[me.currentFather].name} ${me.fatherBells}/${nextFatherCost(s, me)}` : `Congress: choose a Founding Father (${me.fatherBells} bells)`)),
+            me.currentFather ? `Congress: ${FATHERS[me.currentFather].name} ${me.fatherBells}/${nextFatherCost(s, me)}` : `Congress: choose a Founding Father (${me.fatherBells} bells)`),
+          ' · ',
+          h('button', { class: 'link', title: 'The Congress hall (K)', onclick: () => app.openCongress() }, 'Hall')),
         me.independence === 'declared' ? h('div', null, h('span', { class: 'pill bad' }, 'War of Independence')) : null,
         me.independence === 'won' ? h('div', null, h('span', { class: 'pill good' }, 'Independent')) : null,
         Object.values(me.stance).includes('war') && me.independence !== 'declared' ? h('div', null, h('span', { class: 'pill bad' }, 'At war')) : null,
@@ -267,6 +271,7 @@ export class Sidebar {
         h('button', { class: 'btn small', onclick: () => app.openReports(), title: 'Advisor reports (A, or F1–F8)' }, 'Reports…'),
         h('button', { class: 'btn small', onclick: () => app.openCheats(), title: 'Cheats for testing (Ctrl+Shift+C)' }, 'Cheats…')),
       this.difficultyLine(),
+      this.seedLine(),
       this.eventSwitches(),
       app.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used')) : null,
       h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · D foreign affairs · H progress graphs · A or F1–F8 reports · T trade routes · Enter end turn · Right-click or Shift-click to send a unit.'));
@@ -285,6 +290,14 @@ export class Sidebar {
     return h('div', { class: 'row wrap event-switches' },
       toggle('Historical events', 'Dated events from the period: wars in Europe, the Great Frost, famous voyages, financial bubbles.', !!cfg.historicalEvents, (on) => ({ historical: on })),
       toggle('Random events', 'Storms, fires, bumper harvests, gold fever, pirates and other surprises.', !!cfg.randomEvents, (on) => ({ random: on })));
+  }
+
+  /** The seed (with its phrase) and a button that copies a game code for sharing. */
+  private seedLine(): HTMLElement {
+    const config = this.app.state.config;
+    return h('p', { class: 'small seed-line' },
+      'Seed: ', h('strong', { id: 'game-seed-shown' }, describeSeed(config)), ' ',
+      h('button', { class: 'btn small', title: 'A QR code, link and short code that open the New game screen with this game\'s seed and choices filled in.', onclick: () => void shareDialog(this.app.state.config) }, 'Share game…'));
   }
 
   private difficultyLine(): HTMLElement {

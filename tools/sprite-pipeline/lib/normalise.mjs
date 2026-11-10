@@ -119,11 +119,11 @@ export function classify(id) {
  * they would hide the tile underneath. (The image model sometimes returns them opaque.)
  */
 export function isGroundOverlay(id) {
-  return /^terrain\/coast__/.test(id) || /^decor\/road__/.test(id);
+  return /^terrain\/(coast|blend)__/.test(id) || /^decor\/road__/.test(id);
 }
 
 /**
- * Enclosures generated whole (the colony stockade and fort) are drawn in two parts, the back wall
+ * Enclosures generated whole (the colony stockade, fort and fortress) are drawn in two parts, the back wall
  * behind the houses and the front wall in front. They split at this share of the master's height
  * (docs/SPRITE_PROMPTS.md, section 4.10).
  */

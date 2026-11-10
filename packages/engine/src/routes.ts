@@ -1,6 +1,8 @@
 /**
  * Trade routes, as in the original game: a named round trip of stops (the player's colonies,
- * or Europe for ships), each saying which goods to unload and which to load. With a trade
+ * or Europe for ships), each saying which goods to unload and which to load. A Europe stop calls
+ * at the owner's home port, or at a Favoured Nation partner's (`RouteStop.port`), where it trades
+ * at that port's prices and tax; when the partnership ends it falls back to the home port. With a trade
  * agreement (relations.ts), a stop can also be a trade partner's colony: the unit stops next to
  * it, sells what it unloads to the colony and buys what it loads. Ships and wagon
  * trains assigned to a route move on their own at the start of their owner's turn, after
@@ -9,10 +11,10 @@
  */
 import { fail, RuleError } from './errors.js';
 import { noteGoods } from './history.js';
-import { boardInEurope, buyGoods, buyPrice, inHomePort, sailToAmerica, sellGoods } from './europe.js';
+import { boardInEurope, buyGoods, buyPrice, portName, portOf, portProblem, sailToAmerica, sellGoods, shipMarket } from './europe.js';
 import { continueOrders, findPath, pathHint } from './movement.js';
 import { cargoFree, cargoRoomFor, isCoastal, isShip, isWater, message, neighbours, newId, player, reveal, tileAt, unitName, unitPosition, unitsAboard, warehouseCapacity } from './queries.js';
-import { atPeace, besideColony, hasTradeAgreement, inWaitingPeriod, tradeAtForeignColony } from './relations.js';
+import { atPeace, besideColony, closedRoutePorts, hasTradeAgreement, inWaitingPeriod, tradeAtForeignColony } from './relations.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { UNIT_TYPES } from './rules/units.js';
@@ -36,10 +38,18 @@ export function routeUnits(s: GameState, routeId: string): Unit[] {
 
 /** A stop's name; with `owner` (the route's owner), a foreign colony's name carries its nation, e.g. "Québec (French)". */
 export function routeStopName(s: GameState, stop: RouteStop, owner?: NationId): string {
-  if (stop.at === EUROPE_STOP) return 'Europe';
+  if (stop.at === EUROPE_STOP) return stop.port && stop.port !== owner ? `Europe (${portName(stop.port)})` : 'Europe';
   const c = s.colonies[stop.at];
   if (!c) return 'a lost colony';
   return owner && c.owner !== owner ? `${c.name} (${NATIONS[c.owner].adjective})` : c.name;
+}
+
+/**
+ * The home port a Europe stop calls at: the partner's it names while that port is open to the
+ * route's owner, otherwise the owner's own.
+ */
+export function stopPort(s: GameState, owner: NationId, stop: RouteStop): NationId {
+  return stop.port && stop.port !== owner && !portProblem(s, owner, stop.port) ? stop.port : owner;
 }
 
 /** Whether a stop is at a colony of another nation (a trade partner's). */
@@ -93,6 +103,11 @@ function cleanStops(s: GameState, nation: NationId, stops: RouteStop[] | undefin
     }
     const clean: RouteStop = { at: stop.at, load: cleanCargo(stop.load), unload: cleanCargo(stop.unload) };
     if (stop.passengers && stop.at === EUROPE_STOP) clean.passengers = true;
+    if (stop.at === EUROPE_STOP && stop.port && stop.port !== nation) {
+      const problem = portProblem(s, nation, stop.port);
+      if (problem) fail(problem);
+      clean.port = stop.port;
+    }
     return clean;
   });
 }
@@ -204,8 +219,8 @@ export function unassignRoute(s: GameState, unitId: string): void {
 }
 
 function atStop(s: GameState, u: Unit, stop: RouteStop): boolean {
-  // Routes call at the owner's own home port only, never at a Favoured Nation partner's.
-  if (stop.at === EUROPE_STOP) return inHomePort(u);
+  // The home port the stop names (a Favoured Nation partner's), or the owner's own.
+  if (stop.at === EUROPE_STOP) return u.loc.kind === 'europe' && portOf(u) === stopPort(s, u.owner, stop);
   const c = s.colonies[stop.at];
   if (!c) return false;
   if (c.owner !== u.owner) return besideColony(s, u, c.id) && isWater(tileAt(s, (u.loc as { x: number }).x, (u.loc as { y: number }).y)) === isShip(u);
@@ -285,19 +300,25 @@ function serveForeign(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop)
   }
 }
 
+/**
+ * Sells and buys at the home port the ship is in: its owner's, or a Favoured Nation partner's at
+ * that port's prices and tax (boycotts apply only at home). Colonists board only at home.
+ */
 function serveEurope(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop): void {
-  const p = player(s, u.owner);
+  const { p, market } = shipMarket(s, u);
+  const home = market === p;
   let earned = 0;
   let spent = 0;
   for (const r of stop.unload) {
     const have = u.cargo?.[r.good] ?? 0;
-    if (have <= 0 || p.boycotts[r.good]) continue;
+    if (have <= 0 || (home && p.boycotts[r.good])) continue;
     earned += sellGoods(s, u.id, r.good, have);
     track(u.owner, 'route:goods sold in Europe', have);
+    if (!home) track(u.owner, 'route:goods sold in a partner port', have);
   }
   // Colonists before goods: a person takes a whole hold.
   let boarded = 0;
-  if (stop.passengers) {
+  if (stop.passengers && home) {
     for (const o of Object.values(s.units)) {
       if (o.owner !== u.owner || o.loc.kind !== 'europe' || isShip(o) || cargoFree(s, u) <= 0) continue;
       boardInEurope(s, o.id, u.id);
@@ -306,9 +327,9 @@ function serveEurope(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop):
     }
   }
   for (const r of stop.load) {
-    if (p.boycotts[r.good]) continue;
+    if (home && p.boycotts[r.good]) continue;
     const want = (r.amount ?? DEFAULT_EUROPE_LOAD) - (u.cargo?.[r.good] ?? 0);
-    const price = buyPrice(p, r.good);
+    const price = buyPrice(market, r.good);
     const n = Math.min(want, cargoRoomFor(s, u, r.good), Math.floor(p.gold / price));
     if (n <= 0) continue;
     const before = p.gold;
@@ -321,7 +342,7 @@ function serveEurope(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop):
     spent ? `bought goods for ${spent} gold` : '',
     boarded ? `took ${boarded} colonist${boarded > 1 ? 's' : ''} aboard` : '',
   ].filter(Boolean);
-  if (parts.length) message(s, `${unitName(u)} on the ${route.name} route ${parts.join(', ')} in Europe.`, u.owner);
+  if (parts.length) message(s, `${unitName(u)} on the ${route.name} route ${parts.join(', ')} in ${home ? 'Europe' : portName(market.id)}.`, u.owner);
 }
 
 /**
@@ -367,7 +388,7 @@ export function runRoute(s: GameState, u: Unit): void {
       continue;
     }
     if (stop.at === EUROPE_STOP) {
-      // A ship in a partner's port first sails back out.
+      // A ship in another port than the stop's first sails back out.
       if (u.loc.kind === 'europe') {
         try {
           sailToAmerica(s, u.id);
@@ -377,7 +398,8 @@ export function runRoute(s: GameState, u: Unit): void {
         return;
       }
       if (u.moves <= 0) return;
-      u.dest = { europe: true };
+      const port = stopPort(s, u.owner, stop);
+      u.dest = port === u.owner ? { europe: true } : { europe: true, port };
       continueOrders(s, u);
       return;
     }
@@ -413,6 +435,8 @@ export function runRoute(s: GameState, u: Unit): void {
 /** Runs every routed unit of a player; called at the start of the player's turn. */
 export function processRoutes(s: GameState, nation: NationId): void {
   if (!s.routes) return;
+  // Europe stops at a port that has closed (the partnership ended) fall back to the home port.
+  closedRoutePorts(s, nation);
   for (const u of Object.values(s.units)) {
     if (u.owner === nation && u.route && s.units[u.id]) runRoute(s, u);
   }

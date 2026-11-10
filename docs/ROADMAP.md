@@ -92,25 +92,28 @@ Closes the smaller items left from earlier releases while the classic game is co
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Difficulty follow-ups: scale hurry-buy costs; computer ship buying uses adjusted prices; tune values against the original | S | P3 | planned |
-| Rivers follow-ups: draw roads along rivers only as bridges, smooth diagonal seams, river defence bonus, Cooper Creek and the Yukon | S | P3 | planned |
-| Port character: each home port gets its own starting prices, demand and ship prices (for example cheap trade goods in Amsterdam, furs dear in La Rochelle, silver in Seville, cheap ships in Lisbon), so Favoured Nation access and triangle trading pay off. Scenario data per nation | M | P2 | planned |
-| Find why Creative scores about 14 points less with Favoured Nation on | S | P2 | planned |
-| Trade routes may call at a favoured partner's port, not only the home port | S | P3 | planned |
-| Founding Father portraits in the Continental Congress screen and the father choices (once generated) | S | P2 | planned |
-| Wire in the new brave, damaged artillery and fortress sprites (once generated) | S | P2 | planned |
-| Tune event rates and the computer players' event choices (one tournament with `--events`) | S | P2 | planned |
-| Tessellated terrain tiles: edge and corner pieces that blend neighbouring terrains, as a sprite-pack feature (Simon's idea, see CHANGE_SUGGESTIONS.md) | M | P2 | idea |
-| Speed-ups that change outcomes (each 10–20%: follow a found route for the whole turn, sharper path estimate, re-plan colony workers less often, keep colony reports per computer turn); renderer performance pass | M | P3 | idea |
+| Difficulty follow-ups: scale hurry-buy costs; computer ship buying uses adjusted prices; tune values against the original | S | P3 | done except tuning (`hurryCost` in `DIFFICULTY`: 0.7 to 1.3; `ai/fleet.ts` prices ships with `trainPrice`; identical at Conquistador; tuning the numbers against the original is left for later) |
+| Rivers follow-ups: draw roads along rivers only as bridges, smooth diagonal seams, river defence bonus, Cooper Creek and the Yukon | S | P3 | done except the Yukon (roads only cross or leave rivers, with plank bridges; river strokes overlap a hair at tile joins; +25% defence across a river; Cooper Creek ends in Lake Eyre, now a lake tile; the Yukon's mouth lies west of the North America map's edge, so it waits for a larger map) |
+| Port character: each home port gets its own starting prices, demand and ship prices (for example cheap trade goods in Amsterdam, furs dear in La Rochelle, silver in Seville, cheap ships in Lisbon), so Favoured Nation access and triangle trading pay off. Scenario data per nation | M | P2 | done (`rules/ports.ts`: `PORT_CHARACTER` keyed by nation in the shape of the scenario framework's `NationEntry.port`, with price, depth, recovery and ship-price factors; shown in the Europe screen, the Trade report and the route screen. Triangle trades still almost never happen: the gate is ships, not prices; see the audit, "Port character (0.8)") |
+| Find why Creative scores about 14 points less with Favoured Nation on | S | P2 | done (detours and wagon trains spent on trade with partners' colonies that gained nothing while building ties, and wagon trains taken from native trade: Creative −27 ± 14 → +6 ± 17 in 48 games; Favoured Nation now forms less often. See the audit) |
+| Trade routes may call at a favoured partner's port, not only the home port | S | P3 | done (`RouteStop.port`; falls back to the home port with a report when the partnership ends; computer ship routes use a partner's port when the route's goods fetch 15% and 150 gold a trip more there) |
+| Founding Father portraits in the Continental Congress screen and the father choices (once generated) | S | P2 | done (sprites appear once uploaded) |
+| Continental Congress hall: the fathers who have joined as full-length figures in a great hall (`K`), full figures in the father choice, head crops for small icons | M | P2 | done (procedural hall and figures now; `ui/congress-hall`, `fathers/<id>` figures and `__head` crops appear once generated) |
+| Wire in the new brave, damaged artillery and fortress sprites (once generated) | S | P2 | done (sprites appear once uploaded) |
+| Tune event rates and the computer players' event choices (one tournament with `--events`) | S | P2 | done (random rate 4% → 1.2%, about 10 events per nation per game; war levy and tension valued sensibly; per-event table in `--events` output; [design note](design/events.md)) |
+| Tessellated terrain tiles: edge and corner pieces that blend neighbouring terrains, as a sprite-pack feature (Simon's idea, see CHANGE_SUGGESTIONS.md). Design and the `rules.transitions: 'overlay'` pack option are in ([design/tessellated-tiles.md](design/tessellated-tiles.md)), off by default; left: generate the 12 trial images (SPRITE_PROMPTS 4.8a), look at them on a map, then the other terrains | M | P2 | trial |
+| Seed phrases: the Game seed field also accepts text ("Peters Game"), hashed to a seed number, so a game is easy to share by name. Numbers keep working; the phrase is shown with the game and in saves. The same phrase gives the same world only with the same settings (map, nations, difficulty, options) and game version, so a share link or code could carry those too | S | P3 | done (seed phrases, game codes, share links and a QR code; Simon's idea) |
+| Terrain variants: several sprite variants per terrain (`terrain/<id>__v2` …), chosen per tile from the map position so neighbours rarely repeat (Simon's idea); `rules.variants` | S | P2 | done |
 
 ## 0.9: Scenario framework
 
-Done before Beta, so the cooperation rules are scenario data from the start. See [design/scenarios.md](design/scenarios.md).
+Done before Beta, so the cooperation rules are scenario data from the start. See [design/scenarios.md](design/scenarios.md), and the detailed design for this release, [design/scenario-framework.md](design/scenario-framework.md) (status: design, to be agreed): an inventory of everything hard-wired to the Americas, the `Scenario` definition, games kept bit-identical, a proof scenario and a phased plan.
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | idea, agreed |
-| Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | idea, agreed |
+| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | design ([scenario-framework.md](design/scenario-framework.md); proposed size XL) |
+| Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | design (same note) |
+| Proof scenario that exercises the framework with little new art (proposed: The Caribbean, 1650–1750: the lesser powers) | M | P1 | design (same note, section 7) |
 
 ## Beta 1–2: Cooperation
 
@@ -136,6 +139,12 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
 | Specialised councils per scenario: each scenario has its own Founding Fathers counterpart (Australia: Legislative Council and Federation figures; Vinland: the Thing, with saga figures), with effects suited to the scenario and portraits in the same cameo prompt style (see design/scenarios.md, Specialised councils) | M | P1 | idea |
 
 ## Later
+
+- Speed-ups that change outcomes (each 10–20%: follow a found route for the whole turn, sharper path estimate, re-plan colony workers less often, keep colony reports per computer turn); renderer performance pass. Moved out of 0.8: head starts already take about 12 s.
+- Triangle trading that actually happens: the computer players never have a free cargo hold for it (all ships run routes), so it needs a route-level triangle or a ship kept free for it, not price tuning.
+- Favoured Nation forms about a third as often since the 0.8 fix (partner trade must pay); a ties-building rule that doesn't cost detours would bring it back.
+- Interface redesign: one or two side branches that try a redesigned interface (panels, menus, screens) with a front-end design approach, compared side by side before choosing (Simon's idea).
+- More sprites in the interface: buttons, panel frames, icons and screen headers from the art set, through sprite pack interface CSS (Simon's idea).
 
 - More graphical styles as plugins. Sprite-based styles are packs of data (art, mapping from the game to sprite ids, draw rules) loaded by one generic sprite style plugin. Ligne claire (painted) is the first pack, and scenarios can bring their own.
   - Done: packs and styles can bring their own interface CSS (`css`, `cssFiles`, `fallbackCss: false`).

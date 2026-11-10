@@ -194,6 +194,8 @@ describe('trade routes to partners’ colonies', () => {
     expect(good).toBeDefined();
     quebec.goods[good] = 200;
     home.goods[good] = 0;
+    // No settlement nearby buys (natives come first: see the next test).
+    for (const st of Object.values(s.settlements)) st.gold = 0;
     const wagon = createUnit(s, 'france', 'wagonTrain', { kind: 'map', x: quebec.x, y: quebec.y });
     wagon.moves = 6;
     const seen = counting(() => manageLogistics(s, fr));
@@ -204,6 +206,34 @@ describe('trade routes to partners’ colonies', () => {
     expect(seen['route:foreign route created']).toBe(1);
     // It counts towards Favoured Nation.
     expect(routesBetween(s, 'england', 'france')).toBe(1);
+  });
+
+  it('but trades with natives instead when a settlement nearby buys, even while building ties', () => {
+    const s = game();
+    const [home, quebec] = neighbours(s);
+    const fr = s.players[1];
+    makeFavoured(s, 'england', 'france');
+    s.turn = 100;
+    s.players[0].gold = 5000;
+    fr.tax = 30;
+    const made = colonyReport(s, quebec).produced;
+    const own = colonyReport(s, home).produced;
+    const good = (['furs', 'sugar', 'tobacco', 'cotton', 'ore', 'silver', 'lumber'] as GoodId[]).find((g) => made[g] > 0 && own[g] === 0)!;
+    quebec.goods[good] = 200;
+    home.goods[good] = 0;
+    // Without natives nearby the partner's colony is the outlet; with a settlement that buys, the natives are.
+    const near = Object.values(s.settlements).filter((st) => Math.max(Math.abs(st.x - quebec.x), Math.abs(st.y - quebec.y)) <= 10);
+    for (const st of near) st.gold = 0;
+    const wagon = createUnit(s, 'france', 'wagonTrain', { kind: 'map', x: quebec.x, y: quebec.y });
+    wagon.moves = 6;
+    manageLogistics(s, fr);
+    expect(wagon.route).toBeDefined();
+    expect(near.length).toBeGreaterThan(0);
+    // A review with a settlement able to pay ends the route.
+    near[0].gold = 500;
+    s.turn = 110;
+    manageLogistics(s, fr);
+    expect(routesOf(s, 'france').some((r) => r.stops.some((st) => st.at === home.id))).toBe(false);
   });
 
   it('not when shipping home pays as well and Favoured Nation is already made', () => {

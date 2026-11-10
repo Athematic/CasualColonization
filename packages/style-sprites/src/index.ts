@@ -8,7 +8,7 @@
  *
  * The packs that ship with the game are in ../packs.
  */
-export { createSpriteStyle, packCssUrls, type SpriteStyleOptions } from './style.js';
+export { createSpriteStyle, packCssUrls, withTransitions, type SpriteStyleOptions } from './style.js';
 export {
   completePack,
   DEFAULT_MAPPING,
@@ -27,4 +27,7 @@ export {
 export { fill, kebab, SpriteIds } from './ids.js';
 export { chooseSize, type SizeChoice, type SizeSet } from './sizes.js';
 export { SpriteStore, type SpriteManifest, type StoreEnv } from './store.js';
-export { DEFAULT_SPRITE_BASE, spriteBase } from './source.js';
+export { DEFAULT_SPRITE_BASE, spriteBase, transitionsOverride } from './source.js';
+export { DEFAULT_TRANSITION_ORDER, transitionPieces, type TransitionMode, type TransitionPiece, type TransitionPieces } from './transitions.js';
+export { coastPieces } from './coast.js';
+export { variantIndex, variantSet, withVariants, VARIANT_MODES, type VariantContext, type VariantMode } from './variants.js';

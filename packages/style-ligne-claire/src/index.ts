@@ -1,5 +1,5 @@
 import { TERRAIN, type Tile } from '@cc/engine';
-import type { IconRequest, StylePlugin } from '@cc/render-api';
+import { drawFatherCameo, drawFatherFigure, type IconRequest, type StylePlugin } from '@cc/render-api';
 import { INK, LAND, PAPER } from './palette.js';
 import { LigneClaireMapRenderer, lineWidthFor } from './renderer.js';
 import { FONT, HEADING_FONT, house, productIcon, unitSprite } from './sprites.js';
@@ -16,6 +16,10 @@ function drawIcon(ctx: CanvasRenderingContext2D, icon: IconRequest, size: number
       break;
     case 'building':
       house(ctx, c, size * 0.86, size * 0.62, lw, icon.level > 1 ? '#3a6fb0' : undefined);
+      break;
+    case 'father':
+      if (icon.variant === 'figure') drawFatherFigure(ctx, icon.id, icon.category, size, INK, HEADING_FONT);
+      else drawFatherCameo(ctx, icon.id, icon.category, size, INK, HEADING_FONT);
       break;
     case 'tile':
       ctx.fillStyle = tileColor(icon.tile);

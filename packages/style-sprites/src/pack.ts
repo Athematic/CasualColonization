@@ -6,12 +6,14 @@
  *
  * Mapped ids are templates. Placeholders are replaced with engine ids in kebab-case:
  * `{type}` unit type, `{role}` role, `{terrain}` terrain, `{tribe}` tribe, `{building}` building
- * kind, `{level}` building level, `{product}` good or product. A slot may hold one template, a
+ * kind, `{level}` building level, `{product}` good or product, `{father}` Founding Father. A slot may hold one template, a
  * list (tried in order, the first sprite that exists wins) or null (always procedural). Anything
  * that resolves to no sprite in the manifest falls back, per sprite, to the fallback style.
  */
 import type { BuildingKind, ProductId, RoleId, TerrainId, TribeId, UnitTypeId } from '@cc/engine';
 import type { StyleTheme } from '@cc/render-api';
+import type { VariantMode } from './variants.js';
+import { DEFAULT_TRANSITION_ORDER, type TransitionMode } from './transitions.js';
 
 /** One template, several in order of preference, or null for "keep this procedural". */
 export type IdSlot = string | readonly string[] | null;
@@ -55,6 +57,12 @@ export interface SpriteMapping {
   roads: { hub: IdSlot; spoke: IdSlot; diagonal: IdSlot };
   /** Shallow-water bands on water tiles next to land: along the top edge, the top and left edges, the top-left corner. */
   coast: { edge: IdSlot; inner: IdSlot; outer: IdSlot };
+  /**
+   * Terrain transition pieces (see rules.transitions): the band a terrain bleeds onto a lower-ranked
+   * neighbour, along the top edge, along the top and left edges, in the top-left corner. `{terrain}` is the
+   * bleeding terrain. Terrains without an edge piece keep the hard boundary.
+   */
+  transitions: { edge: IdSlot; inner: IdSlot; outer: IdSlot };
   colonies: {
     /** By population: the entry with the largest `min` not above the colony's size. */
     sizes: readonly { min: number; id: IdSlot }[];
@@ -68,6 +76,12 @@ export interface SpriteMapping {
   };
   buildings: IdSlot;
   goods: IdSlot;
+  /** Founding Father portraits: `{father}` is the kebab-case FatherId. Missing ones are drawn procedurally. */
+  fathers?: IdSlot;
+  /** Small head-and-shoulders crops of the fathers (default `fathers/{father}__head`); the figure is cropped when missing. */
+  fatherHeads?: IdSlot;
+  /** Full-frame backdrops, by name (`congress-hall`: default `ui/congress-hall`, 1536x1024). */
+  backdrops?: Partial<Record<'congress-hall', IdSlot>>;
   /** White-cloth markers tinted to a nation's colour. */
   overlays: { pennant: IdSlot; flag: IdSlot; mission: IdSlot };
   /** Ids per building kind or product, replacing the templates. */
@@ -104,6 +118,19 @@ export interface DrawRules {
    * height; the flag is the tinted `overlays.flag` sprite, or a plain ink pennant without it.
    */
   colonyFlag: { x: number; y: number; height: number } | null;
+  /**
+   * Terrain borders: 'none' (default) keeps the hard flat-colour boundary; 'overlay' draws the
+   * mapped transition pieces, for the terrains ranked in `transitionOrder` (lowest first).
+   */
+  transitions: TransitionMode;
+  transitionOrder: readonly TerrainId[];
+  /**
+   * Terrain variants: when the manifest has `<id>__v2`, `<id>__v3` ... next to a ground, plowed ground, forest, hills or
+   * mountains sprite, tiles pick one of them from their position and the map seed. 'off' always uses the base sprite;
+   * 'hash' picks by hash; 'hash-no-repeat' (default) also never gives a tile its west or north neighbour's variant.
+   * Transition pieces stay single-variant. Without variants in the manifest nothing changes.
+   */
+  variants: VariantMode;
   /** Unit icons: sprite size relative to the icon, and the owner's pennant on ships and soldiers. */
   unitIcon: { scale: number; pennant: { size: number; minIcon: number } | null };
 }
@@ -201,6 +228,11 @@ export const DEFAULT_MAPPING: SpriteMapping = {
   rumour: 'decor/ruins',
   roads: { hub: 'decor/road__hub', spoke: 'decor/road__spoke', diagonal: 'decor/road__spoke-diagonal' },
   coast: { edge: 'terrain/coast__edge', inner: 'terrain/coast__inner', outer: 'terrain/coast__outer' },
+  transitions: {
+    edge: 'terrain/blend__{terrain}__edge',
+    inner: 'terrain/blend__{terrain}__inner',
+    outer: 'terrain/blend__{terrain}__outer',
+  },
   colonies: {
     // The house-count thresholds of the procedural colony.
     sizes: [
@@ -216,6 +248,9 @@ export const DEFAULT_MAPPING: SpriteMapping = {
   },
   buildings: 'buildings/{building}__{level}',
   goods: 'goods/{product}',
+  fathers: 'fathers/{father}',
+  fatherHeads: 'fathers/{father}__head',
+  backdrops: { 'congress-hall': 'ui/congress-hall' },
   overlays: { pennant: 'overlays/pennant', flag: 'overlays/flag', mission: 'overlays/mission' },
 };
 
@@ -233,6 +268,9 @@ export const DEFAULT_RULES: DrawRules = {
   colony: { scale: 1.75, x: 0.5, y: 0.97 },
   defence: { scale: 2.1, x: 0.5, y: 1.04 },
   colonyFlag: { x: 0.42, y: 0.56, height: 0.5 },
+  transitions: 'none',
+  transitionOrder: DEFAULT_TRANSITION_ORDER,
+  variants: 'hash-no-repeat',
   unitIcon: { scale: 0.98, pennant: { size: 0.36, minIcon: 28 } },
 };
 

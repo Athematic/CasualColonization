@@ -13,6 +13,8 @@ export type MapSize = 'small' | 'medium' | 'large';
 
 export interface GameConfig {
   seed: number;
+  /** The text the seed was made from (seedFromPhrase), kept for display; the seed number is what counts. */
+  seedPhrase?: string;
   mapSize: MapSize;
   /** Id of a stored map (see STORED_MAPS); absent means a generated map. `mapSize` is then ignored. */
   map?: string;
@@ -240,8 +242,13 @@ export interface RouteCargo {
 
 /** One stop of a trade route: a colony (own, or a trade partner's), or Europe for ships. */
 export interface RouteStop {
-  /** Colony id, or 'europe' (always the owner's own home port). */
+  /** Colony id, or 'europe': a home port in Europe. */
   at: string;
+  /**
+   * For a Europe stop: the home port it calls at, a Favoured Nation partner's. Missing means the
+   * owner's own. When the partnership ends the stop falls back to the home port.
+   */
+  port?: NationId;
   load: RouteCargo[];
   unload: RouteCargo[];
   /** In Europe: take aboard the colonists waiting on the docks. They go ashore at the next colony stop. */

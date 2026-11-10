@@ -12,7 +12,7 @@ export const myStyle: StylePlugin = {
   theme: { '--paper': '#fff', '--ink': '#000', /* … all StyleTheme keys … */ },
   stylesheets: [], // optional, e.g. a web font
   createMapRenderer: (canvas) => new MyMapRenderer(canvas),
-  drawIcon: (ctx, icon, size) => { /* unit, product, building or tile icon */ },
+  drawIcon: (ctx, icon, size) => { /* unit, product, building, tile or father icon */ },
   tileColor: (tile) => '#7ab', // minimap colour
 };
 ```
@@ -49,6 +49,10 @@ The shell does all hit-testing with `screenToTile`. A renderer must therefore us
 `drawIcon(ctx, icon, size)` draws into a `size × size` box at the origin. The shell caches each icon as an image. Icons appear in the side panel, the colony screen and Europe.
 
 The `theme` values become CSS custom properties on the page while the style is active, so panels and buttons match the map.
+
+The `father` icon kind, `{ kind: 'father', id: FatherId, category, variant? }`, is a Founding Father. `variant: 'head'` (the default; the 48 px Congress report list) is a portrait in a square box; `variant: 'figure'` (the father choice at about 160 px, the Congress hall) is the full standing figure: `size` tall, 2:3 narrow (`FATHER_FIGURE_ASPECT`), centred horizontally in the size×size box, feet on a baseline at 92% of the height (`FATHER_FEET`), adults about 80% of the height. A style without art draws a simple oval cameo for the head and, for the figure, a standing silhouette (period coat, tricorn hat) tinted by category with the initials on a plaque; `@cc/render-api` exports `drawFatherCameo`, `drawFatherFigure`, `FATHER_COLORS` and `fatherInitials` for that. A sprite pack maps the figure through `mapping.fathers` (default `fathers/{father}`, a 1024x1536 master, so `bartolomeDeLasCasas` becomes `fathers/bartolome-de-las-casas`) and the head through `mapping.fatherHeads` (default `fathers/{father}__head`), falling back to the figure with its top 30% cropped (a square from 8% down the image) when there is no head sprite, and to the procedural art when the sprite is missing.
+
+The Congress hall's backdrop is an optional `StylePlugin.drawBackdrop(ctx, 'congress-hall', width, height)`. The sprite style paints `mapping.backdrops['congress-hall']` (default `ui/congress-hall`, an opaque 1536x1024 picture: an empty assembly hall with a raised dais at the back, a clear floor with a front standing row along the bottom quarter and a second row behind on a raised step) covering the frame; without it the shell draws `drawCongressHallBackdrop`. Where the fathers stand is `layoutCongressHall(count)` in `@cc/render-api` (three rows of fixed floor lines and sizes, so art for the hall should leave those rows clear).
 
 A style that loads images in the background can implement the optional `onAssetsChanged(listener)`: the shell then drops its cached icons and redraws whenever more assets have arrived.
 
@@ -90,7 +94,7 @@ A `SpritePack` is data (`packages/style-sprites/src/pack.ts`):
 | `rules` | How each kind of sprite sits on a tile: its size relative to the tile, where its anchor (the ground point from the manifest) goes, the bonus marker box, the walls, the colony flag, the mission marker and the unit icon pennant. |
 | `procedural` | Layers to leave to the fallback even when sprites exist (`water`, `land`, `shore`, `roads`, `relief`, `bonus`, `rumour`, `settlements`, `colonies`, `units`, `icons`). Rivers, the coastline's ink, fog, captions and markers always come from the fallback. |
 
-Ids are templates. `{type}`, `{role}`, `{terrain}`, `{tribe}`, `{building}`, `{level}` and `{product}` become the engine ids in kebab-case (`expertFurTrapper` becomes `expert-fur-trapper`). A slot holds one template, a list tried in order, or `null` (always procedural). `DEFAULT_MAPPING` is the scheme of [SPRITE_PROMPTS.md](SPRITE_PROMPTS.md) section 5:
+Ids are templates. `{type}`, `{role}`, `{terrain}`, `{tribe}`, `{building}`, `{level}`, `{product}` and `{father}` become the engine ids in kebab-case (`expertFurTrapper` becomes `expert-fur-trapper`). A slot holds one template, a list tried in order, or `null` (always procedural). `DEFAULT_MAPPING` is the scheme of [SPRITE_PROMPTS.md](SPRITE_PROMPTS.md) section 5:
 
 | Game state | Sprite ids tried |
 | --- | --- |
@@ -104,10 +108,13 @@ Ids are templates. `{type}`, `{role}`, `{terrain}`, `{tribe}`, `{building}`, `{l
 | Lost City Rumour | `decor/ruins` |
 | Road | `decor/road__hub`, `decor/road__spoke` and `decor/road__spoke-diagonal`, turned in quarter steps |
 | Shore | `terrain/coast__edge`, `__inner` and `__outer`, turned in quarter steps |
+| Terrain border (trial; `rules.transitions: 'overlay'`) | `terrain/blend__{terrain}__edge`, `__inner`, `__outer` of the higher-ranked neighbour (`rules.transitionOrder`), over the lower tile, turned in quarter steps. See [design/tessellated-tiles.md](design/tessellated-tiles.md) |
+| Terrain variants (`rules.variants`) | `<id>__v2`, `<id>__v3` … next to a ground, plowed ground, forest, hills or mountains sprite (and ocean ground). See [Terrain variants](#terrain-variants) |
 | Colony | `colonies/colony__small` (0 to 3 colonists), `__medium` (4 to 7), `__large` (8 or more); walls `colonies/stockade` (level 1) and `colonies/fort` (level 2), split at the manifest's `split` line into a back and a front part |
 | Settlement | `settlements/{tribe}`; a capital tries `settlements/{tribe}__capital` first |
 | Building icon | `buildings/{building}__{level}`, then the lower levels |
 | Goods icon | `goods/{product}` |
+| Founding Father portrait | `fathers/{father}` |
 
 Sprites are nation-neutral. Ownership stays visible through the fallback's pennant and stack badge on units, a flag in the owner's colour on colonies, the tinted `overlays/mission` on settlements with a mission, and the tinted `overlays/pennant` on the icons of ships, soldiers and artillery.
 
@@ -131,7 +138,17 @@ const australia = extendPack(ligneClairePaintedPack, {
 
 ### Ligne claire (painted)
 
-The first pack, `packages/style-sprites/packs/ligne-claire-painted.ts`, uses the default mapping and rules, with Ligne claire as the fallback and its theme and fonts. Its sprites live in `assets/sprites/` next to the page, beside the masters (https://casual.spence.dk/assets/sprites/ on the server). Point it elsewhere with `?sprites=https://casual.spence.dk/assets/sprites/` (remembered; `?sprites=default` forgets it, `?sprites=off` draws everything procedurally). Loading from another origin needs `Access-Control-Allow-Origin: *` on the server's `/assets/sprites/`. Without it the browser refuses the images and the style falls back to Ligne claire.
+The first pack, `packages/style-sprites/packs/ligne-claire-painted.ts`, uses the default mapping and rules, with Ligne claire as the fallback and its theme and fonts. Its sprites live in `assets/sprites/` next to the page, beside the masters (https://casual.spence.dk/assets/sprites/ on the server). Point it elsewhere with `?sprites=https://casual.spence.dk/assets/sprites/` (remembered; `?sprites=default` forgets it, `?sprites=off` draws everything procedurally). Loading from another origin needs `Access-Control-Allow-Origin: *` on the server's `/assets/sprites/`. Without it the browser refuses the images and the style falls back to Ligne claire. Terrain transition pieces (`rules.transitions`) can be switched per browser with `?transitions=on` or `?transitions=off` (remembered; `?transitions=default` goes back to the pack's setting), so the effect can be compared in the live game.
+
+### Terrain variants
+
+Generate several takes of a terrain (`Generate-Images.ps1 -Variants 3 -Only 'terrain/*'` makes `terrain/plains`, `terrain/plains__v2`, `terrain/plains__v3`; likewise `terrain/<t>__plowed`, `decor/forest__<t>`, `decor/hills`, `decor/mountains`). The sprite pipeline treats `__vN` masters as ordinary ids, so they appear in the manifest without further work. At runtime, for every one of those ids the manifest has two or more takes of (the base and `__v2` … `__v16`, gaps allowed), a tile picks one, deterministically from its map position, the map seed (`state.config.seed`) and the number of takes: no `Math.random`, so it is the same on every frame, zoom level, reload and device. The chosen take is tried first and the base id second, so a take that is missing or not loaded yet falls back to the base sprite. Transition pieces, coast bands, roads and the ocean under land tiles stay single-variant. With one take, or none, nothing changes.
+
+`rules.variants` (default `'hash-no-repeat'`):
+
+- `'off'`: always the base sprite.
+- `'hash'`: `hash(x, y, seed, n) % n`.
+- `'hash-no-repeat'`: never the same take as the west or north neighbour (for any two or more takes). Each tile gets a class `(X(x) + Y(y)) mod M` with `M = min(n, 3)`, where `X` and `Y` are running sums of hashed steps in `1..M-1` along columns and rows, so the class always differs from the west and north tile's. Take `i` belongs to class `i mod M`, and the tile picks among its class's takes by hash. Two takes make a checkerboard, three a warped lattice, four or more scatter. The choice depends on position only, so it needs no neighbour lookups.
 
 ### Interface CSS in a pack
 

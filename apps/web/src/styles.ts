@@ -1,4 +1,4 @@
-import { getStyle, listStyles, registerStyle, type IconRequest, type StylePlugin } from '@cc/render-api';
+import { drawCongressHallBackdrop, FATHER_FIGURE_ASPECT, getStyle, listStyles, registerStyle, type IconRequest, type StylePlugin } from '@cc/render-api';
 import ligneClaire from '@cc/style-ligne-claire';
 import ligneClairePainted from '@cc/style-sprites/packs/ligne-claire-painted';
 import schematic from '@cc/style-schematic';
@@ -96,19 +96,33 @@ export function icon(req: IconRequest, size = 40, title?: string): HTMLImageElem
   if (!url) {
     const dpr = Math.min(3, window.devicePixelRatio || 1);
     const canvas = document.createElement('canvas');
-    canvas.width = Math.round(size * dpr);
+    // A father's full figure is 2:3: a narrow canvas, the figure still centred in its size x size box.
+    const width = req.kind === 'father' && req.variant === 'figure' ? Math.round(size * FATHER_FIGURE_ASPECT) : size;
+    canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(size * dpr);
     const ctx = canvas.getContext('2d')!;
     ctx.scale(dpr, dpr);
+    ctx.translate((width - size) / 2, 0);
     active.drawIcon(ctx, req, size);
     url = canvas.toDataURL();
     iconCache.set(key, url);
   }
-  const img = new Image(size, size);
+  const img = new Image(req.kind === 'father' && req.variant === 'figure' ? Math.round(size * FATHER_FIGURE_ASPECT) : size, size);
   img.src = url;
   img.className = 'icon';
   img.alt = title ?? '';
   if (title) img.title = title;
   img.draggable = false;
   return img;
+}
+
+/** Paints the Congress hall backdrop into a canvas of width x height CSS px: the style's art, else a procedural hall. */
+export function drawHallBackdrop(canvas: HTMLCanvasElement, width: number, height: number): void {
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(dpr, dpr);
+  if (active.drawBackdrop?.(ctx, 'congress-hall', width, height)) return;
+  drawCongressHallBackdrop(ctx, width, height, active.theme['--ink']);
 }

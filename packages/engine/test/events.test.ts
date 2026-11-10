@@ -20,6 +20,9 @@ import {
   processEvents,
   RANDOM_EVENT_RATE,
   RANDOM_EVENTS,
+  tensionCost,
+  TAX_POINT_VALUE,
+  valueEffects,
   serialize,
   setFeatureSink,
   tileAt,
@@ -206,6 +209,23 @@ describe('random events', () => {
     // Several kinds turn up, none dominating.
     expect(Object.keys(counts).length).toBeGreaterThanOrEqual(8);
     expect(Math.max(...Object.values(counts))).toBeLessThan(total * 0.35);
+  });
+
+  it('keep the rate low enough: a nation sees about 6 to 12 events (both kinds) in a 408-round game', () => {
+    expect(RANDOM_EVENT_RATE).toBeGreaterThanOrEqual(0.006);
+    expect(RANDOM_EVENT_RATE).toBeLessThanOrEqual(0.02);
+    const s = game({ humans: [], historicalEvents: true, randomEvents: true });
+    const nations: NationId[] = ['england', 'france', 'spain'];
+    for (const n of nations) colony(s, n, 3).goods.horses = 60;
+    const counts = countEvents(() => {
+      for (let t = 0; t < 408; t++) {
+        s.turn = t;
+        processEvents(s);
+      }
+    });
+    const perNation = Object.values(counts).reduce((a, b) => a + b, 0) / nations.length;
+    expect(perNation).toBeGreaterThanOrEqual(6);
+    expect(perNation).toBeLessThanOrEqual(13);
   });
 
   it('respect the cooldown for the same nation', () => {
@@ -396,6 +416,41 @@ describe('choices', () => {
     france.ai = 'naive';
     expect(aiEventChoice(s, france, def, v)).toBe(0);
     france.gold = 0;
+    expect(aiEventChoice(s, france, def, v)).toBe(1);
+  });
+
+  it('advanced levels pay the war levy rather than take a lasting tax rise', () => {
+    const s = game({ humans: [], randomEvents: true });
+    colony(s, 'france', 3);
+    const france = nation(s, 'france');
+    france.ai = 'competent';
+    france.gold = 1500;
+    const def = eventDef(s, 'seven-years-war')!;
+    const v = { nation: 'france' as NationId, cost: 150 };
+    def.prepare?.(s, v, () => 0.5);
+    expect(aiEventChoice(s, france, def, v)).toBe(0);
+    // The tax rise is valued at its lasting cost, well above a levy of an eighth of the treasury.
+    expect(valueEffects(s, [{ kind: 'tax', delta: 3 }], v)).toBe(-3 * TAX_POINT_VALUE);
+    // A levy that would eat most of the treasury is still cheaper than three points of tax for ever.
+    expect(v.cost).toBeLessThan(3 * TAX_POINT_VALUE);
+  });
+
+  it('tension costs more the nearer a tribe is to war, so angry tribes are not provoked', () => {
+    expect(tensionCost(80) - tensionCost(0)).toBeCloseTo(120, 0);
+    expect(tensionCost(680) - tensionCost(600)).toBeGreaterThan(3 * (tensionCost(80) - tensionCost(0)));
+    const s = game({ humans: [], randomEvents: true });
+    const c = colony(s, 'france', 3);
+    const france = nation(s, 'france');
+    france.ai = 'competent';
+    france.gold = 500;
+    const st = Object.values(s.settlements)[0];
+    const def = eventDef(s, 'gold-rumour')!;
+    const v = { nation: 'france' as NationId, colony: c.id, settlement: st.id, tribe: st.tribe };
+    // Welcoming prospectors (a colonist for 80 tension) suits a calm tribe...
+    for (const other of Object.values(s.settlements)) if (other.tribe === st.tribe) other.tension.france = 0;
+    expect(aiEventChoice(s, france, def, v)).toBe(0);
+    // ...but not one that is already angry.
+    for (const other of Object.values(s.settlements)) if (other.tribe === st.tribe) other.tension.france = 560;
     expect(aiEventChoice(s, france, def, v)).toBe(1);
   });
 

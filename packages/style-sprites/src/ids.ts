@@ -2,8 +2,9 @@
  * Game state -> sprite id candidates, through a pack's mapping. Every function returns the ids to
  * try in order (empty: nothing to try, draw procedurally).
  */
-import { TERRAIN, UNIT_TYPES, type BuildingKind, type ProductId, type RoleId, type TerrainId, type Tile, type TribeId, type UnitTypeId } from '@cc/engine';
+import { TERRAIN, UNIT_TYPES, type BuildingKind, type FatherId, type ProductId, type RoleId, type TerrainId, type Tile, type TribeId, type UnitTypeId } from '@cc/engine';
 import type { IdSlot, SpriteMapping } from './pack.js';
+import { withVariants, type VariantContext } from './variants.js';
 
 /** `expertFurTrapper` -> `expert-fur-trapper`. */
 export function kebab(id: string): string {
@@ -17,6 +18,9 @@ export function fill(slot: IdSlot | undefined, vars: Record<string, string | num
   const out = list.map((t) => t.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? kebab(String(vars[k])) : m)));
   return [...new Set(out)];
 }
+
+const DEFAULT_HEADS = 'fathers/{father}__head';
+const DEFAULT_BACKDROPS = { 'congress-hall': 'ui/congress-hall' } as const;
 
 export class SpriteIds {
   constructor(readonly mapping: SpriteMapping) {}
@@ -38,12 +42,12 @@ export class SpriteIds {
     return fill(armed && mounted ? m.armedMounted : armed ? m.armed : mounted ? m.mounted : m.plain);
   }
 
-  /** The ground of a tile: plowed first when plowed. */
-  terrain(tile: Pick<Tile, 't' | 'p'>): string[] {
+  /** The ground of a tile: plowed first when plowed. With `vc`, each id is preceded by the tile's variant of it. */
+  terrain(tile: Pick<Tile, 't' | 'p'>, vc?: VariantContext): string[] {
     const m = this.mapping.terrain;
     const vars = { terrain: tile.t };
     const base = m.types && tile.t in m.types ? fill(m.types[tile.t], vars) : fill(m.base, vars);
-    return tile.p && !TERRAIN[tile.t].water ? [...this.plowed(tile.t), ...base] : base;
+    return withVariants(tile.p && !TERRAIN[tile.t].water ? [...this.plowed(tile.t), ...base] : base, vc);
   }
 
   /** The plowed ground of a terrain (that already shows the furrows). */
@@ -52,15 +56,15 @@ export class SpriteIds {
   }
 
   /** Water under a tile: its own ground for water tiles, `underLand` for land. */
-  water(t: TerrainId): string[] {
-    return TERRAIN[t].water ? this.terrain({ t }) : fill(this.mapping.terrain.underLand);
+  water(t: TerrainId, vc?: VariantContext): string[] {
+    return TERRAIN[t].water ? this.terrain({ t }, vc) : fill(this.mapping.terrain.underLand);
   }
 
-  relief(tile: Pick<Tile, 't' | 'f'>): { kind: 'forest' | 'hills' | 'mountains'; ids: string[] } | undefined {
+  relief(tile: Pick<Tile, 't' | 'f'>, vc?: VariantContext): { kind: 'forest' | 'hills' | 'mountains'; ids: string[] } | undefined {
     const m = this.mapping.relief;
-    if (tile.t === 'hills') return { kind: 'hills', ids: fill(m.hills) };
-    if (tile.t === 'mountains') return { kind: 'mountains', ids: fill(m.mountains) };
-    if (tile.f && TERRAIN[tile.t].forest) return { kind: 'forest', ids: fill(m.forest, { terrain: tile.t }) };
+    if (tile.t === 'hills') return { kind: 'hills', ids: withVariants(fill(m.hills), vc) };
+    if (tile.t === 'mountains') return { kind: 'mountains', ids: withVariants(fill(m.mountains), vc) };
+    if (tile.f && TERRAIN[tile.t].forest) return { kind: 'forest', ids: withVariants(fill(m.forest, { terrain: tile.t }), vc) };
     return undefined;
   }
 
@@ -105,6 +109,18 @@ export class SpriteIds {
     return fill(own && product in own ? own[product] : this.mapping.goods, { product });
   }
 
+  /** A Founding Father: the full standing figure (`fathers/<id>`), or his head (`fathers/<id>__head`, then the figure). */
+  father(id: FatherId, variant: 'figure' | 'head' = 'figure'): string[] {
+    const figure = fill(this.mapping.fathers, { father: id });
+    if (variant === 'figure') return figure;
+    return [...fill(this.mapping.fatherHeads ?? DEFAULT_HEADS, { father: id }), ...figure];
+  }
+
+  /** The sprite ids of a full-frame backdrop. */
+  backdrop(kind: 'congress-hall'): string[] {
+    return fill(this.mapping.backdrops?.[kind] ?? DEFAULT_BACKDROPS[kind]);
+  }
+
   road(): { hub: string[]; spoke: string[]; diagonal: string[] } {
     const r = this.mapping.roads;
     return { hub: fill(r.hub), spoke: fill(r.spoke), diagonal: fill(r.diagonal) };
@@ -113,6 +129,13 @@ export class SpriteIds {
   coast(): { edge: string[]; inner: string[]; outer: string[] } {
     const c = this.mapping.coast;
     return { edge: fill(c.edge), inner: fill(c.inner), outer: fill(c.outer) };
+  }
+
+  /** The transition pieces a terrain bleeds onto lower-ranked neighbours. */
+  transition(t: TerrainId): { edge: string[]; inner: string[]; outer: string[] } {
+    const c = this.mapping.transitions;
+    const vars = { terrain: t };
+    return { edge: fill(c.edge, vars), inner: fill(c.inner, vars), outer: fill(c.outer, vars) };
   }
 
   overlay(kind: 'pennant' | 'flag' | 'mission'): string[] {

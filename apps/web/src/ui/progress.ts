@@ -2,6 +2,7 @@ import { DIFFICULTY, formatDate, NATIONS, resolveDifficulty, nationTitle, scoreB
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
 import { activeStyle } from '../styles.js';
+import { shareDialog } from './share.js';
 
 /**
  * Progress Graphs: every European nation's statistics over time, one line per nation.
@@ -158,6 +159,7 @@ export class ProgressScreen implements Screen {
         h('span', { class: 'muted' }, formatDate(s.turn)),
         over
           ? h('div', { class: 'row close' },
+              h('button', { class: 'btn', onclick: () => void shareDialog(this.app.state.config), title: 'A QR code and link so others can play this same game' }, 'Share this game'),
               h('button', { class: 'btn', onclick: () => this.app.closeScreen() }, 'Keep playing'),
               h('button', { class: 'btn primary', onclick: () => over.onMenu() }, 'Main menu'))
           : h('button', { class: 'btn close', onclick: () => this.app.closeScreen(), 'aria-label': 'Close progress graphs' }, 'Close')),

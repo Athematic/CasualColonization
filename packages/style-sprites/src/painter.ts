@@ -54,6 +54,43 @@ export class Painter {
     return true;
   }
 
+  /**
+   * Draws a (not necessarily square) sprite into the box (x, y, w, h) keeping its proportions: contained and centred,
+   * or `cover` to fill the box exactly (cropping the overflow). `square` crops a centred square from the top of the image,
+   * starting `top` of its height down and `side` of its height wide: the head of a full-length figure.
+   */
+  fitted(ctx: PaintContext, ids: string | readonly string[], x: number, y: number, w: number, h: number, dpr: number, opts: { cover?: boolean; head?: { top: number; side: number } } = {}): boolean {
+    const d = this.pick(ids, Math.max(w, h), dpr, opts.cover);
+    if (!d) return false;
+    const img = d.image;
+    let sx = 0;
+    let sy = 0;
+    let sw = img.width;
+    let sh = img.height;
+    if (opts.head && !d.id.endsWith('__head')) {
+      sh = Math.min(img.height, img.height * opts.head.side);
+      sw = Math.min(img.width, sh);
+      sx = (img.width - sw) / 2;
+      sy = Math.min(img.height - sh, img.height * opts.head.top);
+    }
+    const k = opts.cover ? Math.max(w / sw, h / sh) : Math.min(w / sw, h / sh);
+    const dw = sw * k;
+    const dh = sh * k;
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    if (opts.cover) {
+      // Only the part inside the box: clip through the source rectangle instead of a clip path.
+      const vw = Math.min(sw, w / k);
+      const vh = Math.min(sh, h / k);
+      ctx.drawImage(img, sx + (sw - vw) / 2, sy + (sh - vh) / 2, vw, vh, x, y, vw * k, vh * k);
+    } else {
+      ctx.drawImage(img, sx, sy, sw, sh, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    }
+    ctx.restore();
+    return true;
+  }
+
   /** A white-cloth overlay (pennant, flag, mission) tinted to a colour, keeping its ink. */
   tinted(ctx: PaintContext, ids: string | readonly string[], x: number, y: number, size: number, dpr: number, color: string): boolean {
     const d = this.pick(ids, size, dpr);

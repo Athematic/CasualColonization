@@ -12,6 +12,9 @@ import {
   NATIONS,
   portName,
   portOf,
+  portsFor,
+  portSummary,
+  stopPort,
   ROUTE_NAME_MAX,
   routeProblem,
   routesOf,
@@ -99,7 +102,7 @@ export class RoutesScreen implements Screen {
     return h('div', { class: 'card' },
       h('h3', null, 'How trade routes work'),
       h('p', { class: 'small' }, 'A route is a round trip of stops: your colonies, and Europe for ships. At each stop a ship or wagon train first unloads, then loads, the goods you choose. Units on a route move by themselves at the start of each of your turns and never wait for orders.'),
-      h('p', { class: 'small' }, 'Goods unloaded in Europe are sold at market prices, less tax; boycotted goods stay aboard. Unloading in a colony stops when its warehouse is full, so nothing spoils.'),
+      h('p', { class: 'small' }, 'Goods unloaded in Europe are sold at market prices, less tax; boycotted goods stay aboard. A Europe stop can call at a Favoured Nation partner’s port instead of your own, at its prices and tax. Unloading in a colony stops when its warehouse is full, so nothing spoils.'),
       h('p', { class: 'small' }, 'With a trade agreement (Foreign Affairs), a route can also call at the other nation’s colonies, marked with its flag. The ship or wagon train stops next to the colony: unloading sells goods to it at its nation’s home-market prices, as far as its warehouse has room and its treasury can pay; loading buys what it has above 50 of each good.'));
   }
 
@@ -168,11 +171,27 @@ export class RoutesScreen implements Screen {
           h('button', { class: 'btn tiny', disabled: !my || i === route.stops.length - 1, 'aria-label': 'Move stop down', onclick: () => move(1) }, '↓'),
           h('button', { class: 'btn tiny', disabled: !my, 'aria-label': 'Remove stop', onclick: () => this.setStops(route, route.stops.filter((_, k) => k !== i)) }, '✕'))),
       foreign ? h('div', { class: 'muted small' }, `Trading stop: goods unloaded are sold to the colony, goods loaded are bought from it, at ${NATIONS[owner!].adjective} prices.`) : null,
+      europe ? this.portPicker(route, stop, (port) => update({ port })) : null,
       this.cargoRules(foreign ? 'Sell' : 'Unload', stop.unload, europe ? null : 'up to', europe ? 'sold' : 'fill', (unload) => update({ unload })),
       this.cargoRules(foreign ? 'Buy' : 'Load', stop.load, europe ? 'buy to' : 'keep', europe ? '100' : foreign ? '50' : '0', (load) => update({ load })),
       europe ? h('label', { class: 'small passengers' },
         h('input', { type: 'checkbox', checked: !!stop.passengers, disabled: !my, onchange: (e: Event) => update({ passengers: (e.target as HTMLInputElement).checked || undefined }) }),
-        ' Take colonists waiting on the docks (they go ashore at the next colony)') : null);
+        ' Take colonists waiting on the docks (they go ashore at the next colony; home port only)') : null);
+  }
+
+  /** For a Europe stop: the home port it calls at, the route owner's own or a Favoured Nation partner's. */
+  private portPicker(route: TradeRoute, stop: RouteStop, set: (port: RouteStop['port']) => void): HTMLElement {
+    const s = this.app.state;
+    const owner = route.owner;
+    const ports = portsFor(s, owner);
+    const current = stopPort(s, owner, stop);
+    return h('div', { class: 'small route-port' },
+      h('label', null, 'Port ',
+        h('select', { 'aria-label': 'Port in Europe', disabled: !this.app.isMyTurn() || ports.length < 2, onchange: (e: Event) => {
+          const v = (e.target as HTMLSelectElement).value as RouteStop['port'];
+          set(v === owner ? undefined : v);
+        } }, ports.map((port) => h('option', { value: port, selected: port === current }, `${portName(port)}${port === owner ? ' (home)' : ` (${NATIONS[port].adjective}, Favoured Nation)`}`)))),
+      h('span', { class: 'muted' }, ` ${portSummary(current)}.${current !== owner ? ` Sold and bought at ${NATIONS[current].adjective} prices and tax; colonists board only at home. If the partnership ends, the stop falls back to ${portName(owner)}.` : ''}`));
   }
 
   /** One list of cargo rules with an amount each, and a picker to add more. */

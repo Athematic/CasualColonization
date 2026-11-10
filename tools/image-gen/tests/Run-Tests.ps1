@@ -107,14 +107,14 @@ function New-EditFixture([string]$Dir, [object[]]$Rows) {
 
 try {
     # ------------------------------------------------------------------ parsing the real docs
-    Test 'sprites doc parses into 327 jobs with unique ids' {
+    Test 'sprites doc parses into 339 jobs with unique ids' {
         $jobs = Get-SpriteJobs -Path $spriteDocReal
-        Assert-Equal 327 $jobs.Count 'sprite jobs'
-        Assert-Equal 327 (@($jobs.Id | Sort-Object -Unique)).Count 'unique ids'
+        Assert-Equal 339 $jobs.Count 'sprite jobs'
+        Assert-Equal 339 (@($jobs.Id | Sort-Object -Unique)).Count 'unique ids'
         Assert-Equal 'bible/style-bible' $jobs[0].Id 'first job is the style bible'
         Assert-Equal '1536x1024' $jobs[0].Size
         Assert-Equal 'opaque' $jobs[0].Background
-        Assert-Equal 15 (@($jobs.Category | Sort-Object -Unique)).Count 'categories (hall included)'
+        Assert-Equal 16 (@($jobs.Category | Sort-Object -Unique)).Count 'categories (hall and terrain-blend included)'
         Assert-Equal 25 (@($jobs | Where-Object { $_.Category -eq 'fathers' -and $_.Id -like 'fathers/*' -and $_.Size -eq '1024x1536' -and $_.Background -eq 'transparent' })).Count 'one 1024x1536 transparent full figure per Founding Father'
         $hall = @($jobs | Where-Object Id -eq 'ui/congress-hall')
         Assert-Equal 1 $hall.Count 'the Continental Congress hall'
@@ -169,7 +169,7 @@ try {
 
     Test 'filters and variants' {
         $all = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal
-        Assert-Equal 345 $all.Count 'all jobs'
+        Assert-Equal 357 $all.Count 'all jobs'
         $f = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Doc sprites -Only 'units/free-colonist*'
         Assert-Equal 6 $f.Count 'free colonist roles'
         $g = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Only 'caravel', 'boxart/front-*'
@@ -190,12 +190,12 @@ try {
         $fullDefault = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Variant full -ThumbPrompts $tp
         Assert-Equal (($full | ForEach-Object { "$($_.Key)=$(Get-PromptHash $_)" }) -join ';') (($fullDefault | ForEach-Object { "$($_.Key)=$(Get-PromptHash $_)" }) -join ';') '-Variant full is the default job list'
         $thumbs = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Variant thumb -ThumbPrompts $tp
-        Assert-Equal 300 $thumbs.Count 'one thumbnail per sprite except the style bible and the 25 Founding Father portraits; no box art'
+        Assert-Equal 312 $thumbs.Count 'one thumbnail per sprite except the style bible and the 25 Founding Father portraits; no box art'
         Assert-True (@($thumbs | Where-Object { $_.Key -notlike 'thumbs/*' -or $_.OutputRel -ne "thumbs/$($_.Id).png" -or $_.Doc -ne 'thumbs' -or $_.Kind -ne 'thumb' }).Count -eq 0) 'thumbs/<category>/<id> keys and paths'
         Assert-True (-not ($thumbs.Id -contains 'bible/style-bible')) 'no bible thumbnail'
         Assert-Equal 0 @($thumbs | Where-Object { $_.Id -like 'fathers/*' }).Count 'no Founding Father thumbnails'
         $both = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Variant both -ThumbPrompts $tp
-        Assert-Equal 645 $both.Count 'both = 345 full + 300 thumbs'
+        Assert-Equal 669 $both.Count 'both = 357 full + 312 thumbs'
         $docOrder = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Variant both -ThumbPrompts $tp -DocumentOrder
         Assert-Equal 'sprites/bible/style-bible,sprites/units/free-colonist__none,thumbs/units/free-colonist__none,sprites/units/free-colonist__soldier' (($docOrder[0..3] | ForEach-Object Key) -join ',') '-DocumentOrder: each full job followed by its thumbnail'
         Assert-Equal 'sprites/bible/style-bible' $both[0].Key 'style bible first'
@@ -262,14 +262,14 @@ try {
         Assert-Equal 302 $m['jobs'].Count 'committed manifest: 302 jobs'
         $jobs = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal
         $all = @(Get-JobPlan -Jobs $jobs -Manifest $m -OutDir $out)
-        Assert-Equal 345 $all.Count
+        Assert-Equal 357 $all.Count
         # The two road spokes were rewritten on purpose (meandering roads), so they re-queue.
         $rewritten = 'sprites/decor/road__spoke', 'sprites/decor/road__spoke-diagonal'
         $changed = @($all | Where-Object { $_.Job.Key -in $rewritten })
         Assert-Equal 2 @($changed | Where-Object PromptChanged).Count 'the rewritten road prompts re-queue'
         $plan = @($all | Where-Object { $m['jobs'].Contains($_.Job.Key) -and $_.Job.Key -notin $rewritten })
         Assert-Equal 300 $plan.Count 'every other committed job is still in the list'
-        Assert-Equal 43 @($all | Where-Object { $_.Action -eq 'run' -and $_.Reason -eq 'new' }).Count 'the ten new covers, seven new sprites, 25 Founding Father figures and the Congress hall are new jobs'
+        Assert-Equal 55 @($all | Where-Object { $_.Action -eq 'run' -and $_.Reason -eq 'new' }).Count 'the ten new covers, seven new sprites, 25 Founding Father figures and the Congress hall are new jobs'
         foreach ($p in $plan) {
             Assert-Equal $m['jobs'][$p.Job.Key]['promptHash'] $p.Hash "$($p.Job.Key) prompt hash"
             Assert-True (-not $p.PromptChanged) "$($p.Job.Key) not changed"
@@ -296,10 +296,10 @@ try {
     Test 'thumbs: -List counts and the box-art note' {
         $r = Invoke-Tool @{ List = $true; Variant = 'thumb' }
         Assert-Equal 0 $r.Exit
-        Assert-Match $r.Out 'Jobs: 300 \(thumbs: 300\)'
+        Assert-Match $r.Out 'Jobs: 312 \(thumbs: 312\)'
         Assert-Match $r.Out 'thumbs/units/man-of-war__none'
         $r = Invoke-Tool @{ List = $true; Variant = 'both' }
-        Assert-Match $r.Out 'Jobs: 645 \(sprites: 327, boxart: 18, thumbs: 300\)'
+        Assert-Match $r.Out 'Jobs: 669 \(sprites: 339, boxart: 18, thumbs: 312\)'
         $r = Invoke-Tool @{ List = $true; Variant = 'thumb'; Doc = 'boxart' }
         Assert-Match $r.Out 'box art has no thumbnail variant'
         $r = Invoke-Tool @{ DryRun = $true; Variant = 'thumb'; Doc = 'boxart'; OutDir = (Join-Path $scratch 'dry-box') }
@@ -312,7 +312,7 @@ try {
         $saved = $env:OPENAI_API_KEY; $env:OPENAI_API_KEY = $null
         try { $r = Invoke-Tool @{ List = $true } } finally { $env:OPENAI_API_KEY = $saved }
         Assert-Equal 0 $r.Exit
-        Assert-Match $r.Out 'Jobs: 345 \(sprites: 327, boxart: 18\)'
+        Assert-Match $r.Out 'Jobs: 357 \(sprites: 339, boxart: 18\)'
         Assert-Match $r.Out 'sprites/units/man-of-war__none'
     }
 
@@ -697,17 +697,17 @@ Dim Dan points at a small whale.
         $hashText = ($existing | ForEach-Object { "$($_.Key)|$(Get-PromptHash $_)" }) -join "`n"
         $base = Get-Sha256Hex -Bytes ([Text.UTF8Encoding]::new($false).GetBytes($hashText))
         $all = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Doc all -ComicPromptDoc $comicDocReal -ComicsDir $comicsDirReal
-        Assert-Equal 345 $all.Count 'sprites 327 + box art 18'
+        Assert-Equal 357 $all.Count 'sprites 339 + box art 18'
         Assert-Equal 0 (@($all | Where-Object Doc -eq 'comics')).Count
         # key and prompt hash of every sprite and box-art job; re-recorded when the brave, damaged artillery and
         # fortress sprites were added, again when the 25 Founding Father portraits (fathers/*) were added, and again
         # when they became full figures (1024x1536) and the Continental Congress hall (ui/congress-hall) was added
         # (new keys only: the committed-manifest test checks that the older jobs kept their hashes)
-        Assert-Equal 'aeafffa70f603d02f8470923d8b76d61068d5b32c82c32480dd0be8ec2be10fa' $base 'prompt hashes of the existing jobs'
+        Assert-Equal 'f4f038c3341a90f097ccc692869763d9f8e355c4f50622ab97cd2a63197024ca' $base 'prompt hashes of the existing jobs'
         $inc = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Doc all -IncludeComics -ComicPromptDoc $comicDocReal -ComicsDir $comicsDirReal
-        Assert-Equal (345 + 180) $inc.Count
+        Assert-Equal (357 + 180) $inc.Count
         $r = Invoke-Tool @{ Doc = 'all'; List = $true }
-        Assert-Match $r.Out 'Jobs: 345 \(sprites: 327, boxart: 18\)'
+        Assert-Match $r.Out 'Jobs: 357 \(sprites: 339, boxart: 18\)'
     }
 
     Test 'comics: dry run shows the assembled prompt, the size and the full-set note' {

@@ -86,7 +86,7 @@ export function newPlayer(s: GameState, nation: NationId, human: boolean, entry:
     human,
     gold: 1000,
     tax: 0,
-    market: initialMarket(),
+    market: initialMarket(nation),
     crosses: 0,
     crossesRequired: 30,
     recruitPool: [],

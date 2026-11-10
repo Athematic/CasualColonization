@@ -400,6 +400,8 @@ export interface CongressOverview {
   rebels: number;
   colonies: { colony: Colony; population: number; sol: number; bonus: number; bells: number }[];
   fathers: FatherId[];
+  /** The turn each father joined, where the history still has it (older saves and trimmed histories may not). */
+  joined: Partial<Record<FatherId, number>>;
   current: FatherId | null;
   fatherBells: number;
   fatherCost: number;
@@ -426,11 +428,26 @@ export function congressOverview(s: GameState, nation: NationId): CongressOvervi
     rebels: rebelShare(s, nation),
     colonies,
     fathers: [...p.fathers],
+    joined: fatherJoinTurns(s, nation),
     current: p.currentFather,
     fatherBells: p.fatherBells,
     fatherCost: cost,
     turnsToFather: !p.currentFather ? null : left === 0 ? 1 : perTurn > 0 ? Math.ceil(left / perTurn) : null,
   };
+}
+
+/**
+ * The turn each of a nation's Founding Fathers joined, read from the history's 'father' entries
+ * (the state keeps no separate field; fathers whose entry has been trimmed or never recorded are missing).
+ */
+export function fatherJoinTurns(s: GameState, nation: NationId): Partial<Record<FatherId, number>> {
+  const out: Partial<Record<FatherId, number>> = {};
+  const mine = new Set(player(s, nation).fathers);
+  for (const e of s.history ?? []) {
+    if (e.kind !== 'father' || e.nations[0] !== nation) continue;
+    for (const id of mine) if (e.text.startsWith(`${FATHERS[id].name} joins `)) out[id] = e.turn;
+  }
+  return out;
 }
 
 /** A father's name and effect, for lists. */
