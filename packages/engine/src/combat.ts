@@ -35,7 +35,7 @@ import { SURRENDER_CHANCE, SURRENDER_TRIBUTE } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
 import type { Colony, GameState, Unit } from './types.js';
-import { setUnitLoc, removeUnit } from './unitindex.js';
+import { setUnitLoc, setUnitOwner, removeUnit } from './unitindex.js';
 
 function isArmed(u: Unit): boolean {
   return u.role === 'soldier' || u.role === 'dragoon';
@@ -195,7 +195,7 @@ function demote(s: GameState, u: Unit, winner: Unit): string {
       return `${name} is disarmed`;
     }
     // Unarmed colonists and treasure are captured.
-    u.owner = winner.owner;
+    setUnitOwner(s, u, winner.owner);
     u.role = 'none';
     u.tools = 0;
     u.moves = 0;
@@ -207,7 +207,7 @@ function demote(s: GameState, u: Unit, winner: Unit): string {
     return `${name} is captured`;
   }
   if (def.kind === 'treasure' || def.kind === 'wagon') {
-    u.owner = winner.owner;
+    setUnitOwner(s, u, winner.owner);
     delete u.dest;
     return `${name} is captured`;
   }
@@ -366,13 +366,13 @@ function captureColony(s: GameState, attacker: Unit, colony: Colony): string {
   colony.build = null;
   if (attacker.owner === 'crown') colony.takenFrom = previous;
   for (const w of colonyWorkers(s, colony)) {
-    w.owner = attacker.owner;
+    setUnitOwner(s, w, attacker.owner);
     delete w.teach;
   }
   for (const o of unitsAt(s, colony.x, colony.y)) {
     if (o.owner !== previous) continue;
     if (isShip(o)) damageShip(s, o);
-    else o.owner = attacker.owner;
+    else setUnitOwner(s, o, attacker.owner);
   }
   if (attacker.loc.kind === 'map') setUnitLoc(s, attacker, { kind: 'map', x: colony.x, y: colony.y });
   const by = attacker.owner === 'crown' ? `${Term(s, 'royalTroops')}` : nationTitle(s, attacker.owner);

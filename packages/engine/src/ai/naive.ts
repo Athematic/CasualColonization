@@ -11,6 +11,7 @@ import type { Colony, GameState, Player, Unit } from '../types.js';
 import { aiFight, boardRescue, disembarkAll, fetchStranded, guardColony, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
 import { crownAffairs } from './royal.js';
 import { aiGoodsOf, goodsOf } from '../scenarios/index.js';
+import { indexedUnitsOf, ownedUnitsView } from '../unitindex.js';
 
 const BUILD_PREFERENCE: BuildingKind[] = ['docks', 'stockade', 'warehouse', 'carpenter', 'printingPress', 'church', 'schoolhouse', 'customHouse', 'armory'];
 
@@ -19,7 +20,7 @@ export function runNaive(s: GameState, p: Player): void {
   aiPeace(s, p.id);
   // The King's demands are paid whenever the treasury can (ai/royal.ts).
   crownAffairs(s, p, null);
-  const units = Object.values(s.units).filter((u) => u.owner === p.id);
+  const units = indexedUnitsOf(s, p.id);
   for (const u of units) {
     if (!s.units[u.id] || u.owner !== p.id || u.ally) continue;
     safely(() => aiUnit(s, p, u));
@@ -53,7 +54,7 @@ function aiColonist(s: GameState, p: Player, u: Unit): void {
   if (u.role === 'soldier' || u.role === 'dragoon') {
     // Keep one guard per colony; extra soldiers settle down.
     const guarded = ownColonies(s, p).filter((c) =>
-      Object.values(s.units).some((o) => o.owner === p.id && o.id !== u.id && o.loc.kind === 'map' && o.loc.x === c.x && o.loc.y === c.y && (o.role === 'soldier' || o.role === 'dragoon')),
+      ownedUnitsView(s, p.id).some((o) => o.id !== u.id && o.loc.kind === 'map' && o.loc.x === c.x && o.loc.y === c.y && (o.role === 'soldier' || o.role === 'dragoon')),
     );
     if (ownColonies(s, p).length === 0 || guarded.length < ownColonies(s, p).length) return guardColony(s, p, u);
   }
@@ -157,7 +158,7 @@ function aiShip(s: GameState, p: Player, ship: Unit): void {
     }
   }
   const loaded = Object.values(ship.cargo ?? {}).some((n) => (n ?? 0) > 0);
-  const docks = Object.values(s.units).some((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u));
+  const docks = ownedUnitsView(s, p.id).some((u) => u.loc.kind === 'europe' && !isShip(u));
   if (loaded || docks || p.gold >= recruitPrice(s, p) + 200 || !here) {
     if (!ship.dest) setDestination(s, ship.id, { europe: true });
     return;
@@ -173,12 +174,12 @@ function aiShip(s: GameState, p: Player, ship: Unit): void {
 }
 
 function aiEurope(s: GameState, p: Player): void {
-  const ships = Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && isShip(u) && !u.route);
+  const ships = ownedUnitsView(s, p.id).filter((u) => u.loc.kind === 'europe' && isShip(u) && !u.route);
   for (const ship of ships) {
     for (const g of goodsOf(s)) if ((ship.cargo?.[g] ?? 0) > 0) sellGoods(s, ship.id, g, ship.cargo![g]!);
-    const totalUnits = Object.values(s.units).filter((u) => u.owner === p.id).length;
+    const totalUnits = indexedUnitsOf(s, p.id).length;
     while (cargoFree(s, ship) > 0 && p.gold >= recruitPrice(s, p) + 300 && totalUnits < 60) {
-      const docksCount = Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u)).length;
+      const docksCount = ownedUnitsView(s, p.id).filter((u) => u.loc.kind === 'europe' && !isShip(u)).length;
       if (docksCount >= cargoFree(s, ship)) break;
       safely(() => {
         const slot = p.recruitPool.findIndex((t) => t !== 'pettyCriminal');
@@ -186,8 +187,8 @@ function aiEurope(s: GameState, p: Player): void {
       });
       break;
     }
-    for (const u of Object.values(s.units)) {
-      if (u.owner === p.id && u.loc.kind === 'europe' && !isShip(u) && cargoFree(s, ship) > 0) boardInEurope(s, u.id, ship.id);
+    for (const u of indexedUnitsOf(s, p.id)) {
+      if (u.loc.kind === 'europe' && !isShip(u) && cargoFree(s, ship) > 0) boardInEurope(s, u.id, ship.id);
     }
     sailToAmerica(s, ship.id);
   }

@@ -50,7 +50,7 @@ import { type NationId } from './rules/nations.js';
 import { difficultyOf, nationOf, nationSet, scenarioOf, term, Term, type ScenarioLike } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, MercenaryOffer, Player, Unit } from './types.js';
-import { forEachUnitNear, removeUnit } from './unitindex.js';
+import { forEachUnitNear, removeUnit, setUnitOwner } from './unitindex.js';
 
 /** A seeded draw for this nation and purpose. */
 const draw = (s: GameState, nation: NationId, purpose: string) => pairRandom(s, nation, 'crown', `rebellion ${purpose}`);
@@ -413,7 +413,7 @@ function defect(s: GameState, p: Player, c: Colony): void {
   c.takenFrom = p.id;
   c.build = null;
   for (const w of colonyWorkers(s, c)) {
-    w.owner = 'crown';
+    setUnitOwner(s, w, 'crown');
     delete w.teach;
   }
   track(p.id, 'rebellion:colony defected');

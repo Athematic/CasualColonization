@@ -55,7 +55,7 @@ import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { stopPort } from '../routes.js';
-import { forEachUnitNear } from '../unitindex.js';
+import { forEachUnitNear, indexedUnitsOf, ownedUnitsView } from '../unitindex.js';
 import { maybeIncite } from './natives.js';
 import { armyForIndependence, colonyDefences, supportParts, rebelColonyDefence, rebelPower, crownAffairs, defenceShort, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
 import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './plan.js';
@@ -100,7 +100,7 @@ export function runAdvanced(s: GameState, p: Player, base: AiProfile): void {
   for (const c of ownColonies(s, p)) safely(() => manageColony(s, p, c, prof));
   safely(() => sendSettler(s, p, prof));
   safely(() => manageLogistics(s, p));
-  const units = Object.values(s.units).filter((u) => u.owner === p.id);
+  const units = indexedUnitsOf(s, p.id);
   for (const u of units) {
     if (!s.units[u.id] || u.owner !== p.id) continue;
     safely(() => unitTurn(s, p, u, prof));
@@ -162,8 +162,8 @@ function armedAt(s: GameState, p: Player, x: number, y: number): Unit[] {
 function spareArmy(s: GameState, p: Player, prof: AiProfile): Unit[] {
   const out: Unit[] = [];
   const kept = new Map<string, number>();
-  for (const u of Object.values(s.units)) {
-    if (u.owner !== p.id || !isArmed(u) || u.loc.kind !== 'map' || u.ally) continue;
+  for (const u of ownedUnitsView(s, p.id)) {
+    if (!isArmed(u) || u.loc.kind !== 'map' || u.ally) continue;
     const c = colonyAt(s, u.loc.x, u.loc.y);
     if (c && c.owner === p.id) {
       const n = kept.get(c.id) ?? 0;
@@ -967,7 +967,7 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   }
   // A missionary for an unconverted village, if a church can bless one.
   if (prof.missions && here && here.owner === p.id && here.buildings.church >= 2 && u.type !== 'nativeConvert') {
-    const busy = Object.values(s.units).some((o) => o.owner === p.id && o.role === 'missionary');
+    const busy = ownedUnitsView(s, p.id).some((o) => o.role === 'missionary');
     const open = Object.values(s.settlements).some((st) => !st.mission && distance(st.x, st.y, here.x, here.y) <= 10);
     if (!busy && open && (u.type === 'pettyCriminal' || u.type === 'indenturedServant' || u.type === 'firebrandPreacher')) {
       equipInColony(s, u.id, 'missionary');
@@ -1115,7 +1115,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
       return;
     }
   }
-  const docks = Object.values(s.units).some((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u));
+  const docks = ownedUnitsView(s, p.id).some((u) => u.loc.kind === 'europe' && !isShip(u));
   if (p.independence === 'none' && (carrying > 0 || docks || p.gold > prof.reserve + recruitPrice(s, p))) {
     // Home, or a Favoured Nation partner's port where the cargo fetches more (foreign.ts).
     if (!ship.dest) setDestination(s, ship.id, { europe: true, port: choosePort(s, p, ship) });
@@ -1164,7 +1164,7 @@ const MUSKETS_PER_COLONY = 100;
 
 function europe(s: GameState, p: Player, prof: AiProfile): void {
   if (p.independence !== 'none') return;
-  const inEurope = () => Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && isShip(u) && !u.repair && !u.route);
+  const inEurope = () => ownedUnitsView(s, p.id).filter((u) => u.loc.kind === 'europe' && isShip(u) && !u.repair && !u.route);
   const ships = inEurope();
   // Ships on routes that call at Europe pick up colonists from the docks as they pass.
   // Only routes calling at the home port: colonists board only there.
@@ -1183,7 +1183,7 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
   }
 
   const colonies = ownColonies(s, p);
-  const docks = () => Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u));
+  const docks = () => ownedUnitsView(s, p.id).filter((u) => u.loc.kind === 'europe' && !isShip(u));
   // Colonists board only in the home port, so only ships there count as room for them. A ship in
   // a partner's port lets two wait on the docks for the next ship home (port choice brings it).
   const abroad = ships.some((sh) => !inHomePort(sh)) ? 2 : 0;

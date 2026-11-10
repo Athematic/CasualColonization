@@ -7,6 +7,7 @@ import { aiTurn } from '../scenarios/index.js';
 import type { GameState, Player } from '../types.js';
 import { ownColonies } from './common.js';
 import type { AiFocus, AiProfile } from './profiles.js';
+import { ownedUnitsView } from '../unitindex.js';
 
 /** Turns between strategy reviews. */
 const REVIEW_EVERY = 8;
@@ -53,7 +54,7 @@ function chooseFocus(s: GameState, p: Player, base: AiProfile): AiFocus {
 /** A foreign colony close to ours with nobody armed inside (not a Favoured Nation's). */
 function opening(s: GameState, p: Player): boolean {
   const ours = ownColonies(s, p);
-  const spare = Object.values(s.units).filter((u) => u.owner === p.id && (u.role === 'soldier' || u.role === 'dragoon')).length - ours.length;
+  const spare = ownedUnitsView(s, p.id).filter((u) => u.role === 'soldier' || u.role === 'dragoon').length - ours.length;
   if (spare < 2) return false;
   return Object.values(s.colonies).some((c) => {
     // A Favoured Nation's colonies are no opening: it will not be attacked.

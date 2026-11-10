@@ -10,7 +10,7 @@ export * from './rules/colonyNames.js';
 export * from './rules/difficulty.js';
 export * from './rules/ports.js';
 export * from './queries.js';
-export { addColony, addUnit, indexChecks, removeColony, removeUnit, setIndexChecks, setUnitLoc } from './unitindex.js';
+export { addColony, addUnit, forEachUnitNear, indexChecks, indexedUnitsOf, removeColony, removeUnit, setIndexChecks, setUnitLoc, setUnitOwner } from './unitindex.js';
 export * from './production.js';
 export * from './colony.js';
 export * from './europe.js';

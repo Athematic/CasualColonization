@@ -11,6 +11,7 @@ import type { BuildTarget, Colony, GameState, Player } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
 import { aiGoodsOf, aiTurn } from '../scenarios/index.js';
+import { ownedUnitsView } from '../unitindex.js';
 
 /** Goods the merchant fleet carries to Europe. */
 
@@ -29,8 +30,7 @@ export interface FleetReport {
 
 export function fleetReport(s: GameState, p: Player): FleetReport {
   const r: FleetReport = { cargoShips: 0, holds: 0, warships: 0, galleons: 0, waiting: 0, coastal: 0, treasure: 0 };
-  for (const u of Object.values(s.units)) {
-    if (u.owner !== p.id) continue;
+  for (const u of ownedUnitsView(s, p.id)) {
     if (u.type === 'treasure') r.treasure += u.treasure ?? 0;
     if (!isShip(u)) continue;
     const def = UNIT_TYPES[u.type];
@@ -88,7 +88,7 @@ export function shipPort(s: GameState, p: Player, type: UnitTypeId): NationId | 
   if (!buyableInPartnerPort(type)) return undefined;
   let best: { port?: NationId; price: number } = { price: trainPrice(s, p, type) };
   for (const port of portsFor(s, p.id).slice(1)) {
-    if (!Object.values(s.units).some((u) => u.owner === p.id && u.loc.kind === 'europe' && u.loc.port === port)) continue;
+    if (!ownedUnitsView(s, p.id).some((u) => u.loc.kind === 'europe' && u.loc.port === port)) continue;
     const price = trainPrice(s, player(s, port), type);
     if (price < best.price) best = { port, price };
   }

@@ -46,6 +46,7 @@ import type { Colony, GameState, Player, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
 import { aiGoodsOf, aiTurn } from '../scenarios/index.js';
+import { ownedUnitsView } from '../unitindex.js';
 
 /** Goods the computer players export, and so weigh in tax decisions and port choice (the scenario's `ai.goods.export`). */
 export const exportGoods = (s: GameState): readonly GoodId[] => aiGoodsOf(s).export;
@@ -344,7 +345,7 @@ function maybePayArrears(s: GameState, p: Player, prof: AiProfile): void {
 /** Colonists a trip home would bring: those waiting on the docks, and recruits the treasury pays for (up to 3). */
 function colonistsForTrip(s: GameState, p: Player): number {
   let n = 0;
-  for (const u of Object.values(s.units)) if (u.owner === p.id && u.loc.kind === 'europe' && !isShip(u)) n++;
+  for (const u of ownedUnitsView(s, p.id)) if (u.loc.kind === 'europe' && !isShip(u)) n++;
   const price = recruitPrice(s, p);
   return n + Math.min(4, Math.floor(Math.max(0, p.gold - 300) / price));
 }

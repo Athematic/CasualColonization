@@ -12,6 +12,7 @@ import { riverLinked } from '../rivers.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
 import { countUnits, ownColonies } from './common.js';
+import { ownedUnitsView } from '../unitindex.js';
 import { aiGoodsOf } from '../scenarios/index.js';
 
 /** Colonies further apart than this are not worth joining by road. */
@@ -122,8 +123,8 @@ export function buildRoads(s: GameState, p: Player, u: Unit): boolean {
   // Another pioneer already working or heading there.
   const taken = new Set<number>();
   const w = s.map.width;
-  for (const o of Object.values(s.units)) {
-    if (o.owner !== p.id || o.id === u.id || o.role !== 'pioneer' || o.loc.kind !== 'map') continue;
+  for (const o of ownedUnitsView(s, p.id)) {
+    if (o.id === u.id || o.role !== 'pioneer' || o.loc.kind !== 'map') continue;
     if (o.work) taken.add(o.loc.y * w + o.loc.x);
     if (o.dest && 'x' in o.dest) taken.add(o.dest.y * w + o.dest.x);
   }

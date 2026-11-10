@@ -22,6 +22,7 @@ import {
 } from '../queries.js';
 import type { Brave, Colony, GameState, Player, Tile, Unit } from '../types.js';
 import { goodsOf } from '../scenarios/index.js';
+import { ownedUnitsView } from '../unitindex.js';
 
 /** Runs an AI action, ignoring moves the rules turn down. */
 export function safely(fn: () => void): void {
@@ -246,10 +247,8 @@ export function ownColonies(s: GameState, p: Player): Colony[] {
 /** How many of the player's units pass the test (a plain loop, in record order). */
 export function countUnits(s: GameState, p: Player, test: (u: Unit) => boolean): number {
   let n = 0;
-  for (const id in s.units) {
-    const u = s.units[id];
-    if (u.owner === p.id && test(u)) n++;
-  }
+  const own = ownedUnitsView(s, p.id);
+  for (let i = 0; i < own.length; i++) if (test(own[i])) n++;
   return n;
 }
 
@@ -369,7 +368,7 @@ export function landingSpot(s: GameState, p: Player, ship: Unit): { x: number; y
  */
 export function strandedSettlers(s: GameState, p: Player): Unit[] {
   if (Object.values(s.colonies).some((c) => c.owner === p.id)) return [];
-  return Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'map' && u.role !== 'scout' && UNIT_TYPES[u.type].kind === 'colonist' && stranded(s, u));
+  return ownedUnitsView(s, p.id).filter((u) => u.loc.kind === 'map' && u.role !== 'scout' && UNIT_TYPES[u.type].kind === 'colonist' && stranded(s, u));
 }
 
 /** Whether a colonist ashore has no tile it could found a colony on within 5 tiles' walk. */

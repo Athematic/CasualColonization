@@ -17,6 +17,7 @@ import { calendarOf, formatDate } from './scenarios/index.js';
 import { checkVictory } from './victory.js';
 import { recordStats } from './stats.js';
 import type { GameState, Player, Unit } from './types.js';
+import { indexedUnitsOf } from './unitindex.js';
 
 /** Resets a player's units and carries out standing orders at the start of their turn. */
 export function beginPlayerTurn(s: GameState, p: Player): void {
@@ -24,7 +25,8 @@ export function beginPlayerTurn(s: GameState, p: Player): void {
   if (p.finished) return;
   let t = perfStart();
   bombardShips(s, p.id);
-  for (const u of Object.values(s.units)) {
+  // The nation's units, as a filtered Object.values would list them (nothing here changes an owner).
+  for (const u of indexedUnitsOf(s, p.id)) {
     if (u.owner !== p.id) continue;
     if (u.loc.kind === 'sailing') {
       advanceSailing(s, u);
@@ -42,7 +44,7 @@ export function beginPlayerTurn(s: GameState, p: Player): void {
     }
     if (u.work) advanceWork(s, u);
   }
-  for (const u of Object.values(s.units)) {
+  for (const u of indexedUnitsOf(s, p.id)) {
     if (u.owner === p.id && u.dest && !u.route && s.units[u.id]) continueOrders(s, u);
     if (u.owner === p.id && u.roadTo && s.units[u.id]) continueRoadTo(s, u);
   }

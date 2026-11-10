@@ -14,14 +14,17 @@ import {
   createUnit,
   deserialize,
   handOver,
+  forEachUnitNear,
   headStartConfig,
   indexChecks,
+  indexedUnitsOf,
   playUntil,
   removeColony,
   removeUnit,
   serialize,
   setIndexChecks,
   setUnitLoc,
+  setUnitOwner,
   tileWorkedBy,
   unitsAboard,
   unitsAt,
@@ -80,6 +83,44 @@ describe('unit index', () => {
     expect(unitsAt(s, 3, 3)).toHaveLength(3);
     // Out-of-map tiles are answered by the scan.
     expect(unitsAt(s, -1, 3)).toEqual([]);
+  });
+
+  it('follows owners: new, removed and captured units, in record order', () => {
+    setIndexChecks(true);
+    const s = createGame(config(12));
+    const scanOf = (owner: string) => Object.values(s.units).filter((u) => u.owner === owner);
+    const english = indexedUnitsOf(s, 'england');
+    expect(ids(english)).toEqual(ids(scanOf('england')));
+    const [a, b] = english;
+    const french = indexedUnitsOf(s, 'france');
+    // A captured unit keeps its place in record order among its new owner's units.
+    setUnitOwner(s, a, 'france');
+    expect(ids(indexedUnitsOf(s, 'france'))).toEqual(ids(scanOf('france')));
+    expect(indexedUnitsOf(s, 'france')).toHaveLength(french.length + 1);
+    expect(indexedUnitsOf(s, 'england')).not.toContain(a);
+    removeUnit(s, b.id);
+    expect(ids(indexedUnitsOf(s, 'england'))).toEqual(ids(scanOf('england')));
+    const d = createUnit(s, 'england', 'freeColonist', { kind: 'map', x: 3, y: 3 });
+    expect(indexedUnitsOf(s, 'england').at(-1)).toBe(d);
+    expect(indexedUnitsOf(s, 'nobody')).toEqual([]);
+  });
+
+  it('visits the units near a tile', () => {
+    setIndexChecks(true);
+    const s = createGame(config(13));
+    const [a, b, c] = Object.values(s.units);
+    setUnitLoc(s, a, { kind: 'map', x: 5, y: 5 });
+    setUnitLoc(s, b, { kind: 'map', x: 7, y: 3 });
+    setUnitLoc(s, c, { kind: 'map', x: 8, y: 5 });
+    const near = (x: number, y: number, r: number) => {
+      const out: Unit[] = [];
+      forEachUnitNear(s, x, y, r, (u) => out.push(u));
+      return ids(out).sort();
+    };
+    const want = (x: number, y: number, r: number) =>
+      ids(Object.values(s.units).filter((u) => u.loc.kind === 'map' && Math.max(Math.abs(u.loc.x - x), Math.abs(u.loc.y - y)) <= r)).sort();
+    for (const [x, y, r] of [[5, 5, 2], [6, 4, 1], [6, 4, 2], [0, 0, 3], [8, 5, 0]]) expect(near(x, y, r)).toEqual(want(x, y, r));
+    expect(near(6, 4, 2)).toEqual(ids([a, b, c]).sort());
   });
 
   it('follows units joining and leaving colonies and carriers', () => {
