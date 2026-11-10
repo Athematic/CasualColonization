@@ -87,7 +87,7 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Mines running out | S | P3 | done |
 | Abandoning a colony; retiring early | S | P2 | done |
 | Computer players build more buildings (the scoring review found 0–3.5 building points per nation at turn 200): build plans favour docks, schoolhouses, level-2 workshops and warehouses earlier | S | P2 | idea |
-| Performance pass: profile computer turns and the map renderer; a head start to 1700 currently takes about 100 seconds. Goal: under 30 seconds, with identical game outcomes | M | P1 | planned (after the other 0.7 items) |
+| Performance pass: profile computer turns and the map renderer; a head start to 1700 currently takes about 100 seconds. Goal: under 30 seconds, with identical game outcomes | M | P1 | done for the computer turns: `npm run bench` (seed 2024, the web head start to 1700) went from 43–46 s to 12–14 s in Node and from 40 s to 14 s in Chromium (Skip ahead), with the same final state hash on four seeds (`npm run bench -- --verify`). Fixed: the worker optimiser's unit scans (one pass per colony, shared until a job changes), the path search (heap, reused buffers, per-search context, the first step reuses the route just found) and array-building lookups. The map renderer was not part of this pass (Skip ahead draws nothing); speed-ups that would change games are listed in the README's Performance section |
 | Scoring review: reward well-developed colonies (buildings, experts, production, liberty) and not only headcount, to fit the colony charter and the measured pace | S | P1 | done (`score.ts` `SCORE_WEIGHTS`, `scoreBreakdown`; breakdown table in Progress and on the game-over screen; the arena prints the split per level) |
 
 ## Beta 1–2: Cooperation
