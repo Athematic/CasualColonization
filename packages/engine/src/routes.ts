@@ -21,7 +21,7 @@ import { UNIT_TYPES } from './rules/units.js';
 import { track } from './telemetry.js';
 import type { GameState, RouteCargo, RouteStop, TradeRoute, Unit } from './types.js';
 import { goodsOf, nationOf, term, Term } from './scenarios/index.js';
-import { setUnitLoc } from './unitindex.js';
+import { indexedUnitsOf, setUnitLoc } from './unitindex.js';
 
 export const EUROPE_STOP = 'europe';
 export const MAX_ROUTE_STOPS = 12;
@@ -444,7 +444,8 @@ export function processRoutes(s: GameState, nation: NationId): void {
   if (!s.routes) return;
   // Europe stops at a port that has closed (the partnership ended) fall back to the home port.
   closedRoutePorts(s, nation);
-  for (const u of Object.values(s.units)) {
+  // The nation's units, as a filtered Object.values would list them (routes never change an owner).
+  for (const u of indexedUnitsOf(s, nation)) {
     if (u.owner === nation && u.route && s.units[u.id]) runRoute(s, u);
   }
 }
