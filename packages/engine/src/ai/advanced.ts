@@ -55,7 +55,7 @@ import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangle
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { stopPort } from '../routes.js';
 import { maybeIncite } from './natives.js';
-import { armyForIndependence, supportParts, rebelColonyDefence, crownAffairs, defenceShort, expectedSupport, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
+import { armyForIndependence, colonyDefences, supportParts, rebelColonyDefence, rebelPower, crownAffairs, defenceShort, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
 import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './plan.js';
 import { equippedPrice, trainEquipped } from './outfit.js';
 import type { AiProfile } from './profiles.js';
@@ -69,11 +69,13 @@ export function runAdvanced(s: GameState, p: Player, base: AiProfile): void {
   turnShare = rebelShare(s, p.id);
   const plan = base.independence;
   // Mercenaries and a foreign intervention count towards the defence (ai/royal.ts, rebellion.ts).
-  const support = plan && p.independence === 'none' && (preparingIndependence(base, 20) || p.aiMemory?.independencePlan !== undefined) ? expectedSupport(s, p) : 0;
+  // (expectedSupport, with its parts kept: planning changes nothing they depend on.)
+  const parts = plan && p.independence === 'none' && (preparingIndependence(base, 20) || p.aiMemory?.independencePlan !== undefined) ? supportParts(s, p) : undefined;
+  const support = parts ? parts.mercenaries + parts.intervention : 0;
   turnSupport = support;
   // The independence plan (ai/plan.ts): adopted from mid-game, it rings more bells, builds
   // defences and, once the rebels are close to a majority, arms.
-  turnPlan = plan ? planTurn(s, p, base, turnShare, () => !!plan.arm && p.independence === 'none' && !readyToFight(s, p, plan.ratio, support), support) : NO_PLAN;
+  turnPlan = plan ? planTurn(s, p, base, turnShare, () => !!plan.arm && p.independence === 'none' && !readyToFight(s, p, plan.ratio, support, parts?.mercenaries), support) : NO_PLAN;
   // Close to a declaration, and during the war, no more colonies (ai/plan.ts).
   const colonies = ownColonies(s, p).length;
   const settled = colonies > 0 && (p.independence === 'declared' || (turnPlan.arming && turnShare >= (plan?.minShare ?? 0) - FOUND_BELOW));
@@ -129,12 +131,15 @@ let turnSupport = 0;
 /**
  * Whether the nation's defence is ready for a War of Independence (ai/royal.ts): `ratio` times the
  * royal force with the help it can expect, enough to hold until the intervention comes, and no
- * third of the colonies weak.
+ * third of the colonies weak. `mercenaries` are those of `supportParts`, when the caller has them.
+ * The colonies' defences are worked out once for all three.
  */
-function readyToFight(s: GameState, p: Player, ratio: number, support: number): boolean {
-  const { mercenaries } = supportParts(s, p);
-  if (defenceShort(s, p, ratio, support) || !holdsAlone(s, p, mercenaries)) return false;
-  return weakColonies(s, p, mercenaries).length * 3 < ownColonies(s, p).length;
+function readyToFight(s: GameState, p: Player, ratio: number, support: number, mercenaries = supportParts(s, p).mercenaries): boolean {
+  const defences = colonyDefences(s, p);
+  const power = rebelPower(s, p, defences);
+  if (defenceShort(s, p, ratio, support, power) || !holdsAlone(s, p, mercenaries, power)) return false;
+  // Last: weakColonies adds the mercenaries to the defences.
+  return weakColonies(s, p, mercenaries, defences).length * 3 < ownColonies(s, p).length;
 }
 
 /** Whether the nation's rebel share is within `margin` points of the share at which it means to declare. */
@@ -1347,7 +1352,8 @@ function independence(s: GameState, p: Player, prof: AiProfile): void {
   // The Royal Expeditionary Force has grown all game: declare only when the defence can plausibly
   // beat it, counting the mercenaries the treasury can hire and the intervention the bells bring,
   // can hold until the intervention comes, and no third of the colonies is weak.
-  if (defenceShort(s, p, plan.ratio, turnSupport) || !holdsAlone(s, p)) return;
+  const power = rebelPower(s, p);
+  if (defenceShort(s, p, plan.ratio, turnSupport, power) || !holdsAlone(s, p, supportParts(s, p).mercenaries, power)) return;
   abandonOutposts(s, p);
   if (!readyToFight(s, p, plan.ratio, turnSupport)) return;
   if (canDeclareIndependence(s, p.id) !== null) return;
