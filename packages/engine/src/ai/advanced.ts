@@ -60,7 +60,7 @@ import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './p
 import { equippedPrice, trainEquipped } from './outfit.js';
 import type { AiProfile } from './profiles.js';
 import { buildRoads, equipPioneer, pioneerToolsWanted } from './roads.js';
-import { aiGoodsOf, goodsOf } from '../scenarios/index.js';
+import { aiGoodsOf, aiTurn, goodsOf } from '../scenarios/index.js';
 
 const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
 
@@ -1102,12 +1102,12 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
 
   // More ships once trade outgrows the fleet, before anything else: spoiling goods cost more than a ship.
   buyShips(s, p, prof);
-  if (prof.scouting && s.turn < 100 && !countOwned(s, p, (u) => u.role === 'scout')) buyUnit('seasonedScout');
+  if (prof.scouting && s.turn < aiTurn(s, 100) && !countOwned(s, p, (u) => u.role === 'scout')) buyUnit('seasonedScout');
   // A worn-out hardy pioneer is given fresh tools in a colony rather than replaced.
   if (!countOwned(s, p, (u) => u.role === 'pioneer' || u.type === 'hardyPioneer') && colonies.length) buyUnit('hardyPioneer');
   const statesmen = countOwned(s, p, (u) => u.type === 'elderStatesman');
   // Under an independence plan, statesmen only while the rebels still need to grow (ai/plan.ts).
-  if (prof.liberty > 1.3 && s.turn > 30 && statesmen < colonies.length && (!turnPlan.adopted || turnPlan.boost)) buyUnit('elderStatesman');
+  if (prof.liberty > 1.3 && s.turn > aiTurn(s, 30) && statesmen < colonies.length && (!turnPlan.adopted || turnPlan.boost)) buyUnit('elderStatesman');
   const armed = countOwned(s, p, isArmed);
   // A nation getting ready for independence also buys veterans and artillery against the Royal
   // Expeditionary Force, once the colonies hold the muskets they want: 50 muskets defend about as
@@ -1115,12 +1115,12 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
   const stocked = colonies.reduce((n, c) => n + c.goods.muskets, 0) >= colonies.length * MUSKETS_PER_COLONY;
   const arming = turnArming && stocked;
   if (armed < colonies.length * garrisonFor(p, prof) && (armed === 0 || (militant(prof) && p.gold > prof.reserve + 4000) || (arming && p.gold > prof.reserve + 2500))) buyUnit('veteranSoldier');
-  if ((militant(prof) || arming) && s.turn > 80 && countOwned(s, p, (u) => u.type === 'artillery') < Math.ceil(colonies.length / (arming ? 1 : 2))) {
+  if ((militant(prof) || arming) && s.turn > aiTurn(s, 80) && countOwned(s, p, (u) => u.type === 'artillery') < Math.ceil(colonies.length / (arming ? 1 : 2))) {
     if (room() >= 0 && afford(trainPrice(s, p, 'artillery'))) safely(() => train(s, p.id, 'artillery'));
   }
   const fishable = colonies.some((c) => c.buildings.docks > 0) && !countOwned(s, p, (u) => u.type === 'expertFisherman');
   if (fishable) buyUnit('expertFisherman');
-  if (prof.missions && s.turn < 160 && !countOwned(s, p, (u) => u.type === 'firebrandPreacher')) buyUnit('firebrandPreacher');
+  if (prof.missions && s.turn < aiTurn(s, 160) && !countOwned(s, p, (u) => u.type === 'firebrandPreacher')) buyUnit('firebrandPreacher');
   // Recruit the best of the pool while it is cheap.
   // (Dearer recruits too once trade has filled the treasury: idle gold scores next to nothing.)
   // While arming for independence, muskets come first (bought below): recruits only with gold to spare.
@@ -1185,7 +1185,7 @@ function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
   const strength = army.reduce((n, u) => n + offencePower(s, u), 0);
 
   // Raid nearby native settlements for treasure.
-  if (prof.raidNatives && army.length >= 2 && s.turn > 40) {
+  if (prof.raidNatives && army.length >= 2 && s.turn > aiTurn(s, 40)) {
     const st = Object.values(s.settlements)
       .filter((o) => colonies.some((c) => distance(c.x, c.y, o.x, o.y) <= 6))
       .sort((a, b) => a.defenders - b.defenders)[0];
@@ -1206,7 +1206,7 @@ function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
   // cancelling Favoured Nation to go to war (foreign.ts), the war waits until the planned turn.
   const hostileTo = s.players.filter((o) => isHostile(s, p.id, o.id)).map((o) => o.id);
   if (memory.warPlan && (s.turn > memory.warPlan.turn + 20 || p.stance[memory.warPlan.nation] === 'war')) delete memory.warPlan;
-  if ((prof.aggression > 0 || hostileTo.length) && p.independence === 'none' && s.turn - (memory.lastWar ?? -100) > 40 && s.turn > 50) {
+  if ((prof.aggression > 0 || hostileTo.length) && p.independence === 'none' && s.turn - (memory.lastWar ?? -100) > 40 && s.turn > aiTurn(s, 50)) {
     const best = bestWarTarget(s, p, prof, strength);
     if (best && best.ready && army.length >= 2) {
       startWar(s, p.id, best.c.owner);
@@ -1250,7 +1250,7 @@ function abandonOutposts(s: GameState, p: Player): void {
 
 function independence(s: GameState, p: Player, prof: AiProfile): void {
   const plan = prof.independence;
-  if (!plan || p.independence !== 'none' || s.turn < plan.minTurn) return;
+  if (!plan || p.independence !== 'none' || s.turn < aiTurn(s, plan.minTurn)) return;
   const colonies = ownColonies(s, p);
   if (!colonies.length || turnShare < plan.minShare) return;
   const armed = countOwned(s, p, isArmed);

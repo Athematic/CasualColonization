@@ -363,6 +363,13 @@ export interface MemberEffects {
  * keep today's order. Only goods in play may be named.
  */
 export interface ScenarioAi {
+  /**
+   * How fast the game's arc runs for the computer players, against the Americas' 609 turns from
+   * 1492 (1). Their turn thresholds (when to explore, arm, start wars, take up an independence
+   * plan) and the council's late-offer turn are scaled by it with `aiTurn(s, turn)`; lengths in
+   * turns (cooldowns, patience, war weariness) are not. Absent means 1.
+   */
+  pace?: number;
   goods: {
     /** Goods ships move between colonies and sell (ai/logistics.ts), most valuable first. */
     trade: GoodId[];

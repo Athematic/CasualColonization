@@ -191,6 +191,17 @@ export function councilOf(s: HasScenario): { categories: readonly FatherCategory
   return scenarioOf(s).council;
 }
 
+/**
+ * A turn threshold tuned for the Americas (a date in a 609-turn game from 1492: "wars after turn
+ * 50"), scaled by the scenario's `ai.pace` and rounded. At pace 1 it is the turn itself, so the
+ * Americas play exactly as before. Lengths in turns ("40 turns after the last war") are not scaled:
+ * a turn is half a year in every scenario so far, so a cooldown takes as long in game time.
+ */
+export function aiTurn(s: HasScenario, turn: number): number {
+  const pace = scenarioOf(s).ai.pace ?? 1;
+  return pace === 1 ? turn : Math.round(turn * pace);
+}
+
 /** The computer players' goods lists. */
 export function aiGoodsOf(s: HasScenario): ScenarioAi['goods'] {
   return scenarioOf(s).ai.goods;

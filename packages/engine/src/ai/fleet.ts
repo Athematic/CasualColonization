@@ -10,7 +10,7 @@ import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import type { BuildTarget, Colony, GameState, Player } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
-import { aiGoodsOf } from '../scenarios/index.js';
+import { aiGoodsOf, aiTurn } from '../scenarios/index.js';
 
 /** Goods the merchant fleet carries to Europe. */
 
@@ -69,7 +69,7 @@ export function cargoShipWanted(r: FleetReport, spare: number, price: (type: Uni
 
 /** The warship an aggressive nation should buy now, if any. */
 export function warshipWanted(s: GameState, p: Player, prof: AiProfile, r: FleetReport, spare: number, price: (type: UnitTypeId) => number = (type) => UNIT_TYPES[type].price!): UnitTypeId | null {
-  if (prof.aggression < 0.5 || s.turn < 60) return null;
+  if (prof.aggression < 0.5 || s.turn < aiTurn(s, 60)) return null;
   const atWar = Object.entries(p.stance).some(([o, st]) => st === 'war' && o !== 'crown');
   const colonies = ownColonies(s, p).length;
   const wanted = (prof.piracy ? 1 : 0) + (atWar ? 1 : 0) + Math.floor(colonies / 10);

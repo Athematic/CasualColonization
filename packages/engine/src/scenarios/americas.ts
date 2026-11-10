@@ -149,6 +149,8 @@ export const AMERICAS: Scenario = {
   council: { categories: [...FATHER_CATEGORIES], members: Object.keys(FATHERS) as FatherId[] },
   events: 'americas',
   ai: {
+    // The pace the computer players' turn thresholds were tuned for (scenarios/index.ts aiTurn).
+    pace: 1,
     goods: {
       trade: ['silver', 'furs', 'sugar', 'tobacco', 'cotton', 'ore', 'rum', 'cigars', 'cloth', 'coats', 'horses'],
       export: ['sugar', 'tobacco', 'cotton', 'furs', 'ore', 'silver', 'rum', 'cigars', 'cloth', 'coats'],
