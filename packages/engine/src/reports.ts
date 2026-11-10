@@ -75,7 +75,7 @@ export function colonyOverview(s: GameState, colony: Colony): ColonyOverview {
     .sort((a, b) => b.amount - a.amount);
   // At risk: spoiling this turn, or full enough that one more turn of production spoils it.
   const atRisk = warehouse.filter((w) => w.spoil > 0 || (w.net > 0 && w.amount + 2 * w.net > cap)).map((w) => w.good);
-  const toGrow = foodToGrow(colony);
+  const toGrow = foodToGrow(s, colony);
   const netFood = report.net.food;
   const build = colony.build ? buildTargetCost(colony.build, colony) : null;
   const guards = unitsAt(s, colony.x, colony.y).filter((u) => u.owner === colony.owner && !isShip(u));

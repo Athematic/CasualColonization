@@ -107,7 +107,7 @@ export class ColonyScreen implements Screen {
     this.body.append(
       h('header', { class: 'screen-head' },
         h('h2', null, colony.name),
-        h('span', { class: 'muted' }, `Population ${pop} · Sons of Liberty ${report.sonsOfLiberty}% · Food ${colony.goods.food}/${foodToGrow(colony)}`),
+        h('span', { class: 'muted' }, `Population ${pop} · Sons of Liberty ${report.sonsOfLiberty}% · Food ${colony.goods.food}/${foodToGrow(s, colony)}`),
         colony.owner === this.app.viewer && !this.app.observer
           ? h('button', { class: 'btn small', disabled: !this.app.isMyTurn() || abandonProblem(s, colony.id) !== null, title: abandonProblem(s, colony.id) ?? 'Give up this small colony', onclick: () => void this.abandon(colony) }, 'Abandon')
           : null,

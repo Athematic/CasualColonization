@@ -28,7 +28,7 @@ import { COLONY_CHARTER, difficultyRules } from './rules/difficulty.js';
 import { NATIONS, TRIBES, type NationId } from './rules/nations.js';
 import { COLONY_BUILDS, PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId } from './rules/units.js';
 import { runCustomHouse } from './europe.js';
-import { hasFather } from './fathers.js';
+import { modifiers } from './scenarios/modifiers.js';
 import { noteMining } from './mines.js';
 import { noteProduction } from './stats.js';
 import { nativeLandOwner, onColonyFounded } from './natives.js';
@@ -400,7 +400,7 @@ export function canBuild(s: GameState, colony: Colony, target: BuildTarget): boo
   const def = BUILDINGS[target.id];
   const next = def.levels[colony.buildings[target.id]];
   if (!next) return false;
-  if (def.requiresFather && !hasFather(s, colony.owner, def.requiresFather)) return false;
+  if (def.locked && !modifiers(s, colony.owner, 'unlockBuilding').some((m) => m.building === target.id)) return false;
   if (def.coastalOnly && !isCoastal(s, colony.x, colony.y)) return false;
   return pop >= next.minPop;
 }
@@ -460,8 +460,8 @@ export function processColony(s: GameState, colony: Colony): void {
     colony.goods.horses += gain;
   }
 
-  if (colony.goods.food >= foodToGrow(colony)) {
-    colony.goods.food -= foodToGrow(colony);
+  if (colony.goods.food >= foodToGrow(s, colony)) {
+    colony.goods.food -= foodToGrow(s, colony);
     createUnit(s, colony.owner, 'freeColonist', { kind: 'map', x: colony.x, y: colony.y });
     track(colony.owner, 'colony:colonist born');
     message(s, `A new colonist has been born in ${colony.name}.`, colony.owner, colony);
@@ -512,7 +512,8 @@ export function processColony(s: GameState, colony: Colony): void {
   }
 
   processSchool(s, colony);
-  if (colony.buildings.stockade === 0 && colonyWorkers(s, colony).length >= 3 && hasFather(s, colony.owner, 'laSalle')) colony.buildings.stockade = 1;
+  const stockade = modifiers(s, colony.owner, 'autoStockade');
+  if (stockade.length && colony.buildings.stockade === 0 && stockade.some((m) => colonyWorkers(s, colony).length >= m.minColonists)) colony.buildings.stockade = 1;
   runCustomHouse(s, colony.id);
 
   const cap = warehouseCapacity(colony);
