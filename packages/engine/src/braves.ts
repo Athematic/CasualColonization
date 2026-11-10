@@ -755,12 +755,12 @@ function pillage(s: GameState, b: Brave, c: Colony): void {
 function attackUnit(s: GameState, b: Brave, target: Unit): void {
   if (target.loc.kind !== 'map') return;
   const units = unitsAt(s, target.loc.x, target.loc.y).filter((u) => u.owner === target.owner && !isShip(u));
-  const defender = chooseDefender(s, units);
+  const defender = chooseDefender(s, units, b);
   if (!defender) return;
   const tribe = TRIBES[b.tribe].name;
   const at = { x: target.loc.x, y: target.loc.y };
   const off = braveCombat(b).offence * 1.5;
-  const def = defencePower(s, defender);
+  const def = defencePower(s, defender, b);
   track(defender.owner, 'natives:unit attacked');
   if (random(s) >= off / (off + def)) {
     killBrave(s, b);

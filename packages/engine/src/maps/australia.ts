@@ -36,7 +36,8 @@ export const australia: StoredMap = {
     { tribe: 'sioux', region: [59, 64, 67, 70], count: 2 },
   ],
   // Main rivers first, tributaries after the river they join. Format: parseRivers in rivers.ts.
-  // Cooper Creek is left out: Lake Eyre, where it ends, is marsh on this map, not water.
+  // Cooper Creek runs south-west from the Channel Country to Lake Eyre; the lake's centre (49,43) is a
+  // lake tile ('.', water) so the creek can end in it, with marsh around it.
   rivers: `
     Murray: m 65,56 M 60,53 55,51 53,54 52,57 52,58
     Darling: m 66,37 62,42 M 58,47 55,51
@@ -44,6 +45,7 @@ export const australia: StoredMap = {
     Hawkesbury: m 69,46 73,47 74,47
     Brisbane: m 70,37 72,36 73,36
     Swan: m 16,45 13,46 12,46
+    Cooper Creek: m 58,36 54,39 50,43 49,43
     Flinders: m 58,28 55,24 54,22 53,22
     Derwent: m 62,67 63,69 63,70 64,70
   `,
@@ -91,7 +93,7 @@ export const australia: StoredMap = {
 ~~~~~~~~...DDDdDDDdDdddDDdddddDdddddddddddddDddDDddDddsDsdDDsdDppprprhhhR.g...~~~
 ~~~~~~~~....DDDdDDddddddddDddddDdddddddddddddDDDDddDdDDsssDDdddDDprrrr^hhRR...~~~
 ~~~~~~~~....DDDdddDddDDdddDddddDDdddddddddddDdDDmmDdssDdddDdsddpppDprr^hhRR...~~~
-~~~~~~~~....gdDdDDDDDDDddDddddDDDddDDDDdddddddddmmDdsdddddsDsDdDpppgrrhPPgg...~~~
+~~~~~~~~....gdDdDDDDDDDddDddddDDDddDDDDdddddddddm.DdsdddddsDsDdDpppgrrhPPgg...~~~
 ~~~~~~~~~....pddDDDDDDDDddddddDdddDdddDDDdddddddmmDDDdddddDDsDdppDpggrhhPpP...~~~
 ~~~~~~~~~....grdDDDDDDDDddddDdddDDDdddDddDddddddDdddDssdssDDssDpprrgphhPpP....~~~
 ~~~~~~~~~....gpgDDDddDdddddddddpdppdddppdddDDdDddDddDsdsDDDDDsDDpDrrrhhhpP....~~~
