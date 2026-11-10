@@ -432,7 +432,7 @@ export function runRoute(s: GameState, u: Unit): void {
       next();
       continue;
     }
-    u.dest = found.goal;
+    u.dest = { ...found.goal };
     // The route just found is the first step's: continueOrders need not search again.
     continueOrders(s, u, pathHint(u, found.goal, found.path));
     if (!atStop(s, u, stop)) return;
