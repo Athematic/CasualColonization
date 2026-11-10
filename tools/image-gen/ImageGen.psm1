@@ -170,6 +170,8 @@ function Get-BoxArtJobs {
     return , $jobs.ToArray()
 }
 
+. (Join-Path $PSScriptRoot 'Comics.ps1')
+
 function Expand-JobVariants {
     <# One job per take: take 1 keeps the plain name, takes 2..N get the doc's "__v2", "__v3" suffix. #>
     param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Jobs, [int]$Variants = 1)
@@ -240,7 +242,7 @@ function Get-ImageJobs {
     param(
         [Parameter(Mandatory)][string]$SpriteDoc,
         [Parameter(Mandatory)][string]$BoxArtDoc,
-        [ValidateSet('sprites', 'boxart', 'all')][string]$Doc = 'all',
+        [ValidateSet('sprites', 'boxart', 'comics', 'all')][string]$Doc = 'all',
         [string[]]$Only,
         [int]$Variants = 1,
         [switch]$IncludeTitle,
@@ -250,11 +252,22 @@ function Get-ImageJobs {
         # The Read-ThumbPrompts result; needed for thumb and both.
         $ThumbPrompts,
         # Keep the sprite sections in the prompt document's order instead of reversing them (see Get-SpriteJobs).
-        [switch]$DocumentOrder
+        [switch]$DocumentOrder,
+        # Comics (docs/COMIC_PROMPTS.md + docs/comics/*.md): -Doc comics, or -IncludeComics to add them to -Doc all
+        # (all alone stays sprites + box art).
+        [string]$ComicPromptDoc,
+        [string]$ComicsDir,
+        [string[]]$Comic,
+        [ValidateSet('page', 'panel', 'cast')][string]$ComicUnit = 'page',
+        [switch]$IncludeComics
     )
     $jobs = @()
     if ($Doc -in 'sprites', 'all') { $jobs += Invoke-GenerationOrder -Jobs (Get-SpriteJobs -Path $SpriteDoc) -DocumentOrder:$DocumentOrder }
     if ($Doc -in 'boxart', 'all') { $jobs += Get-BoxArtJobs -Path $BoxArtDoc -IncludeTitle:$IncludeTitle }
+    if ($Doc -eq 'comics' -or ($Doc -eq 'all' -and $IncludeComics)) {
+        if (-not $ComicPromptDoc -or -not $ComicsDir) { throw 'Comics need -ComicPromptDoc and -ComicsDir.' }
+        $jobs += Get-ComicJobs -PromptDoc $ComicPromptDoc -ComicsDir $ComicsDir -Unit $ComicUnit -Comic $Comic
+    }
     if ($Variant -ne 'full') {
         if (-not $ThumbPrompts) { throw "-Variant $Variant needs the thumbnail prompts (Read-ThumbPrompts thumb-prompts.md)." }
         $thumbByFull = @{}
@@ -1198,8 +1211,16 @@ function Write-ContactSheet {
         if (-not $groups.Contains($gk)) { $groups[$gk] = @{ Full = $null; Thumb = $null } }
         if ($isThumb) { $groups[$gk].Thumb = $job } else { $groups[$gk].Full = $job }
     }
+    $lastSection = $null
     foreach ($gk in $groups.Keys) {
         $g = $groups[$gk]
+        # Comics: one heading per comic (cast sheet, then the pages in order) and frames in the image's own shape.
+        $comicJob = if ($g.Full -and $g.Full.Doc -eq 'comics') { $g.Full } else { $null }
+        if ($comicJob -and $comicJob.Section -ne $lastSection) {
+            $lastSection = $comicJob.Section
+            $null = $sb.AppendLine("<h2 style=""grid-column:1/-1;font-size:16px;margin:12px 0 0"">$(& $enc $comicJob.Section)</h2>")
+        }
+        $thumbStyle = if ($comicJob -and $comicJob.Size -match '^(\d+)x(\d+)$') { " style=""aspect-ratio:$($Matches[1])/$($Matches[2])""" } else { '' }
         $cols = [System.Collections.Generic.List[object]]::new()
         if ($g.Full) { $cols.Add(@{ Label = 'full'; Key = $g.Full.Key; Rel = $g.Full.OutputRel; Job = $g.Full }) }
         elseif ($g.Thumb.FullOutputRel -and (Test-Path -LiteralPath (Join-Path $OutDir $g.Thumb.FullOutputRel))) {
@@ -1217,7 +1238,7 @@ function Write-ContactSheet {
             $file = Join-Path $OutDir $c.Rel
             $has = Test-Path -LiteralPath $file
             if ($pair) { $null = $sb.Append('<div>') }
-            $null = $sb.Append('<div class="thumb">')
+            $null = $sb.Append("<div class=""thumb""$thumbStyle>")
             if ($has) { $null = $sb.Append("<img loading=""lazy"" src=""$(& $srcOf $c.Rel)"" alt=""$(& $enc $c.Key)"">") }
             else { $null = $sb.Append("<span class=""empty"">$(& $enc $status)</span>") }
             $null = $sb.Append('</div>')
@@ -1622,4 +1643,5 @@ Export-ModuleMember -Function ConvertTo-Slug, Get-SpriteJobs, Invoke-GenerationO
     ConvertFrom-RateLimitDuration, Get-RetryDelaySeconds, Invoke-JobGeneration, Test-ImageResult, Save-BytesAtomic,
     Test-EditJob, Get-ResumeCommand, Get-ApiKeySecure, Add-PlanToManifest, Invoke-ImageJobRun, Get-CostEstimate, Write-ContactSheet,
     Read-EditPrompts, Get-PixelGridSize, Expand-EditPlaceholders, Get-EditJobs, Write-EditContactSheet,
-    Read-ThumbPrompts, Get-ThumbOutline, ConvertTo-ThumbJobs
+    Read-ThumbPrompts, Get-ThumbOutline, ConvertTo-ThumbJobs,
+    Read-ComicPrompts, Read-ComicScript, Select-ComicCast, Get-ComicPanelHint, Get-ComicScriptPaths, Get-ComicJobs
