@@ -616,13 +616,20 @@ export function pathHint(u: Unit, to: { x: number; y: number }, path: { x: numbe
 /**
  * Moves a unit along its standing orders as far as its moves allow. `hint` is a route the caller
  * has just found, from where the unit stands to its destination, with nothing changed since.
+ * A route once found is followed for the rest of the call; it is searched again only when its
+ * next step is blocked (by a unit, a colony, newly seen land or water) or the unit is not where
+ * the route expects.
  */
 export function continueOrders(s: GameState, u: Unit, hint?: PathHint): void {
   let guard = 64;
-  let first = true;
+  let path: { x: number; y: number }[] | null =
+    hint && u.loc.kind === 'map' && hint.from.x === u.loc.x && hint.from.y === u.loc.y ? hint.path : null;
+  let pathTo: { x: number; y: number } | null = path ? hint!.to : null;
+  // Where the route is followed from: path[step] is the next tile.
+  let step = 0;
+  // Whether the route was found in this step (a blocked fresh route waits for next turn).
+  let fresh = !!path;
   while (u.dest && u.moves > 0 && u.loc.kind === 'map' && guard-- > 0) {
-    const useHint = first && hint;
-    first = false;
     let target: { x: number; y: number } | null;
     if ('europe' in u.dest) {
       const tile = tileAt(s, u.loc.x, u.loc.y)!;
@@ -630,7 +637,8 @@ export function continueOrders(s: GameState, u: Unit, hint?: PathHint): void {
         sailToEurope(s, u.id, u.dest.port && !portProblem(s, u.owner, u.dest.port) ? u.dest.port : undefined);
         return;
       }
-      target = nearestHighSeas(s, u);
+      // The high seas found at the start are kept while the route there holds.
+      target = path && pathTo ? pathTo : nearestHighSeas(s, u);
     } else {
       target = u.dest;
     }
@@ -641,24 +649,33 @@ export function continueOrders(s: GameState, u: Unit, hint?: PathHint): void {
     }
     if (u.loc.x === target.x && u.loc.y === target.y) {
       if (!('europe' in u.dest)) delete u.dest;
+      path = null;
       continue;
     }
-    const path =
-      useHint && hint.from.x === u.loc.x && hint.from.y === u.loc.y && hint.to.x === target.x && hint.to.y === target.y
-        ? hint.path
-        : findPath(s, u, target.x, target.y);
-    if (!path || !path.length) {
-      delete u.dest;
-      return;
+    if (!path || !pathTo || pathTo.x !== target.x || pathTo.y !== target.y || step >= path.length) {
+      path = findPath(s, u, target.x, target.y);
+      pathTo = { x: target.x, y: target.y };
+      step = 0;
+      fresh = true;
+      if (!path || !path.length) {
+        delete u.dest;
+        return;
+      }
     }
-    const step = path[0];
-    const dir = directionTo(u.loc.x, u.loc.y, step.x, step.y);
-    const option = describeMove(s, u.id, dir);
-    if (option.kind !== 'move') {
-      // Something got in the way; try again next turn.
-      return;
+    const next = path[step];
+    const dir = directionTo(u.loc.x, u.loc.y, next.x, next.y);
+    const option = Math.max(Math.abs(next.x - u.loc.x), Math.abs(next.y - u.loc.y)) === 1 ? describeMove(s, u.id, dir) : null;
+    if (option?.kind !== 'move') {
+      // Something got in the way of a route found earlier: search again from here. A route found
+      // just now that is blocked waits for next turn.
+      if (fresh) return;
+      path = null;
+      continue;
     }
+    fresh = false;
     moveUnit(s, u.id, dir);
+    step++;
+    if ((u.loc as Unit['loc']).kind !== 'map' || u.loc.x !== next.x || u.loc.y !== next.y) path = null;
   }
 }
 
