@@ -336,3 +336,5 @@ export function hash2(x: number, y: number, salt = 0): number {
 }
 
 export type { GoodId };
+
+export * from './meander.js';
