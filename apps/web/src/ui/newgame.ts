@@ -139,7 +139,26 @@ export function newGameScreen(
   if (initialCode) applyCode(initialCode);
 
   const el = h('main', { class: 'menu-screen' });
+  // Clearing the screen blurs a focused input, whose change handler may render again; a render
+  // that starts while one is running is folded into it.
+  let rendering = false;
+  let again = false;
   const render = () => {
+    if (rendering) {
+      again = true;
+      return;
+    }
+    rendering = true;
+    try {
+      do {
+        again = false;
+        renderOnce();
+      } while (again);
+    } finally {
+      rendering = false;
+    }
+  };
+  const renderOnce = () => {
     clear(el);
     const autoSave = loadAuto();
     const manualSave = loadManual();
@@ -251,8 +270,11 @@ export function newGameScreen(
               },
               onchange: (e: Event) => {
                 seedText = (e.target as HTMLInputElement).value;
-                if (looksLikeGameCode(seedText)) applyCode(seedText);
-                render();
+                // Only a pasted game code changes the other fields; a plain seed is already shown.
+                if (looksLikeGameCode(seedText)) {
+                  applyCode(seedText);
+                  render();
+                }
               },
             })),
           h('button', { class: 'btn small', id: 'seed-random', title: 'Pick a random seed number', onclick: () => { seedText = randomSeed(); codeNote = ''; render(); } }, 'Random'),
