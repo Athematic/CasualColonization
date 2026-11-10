@@ -39,31 +39,27 @@ import {
   BRAVE_CHANCES,
   BRAVE_EQUIPMENT,
   BRAVE_KILLED_TENSION,
-  BRAVE_RESPAWN,
-  BRAVES_PER_SETTLEMENT,
   braveCombat,
   BUY_PRICE_FACTOR,
   BUY_PRICE_PLENTY,
   CAPITAL_EXTRA_BRAVES,
-  CITY_SILVER,
   DEMAND_MET_TENSION,
   DEMAND_REFUSED_TENSION,
   DEMAND_WAIT,
   MAX_BRAVES,
-  PRODUCE_CAP,
-  PRODUCE_RATE,
   TENSION,
   VISIT_RANGE,
   WANDER_RADIUS,
   WANDER_TURNS,
-  type SettlementKind,
 } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from './types.js';
-import { difficultyOf, goodsOf, nativeProduceOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, nativeProduceOf, settlementKindOf } from './scenarios/index.js';
+import type { SettlementKindDef } from './rules/natives.js';
 
-export function settlementKind(st: Settlement): SettlementKind {
-  return TRIBES[st.tribe].settlement;
+/** The kind of a settlement in its game's scenario (camp, village, city…), with its numbers. */
+export function settlementKind(s: GameState, st: Settlement): SettlementKindDef {
+  return settlementKindOf(s, st);
 }
 
 export function bravesOf(s: GameState): Record<string, Brave> {
@@ -71,8 +67,8 @@ export function bravesOf(s: GameState): Record<string, Brave> {
 }
 
 /** Braves a settlement keeps out at most. */
-export function maxBraves(st: Settlement): number {
-  return BRAVES_PER_SETTLEMENT[settlementKind(st)] + (st.capital ? CAPITAL_EXTRA_BRAVES : 0);
+export function maxBraves(s: GameState, st: Settlement): number {
+  return settlementKind(s, st).braves + (st.capital ? CAPITAL_EXTRA_BRAVES : 0);
 }
 
 /** The braves standing on a tile. */
@@ -110,7 +106,7 @@ export function killBrave(s: GameState, b: Brave, killer?: NationId, atWar = fal
   s.nativeDemands = (s.nativeDemands ?? []).filter((d) => d.braveId !== b.id);
   const home = s.settlements[b.home];
   if (!home) return;
-  home.braveTimer = Math.max(home.braveTimer ?? 0, BRAVE_RESPAWN[settlementKind(home)]);
+  home.braveTimer = Math.max(home.braveTimer ?? 0, settlementKind(s, home).respawn);
   if (!killer || killer === 'crown') return;
   if (atWar) {
     addTension(home, killer, Math.round(BRAVE_KILLED_TENSION / 3));
@@ -127,7 +123,7 @@ export function killBrave(s: GameState, b: Brave, killer?: NationId, atWar = fal
 
 /** Goods a settlement gathers from its land each round. */
 export function settlementProduce(s: GameState, st: Settlement): Partial<Record<GoodId, number>> {
-  const kind = settlementKind(st);
+  const kind = settlementKind(s, st);
   const sums: Partial<Record<GoodId, number>> = {};
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
@@ -137,20 +133,20 @@ export function settlementProduce(s: GameState, st: Settlement): Partial<Record<
       const yields = tile.f && def.forest ? def.forest.yields : def.yields;
       for (const g of nativeProduceOf(s)) {
         const y = yields[g] ?? 0;
-        if (y > 0) sums[g] = (sums[g] ?? 0) + y * (g === 'silver' && kind === 'city' ? CITY_SILVER : 1);
+        if (y > 0) sums[g] = (sums[g] ?? 0) + y * (kind.gather?.[g] ?? 1);
       }
     }
   }
   const out: Partial<Record<GoodId, number>> = {};
   for (const g of nativeProduceOf(s)) {
-    const n = Math.round((sums[g] ?? 0) * PRODUCE_RATE[kind]);
+    const n = Math.round((sums[g] ?? 0) * kind.produceRate);
     if (n > 0) out[g] = n;
   }
   return out;
 }
 
 function gatherGoods(s: GameState, st: Settlement): void {
-  const cap = PRODUCE_CAP[settlementKind(st)];
+  const cap = settlementKind(s, st).produceCap;
   const produce = settlementProduce(s, st);
   for (const g of nativeProduceOf(s)) {
     const n = produce[g];
@@ -166,9 +162,9 @@ export function settlementForSale(s: GameState, st: Settlement): { good: GoodId;
 }
 
 /** Price per unit a settlement asks a nation for one of its goods: dearer when tense, cheaper when it has plenty. */
-export function nativeUnitPrice(st: Settlement, good: GoodId, nation: NationId): number {
+export function nativeUnitPrice(s: GameState, st: Settlement, good: GoodId, nation: NationId): number {
   const stock = st.goods?.[good] ?? 0;
-  const plenty = stock >= PRODUCE_CAP[settlementKind(st)] * 0.75 ? BUY_PRICE_PLENTY : 1;
+  const plenty = stock >= settlementKind(s, st).produceCap * 0.75 ? BUY_PRICE_PLENTY : 1;
   const mood = 1 + tensionOf(st, nation) / 1000;
   return Math.max(1, Math.round(GOOD_DEFS[good].price * BUY_PRICE_FACTOR * mood * plenty * (st.capital ? 1.1 : 1)));
 }
@@ -216,12 +212,12 @@ export function processBraves(s: GameState): void {
       st.braveTimer--;
       continue;
     }
-    if ((counts.get(st.id) ?? 0) >= maxBraves(st) || total >= MAX_BRAVES) continue;
+    if ((counts.get(st.id) ?? 0) >= maxBraves(s, st) || total >= MAX_BRAVES) continue;
     const b: Brave = { id: newId(s, 'b'), tribe: st.tribe, home: st.id, x: st.x, y: st.y };
     braves[b.id] = b;
     total++;
     // The next one follows after half the time a lost brave takes to replace.
-    st.braveTimer = Math.ceil(BRAVE_RESPAWN[settlementKind(st)] / 2);
+    st.braveTimer = Math.ceil(settlementKind(s, st).respawn / 2);
   }
   const index = buildIndex(s);
   for (const id of Object.keys(braves)) {
@@ -479,7 +475,7 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
   }
   const offer = settlementForSale(s, st)
     .filter((r) => r.amount >= 30)
-    .map((r) => ({ ...r, amount: Math.min(100, r.amount), unit: nativeUnitPrice(st, r.good, nation) }))
+    .map((r) => ({ ...r, amount: Math.min(100, r.amount), unit: nativeUnitPrice(s, st, r.good, nation) }))
     .sort((x, y) => GOOD_DEFS[y.good].price * y.amount - GOOD_DEFS[x.good].price * x.amount)[0];
   if (!offer) return;
   const price = offer.unit * offer.amount;

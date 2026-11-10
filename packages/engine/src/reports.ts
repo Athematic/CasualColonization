@@ -371,7 +371,7 @@ export function nativesOverview(s: GameState, nation: NationId): TribeOverview[]
       const t = tensionOf(st, nation);
       return {
         settlement: st,
-        name: settlementName(st),
+        name: settlementName(s, st),
         tension: t,
         mood: tensionLabel(t),
         skill: visited ? st.skill : undefined,

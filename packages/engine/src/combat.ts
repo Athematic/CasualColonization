@@ -2,6 +2,7 @@ import { fail } from './errors.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { hasModifier, modifiers, mulOf } from './scenarios/modifiers.js';
+import { settlementKindOf } from './scenarios/index.js';
 import { canAttack } from './movement.js';
 import { braveDefence, braveName, bravesOf, killBrave } from './braves.js';
 import { addTension, settlementName } from './natives.js';
@@ -439,7 +440,7 @@ function attackSettlement(s: GameState, u: Unit, settlementId: string): CombatRe
   const st = s.settlements[settlementId];
   const pos = unitPosition(s, u)!;
   if (!st || distance(st.x, st.y, pos.x, pos.y) !== 1) fail('The settlement is not next to the unit.');
-  hostile(s, st.tribe, u.owner, st, `an attack on the ${settlementName(st)}`);
+  hostile(s, st.tribe, u.owner, st, `an attack on the ${settlementName(s, st)}`);
   for (const other of Object.values(s.settlements)) if (other.tribe === st.tribe) addTension(other, u.owner, other.id === st.id ? 300 : 150);
   const off = offenceVsSettlement(s, u);
   const def = 1 * (1 + (st.capital ? 100 : 50) / 100);
@@ -459,16 +460,17 @@ function attackSettlement(s: GameState, u: Unit, settlementId: string): CombatRe
 function destroySettlement(s: GameState, u: Unit, settlementId: string): string {
   const st = s.settlements[settlementId];
   const pos = unitPosition(s, u)!;
-  const def = TRIBES[st.tribe];
   delete s.settlements[st.id];
   for (const b of Object.values(bravesOf(s))) if (b.home === st.id) delete bravesOf(s)[b.id];
   track(u.owner, 'combat:settlement burned');
   const plunder = st.gold;
   player(s, u.owner).gold += plunder;
-  let text = `The ${settlementName(st)} has been burned. ${plunder} gold was plundered.`;
+  let text = `The ${settlementName(s, st)} has been burned. ${plunder} gold was plundered.`;
   // Cities and capitals hide real treasure, which has to be carried away.
-  if (def.settlement === 'city' || st.capital) {
-    const base = def.settlement === 'city' ? 1500 + randInt(s, 3500) : 300 + randInt(s, 500);
+  const kind = settlementKindOf(s, st);
+  const hoard = kind.treasure ?? (st.capital ? kind.capitalTreasure : undefined);
+  if (hoard) {
+    const base = hoard.base + randInt(s, hoard.spread);
     const treasure = createUnit(s, u.owner, 'treasure', { kind: 'map', x: pos.x, y: pos.y });
     treasure.treasure = Math.round(base * mulOf(modifiers(s, u.owner, 'conquestTreasure')));
     track(u.owner, 'treasure:found');

@@ -1,9 +1,13 @@
-import { TRIBES, TRIBE_ORDER, type TribeId } from './rules/nations.js';
+import { TRIBES, type TribeId } from './rules/nations.js';
+import type { SettlementKindDef } from './rules/natives.js';
 import { TERRAIN, type TerrainId } from './rules/terrain.js';
 import { FIRST_BRAVE_AFTER } from './rules/natives.js';
 import { random, randInt, pick } from './rng.js';
 import { generateRivers } from './rivers.js';
 import type { GameMap, MapSize, Settlement, Tile } from './types.js';
+import { AMERICAS } from './scenarios/americas.js';
+import { settlementKindIn } from './scenarios/index.js';
+import type { Scenario } from './scenarios/types.js';
 
 export const MAP_SIZES: Record<MapSize, { width: number; height: number }> = {
   small: { width: 36, height: 44 },
@@ -50,8 +54,8 @@ export interface GeneratedWorld {
 /** The map edge whose high seas European expeditions arrive at. */
 export type EntrySide = 'east' | 'west';
 
-/** `peoples` are the scenario's peoples, north to south: each gets a band of the map. */
-export function generateMap(rng: { rng: number }, size: MapSize, peoples: readonly TribeId[] = TRIBE_ORDER): GeneratedWorld {
+/** A generated world for a scenario. Its peoples, north to south, each get a band of the map. */
+export function generateMap(rng: { rng: number }, size: MapSize, scenario: Scenario = AMERICAS): GeneratedWorld {
   const { width, height } = MAP_SIZES[size];
   const land = octaves(rng, width, height, [9, 4, 2]);
   const heat = octaves(rng, width, height, [7, 3]);
@@ -124,7 +128,7 @@ export function generateMap(rng: { rng: number }, size: MapSize, peoples: readon
   // the world (bonuses, rumours, settlements) stays what the seed has always made.
   generateRivers({ rng: (rng.rng ^ 0x2c1b3c6d) | 0 }, map, elev, wet);
   sprinkleExtras(rng, map);
-  const settlements = placeSettlements(rng, tiles, width, height, peoples);
+  const settlements = placeSettlements(rng, tiles, width, height, scenario);
   for (const st of settlements) {
     const tile = tiles[idx(st.x, st.y)];
     delete tile.lcr;
@@ -166,17 +170,16 @@ export function sprinkleExtras(rng: { rng: number }, map: GameMap): void {
   }
 }
 
-/** A native settlement with a random skill, defenders and gold for its tribe. */
-export function newSettlement(rng: { rng: number }, id: string, tribe: TribeId, x: number, y: number, capital: boolean): Settlement {
-  const def = TRIBES[tribe];
-  const size = def.settlement === 'city' ? 3 : def.settlement === 'village' ? 2 : 1;
+/** A native settlement of a kind, with a random skill, defenders and gold for its tribe. */
+export function newSettlement(rng: { rng: number }, id: string, tribe: TribeId, x: number, y: number, capital: boolean, kind: SettlementKindDef): Settlement {
+  const { size } = kind;
   return {
     id,
     tribe,
     x,
     y,
     capital,
-    skill: pick(rng, def.skills),
+    skill: pick(rng, TRIBES[tribe].skills),
     visited: [],
     defenders: size + (capital ? 2 : 0) + randInt(rng, 2),
     gold: (size * 150 + randInt(rng, 200)) * (capital ? 2 : 1),
@@ -185,7 +188,8 @@ export function newSettlement(rng: { rng: number }, id: string, tribe: TribeId, 
   };
 }
 
-function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, height: number, peoples: readonly TribeId[]): Settlement[] {
+function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, height: number, scenario: Scenario): Settlement[] {
+  const peoples = scenario.peoples.ids;
   const candidates: { x: number; y: number }[] = [];
   for (let y = 2; y < height - 2; y++) {
     for (let x = 0; x < width; x++) {
@@ -208,7 +212,7 @@ function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, he
     const tribe = peoples[band];
     const capital = !capitals.has(tribe);
     capitals.add(tribe);
-    placed.push(newSettlement(rng, `s${placed.length + 1}`, tribe, c.x, c.y, capital));
+    placed.push(newSettlement(rng, `s${placed.length + 1}`, tribe, c.x, c.y, capital, settlementKindIn(scenario, tribe)));
   }
   return placed;
 }

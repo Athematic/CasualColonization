@@ -108,6 +108,7 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
     for (const b of sc.buildings) expect(BUILDINGS[b]).toBeDefined();
     for (const g of sc.goods) expect(GOODS).toContain(g);
     for (const t of sc.peoples.ids) expect(TRIBES[t]).toBeDefined();
+    for (const t of sc.peoples.ids) expect(sc.peoples.settlements[TRIBES[t].lifeway], `a settlement kind for the ${TRIBES[t].lifeway} ${t}`).toBeDefined();
     for (const f of sc.council.members) expect(FATHERS[f]).toBeDefined();
     for (const m of sc.map.stored) expect(STORED_MAPS.some((d) => d.id === m)).toBe(true);
     expect(sc.map.default === 'generated' ? sc.map.generated : sc.map.stored.includes(sc.map.default)).toBe(true);

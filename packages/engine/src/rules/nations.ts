@@ -73,24 +73,36 @@ export const NATION_ORDER: NationId[] = ['england', 'france', 'netherlands', 'sp
 
 export type TribeId = 'iroquois' | 'cherokee' | 'sioux' | 'apache' | 'aztec' | 'arawak' | 'tupi' | 'inca';
 
-export interface TribeDef {
+/**
+ * How a people lives on the land. A scenario's settlement-kind table (`Scenario.peoples.settlements`)
+ * says which kind of settlement each lifeway builds, with all its numbers (rules/natives.ts
+ * SETTLEMENT_KINDS); the Americas: nomadic peoples live in camps, agricultural ones in villages,
+ * urban ones in cities.
+ */
+export type Lifeway = 'nomadic' | 'agricultural' | 'urban';
+
+/** A people of the catalogue (docs/design/scenario-framework.md, section 3.6). */
+export interface PeopleDef {
   id: TribeId;
   name: string;
   color: string;
-  settlement: 'camp' | 'village' | 'city';
+  lifeway: Lifeway;
   skills: UnitTypeId[];
   wants: GoodId[];
 }
 
-export const TRIBES: Record<TribeId, TribeDef> = {
-  iroquois: { id: 'iroquois', name: 'Iroquois', color: '#7a4b2a', settlement: 'village', skills: ['expertFarmer', 'expertFurTrapper', 'masterTobaccoPlanter', 'expertFisherman'], wants: ['muskets', 'cloth', 'tools'] },
-  cherokee: { id: 'cherokee', name: 'Cherokee', color: '#2f7d6a', settlement: 'village', skills: ['masterTobaccoPlanter', 'expertFarmer', 'masterCottonPlanter', 'expertFurTrapper'], wants: ['cloth', 'tradeGoods', 'horses'] },
-  sioux: { id: 'sioux', name: 'Sioux', color: '#a8452b', settlement: 'camp', skills: ['expertFurTrapper', 'seasonedScout', 'masterFurTrader'], wants: ['horses', 'muskets', 'tradeGoods'] },
-  apache: { id: 'apache', name: 'Apache', color: '#c0702f', settlement: 'camp', skills: ['expertFurTrapper', 'seasonedScout', 'masterCottonPlanter'], wants: ['horses', 'rum', 'tradeGoods'] },
-  aztec: { id: 'aztec', name: 'Aztec', color: '#3b6e2a', settlement: 'city', skills: ['expertOreMiner', 'expertSilverMiner', 'masterCottonPlanter', 'masterSugarPlanter'], wants: ['cloth', 'cigars', 'tools'] },
-  arawak: { id: 'arawak', name: 'Arawak', color: '#c99a1e', settlement: 'village', skills: ['masterSugarPlanter', 'expertFisherman', 'masterCottonPlanter'], wants: ['tradeGoods', 'cloth', 'rum'] },
-  tupi: { id: 'tupi', name: 'Tupi', color: '#6a8f2a', settlement: 'camp', skills: ['masterSugarPlanter', 'expertFisherman', 'expertLumberjack'], wants: ['tradeGoods', 'tools', 'coats'] },
-  inca: { id: 'inca', name: 'Inca', color: '#8a2f5a', settlement: 'city', skills: ['expertSilverMiner', 'expertOreMiner', 'masterWeaver', 'expertFarmer'], wants: ['cloth', 'coats', 'muskets'] },
+/** The engine's older name for a people; the state keeps `tribe` ids. */
+export type TribeDef = PeopleDef;
+
+export const TRIBES: Record<TribeId, PeopleDef> = {
+  iroquois: { id: 'iroquois', name: 'Iroquois', color: '#7a4b2a', lifeway: 'agricultural', skills: ['expertFarmer', 'expertFurTrapper', 'masterTobaccoPlanter', 'expertFisherman'], wants: ['muskets', 'cloth', 'tools'] },
+  cherokee: { id: 'cherokee', name: 'Cherokee', color: '#2f7d6a', lifeway: 'agricultural', skills: ['masterTobaccoPlanter', 'expertFarmer', 'masterCottonPlanter', 'expertFurTrapper'], wants: ['cloth', 'tradeGoods', 'horses'] },
+  sioux: { id: 'sioux', name: 'Sioux', color: '#a8452b', lifeway: 'nomadic', skills: ['expertFurTrapper', 'seasonedScout', 'masterFurTrader'], wants: ['horses', 'muskets', 'tradeGoods'] },
+  apache: { id: 'apache', name: 'Apache', color: '#c0702f', lifeway: 'nomadic', skills: ['expertFurTrapper', 'seasonedScout', 'masterCottonPlanter'], wants: ['horses', 'rum', 'tradeGoods'] },
+  aztec: { id: 'aztec', name: 'Aztec', color: '#3b6e2a', lifeway: 'urban', skills: ['expertOreMiner', 'expertSilverMiner', 'masterCottonPlanter', 'masterSugarPlanter'], wants: ['cloth', 'cigars', 'tools'] },
+  arawak: { id: 'arawak', name: 'Arawak', color: '#c99a1e', lifeway: 'agricultural', skills: ['masterSugarPlanter', 'expertFisherman', 'masterCottonPlanter'], wants: ['tradeGoods', 'cloth', 'rum'] },
+  tupi: { id: 'tupi', name: 'Tupi', color: '#6a8f2a', lifeway: 'nomadic', skills: ['masterSugarPlanter', 'expertFisherman', 'expertLumberjack'], wants: ['tradeGoods', 'tools', 'coats'] },
+  inca: { id: 'inca', name: 'Inca', color: '#8a2f5a', lifeway: 'urban', skills: ['expertSilverMiner', 'expertOreMiner', 'masterWeaver', 'expertFarmer'], wants: ['cloth', 'coats', 'muskets'] },
 };
 
 /** North to south. */

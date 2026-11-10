@@ -11,7 +11,7 @@ import { FATHER_CATEGORIES, FATHERS, type FatherId } from '../rules/fathers.js';
 import { GOODS } from '../rules/goods.js';
 import type { Modifier } from '../rules/modifiers.js';
 import { NATION_ORDER, NATIONS, TRIBE_ORDER, type NationId } from '../rules/nations.js';
-import { BURIAL_WEIGHT, NATIVE_PRODUCE } from '../rules/natives.js';
+import { BURIAL_WEIGHT, NATIVE_PRODUCE, SETTLEMENT_KINDS } from '../rules/natives.js';
 import { PORT_CHARACTER } from '../rules/ports.js';
 import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import { AMERICAS_CALENDAR } from './calendar.js';
@@ -70,7 +70,11 @@ export const AMERICAS: Scenario = {
     default: 'alternative',
     max: 8,
   },
-  peoples: { ids: [...TRIBE_ORDER], produce: [...NATIVE_PRODUCE] },
+  peoples: {
+    ids: [...TRIBE_ORDER],
+    produce: [...NATIVE_PRODUCE],
+    settlements: { nomadic: SETTLEMENT_KINDS.camp, agricultural: SETTLEMENT_KINDS.village, urban: SETTLEMENT_KINDS.city },
+  },
   goods: [...GOODS],
   units: Object.keys(UNIT_TYPES) as UnitTypeId[],
   buildings: [...BUILDING_ORDER],

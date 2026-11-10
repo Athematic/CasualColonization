@@ -26,6 +26,9 @@ import { randInt } from '../rng.js';
 import { parseRivers } from '../rivers.js';
 import { entryPoints, newSettlement, sprinkleExtras, type EntrySide, type GeneratedWorld } from '../mapgen.js';
 import type { GameMap, Settlement, Tile } from '../types.js';
+import { AMERICAS } from '../scenarios/americas.js';
+import { settlementKindIn } from '../scenarios/index.js';
+import type { Scenario } from '../scenarios/types.js';
 import { americas } from './americas.js';
 import { australia } from './australia.js';
 import { northAmerica } from './north-america.js';
@@ -92,14 +95,14 @@ export function parseStoredMap(def: StoredMap): GameMap {
 }
 
 /** Builds the world for a stored map. The rng only places settlements, bonuses and rumours. */
-export function storedWorld(rng: { rng: number }, id: string): GeneratedWorld {
+export function storedWorld(rng: { rng: number }, id: string, scenario: Scenario = AMERICAS): GeneratedWorld {
   const def = storedMap(id);
   const map = parseStoredMap(def);
   sprinkleExtras(rng, map);
   const entryRows = def.entryRows ?? [0, map.height - 1];
   // Keep clear of every arrival point any number of nations could use.
   const arrivals = Array.from({ length: 8 }, (_, i) => entryPoints(map, i + 1, entryRows, def.entrySide)).flat();
-  const settlements = placeRegionSettlements(rng, map, def.tribes, arrivals);
+  const settlements = placeRegionSettlements(rng, map, def.tribes, arrivals, scenario);
   for (const st of settlements) delete map.tiles[st.y * map.width + st.x].lcr;
   return def.entrySide ? { map, settlements, entryRows, entrySide: def.entrySide } : { map, settlements, entryRows };
 }
@@ -111,7 +114,7 @@ const distance = (ax: number, ay: number, bx: number, by: number) => Math.max(Ma
  * tribe gets a second settlement. Settlements stay at least 4 tiles apart and away from
  * the European arrival points.
  */
-function placeRegionSettlements(rng: { rng: number }, map: GameMap, regions: TribeRegion[], avoid: { x: number; y: number }[]): Settlement[] {
+function placeRegionSettlements(rng: { rng: number }, map: GameMap, regions: TribeRegion[], avoid: { x: number; y: number }[], scenario: Scenario): Settlement[] {
   const { width, height, tiles } = map;
   const lists = regions.map(({ region: [x0, y0, x1, y1] }) => {
     const list: { x: number; y: number }[] = [];
@@ -141,7 +144,7 @@ function placeRegionSettlements(rng: { rng: number }, map: GameMap, regions: Tri
         if (avoid.some((a) => distance(a.x, a.y, c.x, c.y) < 2)) continue;
         const capital = !capitals.has(r.tribe);
         capitals.add(r.tribe);
-        placed.push(newSettlement(rng, `s${placed.length + 1}`, r.tribe, c.x, c.y, capital));
+        placed.push(newSettlement(rng, `s${placed.length + 1}`, r.tribe, c.x, c.y, capital, settlementKindIn(scenario, r.tribe)));
         counts[i]++;
         progress = true;
         break;

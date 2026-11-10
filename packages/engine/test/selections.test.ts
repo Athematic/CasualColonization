@@ -41,7 +41,7 @@ const NO_CIGARS: Scenario = {
   goods: without(AMERICAS.goods, 'cigars'),
   units: without(AMERICAS.units, 'masterTobacconist'),
   buildings: without(AMERICAS.buildings, 'tobacconist'),
-  peoples: { ids: without(AMERICAS.peoples.ids, 'aztec'), produce: AMERICAS.peoples.produce },
+  peoples: { ...AMERICAS.peoples, ids: without(AMERICAS.peoples.ids, 'aztec') },
   ai: {
     goods: {
       trade: without(AMERICAS.ai.goods.trade, 'cigars'),

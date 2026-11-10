@@ -14,7 +14,8 @@ import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
 import type { Modifier, RumourOutcome } from '../rules/modifiers.js';
 import type { Effect } from '../events/types.js';
-import type { NationId, TribeId } from '../rules/nations.js';
+import type { Lifeway, NationId, TribeId } from '../rules/nations.js';
+import type { SettlementKindDef } from '../rules/natives.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { ScoreWeights } from '../rules/score.js';
 import type { UnitTypeId } from '../rules/units.js';
@@ -175,6 +176,12 @@ export interface ScenarioPeoples {
   ids: TribeId[];
   /** Goods native settlements produce for trade. */
   produce: GoodId[];
+  /**
+   * The settlement-kind table: the kind of settlement each lifeway lives in, with its numbers
+   * (rules/natives.ts SETTLEMENT_KINDS, or a scenario's own row). Every people in play needs its
+   * lifeway here.
+   */
+  settlements: Partial<Record<Lifeway, SettlementKindDef>>;
 }
 
 /** The scenario's council (the Americas: the Continental Congress's Founding Fathers). */
