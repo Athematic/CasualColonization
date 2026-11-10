@@ -108,12 +108,13 @@ Closes the smaller items left from earlier releases while the classic game is co
 
 ## 0.9: Scenario framework
 
-Done before Beta, so the cooperation rules are scenario data from the start. See [design/scenarios.md](design/scenarios.md).
+Done before Beta, so the cooperation rules are scenario data from the start. See [design/scenarios.md](design/scenarios.md), and the detailed design for this release, [design/scenario-framework.md](design/scenario-framework.md) (status: design, to be agreed): an inventory of everything hard-wired to the Americas, the `Scenario` definition, games kept bit-identical, a proof scenario and a phased plan.
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | idea, agreed |
-| Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | idea, agreed |
+| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | design ([scenario-framework.md](design/scenario-framework.md); proposed size XL) |
+| Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | design (same note) |
+| Proof scenario that exercises the framework with little new art (proposed: The Caribbean, 1650–1750: the lesser powers) | M | P1 | design (same note, section 7) |
 
 ## Beta 1–2: Cooperation
 
