@@ -288,7 +288,7 @@ export function saleGain(s: GameState, p: Player, f: Colony, g: GoodId): number 
 
 /** Gold per unit gained buying a good at a partner's colony and selling it at home. */
 export function buyGain(s: GameState, p: Player, f: Colony, g: GoodId): number {
-  return homeNet(p, g) - buyPrice(player(s, f.owner), g);
+  return homeNet(p, g) - buyPrice(s, player(s, f.owner), g);
 }
 
 /**

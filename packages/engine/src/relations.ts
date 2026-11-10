@@ -561,7 +561,7 @@ export function tradeAtForeignColony(
   }
   for (const r of load) {
     const keep = Math.max(FOREIGN_KEEP, r.amount ?? 0);
-    const price = buyPrice(owner, r.good);
+    const price = buyPrice(s, owner, r.good);
     const n = Math.min(colony.goods[r.good] - keep, cargoRoomFor(s, u, r.good), Math.floor(Math.max(0, me.gold) / price));
     if (n <= 0) continue;
     const gold = n * price;

@@ -13,12 +13,11 @@ import { noteHistory } from './history.js';
 import { royalForce } from './independence.js';
 import { message, player } from './queries.js';
 import { hasTradeAgreement, isFavoured, pairRandom } from './relations.js';
-import { difficultyRules } from './rules/difficulty.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, Player } from './types.js';
-import { goodsOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf } from './scenarios/index.js';
 
 // ---------------------------------------------------------------------------
 // The Royal Expeditionary Force
@@ -56,7 +55,7 @@ export function describeForce(f: Force): string {
 export function initCrown(s: GameState, p: Player): void {
   const colonies = Object.values(s.colonies).filter((c) => c.owner === p.id).length;
   // A save from before the REF grew catches up with the old formula for its colonies.
-  p.ref = royalForce(p, colonies);
+  p.ref = royalForce(s, p, colonies);
   p.royal = { bells: p.bells, points: 0, added: 0 };
 }
 
@@ -86,7 +85,7 @@ function growForce(s: GameState, p: Player, colonies: number): void {
   const crown = p.royal!;
   const bells = Math.max(0, p.bells - crown.bells);
   crown.bells = p.bells;
-  crown.points += difficultyRules(p).refGrowth * (REF_GROWTH.perColony * colonies + REF_GROWTH.perBell * bells);
+  crown.points += difficultyOf(s, p).refGrowth * (REF_GROWTH.perColony * colonies + REF_GROWTH.perBell * bells);
   if (crown.points < REF_GROWTH.batch) return;
   const n = Math.floor(crown.points);
   crown.points -= n;
@@ -131,7 +130,7 @@ export function seizureColony(s: GameState, nation: NationId): { colony: Colony;
 }
 
 function maybeDemand(s: GameState, p: Player, colonies: number): void {
-  const rules = difficultyRules(p);
+  const rules = difficultyOf(s, p);
   if (s.turn < DEMAND.from || !colonies || p.pendingDemand || p.gold < DEMAND.minGold) return;
   if (pairRandom(s, p.id, 'crown', `demand ${s.turn}`) >= DEMAND.chance * rules.demandChance) return;
   const r = pairRandom(s, p.id, 'crown', `demand size ${s.turn}`);
@@ -235,7 +234,7 @@ function maybeRoyalWar(s: GameState, p: Player, colonies: number): void {
   if (s.turn < ROYAL_WAR.from || !colonies) return;
   if (Object.entries(p.stance).some(([o, st]) => st === 'war' && o !== 'crown')) return;
   if (s.turn - (p.royal?.lastWar ?? -Infinity) < ROYAL_WAR.cooldown) return;
-  if (pairRandom(s, p.id, 'crown', `war ${s.turn}`) >= ROYAL_WAR.chance * difficultyRules(p).royalWarChance) return;
+  if (pairRandom(s, p.id, 'crown', `war ${s.turn}`) >= ROYAL_WAR.chance * difficultyOf(s, p).royalWarChance) return;
   const targets = royalWarTargets(s, p.id);
   const total = targets.reduce((n, t) => n + t.weight, 0);
   if (!total) return;

@@ -3,7 +3,7 @@ import { initialMarket, randomImmigrant } from './europe.js';
 import { placeOnMap } from './movement.js';
 import { createUnit, message, reveal } from './queries.js';
 import { NATIONS, type NationId } from './rules/nations.js';
-import { DEFAULT_DIFFICULTY, DIFFICULTY, resolveDifficulty } from './rules/difficulty.js';
+import { DEFAULT_DIFFICULTY, resolveDifficulty } from './rules/difficulty.js';
 import { beginPlayerTurn, runAiUntilHuman } from './turn.js';
 import type { GameConfig, GameState, Player } from './types.js';
 import { offerFathers } from './fathers.js';
@@ -11,7 +11,7 @@ import { createWorld } from './world.js';
 import { initRelations } from './relations.js';
 import { initCrown } from './crown.js';
 import { entryPoints } from './mapgen.js';
-import { checkSavedScenario, checkScenarioConfig, goodsOf, peoplesOf } from './scenarios/index.js';
+import { checkSavedScenario, checkScenarioConfig, difficultyOf, goodsOf, peoplesOf } from './scenarios/index.js';
 import { modifiers } from './scenarios/modifiers.js';
 
 /** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
@@ -59,7 +59,7 @@ export function createGame(config: GameConfig): GameState {
     // them during a head start; other computer players stay at Conquistador (see rules/difficulty.ts).
     if (p.human || config.headStart?.humans.includes(nation) || config.difficultyForAll) {
       p.difficulty = s.difficulty;
-      const rules = DIFFICULTY[s.difficulty!];
+      const rules = difficultyOf(s, { difficulty: s.difficulty });
       p.gold = rules.startingGold;
       p.crossesRequired = Math.round(p.crossesRequired * rules.crosses);
     }

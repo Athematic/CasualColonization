@@ -272,19 +272,19 @@ export function standing(s: GameState, seed: number, nation: NationId, level: Ai
     fathers: p.fathers.length,
     independence: p.independence,
     spoiled: p.goodsSpoiled ?? 0,
-    ...royalStanding(p, colonies.length),
+    ...royalStanding(s, p, colonies.length),
     ...(p.refAtDeclaration ? { warTurns: s.turn - p.refAtDeclaration.turn } : {}),
     ...(isCheated(s) ? { cheated: true } : {}),
   };
 }
 
 /** The Royal Expeditionary Force a nation faced: at its declaration, or at the end. */
-function royalStanding(p: Player, colonies: number): Pick<ArenaEntry, 'ref' | 'refFormula' | 'declared'> {
+function royalStanding(s: GameState, p: Player, colonies: number): Pick<ArenaEntry, 'ref' | 'refFormula' | 'declared'> {
   if (p.refAtDeclaration) {
     const f = p.refAtDeclaration.force;
     return { ref: f.regulars + f.dragoons + f.artillery, refFormula: p.refAtDeclaration.formula, declared: p.refAtDeclaration.turn };
   }
-  const old = royalForce(p, colonies);
+  const old = royalForce(s, p, colonies);
   return { ref: p.ref.regulars + p.ref.dragoons + p.ref.artillery, refFormula: old.regulars + old.dragoons + old.artillery };
 }
 

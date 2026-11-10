@@ -91,7 +91,7 @@ export class Sidebar {
       h('div', { class: 'stats' },
         h('div', null, h('strong', null, formatDate(s.turn, calendarOf(s))), ' · ', nationTitle(app.viewer)),
         h('div', null, `Gold ${me.gold.toLocaleString()} · Tax ${me.tax}%`),
-        h('div', { class: 'muted' }, `Crosses ${me.crosses}/${me.crossesRequired} · Recruit ${recruitPrice(me)}`),
+        h('div', { class: 'muted' }, `Crosses ${me.crosses}/${me.crossesRequired} · Recruit ${recruitPrice(s, me)}`),
         h('div', { class: 'muted' },
           h('button', { class: 'link', onclick: () => void app.chooseFather() },
             me.currentFather ? `Congress: ${FATHERS[me.currentFather].name} ${me.fatherBells}/${nextFatherCost(s, me)}` : `Congress: choose a Founding Father (${me.fatherBells} bells)`),

@@ -23,7 +23,7 @@ import {
 } from './queries.js';
 import { alliesGoHome, isToryColony, offerMercenaries, processRebellion, startRebellion, TORY_LANDING } from './rebellion.js';
 import { lapseFavoured } from './relations.js';
-import { difficultyRules } from './rules/difficulty.js';
+import { difficultyOf } from './scenarios/index.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { finalScores } from './score.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
@@ -77,7 +77,7 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   delete p.pendingDemand;
   // The force the Crown has built up over the game sails (crown.ts); a nation the Crown never
   // reviewed (a test position) gets the old formula's force for its colonies.
-  const formula = royalForce(p, colonies.length);
+  const formula = royalForce(s, p, colonies.length);
   if (!p.royal) p.ref = formula;
   p.refAtDeclaration = { turn: s.turn, force: { ...p.ref }, formula: formula.regulars + formula.dragoons + formula.artillery };
   track(nation, 'independence:royal land units', p.ref.regulars + p.ref.dragoons + p.ref.artillery);
@@ -121,8 +121,8 @@ export function declareIndependence(s: GameState, nation: NationId): string {
  * during the game instead (crown.ts); this sets the force at the start (n = 0), catches up
  * saves from before 0.5, and is the yardstick the growth is tuned against.
  */
-export function royalForce(p: Player, n: number): Player['ref'] {
-  const { refBase: base, refGrowth: per } = difficultyRules(p);
+export function royalForce(s: GameState, p: Player, n: number): Player['ref'] {
+  const { refBase: base, refGrowth: per } = difficultyOf(s, p);
   const size = (fixed: number, perColony: number) => Math.max(1, Math.round(fixed * base + perColony * per));
   return { regulars: size(4, 2 * n), dragoons: size(2, n), artillery: size(1, Math.floor(n / 2)), menOfWar: size(2, 0) };
 }

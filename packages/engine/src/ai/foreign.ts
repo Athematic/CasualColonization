@@ -330,7 +330,7 @@ function maybePayArrears(s: GameState, p: Player, prof: AiProfile): void {
   if (p.independence !== 'none') return;
   for (const g of Object.keys(p.boycotts) as GoodId[]) {
     if (!p.boycotts[g]) continue;
-    const cost = arrears(p, g);
+    const cost = arrears(s, p, g);
     if (p.gold < prof.reserve + cost + 1000 || partnerOutlet(s, p, g, p.tax)) continue;
     const stock = ownColonies(s, p).reduce((n, c) => n + c.goods[g], 0);
     const worth = stock * ((sellPrice(p, g) * (100 - p.tax)) / 100);
@@ -345,7 +345,7 @@ function maybePayArrears(s: GameState, p: Player, prof: AiProfile): void {
 function colonistsForTrip(s: GameState, p: Player): number {
   let n = 0;
   for (const u of Object.values(s.units)) if (u.owner === p.id && u.loc.kind === 'europe' && !isShip(u)) n++;
-  const price = recruitPrice(p);
+  const price = recruitPrice(s, p);
   return n + Math.min(4, Math.floor(Math.max(0, p.gold - 300) / price));
 }
 
@@ -412,7 +412,7 @@ export function triangleBuy(s: GameState, p: Player, ship: Unit, prof: AiProfile
   let best: { good: GoodId; port: NationId; gain: number; net: number; price: number } | null = null;
   for (const g of exportGoods(s)) {
     if (here === p.id && p.boycotts[g]) continue;
-    const price = buyPrice(market, g);
+    const price = buyPrice(s, market, g);
     for (const port of ports) {
       if (port === here) continue;
       const net = portNet(s, p, port, g);

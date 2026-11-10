@@ -121,7 +121,7 @@ describe('trade routes', () => {
     ship.loc = { kind: 'europe' };
     const sugarPrice = p.market.sugar.price;
     const tobaccoPrice = p.market.tobacco.price;
-    const toolsPrice = buyPrice(p, 'tools');
+    const toolsPrice = buyPrice(s, p, 'tools');
     const gold = p.gold;
     runRoute(s, ship);
     expect(ship.cargo).toEqual({ tools: 50 });

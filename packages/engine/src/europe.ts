@@ -17,12 +17,11 @@ import { random, randInt, weightedPick } from './rng.js';
 import { noteTrade } from './stats.js';
 import { favouredPartners, isFavoured } from './relations.js';
 import { HOME_PORTS, NATIONS, type NationId } from './rules/nations.js';
-import { difficultyRules } from './rules/difficulty.js';
 import { portBasePrice, portCharacter, portDepth, portPriceBand } from './rules/ports.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import { PIONEER_MAX_TOOLS, PURCHASABLE, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
 import type { GameState, MarketEntry, Player, Unit } from './types.js';
-import { goodsOf, unitsOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, unitsOf } from './scenarios/index.js';
 
 export const SAIL_TURNS = 3;
 
@@ -31,8 +30,8 @@ export function sailTurns(s: GameState, nation: Player['id']): number {
 }
 
 /** Gold needed to lift a boycott. */
-export function arrears(p: Player, good: GoodId): number {
-  return Math.max(500, 100 * buyPrice(p, good) * 3);
+export function arrears(s: GameState, p: Player, good: GoodId): number {
+  return Math.max(500, 100 * buyPrice(s, p, good) * 3);
 }
 
 function requireTrade(p: Player, good: GoodId): void {
@@ -49,26 +48,26 @@ export function sellPrice(p: Player, good: GoodId): number {
   return p.market[good].price;
 }
 
-export function buyPrice(p: Player, good: GoodId): number {
-  return p.market[good].price + priceSpread(p, good);
+export function buyPrice(s: GameState, p: Player, good: GoodId): number {
+  return p.market[good].price + priceSpread(s, p, good);
 }
 
 /** Gap between buy and sell price, widened or narrowed by the nation's difficulty (at least 1). */
-export function priceSpread(p: Player, good: GoodId): number {
+export function priceSpread(s: GameState, p: Player, good: GoodId): number {
   const spread = GOOD_DEFS[good].spread;
-  const m = difficultyRules(p).priceSpread;
+  const m = difficultyOf(s, p).priceSpread;
   return m === 1 ? spread : Math.max(1, Math.round(spread * m));
 }
 
 /** Units of a good traded in a port's market before its price moves one step. */
-export function marketElasticity(p: Player, good: GoodId): number {
-  return Math.max(1, Math.round(GOOD_DEFS[good].elasticity * portDepth(p.id, good) * difficultyRules(p).priceElasticity));
+export function marketElasticity(s: GameState, p: Player, good: GoodId): number {
+  return Math.max(1, Math.round(GOOD_DEFS[good].elasticity * portDepth(p.id, good) * difficultyOf(s, p).priceElasticity));
 }
 
-function adjustMarket(p: Player, good: GoodId, sold: number): void {
+function adjustMarket(s: GameState, p: Player, good: GoodId, sold: number): void {
   const band = portPriceBand(p.id, good);
   const m = p.market[good];
-  const elasticity = marketElasticity(p, good);
+  const elasticity = marketElasticity(s, p, good);
   m.volume += sold;
   while (m.volume >= elasticity) {
     m.volume -= elasticity;
@@ -81,9 +80,9 @@ function adjustMarket(p: Player, good: GoodId, sold: number): void {
   }
 }
 
-export function recruitPrice(p: Player): number {
+export function recruitPrice(s: GameState, p: Player): number {
   const progress = Math.min(1, p.crosses / p.crossesRequired);
-  const cost = difficultyRules(p).recruitCost;
+  const cost = difficultyOf(s, p).recruitCost;
   return Math.max(Math.round(80 * cost), Math.round((300 + 40 * p.recruited) * (1 - progress * 0.6) * cost));
 }
 
@@ -91,11 +90,11 @@ export function recruitPrice(p: Player): number {
  * Price of training an expert, or buying a ship or artillery, in Europe. `p` is the nation whose
  * port it is bought in (its difficulty and, for ships, its port's ship prices).
  */
-export function trainPrice(p: Player, type: UnitTypeId): number {
+export function trainPrice(s: GameState, p: Player, type: UnitTypeId): number {
   const price = UNIT_TYPES[type].price;
   if (price === undefined) return Infinity;
   const ships = UNIT_TYPES[type].kind === 'ship' ? portCharacter(p.id).ships ?? 1 : 1;
-  return Math.round(price * difficultyRules(p).trainCost * ships);
+  return Math.round(price * difficultyOf(s, p).trainCost * ships);
 }
 
 export function randomImmigrant(s: GameState, nation?: Player['id']): UnitTypeId {
@@ -153,13 +152,13 @@ export function sellToMarket(s: GameState, p: Player, good: GoodId, amount: numb
   p.gold += net;
   noteTrade(s, p.id, net);
   noteGoods(s, p.id, 'europe', good, amount);
-  adjustMarket(market, good, amount);
+  adjustMarket(s, market, good, amount);
   if (market === p) maybeRaiseTax(s, p, gross, good);
   return net;
 }
 
 function maybeRaiseTax(s: GameState, p: Player, gross: number, good: GoodId): void {
-  const rules = difficultyRules(p);
+  const rules = difficultyOf(s, p);
   if (p.tax >= rules.taxCeiling || gross < 100 || p.pendingTax) return;
   const chance = Math.min(0.12, 0.015 + s.turn / 3000) * rules.taxChance;
   if (random(s) >= chance) return;
@@ -207,7 +206,7 @@ export function answerTax(s: GameState, nation: Player['id'], accept: boolean): 
 export function payArrears(s: GameState, nation: Player['id'], good: GoodId): void {
   const p = player(s, nation);
   if (!p.boycotts[good]) fail('That good is not boycotted.');
-  const cost = arrears(p, good);
+  const cost = arrears(s, p, good);
   if (p.gold < cost) fail(`The arrears are ${cost} gold.`);
   p.gold -= cost;
   delete p.boycotts[good];
@@ -271,12 +270,12 @@ export function buyGoods(s: GameState, carrierId: string, good: GoodId, amount: 
   amount = Math.min(amount, cargoRoomFor(s, ship, good));
   if (amount <= 0) fail('The ship has no room.');
   const { p, market } = shipMarket(s, ship, good);
-  const cost = amount * buyPrice(market, good);
+  const cost = amount * buyPrice(s, market, good);
   if (cost > p.gold) fail(`You need ${cost} gold.`);
   p.gold -= cost;
   ship.cargo = ship.cargo ?? {};
   ship.cargo[good] = (ship.cargo[good] ?? 0) + amount;
-  adjustMarket(market, good, -amount);
+  adjustMarket(s, market, good, -amount);
   track(p.id, 'cmd:buyGoods');
   track(p.id, `europe:bought ${GOOD_DEFS[good].name.toLowerCase()}`);
   if (market !== p) track(p.id, 'europe:partner port purchases', amount);
@@ -286,7 +285,7 @@ export function recruit(s: GameState, nation: Player['id'], slot: number): Unit 
   const p = player(s, nation);
   if (p.independence !== 'none') fail('Europe sends no colonists to rebels.');
   if (slot < 0 || slot >= p.recruitPool.length) fail('No such recruit.');
-  const price = recruitPrice(p);
+  const price = recruitPrice(s, p);
   if (p.gold < price) fail(`Recruiting costs ${price} gold.`);
   p.gold -= price;
   p.recruited++;
@@ -315,7 +314,7 @@ export function train(s: GameState, nation: Player['id'], type: UnitTypeId, port
     if (problem) fail(problem);
     if (!buyableInPartnerPort(type) || !unitsOf(s).units.has(type)) fail(`Only merchant ships can be bought in ${portName(port)}. Warships, artillery and colonists come from your own port.`);
     if (!Object.values(s.units).some((u) => u.owner === nation && u.loc.kind === 'europe' && u.loc.port === port)) fail(`You need a ship in ${portName(port)} to buy there.`);
-    const price = trainPrice(player(s, port), type);
+    const price = trainPrice(s, player(s, port), type);
     if (p.gold < price) fail(`${def.name} costs ${price} gold in ${portName(port)}.`);
     p.gold -= price;
     track(nation, 'cmd:train');
@@ -325,7 +324,7 @@ export function train(s: GameState, nation: Player['id'], type: UnitTypeId, port
   }
   const offer = unitsOf(s);
   if (!offer.trainable.includes(type) && !offer.purchasable.includes(type)) fail(`${def.name} cannot be bought in Europe.`);
-  const price = trainPrice(p, type);
+  const price = trainPrice(s, p, type);
   if (p.gold < price) fail(`${def.name} costs ${price} gold.`);
   p.gold -= price;
   track(nation, 'cmd:train');
@@ -338,7 +337,7 @@ export function processImmigration(s: GameState, p: Player): void {
   // The Crown (holding colonies it retook) has no docks to send immigrants to.
   if (p.crosses < p.crossesRequired || p.independence !== 'none' || p.id === 'crown' || !p.recruitPool.length) return;
   p.crosses -= p.crossesRequired;
-  p.crossesRequired += Math.round(setOr(modifiers(s, p.id, 'crossesStep'), 20) * difficultyRules(p).crosses);
+  p.crossesRequired += Math.round(setOr(modifiers(s, p.id, 'crossesStep'), 20) * difficultyOf(s, p).crosses);
   // Brewster lets the colony pick the best candidate; otherwise chance decides.
   const slot = hasModifier(s, p.id, 'chooseImmigrant')
     ? p.recruitPool.reduce((best, t, i) => (UNIT_TYPES[t].skill > UNIT_TYPES[p.recruitPool[best]].skill ? i : best), 0)
@@ -360,13 +359,13 @@ export function equipInEurope(s: GameState, unitId: string, role: RoleId): void 
   const want = role === 'pioneer' ? { tools: PIONEER_MAX_TOOLS } : ROLES[role].goods;
   for (const g of Object.keys(want) as GoodId[]) requireTrade(p, g);
   let cost = 0;
-  for (const [g, n] of Object.entries(want) as [GoodId, number][]) cost += n * buyPrice(p, g);
+  for (const [g, n] of Object.entries(want) as [GoodId, number][]) cost += n * buyPrice(s, p, g);
   let refund = 0;
   for (const [g, n] of Object.entries(current) as [GoodId, number][]) refund += n * sellPrice(p, g);
   if (p.gold + refund < cost) fail(`Equipping costs ${cost} gold.`);
   for (const [g, n] of Object.entries(current) as [GoodId, number][]) if (n) sellToMarket(s, p, g, n);
   p.gold -= cost;
-  for (const [g, n] of Object.entries(want) as [GoodId, number][]) adjustMarket(p, g, -n);
+  for (const [g, n] of Object.entries(want) as [GoodId, number][]) adjustMarket(s, p, g, -n);
   u.role = role;
   u.tools = role === 'pioneer' ? PIONEER_MAX_TOOLS : 0;
   track(u.owner, 'cmd:equip');
@@ -463,7 +462,7 @@ export function unboardInEurope(s: GameState, unitId: string): void {
 /** The chance each round that a good's price in the nation's home port drifts back a step. */
 export function priceRecoveryChance(s: GameState, p: Player): number {
   const mods = modifiers(s, p.id, 'priceRecovery');
-  return setOr(mods, 0.1) * mulOf(mods) * difficultyRules(p).priceRecovery * (portCharacter(p.id).recovery ?? 1);
+  return setOr(mods, 0.1) * mulOf(mods) * difficultyOf(s, p).priceRecovery * (portCharacter(p.id).recovery ?? 1);
 }
 
 /** Drifts prices back toward their starting value in each home port (its own, rules/ports.ts). */

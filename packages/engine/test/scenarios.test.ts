@@ -20,8 +20,8 @@ import {
   nationSet,
   PORT_CHARACTER,
   registerScenario,
+  difficultyTable,
   SaveVersionError,
-  SCORE_WEIGHTS,
   scenarioOf,
   serialize,
   STORED_MAPS,
@@ -88,8 +88,9 @@ describe('the Americas scenario is today’s tables', () => {
     expect(AMERICAS.map.stored).toEqual(STORED_MAPS.map((m) => m.id));
     expect(AMERICAS.map.generated).toBe(true);
     expect(AMERICAS.map.default).toBe('generated');
-    expect(AMERICAS.difficulty).toEqual(DIFFICULTY);
-    expect(AMERICAS.score).toEqual(SCORE_WEIGHTS);
+    // No overrides: the engine's own tables (test/overrides.test.ts).
+    expect(difficultyTable(AMERICAS)).toBe(DIFFICULTY);
+    expect(AMERICAS.score).toBeUndefined();
     expect(AMERICAS.version).toBe(1);
   });
 });

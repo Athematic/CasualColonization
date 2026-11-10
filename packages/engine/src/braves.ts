@@ -32,7 +32,6 @@ import { random, randInt } from './rng.js';
 import { noteTrade } from './stats.js';
 import { track } from './telemetry.js';
 import { BUILDINGS, type BuildingKind } from './rules/buildings.js';
-import { difficultyRules } from './rules/difficulty.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { TRIBES, type NationId } from './rules/nations.js';
@@ -61,7 +60,7 @@ import {
 } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from './types.js';
-import { goodsOf, nativeProduceOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, nativeProduceOf } from './scenarios/index.js';
 
 export function settlementKind(st: Settlement): SettlementKind {
   return TRIBES[st.tribe].settlement;
@@ -349,7 +348,7 @@ function chooseTask(s: GameState, b: Brave, st: Settlement, index: PhaseIndex): 
     const nation = c.owner;
     const t = tensionOf(st, nation);
     const submitted = hasSubmitted(s, st.tribe, nation);
-    const raid = difficultyRules(player(s, nation)).raidChance;
+    const raid = difficultyOf(s, player(s, nation)).raidChance;
     if (!submitted && tribe.stance[nation] === 'war') {
       if (roll < BRAVE_CHANCES.attackAtWar * raid) b.task = { kind: 'attack', colonyId: c.id };
     } else if (!submitted && t >= TENSION.angry) {

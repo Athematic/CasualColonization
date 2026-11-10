@@ -330,7 +330,7 @@ function serveEurope(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop):
   for (const r of stop.load) {
     if (home && p.boycotts[r.good]) continue;
     const want = (r.amount ?? DEFAULT_EUROPE_LOAD) - (u.cargo?.[r.good] ?? 0);
-    const price = buyPrice(market, r.good);
+    const price = buyPrice(s, market, r.good);
     const n = Math.min(want, cargoRoomFor(s, u, r.good), Math.floor(p.gold / price));
     if (n <= 0) continue;
     const before = p.gold;

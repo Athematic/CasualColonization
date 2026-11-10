@@ -86,10 +86,10 @@ export function warshipWanted(s: GameState, p: Player, prof: AiProfile, r: Fleet
  */
 export function shipPort(s: GameState, p: Player, type: UnitTypeId): NationId | undefined {
   if (!buyableInPartnerPort(type)) return undefined;
-  let best: { port?: NationId; price: number } = { price: trainPrice(p, type) };
+  let best: { port?: NationId; price: number } = { price: trainPrice(s, p, type) };
   for (const port of portsFor(s, p.id).slice(1)) {
     if (!Object.values(s.units).some((u) => u.owner === p.id && u.loc.kind === 'europe' && u.loc.port === port)) continue;
-    const price = trainPrice(player(s, port), type);
+    const price = trainPrice(s, player(s, port), type);
     if (price < best.price) best = { port, price };
   }
   return best.port;
@@ -98,7 +98,7 @@ export function shipPort(s: GameState, p: Player, type: UnitTypeId): NationId | 
 /** Buys ships in Europe as the economy grows. Call with a ship in port in Europe. */
 export function buyShips(s: GameState, p: Player, prof: AiProfile): void {
   const r = fleetReport(s, p);
-  const price = (type: UnitTypeId) => trainPrice(p, type);
+  const price = (type: UnitTypeId) => trainPrice(s, p, type);
   const cargo = cargoShipWanted(r, p.gold - prof.reserve, price);
   if (cargo) safely(() => train(s, p.id, cargo, shipPort(s, p, cargo)));
   const war = warshipWanted(s, p, prof, fleetReport(s, p), p.gold - prof.reserve, price);
@@ -111,7 +111,7 @@ export function shipToBuild(s: GameState, p: Player, c: Colony, prof: AiProfile)
   // One ship on the slips across the nation at a time.
   if (ownColonies(s, p).some((o) => o.id !== c.id && o.build?.kind === 'unit' && UNIT_TYPES[o.build.id].kind === 'ship')) return null;
   const r = fleetReport(s, p);
-  const price = (type: UnitTypeId) => trainPrice(p, type);
+  const price = (type: UnitTypeId) => trainPrice(s, p, type);
   const war = warshipWanted(s, p, prof, r, Infinity, price);
   if (war) return { kind: 'unit', id: war };
   const cargo = cargoShipWanted(r, Infinity, price);

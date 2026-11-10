@@ -10,7 +10,6 @@ import { random, randInt } from './rng.js';
 import { noteTrade } from './stats.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { NATIONS, TRIBES, type NationId, type TribeId } from './rules/nations.js';
-import { difficultyRules } from './rules/difficulty.js';
 import {
   DENOUNCE_CHANCE,
   DENOUNCE_EXPERT,
@@ -23,7 +22,7 @@ import {
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
-import { goodsOf, nativeProduceOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, nativeProduceOf } from './scenarios/index.js';
 
 /**
  * The settlement next to a unit, checked for a visit. A wagon train or ship trading there may
@@ -231,7 +230,7 @@ export function takeLand(s: GameState, nation: NationId, x: number, y: number): 
   const st = nativeLandOwner(s, x, y);
   if (!st) fail('Nobody claims that land.');
   tileAt(s, x, y)!.claim = nation;
-  const anger = difficultyRules(player(s, nation)).nativeTension;
+  const anger = difficultyOf(s, player(s, nation)).nativeTension;
   addTension(st, nation, Math.round(250 * anger));
   track(nation, 'cmd:takeLand');
   for (const other of Object.values(s.settlements)) if (other.tribe === st.tribe && other.id !== st.id) addTension(other, nation, Math.round(60 * anger));
@@ -242,7 +241,7 @@ export function takeLand(s: GameState, nation: NationId, x: number, y: number): 
 
 /** New colonies unsettle the natives nearby. */
 export function onColonyFounded(s: GameState, colony: { owner: NationId; x: number; y: number }): void {
-  const anger = colony.owner === 'crown' ? 1 : difficultyRules(player(s, colony.owner)).nativeTension;
+  const anger = colony.owner === 'crown' ? 1 : difficultyOf(s, player(s, colony.owner)).nativeTension;
   for (const st of Object.values(s.settlements)) {
     const d = distance(st.x, st.y, colony.x, colony.y);
     if (d <= 3) addTension(st, colony.owner, Math.round((d <= 2 ? 150 : 80) * anger));
@@ -313,7 +312,7 @@ export function convertType(s: GameState, nation: NationId): UnitTypeId {
 
 export function processNatives(s: GameState): void {
   const nations = s.players.filter((p) => p.id !== 'crown').map((p) => p.id);
-  const rules = new Map(s.players.map((p) => [p.id, difficultyRules(p)]));
+  const rules = new Map(s.players.map((p) => [p.id, difficultyOf(s, p)]));
   for (const st of Object.values(s.settlements)) {
     st.gold += st.capital ? 6 : 3;
     const tribe = tribeOf(s, st);
