@@ -56,6 +56,7 @@ import { openCheats } from './ui/cheats.js';
 import { choose, confirmDialog, promptDialog, toast } from './ui/dialogs.js';
 import { DiplomacyScreen } from './ui/diplomacy.js';
 import { EuropeScreen } from './ui/europe.js';
+import { CongressScreen } from './ui/congress.js';
 import { ProgressScreen } from './ui/progress.js';
 import { REPORT_TABS, ReportsScreen } from './ui/reports.js';
 import { RoutesScreen } from './ui/routes.js';
@@ -729,6 +730,12 @@ export class App {
     void openCheats(this);
   }
 
+  /** The Continental Congress hall (the fathers who have joined, standing together). */
+  openCongress(): void {
+    if (this.screen instanceof CongressScreen) return;
+    this.showScreen(new CongressScreen(this));
+  }
+
   openProgress(): void {
     this.showScreen(new ProgressScreen(this));
   }
@@ -934,6 +941,11 @@ export class App {
     if (e.key.toLowerCase() === 'a' && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
       this.openReports();
+      return;
+    }
+    if (e.key.toLowerCase() === 'k' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      this.openCongress();
       return;
     }
     if (e.key.toLowerCase() === 'h' && !e.metaKey && !e.ctrlKey && !e.altKey) {

@@ -482,6 +482,7 @@ function congressTab(ctx: ReportContext): Child[] {
       stat('Bells rung', c.bells.toLocaleString()),
       stat('Rebels', `${c.rebels}%`, p.independence === 'none' ? (c.rebels >= 50 ? 'enough to declare independence' : '50% needed to declare') : p.independence === 'declared' ? 'at war with the Crown' : p.independence),
       stat('Founding Fathers', `${c.fathers.length}/25`)),
+    h('p', null, h('button', { class: 'btn', onclick: () => app.openCongress() }, 'Open the Congress hall')),
     card('Next Founding Father',
       cur
         ? h('div', null,

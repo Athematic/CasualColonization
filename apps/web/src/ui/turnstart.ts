@@ -198,7 +198,7 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
                 class: id === me.currentFather ? 'btn father primary' : 'btn father',
                 onclick: () => app.dispatch({ type: 'chooseFather', father: id }, true) && done(`Congress will work towards ${FATHERS[id].name}.`),
               },
-              icon({ kind: 'father', id, category: FATHERS[id].category }, 96, FATHERS[id].name),
+              icon({ kind: 'father', id, category: FATHERS[id].category, variant: 'figure' }, 160, FATHERS[id].name),
               h('span', { class: 'father-text' },
                 h('span', { class: 'father-name' }, FATHERS[id].name, h('span', { class: 'muted small' }, ` · ${FATHERS[id].category}`)),
                 h('span', { class: 'father-effect' }, FATHERS[id].effect)))))),

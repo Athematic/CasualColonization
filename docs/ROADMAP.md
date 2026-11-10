@@ -97,6 +97,7 @@ Closes the smaller items left from earlier releases while the classic game is co
 | Find why Creative scores about 14 points less with Favoured Nation on | S | P2 | planned |
 | Trade routes may call at a favoured partner's port, not only the home port | S | P3 | planned |
 | Founding Father portraits in the Continental Congress screen and the father choices (once generated) | S | P2 | done (sprites appear once uploaded) |
+| Continental Congress hall: the fathers who have joined as full-length figures in a great hall (`K`), full figures in the father choice, head crops for small icons | M | P2 | done (procedural hall and figures now; `ui/congress-hall`, `fathers/<id>` figures and `__head` crops appear once generated) |
 | Wire in the new brave, damaged artillery and fortress sprites (once generated) | S | P2 | done (sprites appear once uploaded) |
 | Tune event rates and the computer players' event choices (one tournament with `--events`) | S | P2 | planned |
 | Tessellated terrain tiles: edge and corner pieces that blend neighbouring terrains, as a sprite-pack feature (Simon's idea, see CHANGE_SUGGESTIONS.md). Design and the `rules.transitions: 'overlay'` pack option are in ([design/tessellated-tiles.md](design/tessellated-tiles.md)), off by default; left: generate the 12 trial images (SPRITE_PROMPTS 4.8a), look at them on a map, then the other terrains | M | P2 | trial |
