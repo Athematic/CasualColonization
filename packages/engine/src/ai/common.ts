@@ -3,7 +3,7 @@ import { braveDefence } from '../braves.js';
 import { attack, defencePower, offencePower } from '../combat.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import { RuleError } from '../errors.js';
-import { describeMove, findPath, leaveShip, moveUnit, setDestination } from '../movement.js';
+import { describeMove, findPath, goTo, leaveShip, moveUnit, setDestination } from '../movement.js';
 import { baseTileYield } from '../production.js';
 import {
   cargoFree,
@@ -44,7 +44,42 @@ export const SHARED_TILE_VALUE = 0.25;
  * site in its square, and the land values (landValue) worked out so far, by tile index. Each tile
  * belongs to up to nine sites.
  */
-let search: { x: number; y: number; radius: number; colonies: Colony[]; land: Map<number, number> } | null = null;
+let search: { x: number; y: number; radius: number; colonies: Colony[]; land: Map<number, number>; scores: SiteScores } | null = null;
+
+/**
+ * Site scores (siteScore, keenSiteScore) by tile index, kept for the nation's turn: they depend
+ * only on the land, the colonies and the native settlements, and the land changes only at the
+ * start of a turn. NaN marks a tile not scored yet. Used while bestColonySite searches; a new
+ * turn, another nation moving, or a colony or settlement founded, taken or lost starts afresh.
+ */
+interface SiteScores {
+  key: string;
+  plain: Float64Array;
+  keen: Float64Array;
+}
+
+const siteScoreCache = new WeakMap<GameState, SiteScores>();
+
+function siteScoresFor(s: GameState): SiteScores {
+  const w = s.map.width;
+  let colonies = 0;
+  let settlements = 0;
+  for (const id in s.colonies) {
+    const c = s.colonies[id];
+    colonies = (colonies * 31 + c.y * w + c.x + 1) % 2147483647;
+  }
+  for (const id in s.settlements) {
+    const st = s.settlements[id];
+    settlements = (settlements * 31 + st.y * w + st.x + 1) % 2147483647;
+  }
+  const key = `${s.turn}:${s.current}:${colonies}:${settlements}`;
+  let kept = siteScoreCache.get(s);
+  if (!kept || kept.key !== key || kept.plain.length !== s.map.tiles.length) {
+    kept = { key, plain: new Float64Array(s.map.tiles.length).fill(NaN), keen: new Float64Array(s.map.tiles.length).fill(NaN) };
+    siteScoreCache.set(s, kept);
+  }
+  return kept;
+}
 
 /** Colonies close enough to share a work tile with a colony at x, y. */
 function neighbourColonies(s: GameState, x: number, y: number): Colony[] {
@@ -56,8 +91,12 @@ function neighbourColonies(s: GameState, x: number, y: number): Colony[] {
 const shared = (near: Colony[], x: number, y: number) => near.some((c) => distance(c.x, c.y, x, y) <= 1);
 
 export function siteScore(s: GameState, x: number, y: number): number {
-  if (colonySiteProblem(s, x, y)) return -Infinity;
-  return plainSiteScore(s, x, y, neighbourColonies(s, x, y));
+  const memo = search?.scores.plain;
+  const i = y * s.map.width + x;
+  if (memo && !Number.isNaN(memo[i])) return memo[i];
+  const score = colonySiteProblem(s, x, y) ? -Infinity : plainSiteScore(s, x, y, neighbourColonies(s, x, y));
+  if (memo) memo[i] = score;
+  return score;
 }
 
 /**
@@ -102,6 +141,15 @@ function landValue(s: GameState, i: number, tile: Tile): number {
  * other colony works. Chasing these spreads colonies out irregularly instead of in a grid.
  */
 export function keenSiteScore(s: GameState, x: number, y: number): number {
+  const memo = search?.scores.keen;
+  const i = y * s.map.width + x;
+  if (memo && !Number.isNaN(memo[i])) return memo[i];
+  const score = workKeenSiteScore(s, x, y);
+  if (memo) memo[i] = score;
+  return score;
+}
+
+function workKeenSiteScore(s: GameState, x: number, y: number): number {
   if (colonySiteProblem(s, x, y)) return -Infinity;
   const near = neighbourColonies(s, x, y);
   const base = plainSiteScore(s, x, y, near);
@@ -135,7 +183,7 @@ export function bestColonySite(
   opts: { radius: number; score: (x: number, y: number) => number; perTile: number; stay: boolean; penalty?: (x: number, y: number) => number; overLand?: boolean },
 ): { x: number; y: number; score: number } {
   const outer = search;
-  search = { x, y, radius: opts.radius, colonies: Object.values(s.colonies).filter((c) => distance(c.x, c.y, x, y) <= opts.radius + 2), land: new Map() };
+  search = { x, y, radius: opts.radius, colonies: Object.values(s.colonies).filter((c) => distance(c.x, c.y, x, y) <= opts.radius + 2), land: new Map(), scores: siteScoresFor(s) };
   try {
     let best = { x, y, score: opts.stay ? opts.score(x, y) : -Infinity };
     const reach = opts.overLand ? landReach(s, x, y, opts.radius) : undefined;
@@ -344,8 +392,7 @@ export function fetchStranded(s: GameState, p: Player, ship: Unit): boolean {
     const { x, y } = u.loc;
     if (distance(ship.loc.x, ship.loc.y, x, y) <= 1) return true;
     const spot = neighbours(s, x, y).find((n) => isWater(tileAt(s, n.x, n.y)!) && !unitsAt(s, n.x, n.y).some((o) => o.owner !== p.id));
-    if (spot && findPath(s, ship, spot.x, spot.y)) {
-      setDestination(s, ship.id, spot);
+    if (spot && goTo(s, ship, spot.x, spot.y)) {
       return true;
     }
   }

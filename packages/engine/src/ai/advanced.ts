@@ -25,9 +25,10 @@ import { favouredPartners, hasTradeAgreement, isHostile } from '../relations.js'
 import { boardInEurope, buyGoods, buyPrice, inHomePort, portOf, recruit, recruitPrice, sailToAmerica, sellGoods, train, trainPrice } from '../europe.js';
 import { canDeclareIndependence, declareIndependence, rebelShare } from '../independence.js';
 import { abandonColony } from '../leaving.js';
-import { boardShip, canImprove, findPath, setDestination, startImprovement } from '../movement.js';
+import { boardShip, canImprove, findPath, goTo, setDestination, startImprovement } from '../movement.js';
 import { buyLand, establishMission, giftToTribe, landPrice, learnSkill, nativeLandOwner, speakToChief, takeLand, tensionOf } from '../natives.js';
-import { colonyReport, type ColonyReport } from '../production.js';
+import { type ColonyReport } from '../production.js';
+import { aiColonyReport } from './reports.js';
 import {
   cargoFree,
   cargoRoomFor,
@@ -337,12 +338,13 @@ function carrySeaSettler(s: GameState, p: Player, ship: Unit, here: Colony | und
   const pos = unitPosition(s, ship)!;
   // Next to the site (and not in a colony): the usual landing puts the settler ashore.
   if (distance(pos.x, pos.y, target.x, target.y) <= 1 && !colonyAt(s, pos.x, pos.y)) return false;
-  const spot = neighbours(s, target.x, target.y).find((n) => isWater(tileAt(s, n.x, n.y)!) && findPath(s, ship, n.x, n.y));
+  let found: { x: number; y: number }[] | null = null;
+  const spot = neighbours(s, target.x, target.y).find((n) => isWater(tileAt(s, n.x, n.y)!) && (found = findPath(s, ship, n.x, n.y)));
   if (!spot) {
     delete sea[settler.id];
     return false;
   }
-  setDestination(s, ship.id, spot);
+  setDestination(s, ship.id, spot, found ?? undefined);
   return true;
 }
 
@@ -449,7 +451,7 @@ function optimiseWorkers(s: GameState, p: Player, c: Colony, prof: AiProfile): v
   const workers = colonyWorkers(s, c).sort((a, b) => UNIT_TYPES[b.type].skill - UNIT_TYPES[a.type].skill);
   // The report, the Sons of Liberty share (the report's) and who works where only change when
   // someone changes jobs.
-  let report = colonyReport(s, c);
+  let report = aiColonyReport(s, c);
   let occupancy = colonyOccupancy(s, c);
   for (const u of workers) {
     if (changes >= 3) break;
@@ -458,7 +460,7 @@ function optimiseWorkers(s: GameState, p: Player, c: Colony, prof: AiProfile): v
     if (best && best.value > now * 1.15 + 0.5) {
       assignJob(s, u.id, c.id, best.job);
       changes++;
-      report = colonyReport(s, c);
+      report = aiColonyReport(s, c);
       occupancy = colonyOccupancy(s, c);
     }
   }
@@ -469,7 +471,7 @@ function optimiseWorkers(s: GameState, p: Player, c: Colony, prof: AiProfile): v
     const food = jobOptions(s, c, u, occupancy).filter((o) => o.job.kind === 'tile' && o.job.good === 'food').sort((a, b) => b.amount - a.amount)[0];
     if (food && food.amount > 2) {
       assignJob(s, u.id, c.id, food.job);
-      report = colonyReport(s, c);
+      report = aiColonyReport(s, c);
       occupancy = colonyOccupancy(s, c);
     }
   }
@@ -544,7 +546,7 @@ function manageColony(s: GameState, p: Player, c: Colony, prof: AiProfile): void
     // Walls, wanted for independence, are bought outright with the gold above the reserve.
     const defence = c.build.kind === 'building' ? c.build.id === 'stockade' || c.build.id === 'armory' : c.build.id === 'artillery';
     const spare = p.gold - prof.reserve - turnSaving - (turnArming && !defence ? 2500 : 0);
-    const started = colonyReport(s, c).produced.hammers > 0 && c.hammers >= cost.hammers / 3;
+    const started = aiColonyReport(s, c).produced.hammers > 0 && c.hammers >= cost.hammers / 3;
     const walls = turnArming && c.build.kind === 'building' && c.build.id === 'stockade';
     const outright = c.build.kind === 'building' && colonyWorkers(s, c).length >= BUILDER_POP && spare > price * 3;
     if (price > 0 && price < 1500 && (started || walls ? spare > price * 1.5 : outright)) {
@@ -699,8 +701,7 @@ function soldierTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
           .filter((c) => c.id !== here.id && distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE && colonyWorkers(s, c).length > 0 && surplus(c) < 0)
           .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0]
       : undefined;
-    if (thin && findPath(s, u, thin.x, thin.y)) {
-      setDestination(s, u.id, { x: thin.x, y: thin.y });
+    if (thin && goTo(s, u, thin.x, thin.y)) {
       return;
     }
   }
@@ -826,9 +827,7 @@ function reinforce(s: GameState, p: Player, u: Unit): boolean {
     .map((c) => ({ c, threat: royalsNear(s, p, c) - armedAt(s, p, c.x, c.y).length }))
     .filter((e) => e.threat > 0)
     .sort((a, b) => b.threat - a.threat || distance(a.c.x, a.c.y, pos.x, pos.y) - distance(b.c.x, b.c.y, pos.x, pos.y))[0];
-  if (!target || !findPath(s, u, target.c.x, target.c.y)) return false;
-  setDestination(s, u.id, { x: target.c.x, y: target.c.y });
-  return true;
+  return !!target && goTo(s, u, target.c.x, target.c.y);
 }
 
 /** Tiles troops march to help a threatened colony in the War of Independence. */
@@ -876,8 +875,7 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
       if (d > 0 && (!frontier || d < frontier.d)) frontier = { x, y, d };
     }
   }
-  if (frontier && findPath(s, u, frontier.x, frontier.y)) {
-    setDestination(s, u.id, { x: frontier.x, y: frontier.y });
+  if (frontier && goTo(s, u, frontier.x, frontier.y)) {
     return;
   }
   // Nothing left to explore: settle down.
@@ -904,8 +902,7 @@ function pioneerTurn(s: GameState, p: Player, u: Unit): void {
         }
         continue;
       }
-      if (findPath(s, u, t.x, t.y)) {
-        setDestination(s, u.id, { x: t.x, y: t.y });
+      if (goTo(s, u, t.x, t.y)) {
         const now = unitPosition(s, u)!;
         if (now.x === t.x && now.y === t.y && u.moves > 0 && canImprove(s, u, kind) === null) startImprovement(s, u.id, kind);
         return;
@@ -1006,8 +1003,7 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
         foundColony(s, u.id);
         return;
       }
-      if (findPath(s, u, best.x, best.y)) {
-        setDestination(s, u.id, { x: best.x, y: best.y });
+      if (goTo(s, u, best.x, best.y)) {
         if (colonies.length) markSettler(p, u);
         const now = unitPosition(s, u)!;
         if (now.x === best.x && now.y === best.y && u.moves > 0) foundColony(s, u.id);
@@ -1023,11 +1019,12 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   // The nearest reachable colony, counting food to spare as nearness. Ranked first (each colony's
   // report once), so that only the colonies up to the first reachable one need a path.
   const ranked = (reachable ?? colonies)
-    .map((c) => ({ c, near: distance(c.x, c.y, pos.x, pos.y) - colonyReport(s, c).net.food / 2 }))
+    .map((c) => ({ c, near: distance(c.x, c.y, pos.x, pos.y) - aiColonyReport(s, c).net.food / 2 }))
     .sort((a, b) => a.near - b.near);
-  const home = reachable ? ranked[0]?.c : ranked.find((e) => findPath(s, u, e.c.x, e.c.y))?.c;
+  let found: { x: number; y: number }[] | null | undefined;
+  const home = reachable ? ranked[0]?.c : ranked.find((e) => (found = findPath(s, u, e.c.x, e.c.y)))?.c;
   if (home) {
-    setDestination(s, u.id, { x: home.x, y: home.y });
+    setDestination(s, u.id, { x: home.x, y: home.y }, found ?? undefined);
     const now = unitPosition(s, u)!;
     if (now.x === home.x && now.y === home.y) assignJob(s, u.id, home.id);
   } else if (siteScore(s, pos.x, pos.y) > 0) {
@@ -1111,8 +1108,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
       .map((c) => ({ c, goods: aiGoodsOf(s).export.reduce((n, g) => n + (c.goods[g] >= 50 && shippable(g) ? c.goods[g] : 0), 0) }))
       .filter((r) => r.goods >= 100)
       .sort((a, b) => b.goods - a.goods)[0];
-    if (pickup && findPath(s, ship, pickup.c.x, pickup.c.y)) {
-      setDestination(s, ship.id, { x: pickup.c.x, y: pickup.c.y });
+    if (pickup && goTo(s, ship, pickup.c.x, pickup.c.y)) {
       return;
     }
   }
