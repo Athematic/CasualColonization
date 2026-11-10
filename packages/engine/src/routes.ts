@@ -15,11 +15,12 @@ import { boardInEurope, buyGoods, buyPrice, portName, portOf, portProblem, sailT
 import { continueOrders, findPath, pathHint } from './movement.js';
 import { cargoFree, cargoRoomFor, isCoastal, isShip, isWater, message, neighbours, newId, player, reveal, tileAt, unitName, unitPosition, unitsAboard, warehouseCapacity } from './queries.js';
 import { atPeace, besideColony, closedRoutePorts, hasTradeAgreement, inWaitingPeriod, tradeAtForeignColony } from './relations.js';
-import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
-import { NATIONS, type NationId } from './rules/nations.js';
+import { GOOD_DEFS, type GoodId } from './rules/goods.js';
+import { type NationId } from './rules/nations.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { track } from './telemetry.js';
 import type { GameState, RouteCargo, RouteStop, TradeRoute, Unit } from './types.js';
+import { goodsOf, nationOf, term, Term } from './scenarios/index.js';
 
 export const EUROPE_STOP = 'europe';
 export const MAX_ROUTE_STOPS = 12;
@@ -38,10 +39,10 @@ export function routeUnits(s: GameState, routeId: string): Unit[] {
 
 /** A stop's name; with `owner` (the route's owner), a foreign colony's name carries its nation, e.g. "Québec (French)". */
 export function routeStopName(s: GameState, stop: RouteStop, owner?: NationId): string {
-  if (stop.at === EUROPE_STOP) return stop.port && stop.port !== owner ? `Europe (${portName(stop.port)})` : 'Europe';
+  if (stop.at === EUROPE_STOP) return stop.port && stop.port !== owner ? `${Term(s, 'homeland')} (${portName(s, stop.port)})` : `${Term(s, 'homeland')}`;
   const c = s.colonies[stop.at];
   if (!c) return 'a lost colony';
-  return owner && c.owner !== owner ? `${c.name} (${NATIONS[c.owner].adjective})` : c.name;
+  return owner && c.owner !== owner ? `${c.name} (${nationOf(s, c.owner).adjective})` : c.name;
 }
 
 /**
@@ -69,10 +70,10 @@ export function canUseRoutes(u: Unit): boolean {
   return (kind === 'ship' || kind === 'wagon') && UNIT_TYPES[u.type].cargo > 0;
 }
 
-function cleanCargo(list: RouteCargo[] | undefined): RouteCargo[] {
+function cleanCargo(s: GameState, list: RouteCargo[] | undefined): RouteCargo[] {
   const out: RouteCargo[] = [];
   for (const r of list ?? []) {
-    if (!r || !GOODS.includes(r.good)) fail('Unknown good in the route.');
+    if (!r || !goodsOf(s).includes(r.good)) fail('Unknown good in the route.');
     if (out.some((o) => o.good === r.good)) continue;
     const entry: RouteCargo = { good: r.good };
     if (r.amount !== undefined && r.amount !== null) {
@@ -95,13 +96,13 @@ function cleanStops(s: GameState, nation: NationId, stops: RouteStop[] | undefin
       const c = s.colonies[stop.at];
       if (!c) fail('No such colony.');
       if (c.owner !== nation) {
-        if (inWaitingPeriod(s, nation, c.owner) && !player(s, c.owner).human) fail(`${NATIONS[c.owner].name} will not let your routes call at its colonies for now.`);
+        if (inWaitingPeriod(s, nation, c.owner) && !player(s, c.owner).human) fail(`${nationOf(s, c.owner).name} will not let your routes call at its colonies for now.`);
         if (!hasTradeAgreement(s, nation, c.owner) || !atPeace(s, nation, c.owner)) {
-          fail(`Route stops must be your own colonies, Europe, or colonies of a nation you have a trade agreement with.`);
+          fail(`Route stops must be your own colonies, ${term(s, 'homeland')}, or colonies of a nation you have a trade agreement with.`);
         }
       }
     }
-    const clean: RouteStop = { at: stop.at, load: cleanCargo(stop.load), unload: cleanCargo(stop.unload) };
+    const clean: RouteStop = { at: stop.at, load: cleanCargo(s, stop.load), unload: cleanCargo(s, stop.unload) };
     if (stop.passengers && stop.at === EUROPE_STOP) clean.passengers = true;
     if (stop.at === EUROPE_STOP && stop.port && stop.port !== nation) {
       const problem = portProblem(s, nation, stop.port);
@@ -168,7 +169,7 @@ export function routeProblem(s: GameState, u: Unit, route: TradeRoute): string |
   const ship = isShip(u);
   for (const stop of route.stops) {
     if (stop.at === EUROPE_STOP) {
-      if (!ship) return 'Wagon trains cannot go to Europe.';
+      if (!ship) return `Wagon trains cannot go to ${term(s, 'homeland')}.`;
       continue;
     }
     const c = s.colonies[stop.at];
@@ -200,7 +201,7 @@ export function assignRoute(s: GameState, unitId: string, routeId: string): void
   const route = ownRoute(s, u.owner, routeId);
   const problem = routeProblem(s, u, route);
   if (problem) fail(problem);
-  if (u.loc.kind !== 'map' && u.loc.kind !== 'europe' && u.loc.kind !== 'sailing') fail('The unit must be on the map or in Europe.');
+  if (u.loc.kind !== 'map' && u.loc.kind !== 'europe' && u.loc.kind !== 'sailing') fail(`The unit must be on the map or in ${term(s, 'homeland')}.`);
   // Start at the stop the unit is at, if any; otherwise at the first.
   const here = route.stops.findIndex((stop) => atStop(s, u, stop));
   u.route = { id: route.id, stop: Math.max(0, here) };
@@ -230,13 +231,13 @@ function atStop(s: GameState, u: Unit, stop: RouteStop): boolean {
 /** Why a routed unit has to pass a stop by this turn, or null. */
 function stopProblem(s: GameState, u: Unit, stop: RouteStop): string | null {
   if (stop.at === EUROPE_STOP) {
-    if (!isShip(u)) return 'wagon trains cannot go to Europe';
-    if (player(s, u.owner).independence !== 'none') return 'Europe no longer trades with us';
+    if (!isShip(u)) return `wagon trains cannot go to ${term(s, 'homeland')}`;
+    if (player(s, u.owner).independence !== 'none') return `${Term(s, 'homeland')} no longer trades with us`;
     return null;
   }
   const c = s.colonies[stop.at];
   if (!c) return 'the colony is gone';
-  if (c.owner !== u.owner && (!hasTradeAgreement(s, u.owner, c.owner) || !atPeace(s, u.owner, c.owner))) return `we have no trade agreement with ${NATIONS[c.owner].name}`;
+  if (c.owner !== u.owner && (!hasTradeAgreement(s, u.owner, c.owner) || !atPeace(s, u.owner, c.owner))) return `we have no trade agreement with ${nationOf(s, c.owner).name}`;
   if (isShip(u) && !isCoastal(s, c.x, c.y)) return `${c.name} has no harbour`;
   return null;
 }
@@ -277,15 +278,15 @@ function serveStop(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop): v
     const n = Math.min(spare(r), cargoRoomFor(s, u, r.good));
     if (n > 0) move(colony.goods, u.cargo, r.good, n);
   }
-  for (const g of GOODS) if (u.cargo[g] === 0) delete u.cargo[g];
+  for (const g of goodsOf(s)) if (u.cargo[g] === 0) delete u.cargo[g];
 }
 
 /** Sells to, and buys from, a trade partner's colony, and reports to both nations. */
 function serveForeign(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop): void {
   const colony = s.colonies[stop.at];
   const t = tradeAtForeignColony(s, u, colony.id, stop.unload, stop.load);
-  const them = NATIONS[colony.owner].adjective;
-  const us = NATIONS[u.owner].adjective;
+  const them = nationOf(s, colony.owner).adjective;
+  const us = nationOf(s, u.owner).adjective;
   const parts = [
     t.sold ? `sold ${t.sold} goods for ${t.earned} gold` : '',
     t.bought ? `bought ${t.bought} goods for ${t.spent} gold` : '',
@@ -329,20 +330,20 @@ function serveEurope(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop):
   for (const r of stop.load) {
     if (home && p.boycotts[r.good]) continue;
     const want = (r.amount ?? DEFAULT_EUROPE_LOAD) - (u.cargo?.[r.good] ?? 0);
-    const price = buyPrice(market, r.good);
+    const price = buyPrice(s, market, r.good);
     const n = Math.min(want, cargoRoomFor(s, u, r.good), Math.floor(p.gold / price));
     if (n <= 0) continue;
     const before = p.gold;
     buyGoods(s, u.id, r.good, n);
     spent += before - p.gold;
   }
-  for (const g of GOODS) if (u.cargo?.[g] === 0) delete u.cargo[g];
+  for (const g of goodsOf(s)) if (u.cargo?.[g] === 0) delete u.cargo[g];
   const parts = [
     earned ? `sold goods for ${earned} gold after tax` : '',
     spent ? `bought goods for ${spent} gold` : '',
     boarded ? `took ${boarded} colonist${boarded > 1 ? 's' : ''} aboard` : '',
   ].filter(Boolean);
-  if (parts.length) message(s, `${unitName(u)} on the ${route.name} route ${parts.join(', ')} in ${home ? 'Europe' : portName(market.id)}.`, u.owner);
+  if (parts.length) message(s, `${unitName(u)} on the ${route.name} route ${parts.join(', ')} in ${home ? term(s, 'homeland') : portName(s, market.id)}.`, u.owner);
 }
 
 /**

@@ -141,6 +141,8 @@ export interface AiMemory {
   lastIncite?: number;
   /** Colonists sent out to found colonies, by unit id (ai/advanced.ts, sendSettler). */
   settlers?: string[];
+  /** Settlers waiting in a coastal colony, or aboard, for a ship to a site on another island, by unit id (`ai.islands`). */
+  seaSettlers?: Record<string, { x: number; y: number }>;
   /** Turn the nation adopted its independence plan (ai/plan.ts). */
   independencePlan?: number;
 }

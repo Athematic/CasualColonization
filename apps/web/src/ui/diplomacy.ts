@@ -6,9 +6,10 @@ import {
   FATHERS,
   favouredProblem,
   hasTradeAgreement,
-  HOME_PORTS,
   isFavoured,
-  NATIONS,
+  mechanicsOf,
+  nationOf,
+  portName,
   nationTitle,
   nextFatherCost,
   rebelShare,
@@ -16,6 +17,8 @@ import {
   relationsMood,
   routesBetween,
   tensionLabel,
+  term,
+  Term,
   tradeProblem,
   tradeTies,
   TRIBES,
@@ -48,7 +51,7 @@ export class DiplomacyScreen implements Screen {
       h('h3', null, 'European nations'),
       nations.length
         ? h('ul', { class: 'nation-relations' }, nations.map((p) => this.nationRow(p)))
-        : h('p', { class: 'muted small' }, 'You are the only European nation in the New World.'),
+        : h('p', { class: 'muted small' }, `You are the only ${term(app.state, 'homelandAdjective')} nation in ${term(app.state, 'colonyLand')}.`),
       nations.length ? h('p', { class: 'muted small' }, 'A trade agreement lets your trade routes call at each other’s colonies. After years of peace and enough trade routes between you, Favoured Nations may trade, and buy merchant ships, in each other’s home ports. Cancelling it costs both sides dearly.') : null);
 
     const tribes = s.tribes
@@ -80,32 +83,38 @@ export class DiplomacyScreen implements Screen {
 
     const cost = nextFatherCost(s, me);
     const congress = h('div', { class: 'card' },
-      h('h3', null, 'Continental Congress'),
+      h('h3', null, `${Term(app.state, 'council')}`),
       h('p', null, me.currentFather
         ? `Next: ${FATHERS[me.currentFather].name}, ${me.fatherBells}/${cost} liberty bells.`
         : `${me.fatherBells}/${cost} liberty bells collected. No candidate chosen yet.`),
       h('button', { class: 'btn small', onclick: () => void app.chooseFather() }, me.currentFather ? 'Change candidate' : 'Choose candidate'),
       me.fathers.length
         ? h('ul', { class: 'fathers' }, me.fathers.map((id) => h('li', null, h('strong', null, FATHERS[id].name), ` (${FATHERS[id].category}): ${FATHERS[id].effect}`)))
-        : h('p', { class: 'muted small' }, 'No Founding Fathers have joined yet.'));
+        : h('p', { class: 'muted small' }, `No ${term(app.state, 'members')} have joined yet.`));
 
     const share = rebelShare(s, me.id);
     const blocked = canDeclareIndependence(s, me.id);
-    let independence: HTMLElement;
-    if (me.independence === 'declared') {
+    const mechanics = mechanicsOf(s);
+    let independence: HTMLElement | null;
+    // A scenario without independence (or without a royal army) shows neither.
+    if (!mechanics.independence) {
+      independence = mechanics.ref
+        ? h('div', { class: 'card' }, h('h3', null, 'Royal forces'), h('p', { class: 'small' }, `Royal forces: ${describeForce(me.ref)}.`))
+        : null;
+    } else if (me.independence === 'declared') {
       const ref = me.ref;
       independence = h('div', { class: 'card' },
-        h('h3', null, 'War of Independence'),
+        h('h3', null, `${Term(app.state, 'independenceWar')}`),
         h('p', null, `Still to land: ${ref.regulars} regulars, ${ref.dragoons} dragoons, ${ref.artillery} artillery, ${ref.menOfWar} men-of-war.`),
-        h('p', { class: 'muted small' }, 'Defeat every Royal unit to win. If the Crown retakes half your colonies, the rebellion fails.'));
+        h('p', { class: 'muted small' }, `Defeat every Royal unit to win. If ${term(app.state, 'crown')} retakes half your colonies, the rebellion fails.`));
     } else if (me.independence === 'won' || me.independence === 'lost') {
-      independence = h('div', { class: 'card' }, h('h3', null, 'War of Independence'), h('p', null, me.independence === 'won' ? 'You are a free nation.' : 'The rebellion was crushed.'));
+      independence = h('div', { class: 'card' }, h('h3', null, `${Term(app.state, 'independenceWar')}`), h('p', null, me.independence === 'won' ? 'You are a free nation.' : 'The rebellion was crushed.'));
     } else {
       independence = h('div', { class: 'card' },
         h('h3', null, 'Independence'),
         h('div', { class: 'bar', role: 'progressbar', 'aria-valuenow': share, 'aria-valuemin': 0, 'aria-valuemax': 100 }, h('span', { style: `width:${share}%` })),
         h('p', null, `${share}% of your colonists support independence; 50% are needed to declare it.`),
-        h('p', { class: 'small' }, `Royal forces: ${describeForce(me.ref)}. The Crown adds to them during the game, faster as your colonies ring more liberty bells; all of them sail when you declare.`),
+        h('p', { class: 'small' }, `Royal forces: ${describeForce(me.ref)}. ${Term(app.state, 'crown')} adds to them during the game, faster as your colonies ring more liberty bells; all of them sail when you declare.`),
         h('button', { class: 'btn small primary', disabled: !!blocked, title: blocked ?? undefined, onclick: () => this.declare() }, 'Declare independence'));
     }
 
@@ -141,20 +150,20 @@ export class DiplomacyScreen implements Screen {
     else {
       if (!trade) {
         const why = tradeProblem(s, me.id, p.id);
-        buttons.push(h('button', { class: 'btn tiny', disabled: !!why, title: why ?? `Offer ${NATIONS[p.id].name} a trade agreement`, onclick: () => app.dispatch({ type: 'proposeTrade', nation: p.id }) }, 'Propose trade agreement'));
+        buttons.push(h('button', { class: 'btn tiny', disabled: !!why, title: why ?? `Offer ${nationOf(app.state, p.id).name} a trade agreement`, onclick: () => app.dispatch({ type: 'proposeTrade', nation: p.id }) }, 'Propose trade agreement'));
       } else if (!favoured) {
         buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.cancelTrade(p.id) }, 'End trade agreement'));
       }
-      if (!favoured && !independent) {
+      if (!favoured && !independent && mechanicsOf(s).favoured) {
         const why = favouredProblem(s, me.id, p.id);
-        buttons.push(h('button', { class: 'btn tiny primary', disabled: !!why, title: why ?? `Offer ${NATIONS[p.id].name} Favoured Nation status`, onclick: () => app.dispatch({ type: 'proposeFavoured', nation: p.id }) }, 'Propose Favoured Nation'));
+        buttons.push(h('button', { class: 'btn tiny primary', disabled: !!why, title: why ?? `Offer ${nationOf(app.state, p.id).name} Favoured Nation status`, onclick: () => app.dispatch({ type: 'proposeFavoured', nation: p.id }) }, 'Propose Favoured Nation'));
       }
       if (favoured) buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.cancelFavoured(p) }, 'Cancel Favoured Nation'));
       buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.war(p.id) }, 'Declare war'));
     }
     return h('li', { class: 'nation-relation' },
       h('div', { class: 'nation-head' },
-        h('strong', null, h('span', { class: 'flag', style: `background:${NATIONS[p.id].color}` }), ' ', nationTitle(p.id)),
+        h('strong', null, h('span', { class: 'flag', style: `background:${nationOf(app.state, p.id).color}` }), ' ', nationTitle(app.state, p.id)),
         h('span', { class: 'muted small' }, p.human ? 'player' : AI_LEVEL_INFO[p.ai ?? 'naive'].name),
         h('span', { class: `pill ${war ? 'bad' : 'good'}` }, war ? 'At war' : 'At peace'),
         favoured ? h('span', { class: 'pill good favoured' }, '★ Favoured Nation') : null),
@@ -164,31 +173,31 @@ export class DiplomacyScreen implements Screen {
         h('span', null, trade ? 'Trade agreement' : 'No trade agreement'),
         h('span', null, `${routes} trade route${routes === 1 ? '' : 's'} between you`),
         trade ? h('span', { class: 'muted' }, tradeTies(s, me.id, p.id)) : null,
-        favoured ? h('span', { class: 'muted' }, `Your ships may use ${HOME_PORTS[p.id]}`) : null),
+        favoured ? h('span', { class: 'muted' }, `Your ships may use ${portName(this.app.state, p.id)}`) : null),
       pending && !theirs ? h('p', { class: 'muted small' }, `Your proposal of ${kindName(pending.kind)} is waiting for an answer.`) : null,
       theirs ? h('div', { class: 'proposal row wrap' },
-        h('span', { class: 'small' }, `${nationTitle(p.id)} proposes ${kindName(pending!.kind)}.`),
+        h('span', { class: 'small' }, `${nationTitle(app.state, p.id)} proposes ${kindName(pending!.kind)}.`),
         h('button', { class: 'btn tiny primary', onclick: () => app.dispatch({ type: 'answerProposal', nation: p.id, accept: true }) }, 'Accept'),
         h('button', { class: 'btn tiny', onclick: () => app.dispatch({ type: 'answerProposal', nation: p.id, accept: false }) }, 'Turn down')) : null,
       h('div', { class: 'row wrap nation-actions' }, buttons));
   }
 
   private async cancelTrade(nation: NationId): Promise<void> {
-    if (await confirmDialog('End the trade agreement?', `Your trade routes will no longer call at ${NATIONS[nation].adjective} colonies, and theirs not at yours.`, 'End it', 'Keep trading')) {
+    if (await confirmDialog('End the trade agreement?', `Your trade routes will no longer call at ${nationOf(this.app.state, nation).adjective} colonies, and theirs not at yours.`, 'End it', 'Keep trading')) {
       this.app.dispatch({ type: 'cancelTrade', nation });
     }
   }
 
   private async cancelFavoured(p: Player): Promise<void> {
     const people = p.human && this.app.me.human;
-    const text = `Cancelling ends the trade agreement and every trade route between you. All goods carried by either side's ships and wagon trains next to the other's colonies are seized.${people ? ' Between two players there is no waiting period: you can agree again at once.' : ` Relations with ${NATIONS[p.id].name} will stay hostile for years, and no new agreement will be possible for a long time.`}`;
+    const text = `Cancelling ends the trade agreement and every trade route between you. All goods carried by either side's ships and wagon trains next to the other's colonies are seized.${people ? ' Between two players there is no waiting period: you can agree again at once.' : ` Relations with ${nationOf(this.app.state, p.id).name} will stay hostile for years, and no new agreement will be possible for a long time.`}`;
     if (await confirmDialog('Cancel Favoured Nation status?', text, 'Cancel it', 'Keep it')) this.app.dispatch({ type: 'cancelFavoured', nation: p.id });
   }
 
   private async war(nation: NationId): Promise<void> {
     const favoured = isFavoured(this.app.state, this.app.me.id, nation);
     const extra = favoured ? ' This also cancels your Favoured Nation status, with all its consequences.' : hasTradeAgreement(this.app.state, this.app.me.id, nation) ? ' Your trade agreement ends.' : '';
-    if (await confirmDialog('Declare war?', `Declare war on ${NATIONS[nation].name}? Their colonies and ships become fair game, and yours too.${extra}`, 'Declare war', 'Stay at peace')) {
+    if (await confirmDialog('Declare war?', `Declare war on ${nationOf(this.app.state, nation).name}? Their colonies and ships become fair game, and yours too.${extra}`, 'Declare war', 'Stay at peace')) {
       this.app.dispatch({ type: 'declareWar', nation });
     }
   }
@@ -200,7 +209,7 @@ export class DiplomacyScreen implements Screen {
   private async declare(): Promise<void> {
     const ok = await confirmDialog(
       'Declare independence?',
-      'Trade with Europe ends and everything there is lost. The Crown will send its Royal Expeditionary Force. Veteran soldiers join the Continental Army. There is no going back.',
+      `Trade with ${term(this.app.state, 'homeland')} ends and everything there is lost. ${Term(this.app.state, 'crown')} will send its ${term(this.app.state, 'ref')}. Veteran soldiers join the ${term(this.app.state, 'army')}. There is no going back.`,
       'Declare independence',
       'Not yet',
     );

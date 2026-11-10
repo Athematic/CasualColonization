@@ -3,11 +3,11 @@
  * named in the Americas, then continues with names in the style its colonists used (home towns,
  * saints, royalty) where history ran out. At least 100 per nation.
  */
-import type { NationId } from './nations.js';
+import type { AmericasNationId } from './nations.js';
 
 const list = (historical: string[], inspired: string[] = []) => [...historical, ...inspired];
 
-export const COLONY_NAMES: Record<Exclude<NationId, 'crown'>, string[]> = {
+export const COLONY_NAMES: Record<AmericasNationId, string[]> = {
   // Towns, ports and forts founded by the English in North America and the Caribbean before 1780.
   england: list(
     ['Jamestown', 'Plymouth', 'Roanoke', 'Boston', 'Providence', 'Hartford', 'New Haven', 'Salem', 'Charleston',

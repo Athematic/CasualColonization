@@ -31,6 +31,7 @@
  * Curbing bells as soon as the rebels are a bare majority was tried first: it cost about 40 points
  * a game in rebels and Founding Fathers (see docs/AI_FEATURE_AUDIT.md, "Independence planning").
  */
+import { aiTurn } from '../scenarios/index.js';
 import type { GameState, Player } from '../types.js';
 import type { AiProfile } from './profiles.js';
 import { rebelPower, refPower } from './royal.js';
@@ -71,7 +72,7 @@ export function adoptsPlan(s: GameState, p: Player, prof: AiProfile, share: numb
   const memory = (p.aiMemory = p.aiMemory ?? {});
   if (memory.independencePlan !== undefined) return true;
   const { adopt } = plan;
-  if (share < adopt.share && s.turn < adopt.turn) return false;
+  if (share < adopt.share && s.turn < aiTurn(s, adopt.turn)) return false;
   if (adopt.strength !== undefined && rebelPower(s, p) + support < refPower(p) * plan.ratio * adopt.strength) return false;
   memory.independencePlan = s.turn;
   return true;

@@ -12,11 +12,11 @@ import { riverLinked } from '../rivers.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
 import { ownColonies } from './common.js';
+import { aiGoodsOf } from '../scenarios/index.js';
 
 /** Colonies further apart than this are not worth joining by road. */
 const LINK_RANGE = 6;
 /** Goods a road adds one unit of on a worked tile. */
-const ROAD_GOODS = new Set(['lumber', 'ore', 'silver', 'furs']);
 
 type Spot = { x: number; y: number };
 
@@ -42,8 +42,9 @@ export function roadTargets(s: GameState, p: Player): Spot[] {
   };
   const colonies = ownColonies(s, p).sort((a, b) => colonyWorkers(s, b).length - colonyWorkers(s, a).length);
   // Worked tiles where a road raises the yield.
+  const roadGoods = aiGoodsOf(s).road;
   for (const c of colonies) {
-    for (const wk of colonyWorkers(s, c)) if (wk.loc.kind === 'colony' && wk.loc.job.kind === 'tile' && ROAD_GOODS.has(wk.loc.job.good)) add(wk.loc.job);
+    for (const wk of colonyWorkers(s, c)) if (wk.loc.kind === 'colony' && wk.loc.job.kind === 'tile' && roadGoods.includes(wk.loc.job.good)) add(wk.loc.job);
   }
   // Links between colonies, and from inland colonies to the coast.
   const links = new Set<string>();

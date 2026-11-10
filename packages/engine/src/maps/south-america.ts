@@ -1,4 +1,4 @@
-import type { StoredMap } from './index.js';
+import type { StoredMap, TribeRegion } from './index.js';
 
 /** South America. The legend is in index.ts. */
 export const southAmerica: StoredMap = {
@@ -6,12 +6,6 @@ export const southAmerica: StoredMap = {
   name: 'South America',
   description: 'From the Caribbean coast to Tierra del Fuego: the Andes, the Amazon and the pampas. Arawak, Tupi and Inca.',
   entryRows: [4, 56],
-  tribes: [
-    { tribe: 'arawak', region: [9, 1, 33, 11], count: 6 },
-    { tribe: 'tupi', region: [33, 18, 52, 45], count: 10 },
-    { tribe: 'tupi', region: [19, 14, 33, 27], count: 6 },
-    { tribe: 'inca', region: [5, 13, 21, 53], count: 10 },
-  ],
   // Main rivers first, tributaries after the river they join. Format: parseRivers in rivers.ts.
   rivers: `
     Amazon: m 6,19 M 12,17 20,16 28,15 35,14 36,14
@@ -106,3 +100,11 @@ hW..~~~......sss........s..~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~~~~~~~...........~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 `,
 };
+
+/** Where the Americas scenario's peoples live on South America. */
+export const SOUTH_AMERICA_PEOPLES: TribeRegion[] = [
+  { tribe: 'arawak', region: [9, 1, 33, 11], count: 6 },
+  { tribe: 'tupi', region: [33, 18, 52, 45], count: 10 },
+  { tribe: 'tupi', region: [19, 14, 33, 27], count: 6 },
+  { tribe: 'inca', region: [5, 13, 21, 53], count: 10 },
+];

@@ -1,5 +1,5 @@
-import type { GoodId, NationId, ProductId, RoleId, TribeId, UnitTypeId } from '@cc/engine';
-import { NATIONS, TRIBES, UNIT_TYPES } from '@cc/engine';
+import type { GoodId, ProductId, RoleId, SettlementLook, TribeId, UnitTypeId } from '@cc/engine';
+import { TRIBES, UNIT_TYPES } from '@cc/engine';
 import { HULL, INK, ROOF, SAIL, SKIN, STONE, TRUNK, WALL, WHITE, WOOD, shade, type TreeShape } from './palette.js';
 
 type Ctx = CanvasRenderingContext2D;
@@ -159,7 +159,7 @@ export function flag(ctx: Ctx, x: number, y: number, h: number, color: string, l
   });
 }
 
-export function colonySprite(ctx: Ctx, x: number, y: number, s: number, nation: NationId, size: number, stockade: number, lw: number): void {
+export function colonySprite(ctx: Ctx, x: number, y: number, s: number, color: string, size: number, stockade: number, lw: number): void {
   const base = y + s * 0.3;
   if (stockade > 2) {
     // Fortress: corner towers with a pennant-less cap, above the stone curtain.
@@ -187,7 +187,7 @@ export function colonySprite(ctx: Ctx, x: number, y: number, s: number, nation: 
       });
     }
   }
-  flag(ctx, x + s * 0.1, base - s * 0.3, s * 0.5, NATIONS[nation].color, lw);
+  flag(ctx, x + s * 0.1, base - s * 0.3, s * 0.5, color, lw);
   const count = size >= 8 ? 4 : size >= 4 ? 3 : 2;
   const spots: [number, number, number][] = [
     [-0.2, -0.08, 0.3],
@@ -199,10 +199,11 @@ export function colonySprite(ctx: Ctx, x: number, y: number, s: number, nation: 
   for (const [dx, dy, w] of order) house(ctx, x + dx * s, base + dy * s - s * 0.06, w * s, lw);
 }
 
-export function settlementSprite(ctx: Ctx, x: number, y: number, s: number, tribe: TribeId, capital: boolean, lw: number): void {
+/** A native settlement drawn as its kind looks (a camp of tipis, a village of huts, a stepped city). */
+export function settlementSprite(ctx: Ctx, x: number, y: number, s: number, tribe: TribeId, capital: boolean, lw: number, look: SettlementLook): void {
   const def = TRIBES[tribe];
   const base = y + s * 0.3;
-  if (def.settlement === 'camp') {
+  if (look === 'camp') {
     const tipi = (tx: number, w: number) => {
       inked(ctx, '#ecd7a6', lw, () => {
         ctx.moveTo(tx - w / 2, base);
@@ -223,7 +224,7 @@ export function settlementSprite(ctx: Ctx, x: number, y: number, s: number, trib
     tipi(x - s * 0.18, s * 0.34);
     tipi(x + s * 0.17, s * 0.3);
     tipi(x, s * 0.38);
-  } else if (def.settlement === 'village') {
+  } else if (look === 'village') {
     const hut = (hx: number, w: number) => {
       inked(ctx, '#c99a5b', lw, () => {
         ctx.ellipse(hx, base, w / 2, w * 0.55, 0, Math.PI, 0);
@@ -319,7 +320,7 @@ function person(ctx: Ctx, x: number, y: number, s: number, coat: string, hat: 'b
   }
 }
 
-function ship(ctx: Ctx, x: number, y: number, s: number, type: UnitTypeId, nation: NationId, lw: number): void {
+function ship(ctx: Ctx, x: number, y: number, s: number, type: UnitTypeId, color: string, lw: number): void {
   const masts = type === 'caravel' || type === 'privateer' ? 2 : type === 'merchantman' ? 2 : 3;
   const sail = type === 'privateer' ? '#5a5a5a' : SAIL;
   const hullW = type === 'manOfWar' ? 0.44 : type === 'galleon' || type === 'frigate' ? 0.4 : 0.34;
@@ -348,7 +349,7 @@ function ship(ctx: Ctx, x: number, y: number, s: number, type: UnitTypeId, natio
       });
     }
     if (i === masts - 1) {
-      inked(ctx, type === 'privateer' ? INK : NATIONS[nation].color, lw, () => {
+      inked(ctx, type === 'privateer' ? INK : color, lw, () => {
         ctx.moveTo(mx, deck - h);
         ctx.lineTo(mx + s * 0.14, deck - h + s * 0.04);
         ctx.lineTo(mx, deck - h + s * 0.08);
@@ -416,10 +417,10 @@ function chest(ctx: Ctx, x: number, y: number, s: number, lw: number): void {
   for (const [dx, dy] of [[-0.12, -0.2], [0.05, -0.24], [0.16, -0.17]]) inked(ctx, '#ffd23f', lw * 0.7, () => ctx.arc(x + dx * s, y + dy * s, s * 0.05, 0, Math.PI * 2));
 }
 
-/** Draws a unit centred at (x, y) inside a box of size s. */
-export function unitSprite(ctx: Ctx, x: number, y: number, s: number, type: UnitTypeId, role: RoleId, nation: NationId, lw: number): void {
+/** Draws a unit centred at (x, y) inside a box of size s; `color` is its owner's (flags, soldiers' coats). */
+export function unitSprite(ctx: Ctx, x: number, y: number, s: number, type: UnitTypeId, role: RoleId, color: string, lw: number): void {
   const def = UNIT_TYPES[type];
-  if (def.kind === 'ship') return ship(ctx, x, y, s, type, nation, lw);
+  if (def.kind === 'ship') return ship(ctx, x, y, s, type, color, lw);
   if (def.kind === 'wagon') return wagon(ctx, x, y, s, lw);
   if (def.kind === 'artillery') return cannon(ctx, x, y, s, lw, type === 'damagedArtillery');
   if (def.kind === 'treasure') return chest(ctx, x, y, s, lw);
@@ -431,7 +432,7 @@ export function unitSprite(ctx: Ctx, x: number, y: number, s: number, type: Unit
     });
     return;
   }
-  const nationColor = NATIONS[nation].color;
+  const nationColor = color;
   const mounted = role === 'dragoon' || role === 'scout';
   if (mounted) {
     horse(ctx, x, y + s * 0.02, s, lw);

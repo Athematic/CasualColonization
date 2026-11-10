@@ -4,15 +4,62 @@
  */
 import type { GoodId } from './goods.js';
 
-export type SettlementKind = 'camp' | 'village' | 'city';
+/** The procedural styles' drawings of a settlement; a new kind names the one it looks most like. */
+export type SettlementLook = 'camp' | 'village' | 'city';
 
-/** Braves a settlement keeps out on the land at most: by settlement kind, plus one for a capital. */
-export const BRAVES_PER_SETTLEMENT: Record<SettlementKind, number> = { camp: 1, village: 2, city: 2 };
+/**
+ * A kind of native settlement with every number that depends on it, in one row
+ * (docs/design/scenario-framework.md, row 20). A scenario's peoples live in the kind its table
+ * gives their lifeway (`Scenario.peoples.settlements`); a scenario may add kinds of its own.
+ */
+export interface SettlementKindDef {
+  /** 'camp', 'village', 'city'. */
+  id: string;
+  /** Shown after the people's name: "Sioux camp". */
+  name: string;
+  /** How the procedural styles draw it. */
+  look: SettlementLook;
+  /** Sets a new settlement's defenders (size, +2 for a capital, +0–1) and gold ((size × 150 + 0–199), ×2 for a capital). */
+  size: number;
+  /** Braves it keeps out on the land at most (a capital one more, CAPITAL_EXTRA_BRAVES). */
+  braves: number;
+  /** Rounds it needs to send out a new brave after one is killed or leaves for good. */
+  respawn: number;
+  /** Share of the land's yield (its own tile and its neighbours) it gathers per round. */
+  produceRate: number;
+  /** Most of each good it stores for sale. */
+  produceCap: number;
+  /** Goods whose yield counts more than once when it gathers (cities mine silver). */
+  gather?: Partial<Record<GoodId, number>>;
+  /** Gold to incite its people against a nation (a capital ×1.5). */
+  incitePrice: number;
+  /** Price of a tile of its land at no tension, and what a capital adds. */
+  landPrice: { base: number; capital: number };
+  /** Treasure found when it is burned: `base` plus 0 to `spread` − 1 gold. */
+  treasure?: { base: number; spread: number };
+  /** Treasure when it is a capital and has no `treasure` of its own. */
+  capitalTreasure?: { base: number; spread: number };
+}
+
+/** The catalogue's settlement kinds, as in the original game. */
+export const SETTLEMENT_KINDS = {
+  camp: {
+    id: 'camp', name: 'camp', look: 'camp', size: 1, braves: 1, respawn: 12, produceRate: 0.12, produceCap: 100,
+    incitePrice: 300, landPrice: { base: 80, capital: 80 }, capitalTreasure: { base: 300, spread: 500 },
+  },
+  village: {
+    id: 'village', name: 'village', look: 'village', size: 2, braves: 2, respawn: 10, produceRate: 0.16, produceCap: 150,
+    incitePrice: 450, landPrice: { base: 80, capital: 80 }, capitalTreasure: { base: 300, spread: 500 },
+  },
+  city: {
+    id: 'city', name: 'city', look: 'city', size: 3, braves: 2, respawn: 8, produceRate: 0.2, produceCap: 200,
+    gather: { silver: 3 }, incitePrice: 700, landPrice: { base: 200, capital: 80 }, treasure: { base: 1500, spread: 3500 },
+  },
+} satisfies Record<string, SettlementKindDef>;
+
 export const CAPITAL_EXTRA_BRAVES = 1;
 /** Hard cap on braves on the map, so large maps stay fast. */
 export const MAX_BRAVES = 80;
-/** Rounds a settlement needs to send out a new brave after one is killed or leaves for good. */
-export const BRAVE_RESPAWN: Record<SettlementKind, number> = { camp: 12, village: 10, city: 8 };
 /** A settlement sends out its first brave after this many rounds. */
 export const FIRST_BRAVE_AFTER = 4;
 
@@ -63,12 +110,6 @@ export const BRAVE_KILLED_TENSION = 150;
 
 /** Goods native settlements gather from their land and sell, as in the original. */
 export const NATIVE_PRODUCE: GoodId[] = ['furs', 'sugar', 'tobacco', 'cotton', 'silver'];
-/** Share of the land's yield (the settlement's own tile and its neighbours) a settlement gathers per round. */
-export const PRODUCE_RATE: Record<SettlementKind, number> = { camp: 0.12, village: 0.16, city: 0.2 };
-/** Most of each good a settlement stores for sale. */
-export const PRODUCE_CAP: Record<SettlementKind, number> = { camp: 100, village: 150, city: 200 };
-/** Cities mine silver: their silver yield counts this many times. */
-export const CITY_SILVER = 3;
 
 /**
  * Price per unit a settlement asks for its goods: the good's starting European price times this
@@ -100,8 +141,6 @@ export const DENOUNCE_CHANCE = 0.4;
 export const DENOUNCE_EXPERT = 0.2;
 /** Chance that a missionary whose denunciation fails is killed. */
 export const DENOUNCE_FAIL_DEATH = 0.5;
-/** Gold to incite a settlement's tribe, by settlement kind (capital ×1.5). */
-export const INCITE_PRICE: Record<SettlementKind, number> = { camp: 300, village: 450, city: 700 };
 /** Tension the tribe gains towards the target: this settlement, and the tribe's other settlements. */
 export const INCITE_TENSION = 350;
 export const INCITE_TENSION_OTHERS = 150;

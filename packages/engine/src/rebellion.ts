@@ -46,8 +46,8 @@ import {
   unitsAt,
 } from './queries.js';
 import { hasTradeAgreement, isFavoured, pairRandom } from './relations.js';
-import { difficultyRules } from './rules/difficulty.js';
-import { NATIONS, type NationId } from './rules/nations.js';
+import { type NationId } from './rules/nations.js';
+import { difficultyOf, nationOf, nationSet, scenarioOf, term, Term, type ScenarioLike } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, MercenaryOffer, Player, Unit } from './types.js';
 
@@ -89,10 +89,10 @@ type Company = Pick<MercenaryOffer, 'soldiers' | 'dragoons' | 'artillery'>;
 
 const companySize = (c: Company) => c.soldiers + c.dragoons + c.artillery;
 
-function companyPrice(p: Player, c: Company): number {
+function companyPrice(s: GameState, p: Player, c: Company): number {
   const { price } = MERCENARIES;
   const gold = c.soldiers * price.soldier + c.dragoons * price.dragoon + c.artillery * price.artillery;
-  return Math.round((gold * difficultyRules(p).mercenaryPrice) / 100) * 100;
+  return Math.round((gold * difficultyOf(s, p).mercenaryPrice) / 100) * 100;
 }
 
 /**
@@ -103,14 +103,14 @@ export function mercenaryCompany(s: GameState, nation: NationId, turn = s.turn):
   const p = player(s, nation);
   const r = (what: string) => draw(s, nation, `mercenaries ${what} ${turn}`);
   const c: Company = { soldiers: 2 + Math.floor(r('soldiers') * 3), dragoons: 1 + Math.floor(r('dragoons') * 2), artillery: Math.floor(r('artillery') * 3) };
-  while (companySize(c) > 0 && companyPrice(p, c) > p.gold) {
+  while (companySize(c) > 0 && companyPrice(s, p, c) > p.gold) {
     if (c.artillery) c.artillery--;
     else if (c.dragoons) c.dragoons--;
     else c.soldiers--;
   }
   if (!companySize(c)) return null;
   const name = MERCENARIES.names[Math.floor(r('name') * MERCENARIES.names.length)];
-  return { name, ...c, price: companyPrice(p, c), turn };
+  return { name, ...c, price: companyPrice(s, p, c), turn };
 }
 
 /** "3 veteran soldiers, 1 veteran dragoon and 2 artillery". */
@@ -169,7 +169,7 @@ export function answerMercenaries(s: GameState, nation: NationId, hire: boolean)
   delete p.mercenaryOffer;
   if (!hire) {
     track(nation, 'rebellion:mercenaries refused');
-    noteHistory(s, 'independence', [nation], `${NATIONS[nation].name} turns away a company of ${offer.name} mercenaries.`, { secret: true });
+    noteHistory(s, 'independence', [nation], `${nationOf(s, nation).name} turns away a company of ${offer.name} mercenaries.`, { secret: true });
     const text = `You turn the ${offer.name} mercenaries away.`;
     message(s, text, nation);
     return text;
@@ -182,7 +182,7 @@ export function answerMercenaries(s: GameState, nation: NationId, hire: boolean)
     u.state = 'fortified';
   });
   track(nation, 'rebellion:mercenaries hired', companySize(offer));
-  noteHistory(s, 'independence', [nation], `${NATIONS[nation].name} hires ${offer.name} mercenaries: ${describeCompany(offer)} for ${offer.price} gold.`, { at: colony });
+  noteHistory(s, 'independence', [nation], `${nationOf(s, nation).name} hires ${offer.name} mercenaries: ${describeCompany(offer)} for ${offer.price} gold.`, { at: colony });
   const text = `The ${offer.name} mercenaries (${describeCompany(offer)}) join the garrison of ${colony.name} for ${offer.price} gold.`;
   message(s, text, nation, colony);
   return text;
@@ -214,8 +214,8 @@ function mercenaryRound(s: GameState, p: Player, lostColony: boolean): void {
 export const INTERVENTION = { minTurns: 8, bells: 500, hold: 2 / 3, share: 0.4, minLand: 6, menOfWar: 2 };
 
 /** Liberty bells a nation's rebels must ring after the declaration before a power intervenes. */
-export function interventionBells(p: Player): number {
-  return Math.round(INTERVENTION.bells * difficultyRules(p).interventionBells);
+export function interventionBells(s: GameState, p: Player): number {
+  return Math.round(INTERVENTION.bells * difficultyOf(s, p).interventionBells);
 }
 
 /** The force a power would send: INTERVENTION.share of the land units of the REF that sailed (at least minLand), half soldiers, a quarter each dragoons and artillery. */
@@ -236,7 +236,7 @@ export function interventionStatus(s: GameState, nation: NationId): { turns: num
     turns: s.turn - declaredOn(s, p),
     minTurns: INTERVENTION.minTurns,
     bells: Math.max(0, p.bells - r.bells),
-    needBells: interventionBells(p),
+    needBells: interventionBells(s, p),
     held: Object.values(s.colonies).filter((c) => c.owner === nation).length,
     needHeld: Math.ceil((p.coloniesAtDeclaration ?? 1) * INTERVENTION.hold),
     ...(r.intervention ? { came: r.intervention } : {}),
@@ -244,8 +244,8 @@ export function interventionStatus(s: GameState, nation: NationId): { turns: num
 }
 
 /** "France", or "A European power" for a force from no particular nation. */
-export function powerName(by: NationId | 'foreign'): string {
-  return by === 'foreign' ? 'A European power' : NATIONS[by].name;
+export function powerName(s: ScenarioLike, by: NationId | 'foreign'): string {
+  return by === 'foreign' ? term(s, 'foreignPower') : nationOf(s, by).name;
 }
 
 /**
@@ -269,7 +269,7 @@ export function interventionPower(s: GameState, nation: NationId): NationId | 'f
     let x = r * total;
     return (candidates.find((c) => (x -= c.weight) < 0) ?? candidates[candidates.length - 1]).id;
   }
-  const absent = (Object.keys(NATIONS) as NationId[]).filter((n) => n !== 'crown' && !s.players.some((o) => o.id === n));
+  const absent = nationSet(scenarioOf(s), s.config.rivals).map((e) => e.id).filter((n) => !s.players.some((o) => o.id === n));
   return absent.length ? absent[Math.floor(r * absent.length)] : 'foreign';
 }
 
@@ -303,7 +303,7 @@ export function intervene(s: GameState, nation: NationId): void {
   r.intervention = { by, turn: s.turn, land };
   track(nation, 'rebellion:intervention');
   const ships = sea ? ` and ${force.menOfWar} men-of-war` : '';
-  const text = `${powerName(by)} intervenes in the War of Independence! An intervention force of ${describeCompany(force).replace(/veteran /g, '')}${ships} lands at ${target.name} to fight the Crown beside the rebels of ${NATIONS[nation].name}.`;
+  const text = `${powerName(s, by)} intervenes in the ${term(s, 'independenceWar')}! An intervention force of ${describeCompany(force).replace(/veteran /g, '')}${ships} lands at ${target.name} to fight ${term(s, 'crown')} beside the rebels of ${nationOf(s, nation).name}.`;
   message(s, text, undefined, target);
   noteHistory(s, 'independence', by === 'foreign' || !s.players.some((o) => o.id === by) ? [nation] : [nation, by], text, { at: target });
 }
@@ -319,7 +319,7 @@ function interventionRound(s: GameState, p: Player): void {
 export function alliesGoHome(s: GameState, nation: NationId): void {
   const allies = Object.values(s.units).filter((u) => u.owner === nation && u.ally);
   for (const u of allies) delete s.units[u.id];
-  if (allies.length) message(s, 'The War of Independence is over: the intervention force sails home.', nation);
+  if (allies.length) message(s, `The ${term(s, 'independenceWar')} is over: the intervention force sails home.`, nation);
 }
 
 // ---------------------------------------------------------------------------
@@ -417,9 +417,9 @@ function defect(s: GameState, p: Player, c: Colony): void {
     delete w.teach;
   }
   track(p.id, 'rebellion:colony defected');
-  const text = `Tories in ${c.name} open the gates to the Crown: the colony declares for the King!`;
+  const text = `${Term(s, 'loyalists')} in ${c.name} open the gates to ${term(s, 'crown')}: the colony declares for ${term(s, 'king')}!`;
   message(s, text, undefined, c);
-  noteHistory(s, 'independence', [p.id], `Tories in ${c.name} declare for the King; ${NATIONS[p.id].name} loses the colony.`, { at: c });
+  noteHistory(s, 'independence', [p.id], `${Term(s, 'loyalists')} in ${c.name} declare for ${term(s, 'king')}; ${nationOf(s, p.id).name} loses the colony.`, { at: c });
 }
 
 function toryRound(s: GameState, p: Player): void {
@@ -438,8 +438,8 @@ function toryRound(s: GameState, p: Player): void {
     if (!deserter) continue;
     delete s.units[deserter.id];
     track(p.id, 'rebellion:desertion');
-    message(s, `Tory sentiment in ${c.name}: a ${deserter.role} deserts to the Crown.`, p.id, c);
-    noteHistory(s, 'independence', [p.id], `Tory sentiment in ${c.name}: troops desert.`, { secret: true, at: c });
+    message(s, `${Term(s, 'loyalist')} sentiment in ${c.name}: a ${deserter.role} deserts to ${term(s, 'crown')}.`, p.id, c);
+    noteHistory(s, 'independence', [p.id], `${Term(s, 'loyalist')} sentiment in ${c.name}: troops desert.`, { secret: true, at: c });
   }
 }
 

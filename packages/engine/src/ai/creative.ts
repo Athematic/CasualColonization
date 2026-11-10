@@ -3,6 +3,7 @@ import { rebelShare } from '../independence.js';
 import { colonyAt, distance, isShip, unitsAt } from '../queries.js';
 import { isFavoured } from '../relations.js';
 import { random } from '../rng.js';
+import { aiTurn } from '../scenarios/index.js';
 import type { GameState, Player } from '../types.js';
 import { ownColonies } from './common.js';
 import type { AiFocus, AiProfile } from './profiles.js';
@@ -10,7 +11,10 @@ import type { AiFocus, AiProfile } from './profiles.js';
 /** Turns between strategy reviews. */
 const REVIEW_EVERY = 8;
 
-/** Creative takes up an independence plan from this rebel share (after turn 100), or from this turn. */
+/**
+ * Creative takes up an independence plan from this rebel share (after turn 100), or from this turn.
+ * Both turns are the Americas' and scale with the scenario's pace (`aiTurn`).
+ */
 export const PLAN_FROM = { share: 25, turn: 160 };
 
 /**
@@ -36,13 +40,13 @@ function chooseFocus(s: GameState, p: Player, base: AiProfile): AiFocus {
   const share = rebelShare(s, p.id);
   const personality = p.aiMemory!.personality!;
   if (Object.entries(p.stance).some(([other, stance]) => stance === 'war' && other !== 'crown')) return p.aiMemory?.warTarget ? 'war' : 'defend';
-  if (s.turn < 30) return 'explore';
+  if (s.turn < aiTurn(s, 30)) return 'explore';
   // An independence plan, once taken up (ai/plan.ts), stays the focus: from PLAN_FROM.share percent
   // rebels or PLAN_FROM.turn.
-  if (p.aiMemory?.independencePlan !== undefined || (share >= PLAN_FROM.share && s.turn > 100) || s.turn >= PLAN_FROM.turn) return 'independence';
+  if (base.independence !== null && (p.aiMemory?.independencePlan !== undefined || (share >= PLAN_FROM.share && s.turn > aiTurn(s, 100)) || s.turn >= aiTurn(s, PLAN_FROM.turn))) return 'independence';
   if (opening(s, p) && personality.aggression > 0.3 && s.turn - (p.aiMemory?.lastWar ?? -100) > 60) return 'war';
   if (colonies.length < base.colonyTarget(s.turn) - 1) return 'expand';
-  if (s.turn > 90 && share < 40) return 'liberty';
+  if (s.turn > aiTurn(s, 90) && share < 40) return 'liberty';
   return 'develop';
 }
 
@@ -72,6 +76,7 @@ function applyFocus(base: AiProfile, focus: AiFocus, personality: { aggression: 
     case 'liberty':
       return { ...prof, liberty: 2.4 * personality.liberty, schools: true };
     case 'independence':
+      if (base.independence === null) return prof;
       return { ...prof, liberty: 2, independence: { minTurn: 140, minShare: 50, armyPerColony: 1, ratio: 1.15, arm: true, adopt: PLAN_FROM } };
     case 'defend':
       return { ...prof, garrison: 2, aggression: 0, gifts: true };

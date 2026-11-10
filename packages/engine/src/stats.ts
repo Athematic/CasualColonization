@@ -4,12 +4,13 @@
  * computer-only games record too. Older saves have no history and start recording on load.
  */
 import { sonsOfLiberty } from './production.js';
-import { GOODS, type GoodId } from './rules/goods.js';
+import type { GoodId } from './rules/goods.js';
 import type { NationId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
 import { score } from './score.js';
 import type { GameState, StatsHistory } from './types.js';
+import { goodsOf } from './scenarios/index.js';
 
 /** What each snapshot holds, in order. Per-turn values are rates; the rest are levels. */
 export const STAT_KEYS = [
@@ -33,23 +34,24 @@ export const STAT_KEYS = [
 
 export type StatKey = (typeof STAT_KEYS)[number];
 
+/** Names and descriptions of the statistics; `{…}` are the scenario's terms (`withTerms(s, text)`). */
 export const STAT_INFO: Record<StatKey, { name: string; description: string; perTurn?: boolean; percent?: boolean }> = {
-  score: { name: 'Score', description: 'Score as it would be counted at the end of the game: colonists, experts at work, buildings, production, liberty, Founding Fathers, wealth, peace and cooperation. Saves from before version 0.7 keep the old formula’s numbers for turns already recorded.' },
+  score: { name: 'Score', description: 'Score as it would be counted at the end of the game: colonists, experts at work, buildings, production, liberty, {members}, wealth, peace and cooperation. Saves from before version 0.7 keep the old formula’s numbers for turns already recorded.' },
   gold: { name: 'Gold', description: 'Gold in the treasury.' },
   colonies: { name: 'Colonies', description: 'Colonies held.' },
   population: { name: 'Colonists', description: 'Colonists living and working in colonies.' },
   rebels: { name: 'Rebels', description: 'Share of colonists who support independence.', percent: true },
   bells: { name: 'Liberty bells', description: 'Liberty bells rung since the start of the game.' },
   crosses: { name: 'Crosses', description: 'Crosses produced per turn.', perTurn: true },
-  fathers: { name: 'Founding Fathers', description: 'Members of the Continental Congress.' },
+  fathers: { name: '{Members}', description: 'Members of the {council}.' },
   military: { name: 'Military strength', description: 'Combined attack strength of soldiers, dragoons and artillery.' },
   ships: { name: 'Ships', description: 'Ships in the fleet.' },
   holds: { name: 'Naval tonnage', description: 'Cargo holds across the whole fleet.' },
   production: { name: 'Goods produced', description: 'Goods produced per turn in all colonies (food excluded).', perTurn: true },
-  trade: { name: 'Trade income', description: 'Gold earned per turn by selling goods in Europe, through custom houses and to natives.', perTurn: true },
-  tax: { name: 'Tax rate', description: 'The Crown’s tax rate.', percent: true },
+  trade: { name: 'Trade income', description: 'Gold earned per turn by selling goods in {homeland}, through custom houses and to natives.', perTurn: true },
+  tax: { name: 'Tax rate', description: '{Crown}’s tax rate.', percent: true },
   tension: { name: 'Native tension', description: 'Average tension of the native settlements met (0 content, 1000 furious).' },
-  explored: { name: 'Land explored', description: 'Share of the New World’s land explored.', percent: true },
+  explored: { name: 'Land explored', description: 'Share of {colonyLand}’s land explored.', percent: true },
 };
 
 /** History is thinned (every other snapshot dropped) beyond this, for games played on past 1850. */
@@ -111,7 +113,7 @@ export function noteTrade(s: GameState, nation: NationId, gold: number): void {
 /** Notes a colony's production for the turn (goods except food, and crosses). */
 export function noteProduction(s: GameState, nation: NationId, produced: Partial<Record<GoodId | 'crosses', number>>): void {
   let goods = 0;
-  for (const g of GOODS) if (g !== 'food') goods += produced[g] ?? 0;
+  for (const g of goodsOf(s)) if (g !== 'food') goods += produced[g] ?? 0;
   note(s, nation, 'production', goods);
   note(s, nation, 'crosses', produced.crosses ?? 0);
 }

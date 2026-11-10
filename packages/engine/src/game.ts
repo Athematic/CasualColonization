@@ -2,8 +2,8 @@ import { applyCommand, type Command, type CommandResult } from './commands.js';
 import { initialMarket, randomImmigrant } from './europe.js';
 import { placeOnMap } from './movement.js';
 import { createUnit, message, reveal } from './queries.js';
-import { NATIONS, TRIBE_ORDER, type NationId } from './rules/nations.js';
-import { DEFAULT_DIFFICULTY, DIFFICULTY, resolveDifficulty } from './rules/difficulty.js';
+import type { NationId } from './rules/nations.js';
+import { DEFAULT_DIFFICULTY, resolveDifficulty } from './rules/difficulty.js';
 import { beginPlayerTurn, runAiUntilHuman } from './turn.js';
 import type { GameConfig, GameState, Player } from './types.js';
 import { offerFathers } from './fathers.js';
@@ -11,6 +11,8 @@ import { createWorld } from './world.js';
 import { initRelations } from './relations.js';
 import { initCrown } from './crown.js';
 import { entryPoints } from './mapgen.js';
+import { checkSavedScenario, checkScenarioConfig, difficultyOf, goodsOf, nationOf, peoplesOf, portMarketOf, term } from './scenarios/index.js';
+import { modifiers } from './scenarios/modifiers.js';
 
 /** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
 export const SAVE_VERSION = 3;
@@ -18,16 +20,15 @@ export const SAVE_VERSION = 3;
 /** Shown when a save from before Alpha 0.4 is loaded. */
 export const OLD_SAVE_MESSAGE = "Saves from before version 0.4 can't be loaded.";
 
-/** Thrown by deserialize for a save in a format this version cannot read. */
-export class SaveVersionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'SaveVersionError';
-  }
-}
+import { SaveVersionError } from './errors.js';
+
+export { SaveVersionError };
 
 export function createGame(config: GameConfig): GameState {
-  if (config.nations.length < 1 || config.nations.length > 8) throw new Error('Between 1 and 8 nations can take part.');
+  const scenario = checkScenarioConfig(config);
+  // A game in another scenario records the version it was made with (section 3.14); the Americas
+  // (version 1, the default) write nothing, so their saves and hashes stay as they were.
+  if (config.scenario && config.scenarioVersion === undefined && scenario.version !== 1) config = { ...config, scenarioVersion: scenario.version };
   if (new Set(config.nations).size !== config.nations.length) throw new Error('Each nation can only take part once.');
   for (const h of config.humans) if (!config.nations.includes(h)) throw new Error(`${h} is not taking part.`);
 
@@ -44,7 +45,7 @@ export function createGame(config: GameConfig): GameState {
     players: [],
     units: {},
     colonies: {},
-    tribes: TRIBE_ORDER.map((id) => ({ id, stance: {} })),
+    tribes: peoplesOf({ config }).map((id) => ({ id, stance: {} })),
     settlements: Object.fromEntries(world.settlements.map((st) => [st.id, st])),
     messages: [],
     difficulty: resolveDifficulty(config.difficulty),
@@ -61,7 +62,7 @@ export function createGame(config: GameConfig): GameState {
     // them during a head start; other computer players stay at Conquistador (see rules/difficulty.ts).
     if (p.human || config.headStart?.humans.includes(nation) || config.difficultyForAll) {
       p.difficulty = s.difficulty;
-      const rules = DIFFICULTY[s.difficulty!];
+      const rules = difficultyOf(s, { difficulty: s.difficulty });
       p.gold = rules.startingGold;
       p.crossesRequired = Math.round(p.crossesRequired * rules.crosses);
     }
@@ -72,7 +73,7 @@ export function createGame(config: GameConfig): GameState {
     reveal(s, nation, entry.x, entry.y, 1);
     startingUnits(s, nation, entry);
     const heading = world.entrySide === 'west' ? 'east' : 'west';
-    message(s, `Your Majesty's expedition for ${NATIONS[nation].name} has reached the New World. Sail ${heading} to find land!`, nation, entry);
+    message(s, term(s, 'arrival', { nation: nationOf(s, nation).name, heading }), nation, entry);
   });
 
   beginPlayerTurn(s, s.players[0]);
@@ -86,7 +87,7 @@ export function newPlayer(s: GameState, nation: NationId, human: boolean, entry:
     human,
     gold: 1000,
     tax: 0,
-    market: initialMarket(nation),
+    market: initialMarket(portMarketOf(s, nation), goodsOf(s)),
     crosses: 0,
     crossesRequired: 30,
     recruitPool: [],
@@ -118,7 +119,7 @@ function startingUnits(s: GameState, nation: NationId, at: { x: number; y: numbe
   pioneer.role = 'pioneer';
   pioneer.tools = 60;
   for (const u of [soldier, pioneer]) u.state = 'sentry';
-  if (nation === 'sweden') createUnit(s, nation, 'expertLumberjack', { kind: 'europe' });
+  for (const m of modifiers(s, nation, 'startingDocks')) for (const type of m.units) createUnit(s, nation, type, { kind: 'europe' });
 }
 
 export function serialize(s: GameState): string {
@@ -131,7 +132,8 @@ export function deserialize(json: string): GameState {
 
 /**
  * Checks a loaded save. Alpha 0.4 changed the state for Favoured Nation, and older saves are not
- * converted (agreed in docs/design/favoured-nation.md): they fail with OLD_SAVE_MESSAGE.
+ * converted (agreed in docs/design/favoured-nation.md): they fail with OLD_SAVE_MESSAGE. Saves
+ * from a scenario this version does not have, or from a newer version of it, fail too.
  */
 export function migrate(raw: { version: number }): GameState {
   const s = raw as GameState;
@@ -141,6 +143,8 @@ export function migrate(raw: { version: number }): GameState {
   // Saves from before difficulty levels played by the standard rules.
   s.difficulty = s.difficulty ?? DEFAULT_DIFFICULTY;
   s.relations = s.relations ?? {};
+  // A missing scenario means the Americas; an unknown one or a newer version is refused.
+  checkSavedScenario(s);
   return s;
 }
 

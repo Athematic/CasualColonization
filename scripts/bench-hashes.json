@@ -2,5 +2,9 @@
   "seed 7, 150 rounds": "262c077018e1bb3e",
   "seed 1492, 150 rounds": "ad7b3e79d0f790c5",
   "seed 123456, 150 rounds": "020ce607be5a97b8",
-  "seed 2024, to 1700": "2c4559252d0ad16b"
+  "seed 2024, to 1700": "2c4559252d0ad16b",
+  "caribbean: seed 7, 150 rounds": "0c8ff1b3539ebd2f",
+  "caribbean: seed 1492, 150 rounds": "530cc660619001a0",
+  "caribbean: seed 123456, 150 rounds": "9e515ab23595d0dc",
+  "caribbean: seed 2024, to 1700": "c76b850590da1f48"
 }

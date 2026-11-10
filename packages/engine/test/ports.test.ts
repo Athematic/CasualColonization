@@ -69,7 +69,7 @@ describe('port character', () => {
 
   it('keeps the differences moderate, in the shape of the scenario nation entry', () => {
     for (const [nation, entry] of Object.entries(PORT_CHARACTER) as [NationId, PortEntry][]) {
-      expect(entry.name).toBe(HOME_PORTS[nation]);
+      expect(entry.name).toBe(HOME_PORTS[nation as keyof typeof HOME_PORTS]);
       const c = entry.market ?? {};
       for (const [g, f] of Object.entries(c.prices ?? {}) as [GoodId, number][]) {
         // Factors within 30%; at most about 30% of the price in gold, and never more than 1 gold on the cheap goods.
@@ -89,20 +89,20 @@ describe('port character', () => {
   it('prices ships by port: cheap in Lisbon, dear in Seville', () => {
     const s = game(['england', 'spain', 'portugal']);
     const [en, es, pt] = s.players;
-    expect(trainPrice(pt, 'merchantman')).toBeLessThan(trainPrice(en, 'merchantman'));
-    expect(trainPrice(es, 'merchantman')).toBeGreaterThan(trainPrice(en, 'merchantman'));
+    expect(trainPrice(s, pt, 'merchantman')).toBeLessThan(trainPrice(s, en, 'merchantman'));
+    expect(trainPrice(s, es, 'merchantman')).toBeGreaterThan(trainPrice(s, en, 'merchantman'));
     // Colonists and artillery cost the same everywhere.
-    expect(trainPrice(pt, 'artillery')).toBe(trainPrice(en, 'artillery'));
-    expect(trainPrice(pt, 'expertFarmer')).toBe(trainPrice(en, 'expertFarmer'));
+    expect(trainPrice(s, pt, 'artillery')).toBe(trainPrice(s, en, 'artillery'));
+    expect(trainPrice(s, pt, 'expertFarmer')).toBe(trainPrice(s, en, 'expertFarmer'));
   });
 
   it('a deep market moves its price more slowly, and prices drift back to the port’s own', () => {
     const s = game(['england', 'netherlands']);
     const [en, nl] = s.players;
-    expect(marketElasticity(nl, 'tradeGoods')).toBe(2 * marketElasticity(en, 'tradeGoods'));
+    expect(marketElasticity(s, nl, 'tradeGoods')).toBe(2 * marketElasticity(s, en, 'tradeGoods'));
     // Buying a deep market's goods raises its price half as often.
-    sellToMarket(s, nl, 'tradeGoods', -marketElasticity(en, 'tradeGoods') * 2);
-    sellToMarket(s, en, 'tradeGoods', -marketElasticity(en, 'tradeGoods') * 2);
+    sellToMarket(s, nl, 'tradeGoods', -marketElasticity(s, en, 'tradeGoods') * 2);
+    sellToMarket(s, en, 'tradeGoods', -marketElasticity(s, en, 'tradeGoods') * 2);
     expect(nl.market.tradeGoods.price - portBasePrice('netherlands', 'tradeGoods')).toBe(1);
     expect(en.market.tradeGoods.price - portBasePrice('england', 'tradeGoods')).toBe(2);
     // Recovery heads for the port's own resting price.

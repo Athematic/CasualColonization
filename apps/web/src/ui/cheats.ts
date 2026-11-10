@@ -1,4 +1,4 @@
-import { CHEAT_IDS, CHEATS, formatDate, mapRevealed, nationTitle, yieldMultiplier, type CheatId, type NationId } from '@cc/engine';
+import { calendarOf, CHEAT_IDS, CHEATS, formatDate, mapRevealed, nationTitle, yieldMultiplier, type CheatId, type NationId } from '@cc/engine';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
 import { confirmDialog, layer, toast } from './dialogs.js';
@@ -15,7 +15,7 @@ export async function openCheats(app: App): Promise<void> {
   let target: NationId = nations.includes(app.viewer) ? app.viewer : nations[0];
 
   const select = h('select', { 'aria-label': 'Nation the cheat acts on', onchange: (e: Event) => { target = (e.target as HTMLSelectElement).value as NationId; render(); } },
-    nations.map((n) => h('option', { value: n, selected: n === target || undefined }, `${nationTitle(n)}${s().players.find((p) => p.id === n)?.human ? '' : ' (computer)'}`)));
+    nations.map((n) => h('option', { value: n, selected: n === target || undefined }, `${nationTitle(app.state, n)}${s().players.find((p) => p.id === n)?.human ? '' : ' (computer)'}`)));
   const list = h('div', { class: 'dialog-actions' });
   const status = h('p', { class: 'muted small' });
 
@@ -35,11 +35,11 @@ export async function openCheats(app: App): Promise<void> {
     for (const id of CHEAT_IDS) {
       const def = CHEATS[id];
       const label = def.toggle ? `${def.name}: ${isOn(id) ? 'on' : 'off'}` : def.name;
-      list.append(h('button', { class: 'btn', title: def.note, onclick: () => run(id) }, label, def.perNation ? h('span', { class: 'muted small' }, ` (${nationTitle(target)})`) : null));
+      list.append(h('button', { class: 'btn', title: def.note, onclick: () => run(id) }, label, def.perNation ? h('span', { class: 'muted small' }, ` (${nationTitle(app.state, target)})`) : null));
     }
     list.append(h('button', { class: 'btn primary', onclick: close }, 'Close'));
     const c = s().cheated;
-    status.textContent = c ? `Cheats used since ${formatDate(c.turn)}: ${c.cheats.map((id) => CHEATS[id].name.toLowerCase()).join(', ')}.` : '';
+    status.textContent = c ? `Cheats used since ${formatDate(c.turn, calendarOf(s()))}: ${c.cheats.map((id) => CHEATS[id].name.toLowerCase()).join(', ')}.` : '';
   }
 
   const onKey = (e: KeyboardEvent) => {

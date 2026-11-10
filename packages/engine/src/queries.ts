@@ -1,12 +1,12 @@
 import { BUILDINGS, WAREHOUSE_CAPACITY } from './rules/buildings.js';
-import { NATIONS } from './rules/nations.js';
-import { GOODS, type GoodId } from './rules/goods.js';
+import type { GoodId } from './rules/goods.js';
 import type { NationId } from './rules/nations.js';
 import { FOREST_DEFENCE, TERRAIN, type TerrainDef } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeDef } from './rules/units.js';
 import type { Colony, GameState, Player, Settlement, Tile, Unit, UnitLocation } from './types.js';
 import type { UnitTypeId } from './rules/units.js';
-import type { FatherId } from './rules/fathers.js';
+import { goodsOf } from './scenarios/index.js';
+import { modifiers } from './scenarios/modifiers.js';
 
 export const DIRECTIONS = [
   { id: 'n', dx: 0, dy: -1 },
@@ -101,13 +101,8 @@ export function isCarrier(u: Unit): boolean {
 export function maxMoves(u: Unit, s: GameState): number {
   const def = UNIT_TYPES[u.type];
   let moves = ROLES[u.role].moves ?? def.moves;
-  if (def.kind === 'ship' && u.owner === 'portugal') moves += 1;
-  if (def.kind === 'ship' && ownerHasFather(s, u.owner, 'ferdinandMagellan')) moves += 1;
+  if (def.kind === 'ship') for (const m of modifiers(s, u.owner, 'shipMoves')) moves += m.add;
   return moves * 3;
-}
-
-function ownerHasFather(s: GameState, nation: NationId, id: FatherId): boolean {
-  return s.players.find((p) => p.id === nation)?.fathers.includes(id) ?? false;
 }
 
 export function unitName(u: Unit): string {
@@ -192,7 +187,7 @@ export function colonyPopulation(s: GameState, colony: Colony): number {
 
 export function cargoUsed(s: GameState, carrier: Unit): number {
   let used = unitsAboard(s, carrier).reduce((n, u) => n + (u.type === 'treasure' ? UNIT_TYPES[carrier.type].cargo : 1), 0);
-  for (const g of GOODS) {
+  for (const g of goodsOf(s)) {
     const amount = carrier.cargo?.[g] ?? 0;
     if (amount > 0) used += Math.ceil(amount / 100);
   }
@@ -224,8 +219,7 @@ export function sightRadius(u: Unit, s: GameState): number {
   let r = 1;
   if (u.role === 'scout') r = 2;
   if (def.kind === 'ship' && def.offence > 0) r = 2;
-  if (u.owner === 'russia' && (u.role === 'scout' || u.role === 'dragoon')) r += 1;
-  if (def.kind !== 'ship' && ownerHasFather(s, u.owner, 'hernandoDeSoto')) r += 1;
+  for (const m of modifiers(s, u.owner, 'sight')) if ((!m.roles || m.roles.includes(u.role)) && (!m.land || def.kind !== 'ship')) r += m.add;
   return r;
 }
 
@@ -266,25 +260,9 @@ export function newId(s: GameState, prefix: string): string {
   return `${prefix}${s.nextId++}`;
 }
 
-export function yearOf(turn: number): { year: number; season: 'spring' | 'autumn' | null } {
-  if (turn < 108) return { year: 1492 + turn, season: null };
-  const t = turn - 108;
-  return { year: 1600 + Math.floor(t / 2), season: t % 2 === 0 ? 'spring' : 'autumn' };
-}
-
-export function formatDate(turn: number): string {
-  const { year, season } = yearOf(turn);
-  return season ? `${season === 'spring' ? 'Spring' : 'Autumn'} ${year}` : `${year}`;
-}
-
 export function createUnit(s: GameState, owner: NationId, type: UnitTypeId, loc: UnitLocation): Unit {
   const u: Unit = { id: newId(s, 'u'), owner, type, role: 'none', tools: 0, loc, moves: 0, state: 'active' };
   s.units[u.id] = u;
   return u;
 }
 
-/** A nation's name for the start of a sentence or a table cell ("The Netherlands"). */
-export function nationTitle(nation: NationId): string {
-  const name = NATIONS[nation].name;
-  return name[0].toUpperCase() + name.slice(1);
-}

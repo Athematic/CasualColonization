@@ -45,9 +45,10 @@ import { track } from '../telemetry.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
+import { aiGoodsOf, aiTurn } from '../scenarios/index.js';
 
-/** Goods the computer players export, and so weigh in tax decisions and port choice. */
-export const EXPORT_GOODS: GoodId[] = ['sugar', 'tobacco', 'cotton', 'furs', 'ore', 'silver', 'rum', 'cigars', 'cloth', 'coats'];
+/** Goods the computer players export, and so weigh in tax decisions and port choice (the scenario's `ai.goods.export`). */
+export const exportGoods = (s: GameState): readonly GoodId[] => aiGoodsOf(s).export;
 
 /** Turns between reviews of relations (each nation reviews on a different turn of the cycle). */
 export const FOREIGN_REVIEW_EVERY = 5;
@@ -251,7 +252,7 @@ function reconsiderFavoured(s: GameState, p: Player, prof: AiProfile, strength: 
       return;
     }
   }
-  if (prof.aggression < 1 || army < 2 || s.turn <= 50 || s.turn - (memory.lastWar ?? -100) <= 40 || memory.warPlan) return;
+  if (prof.aggression < 1 || army < 2 || s.turn <= aiTurn(s, 50) || s.turn - (memory.lastWar ?? -100) <= 40 || memory.warPlan) return;
   if (bestWarTarget(s, p, prof, strength)?.ready) return;
   const target = bestWarTarget(s, p, prof, strength, true);
   if (!target || !isFavoured(s, p.id, target.c.owner) || target.score < 1.5 * (2.5 / target.aggression)) return;
@@ -269,7 +270,7 @@ export function exportShare(s: GameState, p: Player, good: GoodId): number {
   let mine = 0;
   for (const c of ownColonies(s, p)) {
     const report = colonyReport(s, c);
-    for (const g of EXPORT_GOODS) {
+    for (const g of exportGoods(s)) {
       const v = (c.goods[g] + Math.max(0, report.net[g]) * 8) * Math.max(1, sellPrice(p, g));
       total += v;
       if (g === good) mine += v;
@@ -301,7 +302,7 @@ function partnerOutlet(s: GameState, p: Player, good: GoodId, rate: number): boo
  * (LARGE_TAX_RAISE points or more) on a good below MINOR_GOOD_SHARE of its exports.
  */
 export function refusesTax(s: GameState, p: Player, pending: { rate: number; good: GoodId }): boolean {
-  if (!EXPORT_GOODS.includes(pending.good)) return false;
+  if (!exportGoods(s).includes(pending.good)) return false;
   const raise = pending.rate - p.tax;
   if (raise <= 0) return false;
   const share = exportShare(s, p, pending.good);
@@ -329,7 +330,7 @@ function maybePayArrears(s: GameState, p: Player, prof: AiProfile): void {
   if (p.independence !== 'none') return;
   for (const g of Object.keys(p.boycotts) as GoodId[]) {
     if (!p.boycotts[g]) continue;
-    const cost = arrears(p, g);
+    const cost = arrears(s, p, g);
     if (p.gold < prof.reserve + cost + 1000 || partnerOutlet(s, p, g, p.tax)) continue;
     const stock = ownColonies(s, p).reduce((n, c) => n + c.goods[g], 0);
     const worth = stock * ((sellPrice(p, g) * (100 - p.tax)) / 100);
@@ -344,7 +345,7 @@ function maybePayArrears(s: GameState, p: Player, prof: AiProfile): void {
 function colonistsForTrip(s: GameState, p: Player): number {
   let n = 0;
   for (const u of Object.values(s.units)) if (u.owner === p.id && u.loc.kind === 'europe' && !isShip(u)) n++;
-  const price = recruitPrice(p);
+  const price = recruitPrice(s, p);
   return n + Math.min(4, Math.floor(Math.max(0, p.gold - 300) / price));
 }
 
@@ -352,7 +353,7 @@ function colonistsForTrip(s: GameState, p: Player): number {
 export function cargoValue(s: GameState, p: Player, ship: Unit, port: NationId): number {
   let v = 0;
   for (const [g, n] of Object.entries(ship.cargo ?? {}) as [GoodId, number][]) {
-    if (n > 0 && (EXPORT_GOODS.includes(g) || g === 'tradeGoods')) v += n * portNet(s, p, port, g);
+    if (n > 0 && (exportGoods(s).includes(g) || g === 'tradeGoods')) v += n * portNet(s, p, port, g);
   }
   return v;
 }
@@ -409,9 +410,9 @@ export function triangleBuy(s: GameState, p: Player, ship: Unit, prof: AiProfile
   const holds = Math.min(2, cargoFree(s, ship));
   if (holds <= 0) return;
   let best: { good: GoodId; port: NationId; gain: number; net: number; price: number } | null = null;
-  for (const g of EXPORT_GOODS) {
+  for (const g of exportGoods(s)) {
     if (here === p.id && p.boycotts[g]) continue;
-    const price = buyPrice(market, g);
+    const price = buyPrice(s, market, g);
     for (const port of ports) {
       if (port === here) continue;
       const net = portNet(s, p, port, g);

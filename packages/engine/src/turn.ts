@@ -12,13 +12,16 @@ import { processEvents } from './events/index.js';
 import { processIndependence } from './independence.js';
 import { runAllies } from './rebellion.js';
 import { processRoutes } from './routes.js';
-import { formatDate, maxMoves, message, unitName, unitPosition } from './queries.js';
-import { checkTimeLimit } from './score.js';
+import { maxMoves, message, unitName, unitPosition } from './queries.js';
+import { calendarOf, formatDate } from './scenarios/index.js';
+import { checkVictory } from './victory.js';
 import { recordStats } from './stats.js';
 import type { GameState, Player, Unit } from './types.js';
 
 /** Resets a player's units and carries out standing orders at the start of their turn. */
 export function beginPlayerTurn(s: GameState, p: Player): void {
+  // A nation finished in arena play-on (victory.ts) takes no more turns.
+  if (p.finished) return;
   let t = perfStart();
   bombardShips(s, p.id);
   for (const u of Object.values(s.units)) {
@@ -64,10 +67,10 @@ export function endTurn(s: GameState): void {
 /** AI players move until a human is up; with no humans at all, one full round is played. */
 export function runAiUntilHuman(s: GameState): void {
   let safety = s.players.length;
-  while (!s.players[s.current].human && safety-- > 0) {
+  while ((!s.players[s.current].human || s.players[s.current].finished) && safety-- > 0) {
     const p = s.players[s.current];
     const t = perfStart();
-    runAi(s, p);
+    if (!p.finished) runAi(s, p);
     perfEnd(p.id === 'crown' ? 'ai: crown (after independence)' : `ai: ${p.ai ?? 'naive'}`, t);
     finishPlayerTurn(s, s.players[s.current]);
     advance(s);
@@ -75,6 +78,7 @@ export function runAiUntilHuman(s: GameState): void {
 }
 
 function finishPlayerTurn(s: GameState, p: Player): void {
+  if (p.finished) return;
   track(p.id, 'cmd:endTurn');
   let t = perfStart();
   for (const c of Object.values(s.colonies)) {
@@ -110,8 +114,8 @@ function advance(s: GameState): void {
     recordStats(s);
     perfEnd('stats', t);
     s.turn++;
-    checkTimeLimit(s);
-    message(s, `${formatDate(s.turn)} begins.`);
+    checkVictory(s, { kind: 'round' });
+    message(s, `${formatDate(s.turn, calendarOf(s))} begins.`);
   }
   beginPlayerTurn(s, s.players[s.current]);
 }

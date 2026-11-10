@@ -1,4 +1,4 @@
-import type { StoredMap } from './index.js';
+import type { StoredMap, TribeRegion } from './index.js';
 
 /** North America. The legend is in index.ts. */
 export const northAmerica: StoredMap = {
@@ -6,16 +6,6 @@ export const northAmerica: StoredMap = {
   name: 'North America',
   description: 'From the Arctic islands to Panama, with the Caribbean. Six tribes, from the Iroquois to the Arawak.',
   entryRows: [14, 60],
-  tribes: [
-    { tribe: 'iroquois', region: [42, 24, 55, 33], count: 7 },
-    { tribe: 'cherokee', region: [33, 34, 47, 45], count: 7 },
-    { tribe: 'sioux', region: [21, 16, 34, 34], count: 10 },
-    { tribe: 'apache', region: [12, 35, 28, 48], count: 8 },
-    { tribe: 'aztec', region: [21, 52, 36, 63], count: 6 },
-    { tribe: 'arawak', region: [39, 52, 60, 59], count: 4 },
-    { tribe: 'arawak', region: [44, 48, 50, 55], count: 1 },
-    { tribe: 'arawak', region: [46, 65, 61, 71], count: 3 },
-  ],
   // Main rivers first, tributaries after the river they join. Format: parseRivers in rivers.ts.
   rivers: `
     Mississippi: m 30,23 31,28 M 32,33 33,38 33,44 33,45
@@ -108,3 +98,15 @@ hGGG^^^^^^TTTTTTTTTTTTTTTTttTTmmm........~~...ttttttthhhhhh...~~~~~~~~~~
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~.........................~~~~~~~~~
 `,
 };
+
+/** Where the Americas scenario's peoples live on North America. */
+export const NORTH_AMERICA_PEOPLES: TribeRegion[] = [
+  { tribe: 'iroquois', region: [42, 24, 55, 33], count: 7 },
+  { tribe: 'cherokee', region: [33, 34, 47, 45], count: 7 },
+  { tribe: 'sioux', region: [21, 16, 34, 34], count: 10 },
+  { tribe: 'apache', region: [12, 35, 28, 48], count: 8 },
+  { tribe: 'aztec', region: [21, 52, 36, 63], count: 6 },
+  { tribe: 'arawak', region: [39, 52, 60, 59], count: 4 },
+  { tribe: 'arawak', region: [44, 48, 50, 55], count: 1 },
+  { tribe: 'arawak', region: [46, 65, 61, 71], count: 3 },
+];

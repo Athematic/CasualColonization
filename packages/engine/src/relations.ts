@@ -9,12 +9,12 @@
  */
 import { fail } from './errors.js';
 import { noteGoods, noteHistory } from './history.js';
-import { buyPrice, sellPrice } from './europe.js';
+import { buyPrice, portName, sellPrice } from './europe.js';
 import { noteTrade } from './stats.js';
 import { cargoRoomFor, colonyAt, distance, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
 import { random } from './rng.js';
-import { GOODS } from './rules/goods.js';
-import { HOME_PORTS, NATIONS, type NationId } from './rules/nations.js';
+import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, term, turnAfterYears, yearValue } from './scenarios/index.js';
+import type { NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import type { GameState, ProposalKind, Relation, RouteCargo, Unit } from './types.js';
 
@@ -99,19 +99,6 @@ export function initRelations(s: GameState): void {
   for (let i = 0; i < nations.length; i++) for (let j = i + 1; j < nations.length; j++) relation(s, nations[i], nations[j]);
 }
 
-/** The game year of a turn, with autumn turns as half years. */
-export function yearValue(turn: number): number {
-  return turn < 108 ? 1492 + turn : 1600 + (turn - 108) / 2;
-}
-
-/** The first turn at least `years` years after `turn`. */
-export function turnAfterYears(turn: number, years: number): number {
-  const goal = yearValue(turn) + years;
-  let t = turn;
-  while (yearValue(t) < goal) t++;
-  return t;
-}
-
 function other(rel: Relation, nation: NationId): NationId {
   return rel.a === nation ? rel.b : rel.a;
 }
@@ -127,7 +114,8 @@ export function atPeace(s: GameState, a: NationId, b: NationId): boolean {
 /** Years of continuous peace between two nations; 0 while at war. */
 export function yearsOfPeace(s: GameState, a: NationId, b: NationId): number {
   if (!europeanPair(a, b) || !atPeace(s, a, b)) return 0;
-  return yearValue(s.turn) - yearValue(relation(s, a, b).peaceSince);
+  const cal = calendarOf(s);
+  return yearValue(s.turn, cal) - yearValue(relation(s, a, b).peaceSince, cal);
 }
 
 export function hasTradeAgreement(s: GameState, a: NationId, b: NationId): boolean {
@@ -188,37 +176,33 @@ export function favouredUnlocked(s: GameState, a: NationId, b: NationId): boolea
 /** Why `from` cannot propose a trade agreement to `to` now, or null. */
 export function tradeProblem(s: GameState, from: NationId, to: NationId): string | null {
   if (!europeanPair(from, to)) return 'Trade agreements are made between two European nations.';
-  if (!takePart(s, from, to)) return `${NATIONS[to].name} is not taking part.`;
-  const name = NATIONS[to].name;
+  if (!takePart(s, from, to)) return `${nationOf(s, to).name} is not taking part.`;
+  const name = nationOf(s, to).name;
   if (!atPeace(s, from, to)) return `You are at war with ${name}.`;
   if (hasTradeAgreement(s, from, to)) return `You already have a trade agreement with ${name}.`;
-  if (!bothHuman(s, from, to) && inWaitingPeriod(s, from, to)) return `${nationTitleOf(to)} will not talk trade so soon after the last agreement was broken.`;
+  if (!bothHuman(s, from, to) && inWaitingPeriod(s, from, to)) return `${nationTitle(s, to)} will not talk trade so soon after the last agreement was broken.`;
   const pending = relation(s, from, to).proposal;
-  if (pending) return pending.from === from ? `${nationTitleOf(to)} has not answered your last proposal yet.` : `${nationTitleOf(to)} is waiting for your answer to its proposal.`;
+  if (pending) return pending.from === from ? `${nationTitle(s, to)} has not answered your last proposal yet.` : `${nationTitle(s, to)} is waiting for your answer to its proposal.`;
   return null;
 }
 
 /** Why `from` cannot propose Favoured Nation status to `to` now, or null. */
 export function favouredProblem(s: GameState, from: NationId, to: NationId): string | null {
+  if (!mechanicsOf(s).favoured) return 'There is no Favoured Nation status in this scenario.';
   if (!europeanPair(from, to)) return 'Favoured Nation status is agreed between two European nations.';
-  if (!takePart(s, from, to)) return `${NATIONS[to].name} is not taking part.`;
-  const name = NATIONS[to].name;
+  if (!takePart(s, from, to)) return `${nationOf(s, to).name} is not taking part.`;
+  const name = nationOf(s, to).name;
   if (!atPeace(s, from, to)) return `You are at war with ${name}.`;
-  if (isFavoured(s, from, to)) return `${nationTitleOf(to)} is already a Favoured Nation.`;
-  if (player(s, from).independence !== 'none' || player(s, to).independence !== 'none') return 'Only nations with a home port in Europe can become Favoured Nations.';
+  if (isFavoured(s, from, to)) return `${nationTitle(s, to)} is already a Favoured Nation.`;
+  if (player(s, from).independence !== 'none' || player(s, to).independence !== 'none') return `Only nations with a home port in ${term(s, 'homeland')} can become Favoured Nations.`;
   const pending = relation(s, from, to).proposal;
-  if (pending) return pending.from === from ? `${nationTitleOf(to)} has not answered your last proposal yet.` : `${nationTitleOf(to)} is waiting for your answer to its proposal.`;
+  if (pending) return pending.from === from ? `${nationTitle(s, to)} has not answered your last proposal yet.` : `${nationTitle(s, to)} is waiting for your answer to its proposal.`;
   // Two people can agree at any time; otherwise peace and trade must have grown first.
   if (bothHuman(s, from, to)) return null;
-  if (inWaitingPeriod(s, from, to)) return `${nationTitleOf(to)} does not trust you again yet.`;
+  if (inWaitingPeriod(s, from, to)) return `${nationTitle(s, to)} does not trust you again yet.`;
   if (!hasTradeAgreement(s, from, to)) return `You need a trade agreement with ${name} first.`;
   if (!favouredUnlocked(s, from, to)) return `Relations with ${name} are not yet close enough: they need more years of peace and more trade routes between you.`;
   return null;
-}
-
-function nationTitleOf(n: NationId): string {
-  const name = NATIONS[n].name;
-  return name[0].toUpperCase() + name.slice(1);
 }
 
 /** Computer players accept a trade agreement when at peace and not hostile. */
@@ -259,13 +243,13 @@ function propose(s: GameState, kind: ProposalKind, from: NationId, to: NationId)
   const target = player(s, to);
   if (target.human) {
     relation(s, from, to).proposal = { kind, from, turn: s.turn };
-    message(s, `${nationTitleOf(from)} proposes ${KIND_NAME[kind]}.`, to);
-    return `Your proposal of ${KIND_NAME[kind]} has been sent to ${NATIONS[to].name}.`;
+    message(s, `${nationTitle(s, from)} proposes ${KIND_NAME[kind]}.`, to);
+    return `Your proposal of ${KIND_NAME[kind]} has been sent to ${nationOf(s, to).name}.`;
   }
   const yes = kind === 'trade' ? aiAcceptsTrade(s, to, from) : aiAcceptsFavoured(s, to, from);
   if (!yes) {
     track(from, 'diplomacy:proposal turned down');
-    const text = `${nationTitleOf(to)} turns down ${KIND_NAME[kind]}.`;
+    const text = `${nationTitle(s, to)} turns down ${KIND_NAME[kind]}.`;
     message(s, text, from);
     return text;
   }
@@ -277,13 +261,13 @@ export function answerProposal(s: GameState, nation: NationId, from: NationId, a
   if (!europeanPair(nation, from)) fail('There is no such proposal.');
   const rel = relation(s, nation, from);
   const p = rel.proposal;
-  if (!p || p.from !== from) fail(`${nationTitleOf(from)} has made no proposal.`);
+  if (!p || p.from !== from) fail(`${nationTitle(s, from)} has made no proposal.`);
   delete rel.proposal;
   track(nation, 'cmd:answerProposal');
   if (!accept) {
     track(from, 'diplomacy:proposal turned down');
-    message(s, `${nationTitleOf(nation)} turns down ${KIND_NAME[p.kind]}.`, from);
-    return `You turn down ${KIND_NAME[p.kind]} with ${NATIONS[from].name}.`;
+    message(s, `${nationTitle(s, nation)} turns down ${KIND_NAME[p.kind]}.`, from);
+    return `You turn down ${KIND_NAME[p.kind]} with ${nationOf(s, from).name}.`;
   }
   // Check again: things may have changed since the proposal was made.
   const problem = p.kind === 'trade' ? tradeProblem(s, from, nation) : favouredProblem(s, from, nation);
@@ -295,9 +279,9 @@ export function makeTradeAgreement(s: GameState, a: NationId, b: NationId): stri
   relation(s, a, b).trade = true;
   track(a, 'diplomacy:trade agreement made');
   track(b, 'diplomacy:trade agreement made');
-  const text = `${nationTitleOf(a)} and ${NATIONS[b].name} have signed a trade agreement. Their trade routes may now call at each other's colonies.`;
+  const text = `${nationTitle(s, a)} and ${nationOf(s, b).name} have signed a trade agreement. Their trade routes may now call at each other's colonies.`;
   message(s, text);
-  noteHistory(s, 'trade', [a, b], `${nationTitleOf(a)} and ${NATIONS[b].name} sign a trade agreement.`);
+  noteHistory(s, 'trade', [a, b], `${nationTitle(s, a)} and ${nationOf(s, b).name} sign a trade agreement.`);
   return text;
 }
 
@@ -307,9 +291,9 @@ export function makeFavoured(s: GameState, a: NationId, b: NationId): string {
   rel.favoured = true;
   track(a, 'diplomacy:favoured nation made');
   track(b, 'diplomacy:favoured nation made');
-  const text = `${nationTitleOf(a)} and ${NATIONS[b].name} are now Favoured Nations: their ships may trade, and buy merchant ships, in each other's home ports.`;
+  const text = `${nationTitle(s, a)} and ${nationOf(s, b).name} are now Favoured Nations: their ships may trade, and buy merchant ships, in each other's home ports.`;
   message(s, text);
-  noteHistory(s, 'favoured', [a, b], `${nationTitleOf(a)} and ${NATIONS[b].name} become Favoured Nations.`);
+  noteHistory(s, 'favoured', [a, b], `${nationTitle(s, a)} and ${nationOf(s, b).name} become Favoured Nations.`);
   return text;
 }
 
@@ -318,14 +302,14 @@ export function makeFavoured(s: GameState, a: NationId, b: NationId): string {
  * colonies are dropped from both nations' routes. No goods are seized and no penalty follows.
  */
 export function cancelTrade(s: GameState, by: NationId, to: NationId): string {
-  if (!hasTradeAgreement(s, by, to)) fail(`You have no trade agreement with ${NATIONS[to].name}.`);
+  if (!hasTradeAgreement(s, by, to)) fail(`You have no trade agreement with ${nationOf(s, to).name}.`);
   if (isFavoured(s, by, to)) fail('Cancel the Favoured Nation status instead; that ends the trade agreement too.');
   track(by, 'cmd:cancelTrade');
   const rel = relation(s, by, to);
   delete rel.trade;
   delete rel.proposal;
   pruneRoutes(s, by, to);
-  const text = `${nationTitleOf(by)} has ended its trade agreement with ${NATIONS[to].name}.`;
+  const text = `${nationTitle(s, by)} has ended its trade agreement with ${nationOf(s, to).name}.`;
   message(s, text);
   noteHistory(s, 'cancel', [by, to], text);
   return text;
@@ -338,7 +322,7 @@ export function cancelTrade(s: GameState, by: NationId, to: NationId): string {
  * period of hostility begin. Both sides suffer, whoever cancels.
  */
 export function cancelFavoured(s: GameState, by: NationId, to: NationId, why: 'cancel' | 'war' = 'cancel'): string {
-  if (!isFavoured(s, by, to)) fail(`${nationTitleOf(to)} is not a Favoured Nation.`);
+  if (!isFavoured(s, by, to)) fail(`${nationTitle(s, to)} is not a Favoured Nation.`);
   if (why === 'cancel') track(by, 'cmd:cancelFavoured');
   track(by, 'diplomacy:favoured nation cancelled');
   const rel = relation(s, by, to);
@@ -353,15 +337,16 @@ export function cancelFavoured(s: GameState, by: NationId, to: NationId, why: 'c
   if (!bothHuman(s, by, to)) {
     rel.cancels = (rel.cancels ?? 0) + 1;
     const r = stream(s, by, to, `cancel ${rel.cancels}`);
-    rel.waitUntil = turnAfterYears(s.turn, around(r, WAITING_YEARS));
-    rel.hostileUntil = turnAfterYears(s.turn, around(r, HOSTILITY_YEARS));
+    const cal = calendarOf(s);
+    rel.waitUntil = turnAfterYears(s.turn, around(r, WAITING_YEARS), cal);
+    rel.hostileUntil = turnAfterYears(s.turn, around(r, HOSTILITY_YEARS), cal);
   }
   // Favoured Nation status needs a new run of peace.
   rel.peaceSince = s.turn;
   const parts = seized.filter(Boolean);
-  const text = `${nationTitleOf(by)} has cancelled the Favoured Nation status with ${NATIONS[to].name}${why === 'war' ? ' by declaring war' : ''}. Trade routes between them are cancelled.${parts.length ? ` ${parts.join(' ')}` : ''}`;
+  const text = `${nationTitle(s, by)} has cancelled the Favoured Nation status with ${nationOf(s, to).name}${why === 'war' ? ' by declaring war' : ''}. Trade routes between them are cancelled.${parts.length ? ` ${parts.join(' ')}` : ''}`;
   message(s, text);
-  noteHistory(s, 'cancel', [by, to], `${nationTitleOf(by)} cancels the Favoured Nation status with ${NATIONS[to].name}${why === 'war' ? ' by declaring war' : ''}.`);
+  noteHistory(s, 'cancel', [by, to], `${nationTitle(s, by)} cancels the Favoured Nation status with ${nationOf(s, to).name}${why === 'war' ? ' by declaring war' : ''}.`);
   return text;
 }
 
@@ -378,7 +363,7 @@ export function lapseFavoured(s: GameState, nation: NationId): void {
     if (rel.proposal?.kind === 'favoured') delete rel.proposal;
     sendShipsHome(s, nation, partner);
     closedRoutePorts(s, partner);
-    message(s, `With ${NATIONS[nation].name}'s declaration of independence, its Favoured Nation status with ${NATIONS[partner].name} has lapsed.`);
+    message(s, `With ${nationOf(s, nation).name}'s declaration of independence, its Favoured Nation status with ${nationOf(s, partner).name} has lapsed.`);
   }
 }
 
@@ -392,7 +377,7 @@ export function onWar(s: GameState, by: NationId, to: NationId): void {
   else if (rel.trade) {
     delete rel.trade;
     pruneRoutes(s, by, to);
-    message(s, `The trade agreement between ${NATIONS[by].name} and ${NATIONS[to].name} ends with the war.`);
+    message(s, `The trade agreement between ${nationOf(s, by).name} and ${nationOf(s, to).name} ends with the war.`);
   }
 }
 
@@ -423,7 +408,7 @@ function pruneRoutes(s: GameState, a: NationId, b: NationId): void {
         delete u.dest;
       }
     }
-    message(s, `The ${route.name} route no longer calls at ${NATIONS[partner].adjective} colonies.`, route.owner);
+    message(s, `The ${route.name} route no longer calls at ${nationOf(s, partner).adjective} colonies.`, route.owner);
   }
 }
 
@@ -444,7 +429,7 @@ export function closedRoutePorts(s: GameState, nation: NationId): void {
       if (port === nation) continue;
       for (const u of Object.values(s.units)) if (u.route?.id === route.id && u.dest && 'europe' in u.dest) delete u.dest.port;
       track(nation, 'route:partner port closed');
-      message(s, `The ${route.name} route now calls at ${HOME_PORTS[nation]}: ${HOME_PORTS[port]} is closed to ${NATIONS[nation].adjective} ships.`, nation);
+      message(s, `The ${route.name} route now calls at ${portName(s, nation)}: ${portName(s, port)} is closed to ${nationOf(s, nation).adjective} ships.`, nation);
     }
   }
 }
@@ -456,7 +441,7 @@ function sendShipsHome(s: GameState, a: NationId, b: NationId): void {
     if (!partner || (u.loc.kind !== 'europe' && u.loc.kind !== 'sailing') || u.loc.port !== partner) continue;
     delete u.loc.port;
     if (u.dest && 'europe' in u.dest) delete u.dest.port;
-    message(s, `${unitName(u)} has to leave the ${NATIONS[partner].adjective} port and returns to its own.`, u.owner);
+    message(s, `${unitName(u)} has to leave the ${nationOf(s, partner).adjective} port and returns to its own.`, u.owner);
   }
 }
 
@@ -475,7 +460,7 @@ function seizeGoods(s: GameState, by: NationId, from: NationId): string {
     const colony = colonies.filter((c) => distance(c.x, c.y, x, y) <= 1).sort((p, q) => distance(p.x, p.y, x, y) - distance(q.x, q.y, x, y))[0];
     if (!colony) continue;
     let taken = 0;
-    for (const g of GOODS) {
+    for (const g of goodsOf(s)) {
       const n = u.cargo[g] ?? 0;
       if (n <= 0) continue;
       const room = g === 'food' ? n : Math.max(0, warehouseCapacity(colony) - colony.goods[g]);
@@ -486,10 +471,10 @@ function seizeGoods(s: GameState, by: NationId, from: NationId): string {
     if (!taken) continue;
     total += taken;
     track(by, 'diplomacy:goods seized', taken);
-    message(s, `${nationTitleOf(by)} seizes the ${taken} goods aboard ${unitName(u)} near ${colony.name}.`, from, { x, y });
-    message(s, `Our people in ${colony.name} seize ${taken} goods from a ${NATIONS[from].adjective} ${isShip(u) ? 'ship' : 'wagon train'}.`, by, colony);
+    message(s, `${nationTitle(s, by)} seizes the ${taken} goods aboard ${unitName(u)} near ${colony.name}.`, from, { x, y });
+    message(s, `Our people in ${colony.name} seize ${taken} goods from a ${nationOf(s, from).adjective} ${isShip(u) ? 'ship' : 'wagon train'}.`, by, colony);
   }
-  return total ? `${nationTitleOf(by)} seizes ${total} ${NATIONS[from].adjective} goods near its colonies.` : '';
+  return total ? `${nationTitle(s, by)} seizes ${total} ${nationOf(s, from).adjective} goods near its colonies.` : '';
 }
 
 /** A vague description of how close two nations are, for the diplomacy screen. Never shows the hidden numbers. */
@@ -572,7 +557,7 @@ export function tradeAtForeignColony(
   }
   for (const r of load) {
     const keep = Math.max(FOREIGN_KEEP, r.amount ?? 0);
-    const price = buyPrice(owner, r.good);
+    const price = buyPrice(s, owner, r.good);
     const n = Math.min(colony.goods[r.good] - keep, cargoRoomFor(s, u, r.good), Math.floor(Math.max(0, me.gold) / price));
     if (n <= 0) continue;
     const gold = n * price;
@@ -585,7 +570,7 @@ export function tradeAtForeignColony(
     out.bought += n;
     out.spent += gold;
   }
-  for (const g of GOODS) if (u.cargo[g] === 0) delete u.cargo[g];
+  for (const g of goodsOf(s)) if (u.cargo[g] === 0) delete u.cargo[g];
   if (out.sold) track(me.id, 'trade:foreign stop sales', out.sold);
   if (out.bought) track(me.id, 'trade:foreign stop purchases', out.bought);
   return out;

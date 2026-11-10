@@ -30,6 +30,7 @@ import { riverLinked } from './rivers.js';
 import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
 import type { TribeId } from './rules/nations.js';
 import type { GameState, ImprovementKind, Player, Unit } from './types.js';
+import { mechanicsOf, term } from './scenarios/index.js';
 
 export type MoveOption =
   | { kind: 'move' }
@@ -114,8 +115,10 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
     if (UNIT_TYPES[u.type].kind === 'colonist' && u.role === 'none' && UNIT_TYPES[u.type].skill <= 0) actions.push('learn');
     if (UNIT_TYPES[u.type].kind === 'wagon') actions.push('trade');
     if (u.role === 'missionary') {
-      if (!settlement.mission) actions.push('mission');
-      else if (settlement.mission !== u.owner) actions.push('denounce');
+      if (mechanicsOf(s).missions) {
+        if (!settlement.mission) actions.push('mission');
+        else if (settlement.mission !== u.owner) actions.push('denounce');
+      }
       if (s.players.some((p) => p.id !== u.owner && p.id !== 'crown')) actions.push('incite');
     }
     if (canAttack(u)) actions.push('attack');
@@ -483,7 +486,7 @@ function directionTo(fx: number, fy: number, tx: number, ty: number): Direction 
 export function setDestination(s: GameState, unitId: string, dest: Unit['dest']): void {
   const u = s.units[unitId];
   if (u.loc.kind !== 'map') fail('Only units on the map can be given orders.');
-  if (dest && 'europe' in dest && !isShip(u)) fail('Only ships can sail to Europe.');
+  if (dest && 'europe' in dest && !isShip(u)) fail(`Only ships can sail to ${term(s, 'homeland')}.`);
   if (dest && 'europe' in dest && dest.port) {
     if (dest.port === u.owner) dest = { europe: true };
     else {

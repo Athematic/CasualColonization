@@ -1,17 +1,19 @@
-import { BUILDINGS, BUILDING_ORDER, BUILDING_SKILL_OUTPUT, PRINTING_BELL_BONUS, type BuildingKind } from './rules/buildings.js';
+import { BUILDINGS, BUILDING_SKILL_OUTPUT, PRINTING_BELL_BONUS, type BuildingKind } from './rules/buildings.js';
+import { buildingsOf } from './scenarios/index.js';
 import { GOODS, type GoodId, type ProductId } from './rules/goods.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { yieldMultiplier } from './cheats.js';
-import { hasFather } from './fathers.js';
+import { modifiers, setOr } from './scenarios/modifiers.js';
 import { applyEventModifiers } from './events/modifiers.js';
 import { colonyWorkers, isWater, tileAt } from './queries.js';
 import type { Colony, GameState, Tile } from './types.js';
 
 export const FOOD_PER_COLONIST = 2;
 
-export function foodToGrow(colony: Colony): number {
-  return colony.owner === 'denmark' ? 160 : 200;
+/** Food a colony needs to grow a colonist (a nation's bonus may lower it). */
+export function foodToGrow(s: GameState, colony: Colony): number {
+  return setOr(modifiers(s, colony.owner, 'foodToGrow'), 200);
 }
 
 /** Sons of Liberty membership in percent. */
@@ -80,7 +82,7 @@ export function tileYield(s: GameState, colony: Colony, x: number, y: number, go
     def.expertFor === good &&
     (good !== 'food' || (unitType === 'expertFisherman') === isWater(tile));
   if (expert) amount *= 2;
-  if (good === 'furs' && hasFather(s, colony.owner, 'henryHudson')) amount *= 2;
+  for (const m of modifiers(s, colony.owner, 'tileYield')) if (m.good === good) amount *= m.mul;
   // Converts know the land: better at farming, fishing and trapping.
   if (unitType === 'nativeConvert' && (good === 'food' || good === 'sugar' || good === 'tobacco' || good === 'cotton' || good === 'furs')) amount += 1;
   return Math.max(0, amount + bonus);
@@ -132,6 +134,8 @@ export interface ColonyReport {
   sonsOfLiberty: number;
 }
 
+// Reports have a zero for every catalogue good: a good a scenario leaves out stays 0 and is
+// never added to a warehouse (processColony adds only the goods in play).
 const ZERO = (() => {
   const out = Object.fromEntries(GOODS.map((g) => [g, 0])) as Record<ProductId, number>;
   out.hammers = 0;
@@ -164,7 +168,7 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
   consumed.food += units.length * FOOD_PER_COLONIST;
 
   // Buildings run in dependency order: tools are made before the armory uses them.
-  for (const kind of BUILDING_ORDER) {
+  for (const kind of buildingsOf(s)) {
     const def = BUILDINGS[kind];
     const level = colony.buildings[kind];
     if (!def.output || level === 0) continue;
@@ -176,7 +180,7 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
         workers[u.id] = n;
       }
     }
-    if (def.input && kind !== 'carpenter' && hasFather(s, colony.owner, 'adamSmith')) capacity = Math.round(capacity * 1.5);
+    if (def.input) for (const m of modifiers(s, colony.owner, 'manufactureCapacity')) if (!m.except?.includes(kind)) capacity = Math.round(capacity * m.mul);
     let output = capacity;
     if (def.input) {
       const available = colony.goods[def.input] + produced[def.input] - consumed[def.input];
@@ -185,11 +189,10 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
     }
     if (kind === 'townHall') {
       let bonus = colony.buildings.printingPress > 0 ? PRINTING_BELL_BONUS[colony.buildings.printingPress - 1] : 0;
-      if (hasFather(s, colony.owner, 'thomasJefferson')) bonus += 10;
-      if (hasFather(s, colony.owner, 'thomasPaine')) bonus += s.players.find((p) => p.id === colony.owner)?.tax ?? 0;
+      for (const m of modifiers(s, colony.owner, 'bellsBonus')) bonus += m.add === 'tax' ? (s.players.find((p) => p.id === colony.owner)?.tax ?? 0) : m.add;
       output = Math.round(output * (1 + bonus / 100));
     }
-    if (kind === 'church' && hasFather(s, colony.owner, 'williamPenn')) output = Math.round(output * 1.5);
+    for (const m of modifiers(s, colony.owner, 'buildingOutput')) if (m.building === kind) output = Math.round(output * m.mul);
     produced[def.output] += output;
     buildings[kind] = { output, capacity };
   }

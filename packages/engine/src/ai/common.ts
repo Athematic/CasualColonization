@@ -6,6 +6,7 @@ import { RuleError } from '../errors.js';
 import { describeMove, findPath, leaveShip, moveUnit, setDestination } from '../movement.js';
 import { baseTileYield } from '../production.js';
 import {
+  cargoFree,
   colonyAt,
   DIRECTIONS,
   distance,
@@ -19,8 +20,8 @@ import {
   unitsAt,
   type Direction,
 } from '../queries.js';
-import { GOODS } from '../rules/goods.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
+import { goodsOf } from '../scenarios/index.js';
 
 /** Runs an AI action, ignoring moves the rules turn down. */
 export function safely(fn: () => void): void {
@@ -60,7 +61,7 @@ export function siteScore(s: GameState, x: number, y: number): number {
     }
     if (colonyAt(s, p.x, p.y)) continue;
     let best = 0;
-    for (const g of GOODS) if (g !== 'food') best = Math.max(best, baseTileYield(tile, g));
+    for (const g of goodsOf(s)) if (g !== 'food') best = Math.max(best, baseTileYield(tile, g));
     score += (baseTileYield(tile, 'food') * 1.2 + best * 0.6) * weight;
   }
   // A river through the centre: road-speed travel inland, and its yield bonus counted above.
@@ -225,6 +226,61 @@ export function landingSpot(s: GameState, p: Player, ship: Unit): { x: number; y
     }
   }
   return null;
+}
+
+/**
+ * Colonists of a nation that has no colony yet, put ashore where no colony can be founded within
+ * reach on foot: another nation founded one on the same small island first. On a continent this
+ * hardly happens; among small islands (the Caribbean) it strands a nation's first landing for the
+ * whole game unless a ship takes them off again (`fetchStranded`, `boardRescue`).
+ */
+export function strandedSettlers(s: GameState, p: Player): Unit[] {
+  if (Object.values(s.colonies).some((c) => c.owner === p.id)) return [];
+  return Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'map' && u.role !== 'scout' && UNIT_TYPES[u.type].kind === 'colonist' && stranded(s, u));
+}
+
+/** Whether a colonist ashore has no tile it could found a colony on within 5 tiles' walk. */
+function stranded(s: GameState, u: Unit): boolean {
+  if (u.loc.kind !== 'map') return false;
+  const w = s.map.width;
+  for (const i of landReach(s, u.loc.x, u.loc.y, 5)) if (siteScore(s, i % w, Math.floor(i / w)) > 0) return false;
+  return true;
+}
+
+/**
+ * An empty ship of a nation with stranded first settlers sails next to them, so they can board.
+ * Returns whether it is on that errand.
+ */
+export function fetchStranded(s: GameState, p: Player, ship: Unit): boolean {
+  if (ship.loc.kind !== 'map' || cargoFree(s, ship) <= 0) return false;
+  const units = strandedSettlers(s, p);
+  if (!units.length) return false;
+  for (const u of units) {
+    if (u.loc.kind !== 'map') continue;
+    const { x, y } = u.loc;
+    if (distance(ship.loc.x, ship.loc.y, x, y) <= 1) return true;
+    const spot = neighbours(s, x, y).find((n) => isWater(tileAt(s, n.x, n.y)!) && !unitsAt(s, n.x, n.y).some((o) => o.owner !== p.id));
+    if (spot && findPath(s, ship, spot.x, spot.y)) {
+      setDestination(s, ship.id, spot);
+      return true;
+    }
+  }
+  return false;
+}
+
+/** A stranded settler boards an own ship with room next to it. Returns whether it did. */
+export function boardRescue(s: GameState, p: Player, u: Unit): boolean {
+  if (u.loc.kind !== 'map' || u.moves <= 0 || Object.values(s.colonies).some((c) => c.owner === p.id) || !stranded(s, u)) return false;
+  const { x, y } = u.loc;
+  for (const n of neighbours(s, x, y)) {
+    const ship = unitsAt(s, n.x, n.y).find((o) => o.owner === p.id && isShip(o) && cargoFree(s, o) > 0);
+    if (!ship) continue;
+    const dir = directionTo(x, y, n.x, n.y)!;
+    if (describeMove(s, u.id, dir).kind !== 'board') continue;
+    moveUnit(s, u.id, dir);
+    return true;
+  }
+  return false;
 }
 
 export function disembarkAll(s: GameState, ship: Unit): boolean {

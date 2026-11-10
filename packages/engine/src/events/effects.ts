@@ -2,17 +2,17 @@
  * What events do: applying effects, and valuing them in gold for the computer players.
  */
 import { addTension } from '../natives.js';
-import { colonyWorkers, createUnit, isWater, neighbours, player, tileAt } from '../queries.js';
+import { colonyWorkers, createUnit, isWater, neighbours, player, reveal, tileAt } from '../queries.js';
 import { placeOnMap } from '../movement.js';
 import { colonyReport } from '../production.js';
 import { BUILDINGS, BUILDING_ORDER, type BuildingKind } from '../rules/buildings.js';
-import { difficultyRules } from '../rules/difficulty.js';
-import { GOODS, type GoodId, type ProductId } from '../rules/goods.js';
+import type { GoodId, ProductId } from '../rules/goods.js';
 import { portPriceBand } from '../rules/ports.js';
 import { TERRAIN } from '../rules/terrain.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState } from '../types.js';
 import type { Effect, EventVars, EventsState, GoodRef, Num } from './types.js';
+import { difficultyOf, goodsOf, portMarketOf } from '../scenarios/index.js';
 
 /** What a point of tax is worth to a nation over the rest of a game, in gold (measured against 30-turn outcomes in docs/design/events.md). */
 export const TAX_POINT_VALUE = 150;
@@ -102,7 +102,7 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
       const g = goodOf(e.good, v);
       if (!g) return;
       const m = p.market[g];
-      const band = portPriceBand(p.id, g);
+      const band = portPriceBand(portMarketOf(s, p.id), g);
       const change = e.delta ?? Math.round((m.price * (e.pct ?? 0)) / 100);
       m.price = Math.max(band.min, Math.min(band.max * 2, m.price + change));
       return;
@@ -111,13 +111,13 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
       p.crosses = Math.max(0, p.crosses + num(e.amount, v));
       return;
     case 'tax':
-      p.tax = Math.max(0, Math.min(difficultyRules(p).taxCeiling, p.tax + e.delta));
+      p.tax = Math.max(0, Math.min(difficultyOf(s, p).taxCeiling, p.tax + e.delta));
       return;
     case 'unit': {
       const type = e.type ?? v.unit;
       if (!type) return;
       if (e.where === 'europe') {
-        if (p.independence === 'none') createUnit(s, v.nation, type, { kind: 'europe' });
+        if (p.independence === 'none' || e.always) createUnit(s, v.nation, type, { kind: 'europe' });
         return;
       }
       if (!colony) return;
@@ -161,6 +161,26 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
     case 'followUp':
       eventsState(s).queue.push({ event: e.event, turn: s.turn + e.turns, vars: { ...v } });
       return;
+    case 'peaceWithPeoples':
+      for (const st of Object.values(s.settlements)) st.tension[p.id] = 0;
+      for (const t of s.tribes) t.stance[p.id] = 'peace';
+      return;
+    case 'stockades':
+      for (const c of ownColonies(s, p.id)) if (colonyWorkers(s, c).length >= e.minColonists && c.buildings.stockade === 0) c.buildings.stockade = 1;
+      return;
+    case 'revealColonies':
+      for (const c of Object.values(s.colonies)) reveal(s, p.id, c.x, c.y, e.radius);
+      return;
+    case 'liberty':
+      // 200 bells make one colonist a Son of Liberty (production.ts, sonsOfLiberty).
+      for (const c of ownColonies(s, p.id)) c.liberty += Math.round(200 * colonyWorkers(s, c).length * e.share);
+      return;
+    case 'convertUnits':
+      for (const u of Object.values(s.units)) if (u.owner === p.id && u.type === e.from) u.type = e.to;
+      return;
+    case 'liftBoycotts':
+      p.boycotts = {};
+      return;
   }
 }
 
@@ -172,7 +192,7 @@ function productionValue(s: GameState, colony: Colony, products?: ProductId[]): 
   for (const [k, n] of Object.entries(report.produced) as [ProductId, number][]) {
     if (!n || (products && !products.includes(k))) continue;
     // Hammers, bells and crosses are worth about what a unit of trade goods is.
-    const price = (GOODS as readonly string[]).includes(k) ? p.market[k as GoodId].price : 2;
+    const price = (goodsOf(s) as readonly string[]).includes(k) ? p.market[k as GoodId].price : 2;
     value += n * price;
   }
   return value;
@@ -261,6 +281,24 @@ export function valueEffects(s: GameState, effects: Effect[], v: EventVars): num
         break;
       case 'followUp':
         break;
+      // Council members' effects: rough values, for completeness (computer players choose members by preference).
+      case 'peaceWithPeoples':
+        for (const st of Object.values(s.settlements)) total += tensionCost(st.tension[v.nation] ?? 0) / 10;
+        break;
+      case 'stockades':
+        total += ownColonies(s, v.nation).filter((c) => c.buildings.stockade === 0 && colonyWorkers(s, c).length >= e.minColonists).length * BUILDINGS.stockade.levels[0].hammers * 4;
+        break;
+      case 'revealColonies':
+        break;
+      case 'liberty':
+        total += ownColonies(s, v.nation).reduce((n, c) => n + colonyWorkers(s, c).length, 0) * e.share * 400;
+        break;
+      case 'convertUnits':
+        total += Object.values(s.units).filter((u) => u.owner === v.nation && u.type === e.from).length * Math.max(0, (UNIT_TYPES[e.to].price ?? 0) - (UNIT_TYPES[e.from].price ?? 0));
+        break;
+      case 'liftBoycotts':
+        total += Object.keys(p.boycotts).length * 500;
+        break;
     }
   }
   return total;
@@ -271,10 +309,14 @@ export function damageableBuilding(colony: Colony): BuildingKind | undefined {
   let best: BuildingKind | undefined;
   for (const b of BUILDING_ORDER) {
     if (b === 'stockade' || b === 'townHall') continue;
-    if (colony.buildings[b] <= Math.max(1, BUILDINGS[b].initialLevel)) continue;
+    if ((colony.buildings[b] ?? 0) <= Math.max(1, BUILDINGS[b].initialLevel)) continue;
     if (!best || colony.buildings[b] > colony.buildings[best]) best = b;
   }
   return best;
+}
+
+function ownColonies(s: GameState, nation: string): Colony[] {
+  return Object.values(s.colonies).filter((c) => c.owner === nation);
 }
 
 /** Colonists working in a colony. */

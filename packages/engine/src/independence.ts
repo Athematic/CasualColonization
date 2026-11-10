@@ -23,9 +23,10 @@ import {
 } from './queries.js';
 import { alliesGoHome, isToryColony, offerMercenaries, processRebellion, startRebellion, TORY_LANDING } from './rebellion.js';
 import { lapseFavoured } from './relations.js';
-import { difficultyRules } from './rules/difficulty.js';
-import { NATIONS, type NationId } from './rules/nations.js';
-import { finalScores } from './score.js';
+import { difficultyOf, mechanicsOf, nationOf, term, Term } from './scenarios/index.js';
+import { type NationId } from './rules/nations.js';
+import { checkVictory, finishNation } from './victory.js';
+import { crownSideOf } from './world.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
 
 /** Share of all colonists, across every colony, who support independence. */
@@ -44,6 +45,7 @@ export function rebelShare(s: GameState, nation: NationId): number {
 export const DECLARE_AT = 50;
 
 export function canDeclareIndependence(s: GameState, nation: NationId): string | null {
+  if (!mechanicsOf(s).independence) return 'There is no declaring independence in this scenario.';
   const p = player(s, nation);
   if (p.independence !== 'none') return 'Independence has already been declared.';
   if (!Object.values(s.colonies).some((c) => c.owner === nation)) return 'You have no colonies.';
@@ -55,7 +57,9 @@ export function canDeclareIndependence(s: GameState, nation: NationId): string |
 function ensureCrown(s: GameState): Player {
   let crown = s.players.find((p) => p.id === 'crown');
   if (!crown) {
-    crown = newPlayer(s, 'crown', false, { x: s.map.width - 2, y: Math.floor(s.map.height / 2) });
+    // The Crown's ships sail in on the scenario's side for it (the map's arrival edge in the Americas).
+    const x = crownSideOf(s) === 'west' ? 1 : s.map.width - 2;
+    crown = newPlayer(s, 'crown', false, { x, y: Math.floor(s.map.height / 2) });
     crown.explored.fill(1);
     crown.gold = 0;
     s.players.push(crown);
@@ -77,7 +81,7 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   delete p.pendingDemand;
   // The force the Crown has built up over the game sails (crown.ts); a nation the Crown never
   // reviewed (a test position) gets the old formula's force for its colonies.
-  const formula = royalForce(p, colonies.length);
+  const formula = royalForce(s, p, colonies.length);
   if (!p.royal) p.ref = formula;
   p.refAtDeclaration = { turn: s.turn, force: { ...p.ref }, formula: formula.regulars + formula.dragoons + formula.artillery };
   track(nation, 'independence:royal land units', p.ref.regulars + p.ref.dragoons + p.ref.artillery);
@@ -107,9 +111,9 @@ export function declareIndependence(s: GameState, nation: NationId): string {
       continentals++;
     } else if (committed) continentals++;
   }
-  const text = `${NATIONS[nation].name}'s colonies have declared independence! The Crown sends ${p.ref.regulars} regulars, ${p.ref.dragoons} dragoons, ${p.ref.artillery} artillery and ${p.ref.menOfWar} men-of-war to crush the rebellion.`;
+  const text = `${nationOf(s, nation).name}'s colonies have declared independence! ${Term(s, 'crown')} sends ${p.ref.regulars} regulars, ${p.ref.dragoons} dragoons, ${p.ref.artillery} artillery and ${p.ref.menOfWar} men-of-war to crush the rebellion.`;
   message(s, text);
-  noteHistory(s, 'independence', [nation], `${NATIONS[nation].name}'s colonies declare independence.`);
+  noteHistory(s, 'independence', [nation], `${nationOf(s, nation).name}'s colonies declare independence.`);
   // A mercenary company offers its services (rebellion.ts).
   offerMercenaries(s, nation);
   return text;
@@ -121,8 +125,8 @@ export function declareIndependence(s: GameState, nation: NationId): string {
  * during the game instead (crown.ts); this sets the force at the start (n = 0), catches up
  * saves from before 0.5, and is the yardstick the growth is tuned against.
  */
-export function royalForce(p: Player, n: number): Player['ref'] {
-  const { refBase: base, refGrowth: per } = difficultyRules(p);
+export function royalForce(s: GameState, p: Player, n: number): Player['ref'] {
+  const { refBase: base, refGrowth: per } = difficultyOf(s, p);
   const size = (fixed: number, perColony: number) => Math.max(1, Math.round(fixed * base + perColony * per));
   return { regulars: size(4, 2 * n), dragoons: size(2, n), artillery: size(1, Math.floor(n / 2)), menOfWar: size(2, 0) };
 }
@@ -193,7 +197,7 @@ function landWave(s: GameState, p: Player): void {
       ship.against = p.id;
       ref.menOfWar--;
     }
-    if (landed) message(s, `Royal troops land outside ${target.name}!${wave > WAVE ? ' Local Tories guide them ashore.' : ''}`, p.id, target);
+    if (landed) message(s, `${Term(s, 'royalTroops')} land outside ${target.name}!${wave > WAVE ? ` Local ${term(s, 'loyalists')} guide them ashore.` : ''}`, p.id, target);
     return;
   }
 }
@@ -212,10 +216,10 @@ function checkOutcome(s: GameState, p: Player): void {
     track(p.id, 'independence:won');
     endRebellion(s, p);
     for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === p.id) delete s.units[u.id];
-    const text = `${NATIONS[p.id].name} has won the War of Independence! A new nation is born.`;
+    const text = term(s, 'gameOver.won', { nation: nationOf(s, p.id).name });
     message(s, text);
     noteHistory(s, 'independence', [p.id], text);
-    if (!s.gameOver) s.gameOver = { turn: s.turn, reason: text, winner: p.id, scores: finalScores(s) };
+    warEnded(s, p, 'won', text);
     return;
   }
   const held = Object.values(s.colonies).filter((c) => c.owner === p.id).length;
@@ -224,12 +228,20 @@ function checkOutcome(s: GameState, p: Player): void {
     p.independence = 'lost';
     track(p.id, 'independence:lost');
     endRebellion(s, p);
-    const text = `The rebellion in ${NATIONS[p.id].name}'s colonies has been crushed.`;
+    const text = term(s, 'gameOver.lost', { nation: nationOf(s, p.id).name });
     message(s, text);
     noteHistory(s, 'independence', [p.id], text);
-    const humansLeft = s.players.some((o) => o.human && o.independence !== 'lost');
-    if (!humansLeft && !s.gameOver) s.gameOver = { turn: s.turn, reason: text, scores: finalScores(s) };
+    warEnded(s, p, 'lost', text);
   }
+}
+
+/**
+ * A War of Independence is over: in arena play-on the nation is finished and the others play on;
+ * then the scenario's victory rules decide whether the game ends (victory.ts).
+ */
+function warEnded(s: GameState, p: Player, outcome: 'won' | 'lost', text: string): void {
+  if (s.config.playOn) finishNation(s, p);
+  checkVictory(s, { kind: 'warEnded', nation: p.id, outcome, text });
 }
 
 /** Once per round, for every nation at war with the Crown. */

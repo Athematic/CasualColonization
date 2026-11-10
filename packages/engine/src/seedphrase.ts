@@ -7,7 +7,8 @@
  */
 import { AI_LEVELS, type AiLevel } from './ai/profiles.js';
 import { DIFFICULTY_LEVELS, type DifficultyId } from './rules/difficulty.js';
-import { NATION_ORDER, type NationId } from './rules/nations.js';
+import { NATION_IDS, type NationId } from './rules/nations.js';
+import { DEFAULT_SCENARIO, getScenario } from './scenarios/index.js';
 import type { GameConfig, MapSize } from './types.js';
 
 /** Version written into game codes. Bump when a change makes the same code produce another game. */
@@ -79,6 +80,10 @@ export interface GameCodeSettings {
   colonyCharter: boolean;
   /** Turn on which the people take over (head start); absent for a start at the beginning. */
   headStartTurn?: number;
+  /** 'real' when the game was set up with the scenario's real rivals; absent for alternative history. */
+  rivals?: 'real';
+  /** The scenario's id; absent for the Americas (DEFAULT_SCENARIO), so their codes are as before. */
+  scenario?: string;
 }
 
 const PREFIX = 'CC1';
@@ -101,6 +106,8 @@ export function settingsFromConfig(config: GameConfig): GameCodeSettings {
     randomEvents: !!config.randomEvents,
     colonyCharter: !!config.colonyCharter,
     ...(config.headStart ? { headStartTurn: config.headStart.turn } : {}),
+    ...(config.rivals === 'real' ? { rivals: 'real' as const } : {}),
+    ...(config.scenario && config.scenario !== DEFAULT_SCENARIO ? { scenario: config.scenario } : {}),
   };
 }
 
@@ -118,7 +125,9 @@ function fromBase64Url(text: string): Uint8Array {
 /**
  * A compact, URL-safe code: `CC1~<game version>~<payload>`. The payload is base64url of a short
  * JSON array: [seed, phrase|0, map|0, size index, [[nation index, "h" or AI level]...],
- * difficulty index, flags (1 historical, 2 random, 4 charter), head start turn|0].
+ * difficulty index, flags (1 historical, 2 random, 4 charter), head start turn|0], followed by
+ * "real" only for a game with real rivals, and then the scenario's id only for a game outside the
+ * Americas (with 0 in the rivals' place for alternative history), so Americas codes are as before.
  */
 export function encodeGameCode(settings: GameCodeSettings): string {
   const payload = [
@@ -126,10 +135,11 @@ export function encodeGameCode(settings: GameCodeSettings): string {
     settings.seedPhrase ?? 0,
     settings.map ?? 0,
     SIZES.indexOf(settings.mapSize),
-    settings.nations.map((n) => [NATION_ORDER.indexOf(n.nation), n.controller === 'human' ? 'h' : n.controller]),
+    settings.nations.map((n) => [NATION_IDS.indexOf(n.nation as (typeof NATION_IDS)[number]), n.controller === 'human' ? 'h' : n.controller]),
     DIFFICULTY_LEVELS.indexOf(settings.difficulty),
     (settings.historicalEvents ? 1 : 0) | (settings.randomEvents ? 2 : 0) | (settings.colonyCharter ? 4 : 0),
     settings.headStartTurn ?? 0,
+    ...(settings.scenario && settings.scenario !== DEFAULT_SCENARIO ? [settings.rivals === 'real' ? 'real' : 0, settings.scenario] : settings.rivals === 'real' ? ['real'] : []),
   ];
   return `${PREFIX}${SEP}${GAME_VERSION}${SEP}${toBase64Url(new TextEncoder().encode(JSON.stringify(payload)))}`;
 }
@@ -148,13 +158,15 @@ export function decodeGameCode(code: string): DecodedGameCode {
   if (parts.length !== 3 || parts[0] !== PREFIX) return bad;
   try {
     const p = JSON.parse(new TextDecoder().decode(fromBase64Url(parts[2]))) as unknown[];
-    const [seed, phrase, map, size, nations, diff, flags, head] = p;
+    const [seed, phrase, map, size, nations, diff, flags, head, rivals, scenario] = p;
     const mapSize = SIZES[size as number];
     const difficulty = DIFFICULTY_LEVELS[diff as number];
-    if (typeof seed !== 'number' || !Number.isFinite(seed) || !mapSize || !difficulty || !Array.isArray(nations) || nations.length < 1 || nations.length > 8 || typeof flags !== 'number') return bad;
+    if (typeof seed !== 'number' || !Number.isFinite(seed) || !mapSize || !difficulty || !Array.isArray(nations) || nations.length < 1 || nations.length > NATION_IDS.length || typeof flags !== 'number') return bad;
+    if (scenario !== undefined && typeof scenario !== 'string') return bad;
+    if (typeof scenario === 'string' && !getScenario(scenario)) return { ok: false, error: `This code is for the scenario "${scenario}", which this version of the game does not have.` };
     const list: GameCodeSettings['nations'] = [];
     for (const n of nations as [number, string][]) {
-      const nation = NATION_ORDER[n[0]];
+      const nation = NATION_IDS[n[0]];
       const controller = n[1] === 'h' ? 'human' : (AI_LEVELS as string[]).includes(n[1]) ? (n[1] as AiLevel) : undefined;
       if (!nation || !controller || list.some((x) => x.nation === nation)) return bad;
       list.push({ nation, controller });
@@ -170,6 +182,8 @@ export function decodeGameCode(code: string): DecodedGameCode {
       randomEvents: !!(flags & 2),
       colonyCharter: !!(flags & 4),
       ...(typeof head === 'number' && head > 0 ? { headStartTurn: head } : {}),
+      ...(rivals === 'real' ? { rivals: 'real' as const } : {}),
+      ...(typeof scenario === 'string' && scenario !== DEFAULT_SCENARIO ? { scenario } : {}),
     };
     const version = parts[1];
     return {

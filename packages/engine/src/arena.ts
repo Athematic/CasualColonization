@@ -9,7 +9,8 @@ import { endStateFeatures, type FeatureCounts } from './features.js';
 import { createGame } from './game.js';
 import { colonyWorkers } from './queries.js';
 import type { DifficultyId } from './rules/difficulty.js';
-import { NATION_ORDER, type NationId } from './rules/nations.js';
+import type { NationId } from './rules/nations.js';
+import { nationSet, scenarioOf, type Rivals } from './scenarios/index.js';
 import { scoreBreakdown, type ScoreComponent } from './score.js';
 import { setFeatureSink } from './telemetry.js';
 import { royalForce } from './independence.js';
@@ -39,6 +40,16 @@ export interface ArenaOptions {
   events?: boolean;
   /** Play without the colony charter (`--no-charter`); arena games use it by default, like new games. */
   noCharter?: boolean;
+  /** Scenario id (`--scenario`); missing means the Americas. Nations rotate over its chosen set. */
+  scenario?: string;
+  /** Which of the scenario's nation sets to rotate over (`--rivals real`); missing means its default. */
+  rivals?: Rivals;
+  /**
+   * Play on after a War of Independence (`--play-on`, `GameConfig.playOn`): the nation that won or
+   * lost it is finished with the score it had then, and the others play on to `turns` or the end of
+   * the calendar. Without it the first war won (or lost by every nation) ends the game.
+   */
+  playOn?: boolean;
 }
 
 /**
@@ -136,6 +147,10 @@ export interface ArenaEntry {
   declared?: number;
   /** Turns the War of Independence lasted: to its outcome, or to the end of the game if it was still going on. */
   warTurns?: number;
+  /** The turn the game stopped at (`turns`, the end of the calendar, or a war that ended it). */
+  lastTurn?: number;
+  /** In play-on, the turn the nation was finished (its war ended); its score is from then. */
+  finished?: number;
   /** The game was cheated in (arena games never cheat, but standings can come from any state). */
   cheated?: boolean;
   /** Highest score in its game (ties count for all). */
@@ -180,6 +195,7 @@ export function playArenaGame(
   noFavoured = false,
   events = false,
   charter = true,
+  setup: { scenario?: string; rivals?: Rivals; playOn?: boolean } = {},
 ): { state: GameState; entries: Omit<ArenaEntry, 'game' | 'won'>[] } {
   const ai = Object.fromEntries(line.map((l) => [l.nation, l.level]));
   const config = {
@@ -193,6 +209,9 @@ export function playArenaGame(
     ...(noFavoured ? { noFavoured: true } : {}),
     ...(events ? { historicalEvents: true, randomEvents: true } : {}),
     ...(charter ? { colonyCharter: true } : {}),
+    ...(setup.scenario ? { scenario: setup.scenario } : {}),
+    ...(setup.rivals ? { rivals: setup.rivals } : {}),
+    ...(setup.playOn ? { playOn: true } : {}),
   };
   const counts = new Map<string, FeatureCounts>();
   const tallies = new Map<string, RelationsTally>();
@@ -252,31 +271,34 @@ export function standing(s: GameState, seed: number, nation: NationId, level: Ai
   const p = s.players.find((x) => x.id === nation)!;
   const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
   const breakdown = scoreBreakdown(s, p);
+  // A nation finished in play-on stands with the score it had when its war ended.
   return {
     seed,
     nation,
     level,
-    score: breakdown.total,
-    parts: Object.fromEntries(breakdown.lines.map((l) => [l.key, l.points])),
+    score: p.finished?.score ?? breakdown.total,
+    parts: p.finished?.parts ?? Object.fromEntries(breakdown.lines.map((l) => [l.key, l.points])),
     colonies: colonies.length,
     population: colonies.reduce((n, c) => n + colonyWorkers(s, c).length, 0),
     gold: p.gold,
     fathers: p.fathers.length,
     independence: p.independence,
     spoiled: p.goodsSpoiled ?? 0,
-    ...royalStanding(p, colonies.length),
-    ...(p.refAtDeclaration ? { warTurns: s.turn - p.refAtDeclaration.turn } : {}),
+    ...royalStanding(s, p, colonies.length),
+    ...(p.refAtDeclaration ? { warTurns: (p.finished?.turn ?? s.turn) - p.refAtDeclaration.turn } : {}),
+    lastTurn: s.turn,
+    ...(p.finished ? { finished: p.finished.turn } : {}),
     ...(isCheated(s) ? { cheated: true } : {}),
   };
 }
 
 /** The Royal Expeditionary Force a nation faced: at its declaration, or at the end. */
-function royalStanding(p: Player, colonies: number): Pick<ArenaEntry, 'ref' | 'refFormula' | 'declared'> {
+function royalStanding(s: GameState, p: Player, colonies: number): Pick<ArenaEntry, 'ref' | 'refFormula' | 'declared'> {
   if (p.refAtDeclaration) {
     const f = p.refAtDeclaration.force;
     return { ref: f.regulars + f.dragoons + f.artillery, refFormula: p.refAtDeclaration.formula, declared: p.refAtDeclaration.turn };
   }
-  const old = royalForce(p, colonies);
+  const old = royalForce(s, p, colonies);
   return { ref: p.ref.regulars + p.ref.dragoons + p.ref.artillery, refFormula: old.regulars + old.dragoons + old.artillery };
 }
 
@@ -284,12 +306,15 @@ function royalStanding(p: Player, colonies: number): Pick<ArenaEntry, 'ref' | 'r
 export function runArena(opts: ArenaOptions, onGame?: (entries: ArenaEntry[], game: number) => void): { entries: ArenaEntry[]; summary: ArenaSummary[] } {
   const entries: ArenaEntry[] = [];
   const n = opts.levels.length;
-  if (n < 1 || n > 8) throw new Error('An arena game needs between 1 and 8 nations.');
+  const set = nationSet(scenarioOf({ config: { scenario: opts.scenario } }), opts.rivals).map((e) => e.id);
+  if (n < 1 || n > set.length) throw new Error(`An arena game needs between 1 and ${set.length} nations.`);
+  const setup = { scenario: opts.scenario, rivals: opts.rivals, playOn: opts.playOn };
   for (let g = 0; g < opts.games; g++) {
     const seed = (opts.firstSeed ?? 1000) + g;
-    const nations = [...NATION_ORDER.slice(g % 8), ...NATION_ORDER.slice(0, g % 8)].slice(0, n);
+    const k = g % set.length;
+    const nations = [...set.slice(k), ...set.slice(0, k)].slice(0, n);
     const line = nations.map((nation, i) => ({ nation, level: opts.levels[(i + g) % n] }));
-    const { entries: game } = playArenaGame(seed, line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured, opts.events, !opts.noCharter);
+    const { entries: game } = playArenaGame(seed, line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured, opts.events, !opts.noCharter, setup);
     const best = Math.max(...game.map((e) => e.score));
     const rows = game.map((e) => ({ ...e, game: g, won: e.score === best }));
     entries.push(...rows);

@@ -14,12 +14,13 @@ import { colonyAt, colonyWorkers, distance, isShip, player, unitName, unitPositi
 import { favouredPartners } from './relations.js';
 import { BUILDINGS } from './rules/buildings.js';
 import { FATHERS, type FatherId } from './rules/fathers.js';
-import { GOODS, type GoodId } from './rules/goods.js';
-import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import type { GoodId } from './rules/goods.js';
+import type { NationId, TribeId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { ledgerFor } from './history.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
+import { goodsOf, peopleOf, term } from './scenarios/index.js';
 
 // ---- Colonies ----
 
@@ -69,12 +70,12 @@ export function colonyOverview(s: GameState, colony: Colony): ColonyOverview {
   const report = colonyReport(s, colony);
   const population = report.population;
   const cap = warehouseCapacity(colony);
-  const warehouse: WarehouseLine[] = GOODS.filter((g) => g !== 'food' && (colony.goods[g] > 0 || report.net[g] > 0))
+  const warehouse: WarehouseLine[] = goodsOf(s).filter((g) => g !== 'food' && (colony.goods[g] > 0 || report.net[g] > 0))
     .map((g) => ({ good: g, amount: colony.goods[g], net: report.net[g], spoil: Math.max(0, colony.goods[g] + report.net[g] - cap) }))
     .sort((a, b) => b.amount - a.amount);
   // At risk: spoiling this turn, or full enough that one more turn of production spoils it.
   const atRisk = warehouse.filter((w) => w.spoil > 0 || (w.net > 0 && w.amount + 2 * w.net > cap)).map((w) => w.good);
-  const toGrow = foodToGrow(colony);
+  const toGrow = foodToGrow(s, colony);
   const netFood = report.net.food;
   const build = colony.build ? buildTargetCost(colony.build, colony) : null;
   const guards = unitsAt(s, colony.x, colony.y).filter((u) => u.owner === colony.owner && !isShip(u));
@@ -144,9 +145,9 @@ export function tradeOverview(s: GameState, nation: NationId): TradeRow[] {
   const ports = [p, ...favouredPartners(s, nation).map((n) => player(s, n))];
   const ledger = ledgerFor(s, nation);
   const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
-  return GOODS.map((g) => ({
+  return goodsOf(s).map((g) => ({
     good: g,
-    prices: ports.map((q) => ({ port: q.id, sell: sellPrice(q, g), buy: buyPrice(q, g), tax: q.tax })),
+    prices: ports.map((q) => ({ port: q.id, sell: sellPrice(q, g), buy: buyPrice(s, q, g), tax: q.tax })),
     boycotted: !!p.boycotts[g],
     sold: { total: ledger.total.europe[g] ?? 0, now: ledger.now.europe[g] ?? 0, last: ledger.last.europe[g] ?? 0 },
     custom: ledger.total.custom[g] ?? 0,
@@ -184,9 +185,9 @@ function forceKind(u: Unit): ForceKind {
 function whereIs(s: GameState, u: Unit): { where: string; colonyId?: string; at?: { x: number; y: number } } {
   switch (u.loc.kind) {
     case 'europe':
-      return { where: 'In Europe' };
+      return { where: `In ${term(s, 'homeland')}` };
     case 'sailing':
-      return { where: u.loc.to === 'europe' ? 'Sailing to Europe' : 'Sailing to the New World' };
+      return { where: u.loc.to === 'europe' ? `Sailing to ${term(s, 'homeland')}` : `Sailing to ${term(s, 'colonyLand')}` };
     case 'carrier': {
       const ship = s.units[u.loc.carrierId];
       const at = ship && unitPosition(s, ship);
@@ -243,7 +244,7 @@ export function navalOverview(s: GameState, nation: NationId): ShipOverview[] {
     .filter((u) => u.owner === nation && isShip(u))
     .map((u) => {
       const passengers = unitsAboard(s, u);
-      const cargo = GOODS.filter((g) => (u.cargo?.[g] ?? 0) > 0).map((g) => ({ good: g, amount: u.cargo![g]! }));
+      const cargo = goodsOf(s).filter((g) => (u.cargo?.[g] ?? 0) > 0).map((g) => ({ good: g, amount: u.cargo![g]! }));
       const used = passengers.reduce((n, p) => n + (p.type === 'treasure' ? UNIT_TYPES[u.type].cargo : 1), 0) + cargo.reduce((n, c) => n + Math.ceil(c.amount / 100), 0);
       const route = u.route && s.routes?.[u.route.id];
       let orders = 'No orders';
@@ -251,7 +252,7 @@ export function navalOverview(s: GameState, nation: NationId): ShipOverview[] {
       else if (route) orders = `Route: ${route.name}`;
       else if (u.loc.kind === 'sailing') orders = `Arrives in ${u.loc.turnsLeft} turn${u.loc.turnsLeft > 1 ? 's' : ''}`;
       else if (u.roadTo) orders = `Road to ${u.roadTo.x},${u.roadTo.y}`;
-      else if (u.dest) orders = 'europe' in u.dest ? 'Bound for Europe' : `Going to ${u.dest.x},${u.dest.y}`;
+      else if (u.dest) orders = 'europe' in u.dest ? `Bound for ${term(s, 'homeland')}` : `Going to ${u.dest.x},${u.dest.y}`;
       else if (u.state === 'sentry') orders = 'Sentry';
       const w = whereIs(s, u);
       return { unit: u, name: unitName(u), where: w.where, at: w.at, holds: UNIT_TYPES[u.type].cargo, used, cargo, passengers, orders, repair: u.repair ?? null };
@@ -370,11 +371,11 @@ export function nativesOverview(s: GameState, nation: NationId): TribeOverview[]
       const t = tensionOf(st, nation);
       return {
         settlement: st,
-        name: settlementName(st),
+        name: settlementName(s, st),
         tension: t,
         mood: tensionLabel(t),
         skill: visited ? st.skill : undefined,
-        wants: visited ? (own ?? TRIBES[st.tribe].wants) : undefined,
+        wants: visited ? (own ?? peopleOf(s, st.tribe).wants) : undefined,
         mission: st.mission,
         visited,
         land,

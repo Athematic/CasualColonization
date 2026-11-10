@@ -13,11 +13,11 @@ import { noteHistory } from './history.js';
 import { royalForce } from './independence.js';
 import { message, player } from './queries.js';
 import { hasTradeAgreement, isFavoured, pairRandom } from './relations.js';
-import { difficultyRules } from './rules/difficulty.js';
-import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
-import { NATIONS, type NationId } from './rules/nations.js';
+import { GOOD_DEFS, type GoodId } from './rules/goods.js';
+import { type NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, Player } from './types.js';
+import { difficultyOf, goodsOf, mechanicsOf, nationOf, term, Term } from './scenarios/index.js';
 
 // ---------------------------------------------------------------------------
 // The Royal Expeditionary Force
@@ -55,7 +55,7 @@ export function describeForce(f: Force): string {
 export function initCrown(s: GameState, p: Player): void {
   const colonies = Object.values(s.colonies).filter((c) => c.owner === p.id).length;
   // A save from before the REF grew catches up with the old formula for its colonies.
-  p.ref = royalForce(p, colonies);
+  p.ref = royalForce(s, p, colonies);
   p.royal = { bells: p.bells, points: 0, added: 0 };
 }
 
@@ -85,13 +85,13 @@ function growForce(s: GameState, p: Player, colonies: number): void {
   const crown = p.royal!;
   const bells = Math.max(0, p.bells - crown.bells);
   crown.bells = p.bells;
-  crown.points += difficultyRules(p).refGrowth * (REF_GROWTH.perColony * colonies + REF_GROWTH.perBell * bells);
+  crown.points += difficultyOf(s, p).refGrowth * (REF_GROWTH.perColony * colonies + REF_GROWTH.perBell * bells);
   if (crown.points < REF_GROWTH.batch) return;
   const n = Math.floor(crown.points);
   crown.points -= n;
   const added = addToForce(p, n);
   track(p.id, 'crown:ref units added', n);
-  message(s, `The King adds ${listForce(added)} to the Royal Expeditionary Force. Royal forces: ${describeForce(p.ref)}.`, p.id);
+  message(s, `${Term(s, 'king')} adds ${listForce(added)} to the ${term(s, 'ref')}. Royal forces: ${describeForce(p.ref)}.`, p.id);
 }
 
 /** Only the kinds that are there: "2 regulars and 1 dragoon". */
@@ -123,14 +123,14 @@ export function seizureColony(s: GameState, nation: NationId): { colony: Colony;
   let best: { colony: Colony; value: number } | null = null;
   for (const c of Object.values(s.colonies)) {
     if (c.owner !== nation) continue;
-    const value = GOODS.reduce((n, g) => (g === 'food' ? n : n + c.goods[g] * p.market[g].price), 0);
+    const value = goodsOf(s).reduce((n, g) => (g === 'food' ? n : n + c.goods[g] * p.market[g].price), 0);
     if (!best || value > best.value) best = { colony: c, value };
   }
   return best;
 }
 
 function maybeDemand(s: GameState, p: Player, colonies: number): void {
-  const rules = difficultyRules(p);
+  const rules = difficultyOf(s, p);
   if (s.turn < DEMAND.from || !colonies || p.pendingDemand || p.gold < DEMAND.minGold) return;
   if (pairRandom(s, p.id, 'crown', `demand ${s.turn}`) >= DEMAND.chance * rules.demandChance) return;
   const r = pairRandom(s, p.id, 'crown', `demand size ${s.turn}`);
@@ -139,7 +139,7 @@ function maybeDemand(s: GameState, p: Player, colonies: number): void {
   const seize = seizureColony(s, p.id);
   p.pendingDemand = { gold, colony: seize?.colony.id ?? null, turn: s.turn };
   track(p.id, 'crown:demand made');
-  message(s, `His Majesty demands ${gold} gold from the treasury of ${NATIONS[p.id].name}.`, p.id);
+  message(s, `${Term(s, 'majesty')} demands ${gold} gold from the treasury of ${nationOf(s, p.id).name}.`, p.id);
 }
 
 /** What refusing the pending demand would cost: the goods seized, and the regulars added. */
@@ -147,7 +147,7 @@ export function demandPenalty(s: GameState, nation: NationId): { colony: Colony 
   const p = player(s, nation);
   const named = p.pendingDemand?.colony ? s.colonies[p.pendingDemand.colony] : undefined;
   if (named && named.owner === nation) {
-    const value = GOODS.reduce((n, g) => (g === 'food' ? n : n + named.goods[g] * p.market[g].price), 0);
+    const value = goodsOf(s).reduce((n, g) => (g === 'food' ? n : n + named.goods[g] * p.market[g].price), 0);
     return { colony: named, value };
   }
   const best = seizureColony(s, nation);
@@ -158,33 +158,35 @@ export function demandPenalty(s: GameState, nation: NationId): { colony: Colony 
 export function answerDemand(s: GameState, nation: NationId, pay: boolean): string {
   const p = player(s, nation);
   const demand = p.pendingDemand;
-  if (!demand) fail('The King has demanded nothing.');
-  if (pay && p.gold < demand.gold) fail(`The King demands ${demand.gold} gold; the treasury holds ${p.gold}.`);
+  if (!demand) fail(`${Term(s, 'king')} has demanded nothing.`);
+  if (pay && p.gold < demand.gold) fail(`${Term(s, 'king')} demands ${demand.gold} gold; the treasury holds ${p.gold}.`);
   track(nation, 'cmd:answerDemand');
   if (pay) {
     delete p.pendingDemand;
     p.gold -= demand.gold;
     track(nation, 'crown:demand paid');
-    noteHistory(s, 'crown', [nation], `${NATIONS[nation].name} pays the King ${demand.gold} gold.`, { secret: true });
-    const text = `You pay the King ${demand.gold} gold.`;
+    noteHistory(s, 'crown', [nation], `${nationOf(s, nation).name} pays ${term(s, 'king')} ${demand.gold} gold.`, { secret: true });
+    const text = `You pay ${term(s, 'king')} ${demand.gold} gold.`;
     message(s, text, nation);
     return text;
   }
   const { colony } = demandPenalty(s, nation);
   delete p.pendingDemand;
   track(nation, 'crown:demand refused');
-  noteHistory(s, 'crown', [nation], `${NATIONS[nation].name} refuses the King's demand for ${demand.gold} gold${colony ? `; the goods in ${colony.name} are seized` : ''}.`, { secret: true, at: colony ?? undefined });
+  noteHistory(s, 'crown', [nation], `${nationOf(s, nation).name} refuses ${term(s, 'king')}'s demand for ${demand.gold} gold${colony ? `; the goods in ${colony.name} are seized` : ''}.`, { secret: true, at: colony ?? undefined });
   const seized: string[] = [];
   if (colony) {
-    for (const g of GOODS) {
+    for (const g of goodsOf(s)) {
       if (g === 'food' || colony.goods[g] <= 0) continue;
       seized.push(`${colony.goods[g]} ${GOOD_DEFS[g as GoodId].name.toLowerCase()}`);
       colony.goods[g] = 0;
     }
   }
-  p.ref.regulars += REF_ON_REFUSAL;
+  // Without a Royal Expeditionary Force in the scenario, the seizure is the whole price.
+  const ref = mechanicsOf(s).ref;
+  if (ref) p.ref.regulars += REF_ON_REFUSAL;
   const goods = colony && seized.length ? ` Royal officials seize the goods in ${colony.name}: ${seized.join(', ')}.` : '';
-  const text = `You refuse the King's demand for ${demand.gold} gold.${goods} The King sends ${REF_ON_REFUSAL} more regulars to the Royal Expeditionary Force.`;
+  const text = `You refuse ${term(s, 'king')}'s demand for ${demand.gold} gold.${goods}${ref ? ` ${Term(s, 'king')} sends ${REF_ON_REFUSAL} more regulars to the ${term(s, 'ref')}.` : ''}`;
   message(s, text, nation, colony ?? undefined);
   return text;
 }
@@ -218,23 +220,23 @@ export function royalWarTargets(s: GameState, nation: NationId): { nation: Natio
 /** The King declares war on another European nation for this nation. */
 export function royalWar(s: GameState, nation: NationId, target: NationId): void {
   const p = player(s, nation);
-  if (p.independence !== 'none' || player(s, target).independence !== 'none') fail('The King declares no wars for or on independent nations.');
-  if (isFavoured(s, nation, target)) fail('The King declares no war on a Favoured Nation.');
+  if (p.independence !== 'none' || player(s, target).independence !== 'none') fail(`${Term(s, 'king')} declares no wars for or on independent nations.`);
+  if (isFavoured(s, nation, target)) fail(`${Term(s, 'king')} declares no war on a Favoured Nation.`);
   declareWar(s, nation, target);
   const crown = (p.royal = p.royal ?? { bells: p.bells, points: 0, added: 0 });
   crown.lastWar = s.turn;
   crown.warOn = target;
   track(nation, 'crown:royal war');
-  noteHistory(s, 'crown', [nation, target], `The King of ${NATIONS[nation].name} declares war on ${NATIONS[target].name}.`);
-  message(s, `The King has declared war on ${NATIONS[target].name}! Your colonies are at war with ${NATIONS[target].name}, whether you want it or not. Peace can be made later, as usual.`, nation);
-  message(s, `The King of ${NATIONS[nation].name} has declared war on ${NATIONS[target].name}.`, target);
+  noteHistory(s, 'crown', [nation, target], `${Term(s, 'king')} of ${nationOf(s, nation).name} declares war on ${nationOf(s, target).name}.`);
+  message(s, `${Term(s, 'king')} has declared war on ${nationOf(s, target).name}! Your colonies are at war with ${nationOf(s, target).name}, whether you want it or not. Peace can be made later, as usual.`, nation);
+  message(s, `${Term(s, 'king')} of ${nationOf(s, nation).name} has declared war on ${nationOf(s, target).name}.`, target);
 }
 
 function maybeRoyalWar(s: GameState, p: Player, colonies: number): void {
   if (s.turn < ROYAL_WAR.from || !colonies) return;
   if (Object.entries(p.stance).some(([o, st]) => st === 'war' && o !== 'crown')) return;
   if (s.turn - (p.royal?.lastWar ?? -Infinity) < ROYAL_WAR.cooldown) return;
-  if (pairRandom(s, p.id, 'crown', `war ${s.turn}`) >= ROYAL_WAR.chance * difficultyRules(p).royalWarChance) return;
+  if (pairRandom(s, p.id, 'crown', `war ${s.turn}`) >= ROYAL_WAR.chance * difficultyOf(s, p).royalWarChance) return;
   const targets = royalWarTargets(s, p.id);
   const total = targets.reduce((n, t) => n + t.weight, 0);
   if (!total) return;
@@ -245,15 +247,21 @@ function maybeRoyalWar(s: GameState, p: Player, colonies: number): void {
 
 // ---------------------------------------------------------------------------
 
-/** Once per round: the Crown's build-up, demands and wars for every nation still loyal to it. */
+/**
+ * Once per round: the Crown's build-up, demands and wars for every nation still loyal to it, as
+ * far as the scenario has them (`mechanics.ref`, `demands`, `royalWars`).
+ */
 export function processCrown(s: GameState): void {
+  const mechanics = mechanicsOf(s);
   for (const p of s.players) {
     if (p.id === 'crown' || p.independence !== 'none') continue;
     const colonies = Object.values(s.colonies).filter((c) => c.owner === p.id).length;
-    growForce(s, p, colonies);
-    // A demand not answered within a round counts as refused.
-    if (p.pendingDemand && s.turn > p.pendingDemand.turn + 1) answerDemand(s, p.id, false);
-    maybeDemand(s, p, colonies);
-    maybeRoyalWar(s, p, colonies);
+    if (mechanics.ref) growForce(s, p, colonies);
+    if (mechanics.demands) {
+      // A demand not answered within a round counts as refused.
+      if (p.pendingDemand && s.turn > p.pendingDemand.turn + 1) answerDemand(s, p.id, false);
+      maybeDemand(s, p, colonies);
+    }
+    if (mechanics.royalWars) maybeRoyalWar(s, p, colonies);
   }
 }

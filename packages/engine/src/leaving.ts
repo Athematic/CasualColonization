@@ -1,6 +1,7 @@
 import { fail } from './errors.js';
 import { noteHistory } from './history.js';
-import { colonyWorkers, currentPlayer, formatDate, maxMoves, message, yearOf } from './queries.js';
+import { colonyWorkers, currentPlayer, maxMoves, message } from './queries.js';
+import { calendarOf, formatDate, yearOf } from './scenarios/index.js';
 import { finalScores } from './score.js';
 import { track } from './telemetry.js';
 import type { GameState } from './types.js';
@@ -47,9 +48,9 @@ export function retire(s: GameState): string {
   const p = currentPlayer(s);
   if (!p.human) fail('Only a person can retire.');
   if (s.gameOver) fail('The game is already over.');
-  const text = `Retired in ${yearOf(s.turn).year}.`;
+  const text = `Retired in ${yearOf(s.turn, calendarOf(s)).year}.`;
   s.gameOver = { turn: s.turn, reason: text, scores: finalScores(s), retired: true };
   track(p.id, 'cmd:retire');
-  noteHistory(s, 'event', [p.id], `${p.id} retired in ${formatDate(s.turn)}.`);
+  noteHistory(s, 'event', [p.id], `${p.id} retired in ${formatDate(s.turn, calendarOf(s))}.`);
   return text;
 }

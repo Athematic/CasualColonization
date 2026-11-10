@@ -3,13 +3,14 @@ import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { randInt, weightedPick } from './rng.js';
 import { randomImmigrant } from './europe.js';
-import { hasFather } from './fathers.js';
-import { difficultyRules } from './rules/difficulty.js';
-import { NATIONS, TRIBES } from './rules/nations.js';
-import { BURIAL_RADIUS, BURIAL_WEIGHT } from './rules/natives.js';
+import { modifiers } from './scenarios/modifiers.js';
+import type { RumourOutcome } from './rules/modifiers.js';
+import { difficultyOf, nationOf, rumoursOf, term } from './scenarios/index.js';
+import { TRIBES } from './rules/nations.js';
+import { BURIAL_RADIUS } from './rules/natives.js';
 import type { GameState, Settlement, Unit } from './types.js';
 
-type Outcome = 'nothing' | 'tales' | 'smallTreasure' | 'colonist' | 'treasure' | 'fountain' | 'lost' | 'burial';
+type Outcome = RumourOutcome;
 
 /** The settlement whose tribal land a tile is (within BURIAL_RADIUS, not bought or taken), if any. */
 export function tribalLandOwner(s: GameState, x: number, y: number): Settlement | undefined {
@@ -22,62 +23,77 @@ export function tribalLandOwner(s: GameState, x: number, y: number): Settlement 
   return best;
 }
 
+/**
+ * The weighted outcomes of a rumour explored by this unit, in the order they are drawn: the
+ * scenario's rumour table (Scenario.rumours). `tribal` is the settlement whose land the rumour lies
+ * on, if any: only there can it be a burial ground.
+ */
+export function rumourOdds(s: GameState, u: Unit, tribal: Settlement | undefined): [Outcome, number][] {
+  const scout = u.role === 'scout';
+  const expert = u.type === 'seasonedScout';
+  // Council members and bonuses can make outcomes likelier or impossible (de Soto: × 0 for tall tales and lost expeditions).
+  const mods = modifiers(s, u.owner, 'rumourOutcome');
+  const f = (o: Outcome): number => {
+    let k = 1;
+    for (const m of mods) if (m.outcome === o) k *= m.mul;
+    return k;
+  };
+  // Harder levels make the bad results likelier and the best ones rarer.
+  const rules = difficultyOf(s, player(s, u.owner));
+  const odds: [Outcome, number][] = [];
+  for (const e of rumoursOf(s)) {
+    if (e.tribal && !tribal) continue;
+    const base = expert && e.expert !== undefined ? e.expert : scout && e.scout !== undefined ? e.scout : e.weight;
+    let w = base * f(e.outcome);
+    if (e.difficulty) w *= rules[e.difficulty];
+    odds.push([e.outcome, w]);
+  }
+  return odds;
+}
+
 /** Explores a Lost City Rumour with the unit that stepped onto it. */
 export function resolveRumour(s: GameState, u: Unit): void {
   const pos = unitPosition(s, u)!;
-  const scout = u.role === 'scout';
   const expert = u.type === 'seasonedScout';
-  const deSoto = hasFather(s, u.owner, 'hernandoDeSoto');
   const p = player(s, u.owner);
-  // Harder levels make the bad results likelier and the best ones rarer.
-  const { rumourBad: bad, rumourGood: good, burialGrounds } = difficultyRules(p);
-  // Only on tribal land can a rumour turn out to be a burial ground (listed last, so rumours elsewhere draw as before).
+  // Only on tribal land can a rumour turn out to be a burial ground.
   const tribal = u.owner === 'crown' ? undefined : tribalLandOwner(s, pos.x, pos.y);
-  const outcome = weightedPick<Outcome>(s, [
-    ['nothing', (deSoto ? 0 : 30) * bad],
-    ['tales', 14],
-    ['smallTreasure', 26],
-    ['colonist', 10 * good],
-    ['treasure', (scout ? 10 : 5) * good],
-    ['fountain', (scout ? 4 : 2) * good],
-    ['lost', (expert || deSoto ? 0 : scout ? 3 : 6) * bad],
-    ...(tribal ? [['burial', BURIAL_WEIGHT * burialGrounds] as [Outcome, number]] : []),
-  ]);
+  const outcome = weightedPick<Outcome>(s, rumourOdds(s, u, tribal));
   track(u.owner, 'explore:rumour explored');
   if (outcome === 'lost') track(u.owner, 'explore:expedition lost');
   switch (outcome) {
     case 'nothing':
-      message(s, 'The rumour proves to be nothing more than tall tales.', u.owner, pos);
+      message(s, term(s, 'rumour.nothing'), u.owner, pos);
       break;
     case 'tales':
       reveal(s, u.owner, pos.x, pos.y, 6);
-      message(s, 'You meet travellers who describe the lands around you.', u.owner, pos);
+      message(s, term(s, 'rumour.tales'), u.owner, pos);
       break;
     case 'smallTreasure': {
       const gold = (50 + randInt(s, 150)) * (expert ? 2 : 1);
       p.gold += gold;
-      message(s, `You find a small trinket cache worth ${gold} gold.`, u.owner, pos);
+      message(s, term(s, 'rumour.smallTreasure', { gold }), u.owner, pos);
       break;
     }
     case 'colonist':
       createUnit(s, u.owner, 'freeColonist', { kind: 'map', x: pos.x, y: pos.y });
-      message(s, 'You find survivors of a lost colony; they join you as free colonists.', u.owner, pos);
+      message(s, term(s, 'rumour.colonist'), u.owner, pos);
       break;
     case 'treasure': {
       const gold = 300 + randInt(s, 700);
       p.gold += gold;
-      message(s, `You discover the ruins of a lost civilisation and recover ${gold} gold!`, u.owner, pos);
-      noteHistory(s, 'treasure', [u.owner], `Explorers find the ruins of a lost civilisation and recover ${gold} gold.`, { secret: true, at: pos });
+      message(s, term(s, 'rumour.treasure', { gold }), u.owner, pos);
+      noteHistory(s, 'treasure', [u.owner], term(s, 'rumour.treasure.history', { gold }), { secret: true, at: pos });
       break;
     }
     case 'fountain':
       for (let i = 0; i < 4; i++) createUnit(s, u.owner, randomImmigrant(s, u.owner), { kind: 'europe' });
-      message(s, 'You have found the Fountain of Youth! Four new colonists wait on the docks in Europe.', u.owner, pos);
-      noteHistory(s, 'treasure', [u.owner], 'Explorers find the Fountain of Youth: four colonists come from Europe.', { secret: true, at: pos });
+      message(s, term(s, 'rumour.fountain'), u.owner, pos);
+      noteHistory(s, 'treasure', [u.owner], term(s, 'rumour.fountain.history'), { secret: true, at: pos });
       break;
     case 'lost':
       delete s.units[u.id];
-      message(s, 'The expedition vanishes without a trace.', u.owner, pos);
+      message(s, term(s, 'rumour.lost'), u.owner, pos);
       break;
     case 'burial': {
       // The tribe is furious for good and at war until it is destroyed (see processNatives).
@@ -88,9 +104,10 @@ export function resolveRumour(s: GameState, u: Unit): void {
       tribe.stance[u.owner] = 'war';
       for (const st of Object.values(s.settlements)) if (st.tribe === tribeId) st.tension[u.owner] = 1000;
       track(u.owner, 'natives:burial ground disturbed');
-      noteHistory(s, 'tribe', [u.owner], `${NATIONS[u.owner].adjective} explorers disturb a ${TRIBES[tribeId].name} burial ground; the ${TRIBES[tribeId].name} swear eternal war.`, { at: pos });
+      const vars = { tribe: TRIBES[tribeId].name, nation: nationOf(s, u.owner).name, adjective: nationOf(s, u.owner).adjective };
+      noteHistory(s, 'tribe', [u.owner], term(s, 'rumour.burial.history', vars), { at: pos });
       track(u.owner, 'natives:tribe went to war');
-      message(s, `You have disturbed a ${TRIBES[tribeId].name} burial ground! The ${TRIBES[tribeId].name} swear eternal vengeance on ${NATIONS[u.owner].name}.`, u.owner, pos);
+      message(s, term(s, 'rumour.burial', vars), u.owner, pos);
       break;
     }
   }

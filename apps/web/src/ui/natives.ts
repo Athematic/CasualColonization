@@ -1,12 +1,13 @@
 import {
   cargoRoomFor,
   GOOD_DEFS,
-  GOODS,
+  goodsOf,
   incitePrice,
-  NATIONS,
+  nationOf,
   nationTitle,
   nativeOffer,
   nativeUnitPrice,
+  peopleOf,
   settlementForSale,
   settlementName,
   tensionLabel,
@@ -36,10 +37,10 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
     const visit = unit.trade && unit.trade.at === st.id && unit.trade.turn === s.turn ? unit.trade : undefined;
     const gold = app.me.gold;
     const options: Choice<Deal>[] = [];
-    for (const g of GOODS) {
+    for (const g of goodsOf(s)) {
       const n = Math.min(100, unit.cargo?.[g] ?? 0);
       if (n <= 0) continue;
-      const offer = nativeOffer(st, g, n);
+      const offer = nativeOffer(s, st, g, n);
       options.push({
         label: `Sell ${n} ${GOOD_DEFS[g].name.toLowerCase()} for ${offer} gold`,
         value: { kind: 'sell', good: g },
@@ -47,9 +48,9 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
         hint: visit?.sold ? 'You have already sold here this turn.' : offer <= 0 ? 'The natives have no gold left.' : undefined,
       });
     }
-    for (const r of settlementForSale(st).filter((o) => o.amount >= 10)) {
+    for (const r of settlementForSale(s, st).filter((o) => o.amount >= 10)) {
       const n = Math.min(100, r.amount, cargoRoomFor(s, unit, r.good));
-      const each = nativeUnitPrice(st, r.good, unit.owner);
+      const each = nativeUnitPrice(s, st, r.good, unit.owner);
       const price = each * Math.max(1, n);
       options.push({
         label: n > 0 ? `Buy ${n} ${GOOD_DEFS[r.good].name.toLowerCase()} for ${price} gold (${each} each)` : `${r.amount} ${GOOD_DEFS[r.good].name.toLowerCase()} for sale (no room aboard)`,
@@ -60,9 +61,9 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
     }
     const mood = tensionLabel(st.tension[unit.owner] ?? 0);
     const text = h('div', null,
-      h('p', null, `The people here are ${mood}. They pay ${st.gold} gold at most, and want ${TRIBES[st.tribe].wants.map((g) => GOOD_DEFS[g].name.toLowerCase()).join(', ')}.`),
+      h('p', null, `The people here are ${mood}. They pay ${st.gold} gold at most, and want ${peopleOf(s, st.tribe).wants.map((g) => GOOD_DEFS[g].name.toLowerCase()).join(', ')}.`),
       options.length ? null : h('p', { class: 'muted' }, 'You have nothing to sell, and they have nothing for sale.'));
-    const choice: Deal | null = await choose<Deal>(`Trade with the ${settlementName(st)}`, text, [...options, { label: traded ? 'Done' : 'Leave', value: null as unknown as Deal }]);
+    const choice: Deal | null = await choose<Deal>(`Trade with the ${settlementName(s, st)}`, text, [...options, { label: traded ? 'Done' : 'Leave', value: null as unknown as Deal }]);
     if (!choice) return traded;
     const ok: boolean = choice.kind === 'sell'
       ? app.dispatch({ type: 'tradeNatives', unitId: unit.id, settlementId, good: choice.good })
@@ -76,13 +77,13 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
 export async function inciteDialog(app: App, u: Unit, settlementId: string): Promise<boolean> {
   const s = app.state;
   const st = s.settlements[settlementId];
-  const price = incitePrice(st);
+  const price = incitePrice(s, st);
   const rivals = s.players.filter((p) => p.id !== u.owner && p.id !== 'crown').map((p) => p.id as NationId);
   const nation = await choose(
     'Incite the natives',
     `For ${price} gold the ${TRIBES[st.tribe].name} will turn against a rival nation: their anger with it rises sharply, and they may go to war. You have ${app.me.gold} gold.`,
     [
-      ...rivals.map((n) => ({ label: `Against ${nationTitle(n)}`, value: n, disabled: app.me.gold < price || s.tribes.find((t) => t.id === st.tribe)?.stance[n] === 'war', hint: NATIONS[n].name })),
+      ...rivals.map((n) => ({ label: `Against ${nationTitle(app.state, n)}`, value: n, disabled: app.me.gold < price || s.tribes.find((t) => t.id === st.tribe)?.stance[n] === 'war', hint: nationOf(app.state, n).name })),
       { label: 'Never mind', value: null as unknown as NationId },
     ],
   );

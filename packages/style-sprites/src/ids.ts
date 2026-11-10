@@ -116,9 +116,10 @@ export class SpriteIds {
     return [...fill(this.mapping.fatherHeads ?? DEFAULT_HEADS, { father: id }), ...figure];
   }
 
-  /** The sprite ids of a full-frame backdrop. */
-  backdrop(kind: 'congress-hall'): string[] {
-    return fill(this.mapping.backdrops?.[kind] ?? DEFAULT_BACKDROPS[kind]);
+  /** The sprite ids of a full-frame backdrop: the scenario's own (`sprite`) first, then the pack's. */
+  backdrop(kind: 'congress-hall', sprite?: string): string[] {
+    const usual = fill(this.mapping.backdrops?.[kind] ?? DEFAULT_BACKDROPS[kind]);
+    return sprite ? [...new Set([sprite, ...usual])] : usual;
   }
 
   road(): { hub: string[]; spoke: string[]; diagonal: string[] } {

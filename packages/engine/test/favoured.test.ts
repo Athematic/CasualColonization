@@ -178,7 +178,7 @@ describe('trade agreements and foreign colony stops', () => {
     wagon.moves = 6;
     const enGold = en.gold;
     const furPrice = sellPrice(fr, 'furs');
-    const sugarPrice = buyPrice(fr, 'sugar');
+    const sugarPrice = buyPrice(s, fr, 'sugar');
     ok(s, { type: 'assignRoute', unitId: wagon.id, routeId: id });
     // Only what fits in the warehouse is sold, at the French home-market price, with no tax.
     const cap = warehouseCapacity(quebec);
@@ -285,7 +285,7 @@ describe('Favoured Nation', () => {
     expect(en.market.furs).toEqual({ price: 3, volume: 0 });
     // Buying uses French prices too.
     const g2 = en.gold;
-    const toolPrice = buyPrice(fr, 'tools');
+    const toolPrice = buyPrice(s, fr, 'tools');
     ok(s, { type: 'buyGoods', carrierId: ship.id, good: 'tools', amount: 100 });
     expect(en.gold).toBe(g2 - 100 * toolPrice);
     // Colonists stay aboard: only the home port takes them ashore or sends recruits.

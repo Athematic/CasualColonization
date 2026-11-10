@@ -1,36 +1,39 @@
 import {
-  describeSeed,
+  AI_LEVEL_INFO,
+  calendarOf,
   canFoundColony,
-  charterCost,
   canImprove,
   canUseRoutes,
-  routeStopName,
-  portName,
+  charterCost,
   colonyAt,
-  AI_LEVEL_INFO,
   colonyWorkers,
+  describeSeed,
   DIFFICULTY,
-  resolveDifficulty,
   FATHERS,
   formatDate,
-  rebelShare,
-  score,
-  nextFatherCost,
   GOOD_DEFS,
-  GOODS,
+  goodsOf,
   isShip,
   maxMoves,
-  NATIONS,
+  nationOf,
   nationTitle,
+  nextFatherCost,
+  portName,
+  rebelShare,
   recruitPrice,
+  resolveDifficulty,
+  routeStopName,
+  score,
   serialize,
+  term,
+  Term,
   tileAt,
   tileDescription,
+  UNIT_TYPES,
   unitName,
   unitPosition,
   unitsAboard,
   unitsAwaitingOrders,
-  UNIT_TYPES,
   type GameState,
   type NationId,
   type Unit,
@@ -86,17 +89,17 @@ export class Sidebar {
     this.body.append(
       h('div', { class: 'title-row' },
         h('h1', null, 'Casual Colonization'),
-        h('span', { class: 'flag', style: `background:${NATIONS[app.viewer].color}`, title: NATIONS[app.viewer].name })),
+        h('span', { class: 'flag', style: `background:${nationOf(app.state, app.viewer).color}`, title: nationOf(app.state, app.viewer).name })),
       h('div', { class: 'stats' },
-        h('div', null, h('strong', null, formatDate(s.turn)), ' · ', nationTitle(app.viewer)),
+        h('div', null, h('strong', null, formatDate(s.turn, calendarOf(s))), ' · ', nationTitle(app.state, app.viewer)),
         h('div', null, `Gold ${me.gold.toLocaleString()} · Tax ${me.tax}%`),
-        h('div', { class: 'muted' }, `Crosses ${me.crosses}/${me.crossesRequired} · Recruit ${recruitPrice(me)}`),
+        h('div', { class: 'muted' }, `Crosses ${me.crosses}/${me.crossesRequired} · Recruit ${recruitPrice(s, me)}`),
         h('div', { class: 'muted' },
           h('button', { class: 'link', onclick: () => void app.chooseFather() },
-            me.currentFather ? `Congress: ${FATHERS[me.currentFather].name} ${me.fatherBells}/${nextFatherCost(s, me)}` : `Congress: choose a Founding Father (${me.fatherBells} bells)`),
+            me.currentFather ? `${Term(s, 'councilShort')}: ${FATHERS[me.currentFather].name} ${me.fatherBells}/${nextFatherCost(s, me)}` : `${Term(s, 'councilShort')}: choose a ${term(s, 'member')} (${me.fatherBells} bells)`),
           ' · ',
           h('button', { class: 'link', title: 'The Congress hall (K)', onclick: () => app.openCongress() }, 'Hall')),
-        me.independence === 'declared' ? h('div', null, h('span', { class: 'pill bad' }, 'War of Independence')) : null,
+        me.independence === 'declared' ? h('div', null, h('span', { class: 'pill bad' }, `${Term(app.state, 'independenceWar')}`)) : null,
         me.independence === 'won' ? h('div', null, h('span', { class: 'pill good' }, 'Independent')) : null,
         Object.values(me.stance).includes('war') && me.independence !== 'declared' ? h('div', null, h('span', { class: 'pill bad' }, 'At war')) : null,
       ),
@@ -106,7 +109,7 @@ export class Sidebar {
 
     this.body.append(
       h('div', { class: 'row wrap nav-row' },
-        h('button', { class: 'btn', onclick: () => app.openEurope(), title: 'Europe (E)' }, 'Europe'),
+        h('button', { class: 'btn', onclick: () => app.openEurope(), title: `${Term(app.state, 'homeland')} (E)` }, `${Term(app.state, 'homeland')}`),
         h('button', { class: 'btn', onclick: () => app.openDiplomacy(), title: 'Foreign affairs (D)' }, 'Affairs'),
         h('button', { class: 'btn', onclick: () => app.openRoutes(), title: 'Trade routes (T)' }, 'Routes'),
         h('button', { class: 'btn', onclick: () => app.openProgress(), title: 'Progress graphs (H)' }, 'Progress'),
@@ -146,7 +149,7 @@ export class Sidebar {
       .sort((a, b) => b.score - a.score);
     const watch = h('select', { 'aria-label': 'Whose view to show', onchange: (e: Event) => app.setWatch((e.target as HTMLSelectElement).value as NationId | 'all') },
       h('option', { value: 'all', selected: app.watch === 'all' || undefined }, 'Everything'),
-      rows.map((r) => h('option', { value: r.p.id, selected: app.watch === r.p.id || undefined }, `${nationTitle(r.p.id)}'s view`)));
+      rows.map((r) => h('option', { value: r.p.id, selected: app.watch === r.p.id || undefined }, `${nationTitle(app.state, r.p.id)}'s view`)));
     const head = s.config.headStart;
     const speeds = (head ? [[1000, 'Slow'], [500, 'Normal'], [250, 'Fast']] : [[1200, 'Slow'], [400, 'Normal'], [80, 'Fast'], [0, 'Fastest']]) as [number, string][];
     const speed = h('select', { 'aria-label': 'Autoplay speed', onchange: (e: Event) => { app.speed = Number((e.target as HTMLSelectElement).value); if (app.autoplay) app.setAutoplay(true); } },
@@ -155,9 +158,9 @@ export class Sidebar {
     const progress = head ? Math.min(100, Math.round((s.turn / head.turn) * 100)) : 0;
     return h('div', { class: 'card observer' },
       h('div', { class: 'title-row' }, h('h1', null, 'Casual Colonization'), h('span', { class: 'pill' }, head ? 'Head start' : 'Observer'), s.cheated ? h('span', { class: 'pill warn', title: 'Cheats have been used in this game' }, 'Cheated') : null),
-      h('div', { class: 'stats' }, h('strong', null, formatDate(s.turn)), over ? ` · ${over.reason}` : ''),
+      h('div', { class: 'stats' }, h('strong', null, formatDate(s.turn, calendarOf(s))), over ? ` · ${over.reason}` : ''),
       head ? h('div', null,
-        h('p', { class: 'small' }, `The computer plays ${head.humans.map((n) => nationTitle(n)).join(' and ')} for you until ${formatDate(head.turn)}.`),
+        h('p', { class: 'small' }, `The computer plays ${head.humans.map((n) => nationTitle(app.state, n)).join(' and ')} for you until ${formatDate(head.turn, calendarOf(s))}.`),
         h('div', { class: 'bar', role: 'progressbar', 'aria-valuenow': progress, 'aria-valuemin': 0, 'aria-valuemax': 100 }, h('span', { style: `width:${progress}%` })),
         h('button', { class: 'btn small', onclick: () => app.takeOver() }, 'Take over now')) : null,
       h('div', { class: 'row' },
@@ -170,7 +173,7 @@ export class Sidebar {
       h('table', { class: 'table scoreboard' },
         h('tr', null, h('th', null, 'Nation'), h('th', null, 'Level'), h('th', { title: 'Colonies' }, 'Col'), h('th', { title: 'Colonists' }, 'Pop'), h('th', { title: 'Sons of Liberty' }, 'SoL'), h('th', null, 'Score')),
         rows.map((r) => h('tr', { class: app.watch === r.p.id ? 'watched' : undefined, onclick: () => app.setWatch(app.watch === r.p.id ? 'all' : r.p.id) },
-          h('td', null, h('span', { class: 'flag', style: `background:${NATIONS[r.p.id].color}` }), ' ', nationTitle(r.p.id), r.p.independence === 'declared' ? ' ⚔' : r.p.independence === 'won' ? ' ★' : ''),
+          h('td', null, h('span', { class: 'flag', style: `background:${nationOf(app.state, r.p.id).color}` }), ' ', nationTitle(app.state, r.p.id), r.p.independence === 'declared' ? ' ⚔' : r.p.independence === 'won' ? ' ★' : ''),
           h('td', null, AI_LEVEL_INFO[r.p.ai ?? 'naive'].name, r.p.aiMemory?.focus ? h('span', { class: 'muted small' }, ` (${r.p.aiMemory.focus})`) : null),
           h('td', null, String(r.colonies)),
           h('td', null, String(r.pop)),
@@ -190,9 +193,9 @@ export class Sidebar {
     const tile = pos && tileAt(s, pos.x, pos.y);
     const def = UNIT_TYPES[u.type];
     const aboard = unitsAboard(s, u);
-    const cargo = GOODS.filter((g) => (u.cargo?.[g] ?? 0) > 0);
+    const cargo = goodsOf(s).filter((g) => (u.cargo?.[g] ?? 0) > 0);
     const route = u.route && s.routes?.[u.route.id];
-    const orders = u.repair ? `Under repair (${u.repair} turns)` : route ? `Trade route: ${route.name}${route.stops.length ? `, next ${routeStopName(s, route.stops[u.route!.stop % route.stops.length], route.owner)}` : ''}` : u.roadTo ? `Building a road to ${u.roadTo.x},${u.roadTo.y}` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? (u.dest.port ? `Sailing for ${portName(u.dest.port)}` : 'Sailing for Europe') : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
+    const orders = u.repair ? `Under repair (${u.repair} turns)` : route ? `Trade route: ${route.name}${route.stops.length ? `, next ${routeStopName(s, route.stops[u.route!.stop % route.stops.length], route.owner)}` : ''}` : u.roadTo ? `Building a road to ${u.roadTo.x},${u.roadTo.y}` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? (u.dest.port ? `Sailing for ${portName(app.state, u.dest.port)}` : `Sailing for ${term(app.state, 'homeland')}`) : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
     const mine = u.owner === app.viewer;
     const can = (fn: () => string | null) => mine && app.isMyTurn() && fn() === null;
     const terrain = tile?.f ? 'clear' : 'plow';
@@ -211,7 +214,7 @@ export class Sidebar {
         toast('Click where the unit should go.');
       });
       if (canUseRoutes(u)) btn(u.route ? 'Change route…' : 'Trade route…', 'T', () => app.openRoutes(u.id));
-      if (isShip(u)) btn('Sail to Europe', '', () => app.unitCommand('gotoEurope'));
+      if (isShip(u)) btn(`Sail to ${term(app.state, 'homeland')}`, '', () => app.unitCommand('gotoEurope'));
       if (u.type === 'treasure') btn('Ship treasure home', '', () => { if (app.dispatch({ type: 'cashTreasure', unitId: u.id })) app.afterUnitAction(); });
       if (u.type === 'damagedArtillery') btn('Repair (colony armory)', '', () => { if (app.dispatch({ type: 'repairArtillery', unitId: u.id })) app.afterUnitAction(); });
       btn('Fortify', 'F', () => app.unitCommand('fortify'), !isShip(u));
@@ -229,7 +232,7 @@ export class Sidebar {
       'div',
       { class: 'card unit-card' },
       h('div', { class: 'unit-head' },
-        icon({ kind: 'unit', type: u.type, role: u.role, nation: u.owner }, 56, unitName(u)),
+        icon({ kind: 'unit', type: u.type, role: u.role, color: nationOf(app.state, u.owner).color }, 56, unitName(u)),
         h('div', null,
           h('div', { class: 'unit-name' }, unitName(u)),
           h('div', { class: 'muted' }, `Moves ${movesText(u, s)}${u.role === 'pioneer' ? ` · Tools ${u.tools}` : ''}`),
@@ -237,7 +240,7 @@ export class Sidebar {
           tile ? h('div', { class: 'muted' }, tileDescription(tile)) : null)),
       aboard.length || cargo.length
         ? h('div', { class: 'cargo' },
-            aboard.map((p) => h('button', { class: 'chip', title: `Select ${unitName(p)}`, onclick: () => app.select(p.id) }, icon({ kind: 'unit', type: p.type, role: p.role, nation: p.owner }, 28), unitName(p))),
+            aboard.map((p) => h('button', { class: 'chip', title: `Select ${unitName(p)}`, onclick: () => app.select(p.id) }, icon({ kind: 'unit', type: p.type, role: p.role, color: nationOf(app.state, p.owner).color }, 28), unitName(p))),
             cargo.map((g) => h('span', { class: 'chip' }, icon({ kind: 'product', product: g }, 22), `${u.cargo![g]} ${GOOD_DEFS[g].name}`)))
         : null,
       actions.length ? h('div', { class: 'actions' }, actions) : null,
@@ -274,7 +277,7 @@ export class Sidebar {
       this.seedLine(),
       this.eventSwitches(),
       app.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used')) : null,
-      h('p', { class: 'muted small' }, 'Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E Europe · D foreign affairs · H progress graphs · A or F1–F8 reports · T trade routes · Enter end turn · Right-click or Shift-click to send a unit.'));
+      h('p', { class: 'muted small' }, `Arrows / numpad move · B found colony · P plow · R road · F fortify · G go to · E ${term(app.state, 'homeland')} · D foreign affairs · H progress graphs · A or F1–F8 reports · T trade routes · Enter end turn · Right-click or Shift-click to send a unit.`));
     details.addEventListener('toggle', () => (this.menuOpen = details.open));
     return details;
   }
@@ -288,7 +291,7 @@ export class Sidebar {
         h('input', { type: 'checkbox', checked: on || undefined, onchange: (e: Event) => { app.dispatch({ type: 'setEvents', ...cmd((e.target as HTMLInputElement).checked) }); app.requestRender(); } }),
         ' ', label);
     return h('div', { class: 'row wrap event-switches' },
-      toggle('Historical events', 'Dated events from the period: wars in Europe, the Great Frost, famous voyages, financial bubbles.', !!cfg.historicalEvents, (on) => ({ historical: on })),
+      toggle('Historical events', `Dated events from the period: wars in ${term(app.state, 'homeland')}, the Great Frost, famous voyages, financial bubbles.`, !!cfg.historicalEvents, (on) => ({ historical: on })),
       toggle('Random events', 'Storms, fires, bumper harvests, gold fever, pirates and other surprises.', !!cfg.randomEvents, (on) => ({ random: on })));
   }
 
@@ -340,7 +343,7 @@ export class Sidebar {
     }
     for (const col of Object.values(s.colonies)) {
       if (!this.app.knows(col.y * s.map.width + col.x)) continue;
-      ctx.fillStyle = NATIONS[col.owner].color;
+      ctx.fillStyle = nationOf(this.app.state, col.owner).color;
       ctx.fillRect(col.x * scale - 1, col.y * scale - 1, scale + 2, scale + 2);
     }
     const r = this.app.mapWrap.getBoundingClientRect();

@@ -9,20 +9,23 @@
 import { fail } from '../errors.js';
 import { noteHistory } from '../history.js';
 import { random } from '../rng.js';
-import { formatDate, message, nationTitle, player, unitName, yearOf } from '../queries.js';
+import { message, player, unitName } from '../queries.js';
+import { calendarOf, formatDate, nationOf, nationTitle, scenarioOf, yearOf } from '../scenarios/index.js';
 import { buildingName } from '../rules/buildings.js';
 import { GOOD_DEFS } from '../rules/goods.js';
-import { NATIONS, TRIBES, type NationId } from '../rules/nations.js';
+import { TRIBES, type NationId } from '../rules/nations.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import { track, tracking } from '../telemetry.js';
 import type { GameState, Player } from '../types.js';
 import { AMERICAS_EVENTS } from './americas.js';
+import { CARIBBEAN_EVENTS } from './caribbean.js';
 import { applyEffects, atRoundEnd, eventsState, num, valueEffects } from './effects.js';
 import type { EventChoice, EventDef, EventKind, EventVars, PendingEvent } from './types.js';
 
 export * from './types.js';
 export { eventProductionPct } from './modifiers.js';
 export { HISTORICAL_EVENTS, RANDOM_EVENTS, AMERICAS_EVENTS } from './americas.js';
+export { CARIBBEAN_EVENTS } from './caribbean.js';
 export { applyEffects, valueEffects, tensionCost, tensionValue, TAX_POINT_VALUE } from './effects.js';
 
 /** Chance per round that a nation has a random event (if one has a target). */
@@ -33,7 +36,7 @@ export const RANDOM_COOLDOWN = 40;
 // ---------------------------------------------------------------------------
 // Registry
 
-const SETS: Record<string, EventDef[]> = { americas: AMERICAS_EVENTS };
+const SETS: Record<string, EventDef[]> = { americas: AMERICAS_EVENTS, caribbean: CARIBBEAN_EVENTS };
 
 /** Registers an event set (a scenario's), replacing one with the same id. */
 export function registerEventSet(id: string, defs: EventDef[]): void {
@@ -45,9 +48,14 @@ export function registerEventSet(id: string, defs: EventDef[]): void {
   SETS[id] = defs;
 }
 
-/** The events of the game's set. */
+/** Whether an event set with this id is registered (scenarios name theirs). */
+export function hasEventSet(id: string): boolean {
+  return id in SETS;
+}
+
+/** The events of the game's set: `config.eventSet` (tests), else its scenario's. */
 export function eventDefs(s: GameState): EventDef[] {
-  return SETS[s.config.eventSet ?? 'americas'] ?? AMERICAS_EVENTS;
+  return SETS[s.config.eventSet ?? scenarioOf(s).events] ?? AMERICAS_EVENTS;
 }
 
 export function eventDef(s: GameState, id: string): EventDef | undefined {
@@ -81,9 +89,9 @@ export function eventText(s: GameState, text: string, v: EventVars): string {
   return text.replace(/\{(\w+)\}/g, (all, key: string) => {
     switch (key) {
       case 'nation':
-        return NATIONS[v.nation].name;
+        return nationOf(s, v.nation).name;
       case 'Nation':
-        return nationTitle(v.nation);
+        return nationTitle(s, v.nation);
       case 'colony':
         return (v.colony && s.colonies[v.colony]?.name) || 'the colony';
       case 'tribe':
@@ -105,7 +113,7 @@ export function eventText(s: GameState, text: string, v: EventVars): string {
       case 'cost':
         return String(v.cost ?? 0);
       case 'year':
-        return String(yearOf(s.turn).year);
+        return String(yearOf(s.turn, calendarOf(s)).year);
       default:
         return all;
     }
@@ -255,7 +263,7 @@ export function fireEvent(s: GameState, def: EventDef, nation: NationId, given?:
   else if (ev.fired[def.id] !== s.turn) {
     // A world event: noted once in the public history, however many nations it touches.
     ev.fired[def.id] = s.turn;
-    noteHistory(s, 'event', [], `${eventText(s, def.title, v)} (${formatDate(s.turn)}).`);
+    noteHistory(s, 'event', [], `${eventText(s, def.title, v)} (${formatDate(s.turn, calendarOf(s))}).`);
   }
   track(nation, `event:${def.id}`);
   if (tracking() && def.effects?.length) track(nation, `eventvalue ${def.id}`, Math.round(valueEffects(s, def.effects, v)));
@@ -287,8 +295,9 @@ function fireWorld(s: GameState, def: EventDef): void {
 
 /** Historical events in their window: each fires once, at the latest in the window's last round. */
 function drawHistorical(s: GameState): void {
-  const year = yearOf(s.turn).year;
-  const nextYear = yearOf(s.turn + 1).year;
+  const cal = calendarOf(s);
+  const year = yearOf(s.turn, cal).year;
+  const nextYear = yearOf(s.turn + 1, cal).year;
   for (const def of eventDefs(s)) {
     if (def.kind !== 'historical' || def.hidden || !def.years) continue;
     if (s.events?.fired[def.id] !== undefined) continue;

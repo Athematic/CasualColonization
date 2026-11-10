@@ -1,33 +1,35 @@
 import {
   abandonProblem,
-  BUILDING_ORDER,
+  buildingName,
   BUILDINGS,
+  buildingsOf,
   buildOptions,
   buildTargetCost,
-  buildingName,
   centreProduction,
   colonyReport,
   colonyWorkers,
   foodToGrow,
   GOOD_DEFS,
-  GOODS,
+  goodsOf,
   hurryPrice,
   isCarrier,
   isWater,
   landPrice,
+  nationOf,
   nativeLandOwner,
-  SCHOOL_TEACHERS,
-  TEACH_TURNS,
-  TRIBES,
   PRODUCT_NAMES,
   ROLES,
+  SCHOOL_TEACHERS,
+  TEACH_TURNS,
+  term,
   tileAt,
   tileDescription,
   tileYield,
+  TRIBES,
+  UNIT_TYPES,
   unitName,
   unitsAboard,
   unitsAt,
-  UNIT_TYPES,
   warehouseCapacity,
   type BuildTarget,
   type BuildingKind,
@@ -107,7 +109,7 @@ export class ColonyScreen implements Screen {
     this.body.append(
       h('header', { class: 'screen-head' },
         h('h2', null, colony.name),
-        h('span', { class: 'muted' }, `Population ${pop} · Sons of Liberty ${report.sonsOfLiberty}% · Food ${colony.goods.food}/${foodToGrow(colony)}`),
+        h('span', { class: 'muted' }, `Population ${pop} · Sons of Liberty ${report.sonsOfLiberty}% · Food ${colony.goods.food}/${foodToGrow(s, colony)}`),
         colony.owner === this.app.viewer && !this.app.observer
           ? h('button', { class: 'btn small', disabled: !this.app.isMyTurn() || abandonProblem(s, colony.id) !== null, title: abandonProblem(s, colony.id) ?? 'Give up this small colony', onclick: () => void this.abandon(colony) }, 'Abandon')
           : null,
@@ -169,7 +171,7 @@ export class ColonyScreen implements Screen {
           title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : native ? ` (land of the ${TRIBES[native.tribe].name})` : ''}`,
           onclick: () => this.clickTile(colony, x, y, worker),
         },
-        worker ? icon({ kind: 'unit', type: worker.type, role: 'none', nation: worker.owner }, 40, unitName(worker)) : null,
+        worker ? icon({ kind: 'unit', type: worker.type, role: 'none', color: nationOf(this.app.state, worker.owner).color }, 40, unitName(worker)) : null,
         job ? h('span', { class: 'yield' }, icon({ kind: 'product', product: job.good }, 18), workers[worker!.id] ?? 0) : null));
       }
     }
@@ -181,7 +183,7 @@ export class ColonyScreen implements Screen {
     const report = colonyReport(s, colony);
     const hungry = report.net.food < 2;
     let best: { g: GoodId; v: number } | undefined;
-    for (const g of GOODS) {
+    for (const g of goodsOf(s)) {
       const n = tileYield(s, colony, x, y, g, u.type);
       if (n <= 0) continue;
       const expert = UNIT_TYPES[u.type].expertFor === g;
@@ -196,7 +198,7 @@ export class ColonyScreen implements Screen {
     const sel = this.selected ? s.units[this.selected] : undefined;
     if (sel && worker && sel.id === worker.id && worker.loc.kind === 'colony' && worker.loc.job.kind === 'tile') {
       // Clicking a worker's own field cycles what it produces.
-      const goods = GOODS.filter((g) => tileYield(s, colony, x, y, g, worker.type) > 0);
+      const goods = goodsOf(s).filter((g) => tileYield(s, colony, x, y, g, worker.type) > 0);
       const next = goods[(goods.indexOf(worker.loc.job.good) + 1) % goods.length];
       if (next) this.dispatch({ type: 'assignJob', unitId: worker.id, colonyId: colony.id, job: { kind: 'tile', x, y, good: next } });
       return;
@@ -240,7 +242,7 @@ export class ColonyScreen implements Screen {
     const s = this.app.state;
     const cards: HTMLElement[] = [];
     const passive: string[] = [];
-    for (const kind of BUILDING_ORDER) {
+    for (const kind of buildingsOf(s)) {
       const level = colony.buildings[kind];
       if (level === 0) continue;
       const def = BUILDINGS[kind];
@@ -256,7 +258,7 @@ export class ColonyScreen implements Screen {
       for (let i = 0; i < places; i++) {
         const w = here[i];
         slots.push(w
-          ? h('span', { class: `slot${w.id === this.selected ? ' selected' : ''}`, onclick: (e: Event) => { e.stopPropagation(); this.toggleSelect(w.id); } }, icon({ kind: 'unit', type: w.type, role: 'none', nation: w.owner }, 36, unitName(w)))
+          ? h('span', { class: `slot${w.id === this.selected ? ' selected' : ''}`, onclick: (e: Event) => { e.stopPropagation(); this.toggleSelect(w.id); } }, icon({ kind: 'unit', type: w.type, role: 'none', color: nationOf(this.app.state, w.owner).color }, 36, unitName(w)))
           : h('span', { class: 'slot empty' }));
       }
       const production = out && def.output
@@ -354,7 +356,7 @@ export class ColonyScreen implements Screen {
     }
 
     const chip = (u: Unit) => h('button', { class: `chip${u.id === this.selected ? ' selected' : ''}`, onclick: () => this.toggleSelect(u.id) },
-      icon({ kind: 'unit', type: u.type, role: u.role, nation: u.owner }, 32), unitName(u));
+      icon({ kind: 'unit', type: u.type, role: u.role, color: nationOf(this.app.state, u.owner).color }, 32), unitName(u));
 
     return h('div', { class: 'card side' },
       h('h3', null, 'Production'),
@@ -366,10 +368,10 @@ export class ColonyScreen implements Screen {
       carriers.length ? h('h3', null, 'In port') : null,
       carriers.map((c) => h('div', { class: `carrier${c.id === this.carrier ? ' selected' : ''}` },
         h('button', { class: 'chip', onclick: () => { this.carrier = this.carrier === c.id ? undefined : c.id; this.app.requestRender(); } },
-          icon({ kind: 'unit', type: c.type, role: 'none', nation: c.owner }, 36), `${unitName(c)}${c.repair ? ` (repairing, ${c.repair} turns)` : c.id === this.carrier ? ' (loading)' : ''}`),
+          icon({ kind: 'unit', type: c.type, role: 'none', color: nationOf(this.app.state, c.owner).color }, 36), `${unitName(c)}${c.repair ? ` (repairing, ${c.repair} turns)` : c.id === this.carrier ? ' (loading)' : ''}`),
         h('div', { class: 'chips' },
           unitsAboard(s, c).map(chip),
-          GOODS.filter((g) => (c.cargo?.[g] ?? 0) > 0).map((g) => h('button', { class: 'chip', title: 'Unload', onclick: () => this.dispatch({ type: 'unloadGoods', carrierId: c.id, good: g, amount: c.cargo![g]! }) },
+          goodsOf(s).filter((g) => (c.cargo?.[g] ?? 0) > 0).map((g) => h('button', { class: 'chip', title: 'Unload', onclick: () => this.dispatch({ type: 'unloadGoods', carrierId: c.id, good: g, amount: c.cargo![g]! }) },
             icon({ kind: 'product', product: g }, 22), `${c.cargo![g]} ⤓`))))),
       selActions.length ? h('div', { class: 'actions' }, selActions) : null);
   }
@@ -379,8 +381,8 @@ export class ColonyScreen implements Screen {
     const customs = colony.buildings.customHouse > 0;
     return h('div', { class: 'card warehouse' },
       h('h3', null, this.carrier ? 'Warehouse — click a good to load 100 onto the ship' : 'Warehouse'),
-      customs ? h('p', { class: 'muted small' }, 'Custom house: ticked goods above 50 are sold in Europe at the end of each turn.') : null,
-      h('div', { class: 'goods' }, GOODS.map((g) => {
+      customs ? h('p', { class: 'muted small' }, `Custom house: ticked goods above 50 are sold in ${term(this.app.state, 'homeland')} at the end of each turn.`) : null,
+      h('div', { class: 'goods' }, goodsOf(this.app.state).map((g) => {
         const amount = colony.goods[g];
         const over = g !== 'food' && amount > cap;
         const exportBox = customs && g !== 'food'
