@@ -1,11 +1,13 @@
 import { fail } from './errors.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
-import { colonyWorkers, createUnit, message, player, reveal } from './queries.js';
-import { weightedPick } from './rng.js';
+import { applyEffects } from './events/effects.js';
+import { message, player } from './queries.js';
+import { random, weightedPick } from './rng.js';
 import { FATHERS, fatherCost, type FatherCategory, type FatherId } from './rules/fathers.js';
 import { NATIONS } from './rules/nations.js';
-import { councilOf } from './scenarios/index.js';
+import { councilOf, scenarioOf } from './scenarios/index.js';
+import { memberEffects } from './scenarios/modifiers.js';
 import type { GameState, Player } from './types.js';
 
 export function hasFather(s: GameState, nation: Player['id'], id: FatherId): boolean {
@@ -66,30 +68,8 @@ export function joinCongress(s: GameState, p: Player, id: FatherId): void {
   for (const other of s.players) {
     if (other.id !== p.id) message(s, `${def.name} has joined the Continental Congress of ${NATIONS[p.id].name}.`, other.id);
   }
-  const colonies = Object.values(s.colonies).filter((c) => c.owner === p.id);
-  switch (id) {
-    case 'pocahontas':
-      for (const st of Object.values(s.settlements)) st.tension[p.id] = 0;
-      for (const t of s.tribes) t.stance[p.id] = 'peace';
-      break;
-    case 'johnPaulJones':
-      createUnit(s, p.id, 'frigate', { kind: 'europe' });
-      break;
-    case 'laSalle':
-      for (const c of colonies) if (colonyWorkers(s, c).length >= 3 && c.buildings.stockade === 0) c.buildings.stockade = 1;
-      break;
-    case 'franciscoDeCoronado':
-      for (const c of Object.values(s.colonies)) reveal(s, p.id, c.x, c.y, 3);
-      break;
-    case 'simonBolivar':
-      for (const c of colonies) c.liberty += Math.round(200 * colonyWorkers(s, c).length * 0.2);
-      break;
-    case 'bartolomeDeLasCasas':
-      for (const u of Object.values(s.units)) if (u.owner === p.id && u.type === 'nativeConvert') u.type = 'freeColonist';
-      break;
-    case 'jakobFugger':
-      p.boycotts = {};
-      break;
-  }
+  // The member's one-off effects, in order (none of today's draws a random number).
+  const onJoin = memberEffects(scenarioOf(s), id).onJoin;
+  if (onJoin?.length) applyEffects(s, `father:${id}`, onJoin, { nation: p.id }, () => random(s));
   offerFathers(s, p);
 }

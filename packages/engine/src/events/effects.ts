@@ -2,7 +2,7 @@
  * What events do: applying effects, and valuing them in gold for the computer players.
  */
 import { addTension } from '../natives.js';
-import { colonyWorkers, createUnit, isWater, neighbours, player, tileAt } from '../queries.js';
+import { colonyWorkers, createUnit, isWater, neighbours, player, reveal, tileAt } from '../queries.js';
 import { placeOnMap } from '../movement.js';
 import { colonyReport } from '../production.js';
 import { BUILDINGS, BUILDING_ORDER, type BuildingKind } from '../rules/buildings.js';
@@ -118,7 +118,7 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
       const type = e.type ?? v.unit;
       if (!type) return;
       if (e.where === 'europe') {
-        if (p.independence === 'none') createUnit(s, v.nation, type, { kind: 'europe' });
+        if (p.independence === 'none' || e.always) createUnit(s, v.nation, type, { kind: 'europe' });
         return;
       }
       if (!colony) return;
@@ -161,6 +161,26 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
     }
     case 'followUp':
       eventsState(s).queue.push({ event: e.event, turn: s.turn + e.turns, vars: { ...v } });
+      return;
+    case 'peaceWithPeoples':
+      for (const st of Object.values(s.settlements)) st.tension[p.id] = 0;
+      for (const t of s.tribes) t.stance[p.id] = 'peace';
+      return;
+    case 'stockades':
+      for (const c of ownColonies(s, p.id)) if (colonyWorkers(s, c).length >= e.minColonists && c.buildings.stockade === 0) c.buildings.stockade = 1;
+      return;
+    case 'revealColonies':
+      for (const c of Object.values(s.colonies)) reveal(s, p.id, c.x, c.y, e.radius);
+      return;
+    case 'liberty':
+      // 200 bells make one colonist a Son of Liberty (production.ts, sonsOfLiberty).
+      for (const c of ownColonies(s, p.id)) c.liberty += Math.round(200 * colonyWorkers(s, c).length * e.share);
+      return;
+    case 'convertUnits':
+      for (const u of Object.values(s.units)) if (u.owner === p.id && u.type === e.from) u.type = e.to;
+      return;
+    case 'liftBoycotts':
+      p.boycotts = {};
       return;
   }
 }
@@ -262,6 +282,24 @@ export function valueEffects(s: GameState, effects: Effect[], v: EventVars): num
         break;
       case 'followUp':
         break;
+      // Council members' effects: rough values, for completeness (computer players choose members by preference).
+      case 'peaceWithPeoples':
+        for (const st of Object.values(s.settlements)) total += tensionCost(st.tension[v.nation] ?? 0) / 10;
+        break;
+      case 'stockades':
+        total += ownColonies(s, v.nation).filter((c) => c.buildings.stockade === 0 && colonyWorkers(s, c).length >= e.minColonists).length * BUILDINGS.stockade.levels[0].hammers * 4;
+        break;
+      case 'revealColonies':
+        break;
+      case 'liberty':
+        total += ownColonies(s, v.nation).reduce((n, c) => n + colonyWorkers(s, c).length, 0) * e.share * 400;
+        break;
+      case 'convertUnits':
+        total += Object.values(s.units).filter((u) => u.owner === v.nation && u.type === e.from).length * Math.max(0, (UNIT_TYPES[e.to].price ?? 0) - (UNIT_TYPES[e.from].price ?? 0));
+        break;
+      case 'liftBoycotts':
+        total += Object.keys(p.boycotts).length * 500;
+        break;
     }
   }
   return total;
@@ -276,6 +314,10 @@ export function damageableBuilding(colony: Colony): BuildingKind | undefined {
     if (!best || colony.buildings[b] > colony.buildings[best]) best = b;
   }
   return best;
+}
+
+function ownColonies(s: GameState, nation: string): Colony[] {
+  return Object.values(s.colonies).filter((c) => c.owner === nation);
 }
 
 /** Colonists working in a colony. */

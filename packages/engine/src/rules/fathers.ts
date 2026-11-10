@@ -1,3 +1,4 @@
+import type { Effect } from '../events/types.js';
 import type { Modifier } from './modifiers.js';
 
 export type FatherCategory = 'trade' | 'exploration' | 'military' | 'political' | 'religious';
@@ -38,6 +39,8 @@ export interface FatherDef {
   weight: number;
   /** What the effect does while the father is in the council, read at the engine's hook points (rules/modifiers.ts). */
   modifiers?: Modifier[];
+  /** Applied once, in order, when the father joins (the events' effects, events/effects.ts). */
+  onJoin?: Effect[];
 }
 
 const f = (id: FatherId, name: string, category: FatherCategory, effect: string, weight = 5, more: Partial<FatherDef> = {}): FatherDef => ({ id, name, category, effect, weight, ...more });
@@ -46,7 +49,9 @@ export const FATHERS: Record<FatherId, FatherDef> = {
   adamSmith: f('adamSmith', 'Adam Smith', 'trade', 'Manufacturing buildings produce 50% more.', 5, {
     modifiers: [{ hook: 'manufactureCapacity', mul: 1.5, except: ['carpenter'] }],
   }),
-  jakobFugger: f('jakobFugger', 'Jakob Fugger', 'trade', 'All boycotts are lifted without paying arrears.', 3),
+  jakobFugger: f('jakobFugger', 'Jakob Fugger', 'trade', 'All boycotts are lifted without paying arrears.', 3, {
+    onJoin: [{ kind: 'liftBoycotts' }],
+  }),
   peterMinuit: f('peterMinuit', 'Peter Minuit', 'trade', 'Natives ask nothing for their land.', 5, {
     modifiers: [{ hook: 'landPrice', set: 0 }],
   }),
@@ -59,7 +64,9 @@ export const FATHERS: Record<FatherId, FatherDef> = {
   ferdinandMagellan: f('ferdinandMagellan', 'Ferdinand Magellan', 'exploration', 'Ships gain a move and reach Europe a turn sooner.', 5, {
     modifiers: [{ hook: 'shipMoves', add: 1 }, { hook: 'sailTurns', add: -1 }],
   }),
-  franciscoDeCoronado: f('franciscoDeCoronado', 'Francisco de Coronado', 'exploration', 'The surroundings of every existing colony are revealed.'),
+  franciscoDeCoronado: f('franciscoDeCoronado', 'Francisco de Coronado', 'exploration', 'The surroundings of every existing colony are revealed.', 5, {
+    onJoin: [{ kind: 'revealColonies', radius: 3 }],
+  }),
   hernandoDeSoto: f('hernandoDeSoto', 'Hernando de Soto', 'exploration', 'Land units see further, and rumours are always worth exploring.', 5, {
     modifiers: [
       { hook: 'sight', add: 1, land: true },
@@ -72,6 +79,7 @@ export const FATHERS: Record<FatherId, FatherDef> = {
   }),
   laSalle: f('laSalle', 'René-Robert de La Salle', 'exploration', 'Every colony of three or more gets a free stockade.', 5, {
     modifiers: [{ hook: 'autoStockade', minColonists: 3 }],
+    onJoin: [{ kind: 'stockades', minColonists: 3 }],
   }),
   hernanCortes: f('hernanCortes', 'Hernán Cortés', 'military', 'Conquered settlements yield more treasure, and the Crown carries it free of charge.', 5, {
     modifiers: [{ hook: 'conquestTreasure', mul: 1.5 }, { hook: 'treasureFee', set: 0 }],
@@ -85,15 +93,21 @@ export const FATHERS: Record<FatherId, FatherDef> = {
   francisDrake: f('francisDrake', 'Francis Drake', 'military', 'Privateers fight 50% harder.', 5, {
     modifiers: [{ hook: 'unitOffence', unit: 'privateer', mul: 1.5 }],
   }),
-  johnPaulJones: f('johnPaulJones', 'John Paul Jones', 'military', 'A frigate joins your fleet.', 3),
+  johnPaulJones: f('johnPaulJones', 'John Paul Jones', 'military', 'A frigate joins your fleet.', 3, {
+    onJoin: [{ kind: 'unit', type: 'frigate', where: 'europe', always: true }],
+  }),
   thomasJefferson: f('thomasJefferson', 'Thomas Jefferson', 'political', 'Liberty bell production rises by 10%.', 7, {
     modifiers: [{ hook: 'bellsBonus', add: 10 }],
   }),
-  pocahontas: f('pocahontas', 'Pocahontas', 'political', 'All native tension disappears and every tribe makes peace.', 4),
+  pocahontas: f('pocahontas', 'Pocahontas', 'political', 'All native tension disappears and every tribe makes peace.', 4, {
+    onJoin: [{ kind: 'peaceWithPeoples' }],
+  }),
   thomasPaine: f('thomasPaine', 'Thomas Paine', 'political', 'Liberty bell production rises by the current tax rate.', 5, {
     modifiers: [{ hook: 'bellsBonus', add: 'tax' }],
   }),
-  simonBolivar: f('simonBolivar', 'Simón Bolívar', 'political', 'Sons of Liberty membership rises by 20% in every colony.', 3),
+  simonBolivar: f('simonBolivar', 'Simón Bolívar', 'political', 'Sons of Liberty membership rises by 20% in every colony.', 3, {
+    onJoin: [{ kind: 'liberty', share: 0.2 }],
+  }),
   benjaminFranklin: f('benjaminFranklin', 'Benjamin Franklin', 'political', 'Other European nations always accept peace.', 5, {
     modifiers: [{ hook: 'peaceAccepted' }],
   }),
@@ -111,6 +125,7 @@ export const FATHERS: Record<FatherId, FatherDef> = {
   }),
   bartolomeDeLasCasas: f('bartolomeDeLasCasas', 'Bartolomé de las Casas', 'religious', 'All native converts become free colonists.', 3, {
     modifiers: [{ hook: 'convertsBecome', unit: 'freeColonist' }],
+    onJoin: [{ kind: 'convertUnits', from: 'nativeConvert', to: 'freeColonist' }],
   }),
 };
 

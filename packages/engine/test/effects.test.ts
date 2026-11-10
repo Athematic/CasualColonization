@@ -22,13 +22,16 @@ import {
   deserialize,
   foundColony,
   isCoastal,
+  isExplored,
   isWater,
+  joinCongress,
   landPrice,
   maxMoves,
   modifiers,
   nativeLandOwner,
   neighbours,
   offencePower,
+  offerFathers,
   player,
   priceRecoveryChance,
   processColony,
@@ -341,13 +344,107 @@ describe('Founding Fathers as modifiers', () => {
   });
 });
 
+describe('Founding Fathers joining: one-off effects', () => {
+  const welcome = (s: GameState, id: FatherId, nation: NationId = 'england') => joinCongress(s, player(s, nation), id);
+
+  it('Pocahontas: all native tension disappears and every people makes peace', () => {
+    const s = game();
+    for (const st of Object.values(s.settlements)) st.tension.england = 400;
+    s.tribes[0].stance.england = 'war';
+    const france = Object.values(s.settlements).map((st) => st.tension.france);
+    welcome(s, 'pocahontas');
+    expect(Object.values(s.settlements).every((st) => st.tension.england === 0)).toBe(true);
+    expect(s.tribes.every((t) => t.stance.england === 'peace')).toBe(true);
+    expect(Object.values(s.settlements).map((st) => st.tension.france)).toEqual(france);
+  });
+
+  it('John Paul Jones: a frigate on the docks, even after independence', () => {
+    const s = game();
+    const frigates = (st: GameState) => Object.values(st.units).filter((u) => u.owner === 'england' && u.type === 'frigate' && u.loc.kind === 'europe').length;
+    welcome(s, 'johnPaulJones');
+    expect(frigates(s)).toBe(1);
+    const t = game();
+    player(t, 'england').independence = 'declared';
+    welcome(t, 'johnPaulJones');
+    expect(frigates(t)).toBe(1);
+  });
+
+  it('La Salle: colonies of three or more get a stockade at once', () => {
+    const s = game();
+    const big = colonyAt(s);
+    staff(s, big, 'carpenter', 'freeColonist', 2);
+    const small = colonyAt(s, true);
+    welcome(s, 'laSalle');
+    expect(big.buildings.stockade).toBe(1);
+    expect(small.buildings.stockade).toBe(0);
+  });
+
+  it('Francisco de Coronado: the surroundings of every colony are revealed', () => {
+    const s = game();
+    const c = colonyAt(s, false, 'france');
+    const corner = { x: c.x + 3, y: c.y - 3 };
+    player(s, 'england').explored[corner.y * s.map.width + corner.x] = 0;
+    expect(isExplored(s, 'england', corner.x, corner.y)).toBe(false);
+    welcome(s, 'franciscoDeCoronado');
+    expect(isExplored(s, 'england', corner.x, corner.y)).toBe(true);
+  });
+
+  it('Simón Bolívar: Sons of Liberty rise by 20% of the colonists in every colony', () => {
+    const s = game();
+    const c = colonyAt(s);
+    staff(s, c, 'carpenter', 'freeColonist', 2);
+    staff(s, c, 'weaver', 'freeColonist', 2);
+    const other = colonyAt(s, false, 'france');
+    c.liberty = 37;
+    welcome(s, 'simonBolivar');
+    expect(c.liberty).toBe(37 + Math.round(200 * 5 * 0.2));
+    expect(other.liberty).toBe(0);
+  });
+
+  it('Bartolomé de las Casas: native converts become free colonists', () => {
+    const s = game();
+    const mine = onMap(s, 'england', 'nativeConvert');
+    const theirs = onMap(s, 'france', 'nativeConvert');
+    welcome(s, 'bartolomeDeLasCasas');
+    expect(mine.type).toBe('freeColonist');
+    expect(theirs.type).toBe('nativeConvert');
+  });
+
+  it('Jakob Fugger: all boycotts are lifted', () => {
+    const s = game();
+    player(s, 'england').boycotts = { cloth: true, rum: true };
+    player(s, 'france').boycotts = { cloth: true };
+    welcome(s, 'jakobFugger');
+    expect(player(s, 'england').boycotts).toEqual({});
+    expect(player(s, 'france').boycotts).toEqual({ cloth: true });
+  });
+
+  it('draw no random numbers', () => {
+    for (const id of ['pocahontas', 'johnPaulJones', 'laSalle', 'franciscoDeCoronado', 'simonBolivar', 'bartolomeDeLasCasas', 'jakobFugger'] as FatherId[]) {
+      const s = game();
+      // Only the new offer that follows draws.
+      const t = clone(s);
+      player(t, 'england').fathers.push(id);
+      offerFathers(t, player(t, 'england'));
+      welcome(s, id);
+      expect(s.rng).toBe(t.rng);
+    }
+  });
+});
+
 describe('the data drives the behaviour', () => {
   /** The Americas with Henry Hudson doubling ore instead of furs. */
   const HUDSON_ORE: Scenario = {
     ...AMERICAS,
     id: 'test-hudson-ore',
     name: 'Test: Hudson mines ore',
-    council: { ...AMERICAS.council, effects: { henryHudson: { modifiers: [{ hook: 'tileYield', good: 'ore', mul: 3 }] } } },
+    council: {
+      ...AMERICAS.council,
+      effects: {
+        henryHudson: { modifiers: [{ hook: 'tileYield', good: 'ore', mul: 3 }] },
+        jakobFugger: { onJoin: [{ kind: 'gold', amount: 1000 }] },
+      },
+    },
   };
   registerScenario(HUDSON_ORE);
 
@@ -369,5 +466,15 @@ describe('the data drives the behaviour', () => {
     expect(modifiers(s, 'england', 'tileYield')).toEqual([{ hook: 'tileYield', good: 'ore', mul: 3 }]);
     // Ore × 3 where the Americas' Hudson doubles furs (above); furs stay as they were.
     expect(yields()).toEqual({ ore: before.ore * 3, furs: before.furs });
+  });
+
+  it('a scenario can give a father different joining effects', () => {
+    const s = game(7, HUDSON_ORE.id);
+    const p = player(s, 'england');
+    p.boycotts = { cloth: true };
+    const gold = p.gold;
+    joinCongress(s, p, 'jakobFugger');
+    expect(p.gold).toBe(gold + 1000);
+    expect(p.boycotts).toEqual({ cloth: true });
   });
 });

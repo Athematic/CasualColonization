@@ -51,8 +51,11 @@ export type Effect =
   | { kind: 'crosses'; amount: Num }
   /** Tax rate change in percentage points (up to the difficulty's ceiling). */
   | { kind: 'tax'; delta: number }
-  /** A new unit: in the target colony, or on the docks in Europe. `type` missing means the event's `unit`. */
-  | { kind: 'unit'; type?: UnitTypeId; where: 'colony' | 'europe' }
+  /**
+   * A new unit: in the target colony, or on the docks in Europe. `type` missing means the event's
+   * `unit`. Units for the docks only come before independence unless `always` (John Paul Jones' frigate).
+   */
+  | { kind: 'unit'; type?: UnitTypeId; where: 'colony' | 'europe'; always?: boolean }
   /** The target ship is laid up for repairs and loses a share of its cargo. */
   | { kind: 'damageShip'; turns: number; cargoPct: number }
   /** The target building drops one level (never below its starting level); without one, half the hammers burn. */
@@ -62,7 +65,20 @@ export type Effect =
   /** The effects happen with probability `p` (drawn from the event stream). */
   | { kind: 'chance'; p: number; effects: Effect[]; text?: string; elseText?: string }
   /** Another (usually hidden) event fires `turns` turns later, for the same nation (or the world). */
-  | { kind: 'followUp'; event: string; turns: number };
+  | { kind: 'followUp'; event: string; turns: number }
+  // Council members' joining effects (MemberEffects.onJoin); events may use them too.
+  /** Every native settlement forgets its tension towards the nation, and every people makes peace (Pocahontas). */
+  | { kind: 'peaceWithPeoples' }
+  /** The nation's colonies of at least `minColonists` colonists without a stockade get one (La Salle). */
+  | { kind: 'stockades'; minColonists: number }
+  /** The land within `radius` of every colony, anyone's, is revealed to the nation (Francisco de Coronado). */
+  | { kind: 'revealColonies'; radius: number }
+  /** Each of the nation's colonies gains this share of its colonists as Sons of Liberty, in bells (Simón Bolívar: 0.2). */
+  | { kind: 'liberty'; share: number }
+  /** The nation's units of one type become another (Bartolomé de las Casas: converts become free colonists). */
+  | { kind: 'convertUnits'; from: UnitTypeId; to: UnitTypeId }
+  /** All the nation's boycotts end without arrears (Jakob Fugger). */
+  | { kind: 'liftBoycotts' };
 
 export interface EventChoice {
   label: string;
