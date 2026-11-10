@@ -108,6 +108,7 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
   u.loc = { kind: 'colony', colonyId: colony.id, job };
   u.state = 'active';
   delete u.dest;
+  delete u.roadTo;
   delete u.work;
   colony.build = isCoastal(s, x, y) ? { kind: 'building', id: 'docks' } : { kind: 'building', id: 'stockade' };
   if (!canBuild(s, colony, colony.build)) colony.build = { kind: 'building', id: 'warehouse' };
@@ -246,6 +247,7 @@ export function assignJob(s: GameState, unitId: string, colonyId: string, job?: 
   u.moves = 0;
   track(u.owner, 'cmd:assignJob');
   delete u.dest;
+  delete u.roadTo;
   delete u.work;
 }
 

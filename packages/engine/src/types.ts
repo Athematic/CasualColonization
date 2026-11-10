@@ -175,6 +175,8 @@ export interface Unit {
   against?: NationId;
   /** Where the unit is going; for Europe, `port` is a Favoured Nation partner's port (missing: its own). */
   dest?: { x: number; y: number } | { europe: true; port?: NationId };
+  /** "Road to…": a pioneer roads each tile on the way to this one, then steps on (see `continueRoadTo`). Missing in older saves. */
+  roadTo?: { x: number; y: number };
   cargo?: Partial<Record<GoodId, number>>;
   /** The trade route a ship or wagon train follows, and the index of the stop it is heading for. */
   route?: { id: string; stop: number };

@@ -250,6 +250,7 @@ export function navalOverview(s: GameState, nation: NationId): ShipOverview[] {
       if (u.repair) orders = `Under repair, ${u.repair} turn${u.repair > 1 ? 's' : ''} left`;
       else if (route) orders = `Route: ${route.name}`;
       else if (u.loc.kind === 'sailing') orders = `Arrives in ${u.loc.turnsLeft} turn${u.loc.turnsLeft > 1 ? 's' : ''}`;
+      else if (u.roadTo) orders = `Road to ${u.roadTo.x},${u.roadTo.y}`;
       else if (u.dest) orders = 'europe' in u.dest ? 'Bound for Europe' : `Going to ${u.dest.x},${u.dest.y}`;
       else if (u.state === 'sentry') orders = 'Sentry';
       const w = whereIs(s, u);

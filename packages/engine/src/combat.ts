@@ -167,6 +167,7 @@ function demote(s: GameState, u: Unit, winner: Unit): string {
     u.tools = 0;
     u.moves = 0;
     delete u.dest;
+    delete u.roadTo;
     delete u.work;
     const pos = unitPosition(s, winner);
     if (pos && u.loc.kind === 'map') u.loc = { kind: 'map', x: pos.x, y: pos.y };
@@ -203,6 +204,7 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
   u.moves = 0;
   u.state = 'active';
   delete u.dest;
+  delete u.roadTo;
   track(u.owner, 'cmd:attack');
   if (u.type === 'privateer') track(u.owner, 'combat:privateer attack');
 
