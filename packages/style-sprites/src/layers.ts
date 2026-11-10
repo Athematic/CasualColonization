@@ -2,11 +2,15 @@
  * The map layers a sprite pack paints over its fallback style, as MapLayerHooks. Each hook returns
  * false when its sprite is missing or not loaded yet, and the fallback draws that piece instead.
  */
-import { NATIONS, TERRAIN, type GameState } from '@cc/engine';
+import { NATIONS, TERRAIN, type GameState, type TerrainId } from '@cc/engine';
 import type { LayerTile, MapLayerHooks } from '@cc/render-api';
 import type { SpriteIds } from './ids.js';
 import type { PackLayer, Placement, SpritePack } from './pack.js';
 import type { Painter } from './painter.js';
+import { coastPieces } from './coast.js';
+import { transitionPieces, type TransitionPieces } from './transitions.js';
+
+export { coastPieces };
 
 /** Neighbour offsets clockwise from north: N, NE, E, SE, S, SW, W, NW. */
 export const DIRS = [
@@ -25,6 +29,13 @@ function isLand(s: Readonly<GameState>, x: number, y: number, outside: boolean):
   return !TERRAIN[s.map.tiles[y * s.map.width + x].t].water;
 }
 
+/** The terrain of a land tile, undefined for water and off the map. */
+function landTerrainAt(s: Readonly<GameState>, x: number, y: number): TerrainId | undefined {
+  if (x < 0 || y < 0 || x >= s.map.width || y >= s.map.height) return undefined;
+  const t = s.map.tiles[y * s.map.width + x].t;
+  return TERRAIN[t].water ? undefined : t;
+}
+
 function hasRoadAt(s: Readonly<GameState>, x: number, y: number): boolean {
   if (x < 0 || y < 0 || x >= s.map.width || y >= s.map.height) return false;
   return !!s.map.tiles[y * s.map.width + x].r || Object.values(s.colonies).some((c) => c.x === x && c.y === y);
@@ -34,29 +45,6 @@ function hasRoadAt(s: Readonly<GameState>, x: number, y: number): boolean {
 function roundedCorner(s: Readonly<GameState>, x: number, y: number): boolean {
   const water = (i: number) => !isLand(s, x + DIRS[i][0], y + DIRS[i][1], true);
   return (water(0) && water(2)) || (water(2) && water(4)) || (water(4) && water(6)) || (water(6) && water(0));
-}
-
-/**
- * Which quarter-turned coast pieces a water tile needs, from its eight neighbours (`land[i]` for
- * DIRS[i]). Pieces point north (edge), north and west (inner) or north-west (outer) unturned.
- */
-export function coastPieces(land: readonly boolean[], hasInner: boolean): { piece: 'edge' | 'inner' | 'outer'; turns: number }[] {
-  const out: { piece: 'edge' | 'inner' | 'outer'; turns: number }[] = [];
-  const side = (k: number) => land[(2 * k) % 8];
-  const corner = (k: number) => land[(2 * k + 7) % 8];
-  const covered = [false, false, false, false];
-  if (hasInner) {
-    for (let k = 0; k < 4; k++) {
-      const prev = (k + 3) % 4;
-      if (side(k) && side(prev)) {
-        out.push({ piece: 'inner', turns: k });
-        covered[k] = covered[prev] = true;
-      }
-    }
-  }
-  for (let k = 0; k < 4; k++) if (side(k) && !covered[k]) out.push({ piece: 'edge', turns: k });
-  for (let k = 0; k < 4; k++) if (corner(k) && !side(k) && !side((k + 3) % 4)) out.push({ piece: 'outer', turns: k });
-  return out;
 }
 
 /** Quarter turns for a road spoke towards neighbour DIRS[i]: spokes point north, diagonals north-west. */
@@ -84,6 +72,21 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
     hooks.water = (ctx, t, z) => painter.square(ctx, ids.water(t.tile.t), t.px, t.py, z, dpr, { fill: true, bleed: 0.5 });
   }
 
+  // Terrain transitions: bands of the higher-ranked neighbour over a tile's ground (rules.transitions).
+  const blend = rules.transitions === 'overlay';
+  const order = rules.transitionOrder;
+  const hasPieces = (z: number) => (terrain: TerrainId): TransitionPieces | undefined => {
+    const p = ids.transition(terrain);
+    if (!painter.pick(p.edge, z, dpr, true)) return undefined;
+    return { edge: true, inner: !!painter.pick(p.inner, z, dpr, true), outer: !!painter.pick(p.outer, z, dpr, true) };
+  };
+  const blendBorders = (ctx: CanvasRenderingContext2D, t: LayerTile, z: number, s: Readonly<GameState>) => {
+    const nbr = DIRS.map(([dx, dy]) => landTerrainAt(s, t.x + dx, t.y + dy));
+    for (const { terrain, piece, turns } of transitionPieces(order, t.tile.t, nbr, hasPieces(z))) {
+      painter.square(ctx, ids.transition(terrain)[piece], t.px, t.py, z, dpr, { fill: true, rotate: turns });
+    }
+  };
+
   if (!off.has('land')) {
     hooks.land = (ctx, t, z, shape, s) => {
       const list = ids.terrain(t.tile);
@@ -98,6 +101,7 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
         ctx.clip();
       }
       painter.square(ctx, list, t.px, t.py, z, dpr, { fill: true, bleed: clip ? 0 : 0.5 });
+      if (blend) blendBorders(ctx, t, z, s);
       if (clip) ctx.restore();
       if (t.tile.p && ids.plowed(t.tile.t).includes(pick.id)) plowed.add(t);
       return true;

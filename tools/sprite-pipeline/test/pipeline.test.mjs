@@ -91,6 +91,8 @@ test('full-bleed art keeps its geometry: square fills the square, wide art is ce
 test('ground overlays and enclosure splits are recognised by id', () => {
   assert.ok(isGroundOverlay('terrain/coast__edge'));
   assert.ok(isGroundOverlay('decor/road__spoke'));
+  assert.ok(isGroundOverlay('terrain/blend__grassland__edge'));
+  assert.equal(classify('terrain/blend__grassland__outer').layout, 'fullbleed');
   assert.ok(!isGroundOverlay('terrain/plains'));
   assert.ok(!isGroundOverlay('decor/forest__plains'));
   assert.equal(SPLIT_SPRITES['colonies/stockade'], 0.58);

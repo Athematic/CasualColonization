@@ -28,3 +28,5 @@ export { fill, kebab, SpriteIds } from './ids.js';
 export { chooseSize, type SizeChoice, type SizeSet } from './sizes.js';
 export { SpriteStore, type SpriteManifest, type StoreEnv } from './store.js';
 export { DEFAULT_SPRITE_BASE, spriteBase } from './source.js';
+export { DEFAULT_TRANSITION_ORDER, transitionPieces, type TransitionMode, type TransitionPiece, type TransitionPieces } from './transitions.js';
+export { coastPieces } from './coast.js';
