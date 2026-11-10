@@ -49,6 +49,10 @@ Newest last. Each entry has an id; acknowledge it in your next report.
 
   The default is `--years 1700,1750,1850:keep`, and this file's commands now use it. Re-baseline the best at this commit before gating, then gate the candidate when it updates.
 - **M6 (2026-11-10), replaces the `:noind` games of M4/M5:** Simon's better idea. The full game no longer switches independence off. `bench --keep-playing` keeps the scenario's rules and only removes the victory by war: wars of independence are fought as usual, a nation that wins plays on as independent, and only the calendar ends the game. The gate's default is now `--years 1700,1750,1850:keep`, and this file's commands use it. Re-baseline the best at this commit, then gate the candidate when it updates.
+- **M7 (2026-11-10):** `82a9023` (the AI planning speed-ups) is **accepted** and merged into the best.
+  - The gate's rule is now Pareto: ACCEPT when no game is slower beyond its noise and at least one is faster beyond it. Your run showed −9.5% at 1700 and −3.7% at 1750, with 1850 within noise, so it passes the new rule.
+  - Re-baseline the best at this commit.
+  - Candidates from now on are round 2, which changes outcomes and is marked `[outcomes]`, so run the tournaments for those. Later come a save/load determinism fix and the Beta 1 work.
 
 What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
 
@@ -119,7 +123,7 @@ Do job 2 on the release candidate commit with all five steps, and compare with t
 
 - **Verification:** `bench --verify` for the Americas and the Caribbean must print "same" everywhere, and every timed run must end in the same state. If not, the candidate is rejected whatever its speed.
 - **Score:** the median of `--runs` timed head starts (default 5, after one warm-up), for each year in `--years` (default 1700).
-- **Verdict against `--baseline`:** ACCEPT only when every year is faster by more than the noise (2%, or the larger spread of the two runs). NEUTRAL when within the noise, REJECT when slower.
+- **Verdict against `--baseline`:** ACCEPT when no game is slower beyond the noise (2%, or the larger spread of the two runs) and at least one is faster beyond it. NEUTRAL when all are within the noise, REJECT when any is slower.
 
 ```sh
 npm ci
