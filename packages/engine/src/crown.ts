@@ -17,7 +17,7 @@ import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, Player } from './types.js';
-import { difficultyOf, goodsOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, mechanicsOf } from './scenarios/index.js';
 
 // ---------------------------------------------------------------------------
 // The Royal Expeditionary Force
@@ -182,9 +182,11 @@ export function answerDemand(s: GameState, nation: NationId, pay: boolean): stri
       colony.goods[g] = 0;
     }
   }
-  p.ref.regulars += REF_ON_REFUSAL;
+  // Without a Royal Expeditionary Force in the scenario, the seizure is the whole price.
+  const ref = mechanicsOf(s).ref;
+  if (ref) p.ref.regulars += REF_ON_REFUSAL;
   const goods = colony && seized.length ? ` Royal officials seize the goods in ${colony.name}: ${seized.join(', ')}.` : '';
-  const text = `You refuse the King's demand for ${demand.gold} gold.${goods} The King sends ${REF_ON_REFUSAL} more regulars to the Royal Expeditionary Force.`;
+  const text = `You refuse the King's demand for ${demand.gold} gold.${goods}${ref ? ` The King sends ${REF_ON_REFUSAL} more regulars to the Royal Expeditionary Force.` : ''}`;
   message(s, text, nation, colony ?? undefined);
   return text;
 }
@@ -245,15 +247,21 @@ function maybeRoyalWar(s: GameState, p: Player, colonies: number): void {
 
 // ---------------------------------------------------------------------------
 
-/** Once per round: the Crown's build-up, demands and wars for every nation still loyal to it. */
+/**
+ * Once per round: the Crown's build-up, demands and wars for every nation still loyal to it, as
+ * far as the scenario has them (`mechanics.ref`, `demands`, `royalWars`).
+ */
 export function processCrown(s: GameState): void {
+  const mechanics = mechanicsOf(s);
   for (const p of s.players) {
     if (p.id === 'crown' || p.independence !== 'none') continue;
     const colonies = Object.values(s.colonies).filter((c) => c.owner === p.id).length;
-    growForce(s, p, colonies);
-    // A demand not answered within a round counts as refused.
-    if (p.pendingDemand && s.turn > p.pendingDemand.turn + 1) answerDemand(s, p.id, false);
-    maybeDemand(s, p, colonies);
-    maybeRoyalWar(s, p, colonies);
+    if (mechanics.ref) growForce(s, p, colonies);
+    if (mechanics.demands) {
+      // A demand not answered within a round counts as refused.
+      if (p.pendingDemand && s.turn > p.pendingDemand.turn + 1) answerDemand(s, p.id, false);
+      maybeDemand(s, p, colonies);
+    }
+    if (mechanics.royalWars) maybeRoyalWar(s, p, colonies);
   }
 }

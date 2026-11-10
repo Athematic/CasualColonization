@@ -22,7 +22,7 @@ import {
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
-import { difficultyOf, goodsOf, nativeProduceOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, mechanicsOf, nativeProduceOf } from './scenarios/index.js';
 
 /**
  * The settlement next to a unit, checked for a visit. A wagon train or ship trading there may
@@ -268,6 +268,7 @@ export function establishMission(s: GameState, unitId: string, settlementId: str
   const u = s.units[unitId];
   const st = adjacentSettlement(s, u, settlementId);
   if (u.role !== 'missionary') fail('Only missionaries can found missions.');
+  if (!mechanicsOf(s).missions) fail('There are no missions in this scenario.');
   if (st.mission) fail(`There is already a ${NATIONS[st.mission].adjective} mission here.`);
   delete s.units[u.id];
   track(u.owner, 'cmd:mission');
@@ -364,6 +365,7 @@ export function denounceMission(s: GameState, unitId: string, settlementId: stri
   const u = s.units[unitId];
   const st = adjacentSettlement(s, u, settlementId);
   if (u.role !== 'missionary') fail('Only missionaries can denounce a mission.');
+  if (!mechanicsOf(s).missions) fail('There are no missions in this scenario.');
   const rival = st.mission;
   if (!rival || rival === u.owner) fail('There is no rival mission here.');
   u.moves = 0;

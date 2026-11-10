@@ -1,4 +1,5 @@
 import {
+  mechanicsOf,
   coloniesOverview,
   congressOverview,
   FATHERS,
@@ -273,7 +274,7 @@ function militaryTab(ctx: ReportContext): Child[] {
   const forces = landForces(s, nation);
   const count = (k: ForceKind) => forces.filter((f) => f.kind === k).length;
   const strength = militaryStrength(forces.map((f) => f.unit));
-  const ref = royalForces(s, nation);
+  const ref = mechanicsOf(s).ref ? royalForces(s, nation) : null;
   const p = player(s, nation);
 
   // Units by where they are.
@@ -409,7 +410,7 @@ function religionTab(ctx: ReportContext): Child[] {
     h('div', { class: 'report-stats' },
       stat('Crosses per turn', r.crossesPerTurn),
       stat('Next immigrant', r.closed ? 'closed' : turns(r.turnsToImmigrant, 'never'), r.closed ? 'no immigrants after the declaration' : `${r.crosses}/${r.crossesRequired} crosses`),
-      stat('Missions', r.missions.reduce((n, m) => n + m.own, 0)),
+      mechanicsOf(s).missions ? stat('Missions', r.missions.reduce((n, m) => n + m.own, 0)) : null,
       stat('Native converts', r.converts)),
     card('Immigration',
       bar(r.crosses, r.crossesRequired, 'Crosses towards the next immigrant'),
@@ -422,7 +423,7 @@ function religionTab(ctx: ReportContext): Child[] {
               h('td', null, h('button', { class: 'link', onclick: () => app.openColony(c.colony.id) }, c.colony.name)),
               h('td', { class: 'num' }, String(c.crosses)))))))
         : empty('No colony makes crosses.')),
-      card('Missions', r.missions.length
+      !mechanicsOf(s).missions ? null : card('Missions', r.missions.length
         ? scroll(h('table', { class: 'table report-table' },
             h('thead', null, h('tr', null, h('th', null, 'Tribe'), h('th', { class: 'num' }, 'Yours'), h('th', null, 'Others'))),
             h('tbody', null, r.missions.map((m) => h('tr', null,

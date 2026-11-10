@@ -13,7 +13,7 @@ import { buyPrice, sellPrice } from './europe.js';
 import { noteTrade } from './stats.js';
 import { cargoRoomFor, colonyAt, distance, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
 import { random } from './rng.js';
-import { calendarOf, goodsOf, turnAfterYears, yearValue } from './scenarios/index.js';
+import { calendarOf, goodsOf, mechanicsOf, turnAfterYears, yearValue } from './scenarios/index.js';
 import { HOME_PORTS, NATIONS, type NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import type { GameState, ProposalKind, Relation, RouteCargo, Unit } from './types.js';
@@ -188,6 +188,7 @@ export function tradeProblem(s: GameState, from: NationId, to: NationId): string
 
 /** Why `from` cannot propose Favoured Nation status to `to` now, or null. */
 export function favouredProblem(s: GameState, from: NationId, to: NationId): string | null {
+  if (!mechanicsOf(s).favoured) return 'There is no Favoured Nation status in this scenario.';
   if (!europeanPair(from, to)) return 'Favoured Nation status is agreed between two European nations.';
   if (!takePart(s, from, to)) return `${NATIONS[to].name} is not taking part.`;
   const name = NATIONS[to].name;

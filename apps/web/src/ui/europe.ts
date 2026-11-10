@@ -1,4 +1,5 @@
 import {
+  mechanicsOf,
   arrears,
   buyableInPartnerPort,
   buyPrice,
@@ -88,8 +89,8 @@ export class EuropeScreen implements Screen {
         me.pendingTax ? h('button', { class: 'btn small', onclick: () => void this.app.answerPending() }, 'Answer the tax raise') : null,
         h('button', { class: 'btn close', onclick: () => this.app.closeScreen(), 'aria-label': 'Close Europe' }, 'Close')),
       h('p', { class: 'muted small port-character', title: 'Each home port has its own prices, depth of market and ship prices.' }, `${portSummary(port, goodsOf(this.app.state))}.`),
-      h('p', { class: 'muted small royal-forces', title: 'The Royal Expeditionary Force the Crown holds against a rebellion. It grows during the game, faster as your colonies ring more liberty bells, and sails if you declare independence.' },
-        `Royal forces: ${describeForce(me.ref)}.`),
+      ...(!mechanicsOf(this.app.state).ref ? [] : [h('p', { class: 'muted small royal-forces', title: 'The Royal Expeditionary Force the Crown holds against a rebellion. It grows during the game, faster as your colonies ring more liberty bells, and sails if you declare independence.' },
+        `Royal forces: ${describeForce(me.ref)}.`)]),
       views.length > 1 ? h('div', { class: 'port-tabs', role: 'tablist', 'aria-label': 'Ports' }, views.map((p) =>
         h('button', { class: `tab${p === port ? ' active' : ''}`, role: 'tab', 'aria-selected': String(p === port), onclick: () => { this.port = p; this.ship = undefined; this.selected = undefined; this.app.requestRender(); } },
           h('span', { class: 'foreign-flag', style: `background:${NATIONS[p].color}` }), portName(p), p === viewer ? ' (home)' : ''))) : '',

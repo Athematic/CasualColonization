@@ -23,7 +23,7 @@ import {
 } from './queries.js';
 import { alliesGoHome, isToryColony, offerMercenaries, processRebellion, startRebellion, TORY_LANDING } from './rebellion.js';
 import { lapseFavoured } from './relations.js';
-import { difficultyOf } from './scenarios/index.js';
+import { difficultyOf, mechanicsOf } from './scenarios/index.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { finalScores } from './score.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
@@ -44,6 +44,7 @@ export function rebelShare(s: GameState, nation: NationId): number {
 export const DECLARE_AT = 50;
 
 export function canDeclareIndependence(s: GameState, nation: NationId): string | null {
+  if (!mechanicsOf(s).independence) return 'There is no declaring independence in this scenario.';
   const p = player(s, nation);
   if (p.independence !== 'none') return 'Independence has already been declared.';
   if (!Object.values(s.colonies).some((c) => c.owner === nation)) return 'You have no colonies.';

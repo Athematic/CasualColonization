@@ -8,6 +8,7 @@ import {
   hasTradeAgreement,
   HOME_PORTS,
   isFavoured,
+  mechanicsOf,
   NATIONS,
   nationTitle,
   nextFatherCost,
@@ -91,8 +92,14 @@ export class DiplomacyScreen implements Screen {
 
     const share = rebelShare(s, me.id);
     const blocked = canDeclareIndependence(s, me.id);
-    let independence: HTMLElement;
-    if (me.independence === 'declared') {
+    const mechanics = mechanicsOf(s);
+    let independence: HTMLElement | null;
+    // A scenario without independence (or without a royal army) shows neither.
+    if (!mechanics.independence) {
+      independence = mechanics.ref
+        ? h('div', { class: 'card' }, h('h3', null, 'Royal forces'), h('p', { class: 'small' }, `Royal forces: ${describeForce(me.ref)}.`))
+        : null;
+    } else if (me.independence === 'declared') {
       const ref = me.ref;
       independence = h('div', { class: 'card' },
         h('h3', null, 'War of Independence'),
@@ -145,7 +152,7 @@ export class DiplomacyScreen implements Screen {
       } else if (!favoured) {
         buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.cancelTrade(p.id) }, 'End trade agreement'));
       }
-      if (!favoured && !independent) {
+      if (!favoured && !independent && mechanicsOf(s).favoured) {
         const why = favouredProblem(s, me.id, p.id);
         buttons.push(h('button', { class: 'btn tiny primary', disabled: !!why, title: why ?? `Offer ${NATIONS[p.id].name} Favoured Nation status`, onclick: () => app.dispatch({ type: 'proposeFavoured', nation: p.id }) }, 'Propose Favoured Nation'));
       }

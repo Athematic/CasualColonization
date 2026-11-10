@@ -403,6 +403,7 @@ export function canBuild(s: GameState, colony: Colony, target: BuildTarget): boo
   const next = def.levels[colony.buildings[target.id]];
   if (!next) return false;
   if (def.locked && !modifiers(s, colony.owner, 'unlockBuilding').some((m) => m.building === target.id)) return false;
+  if (target.id === 'customHouse' && !mechanicsOf(s).customHouse) return false;
   if (def.coastalOnly && !isCoastal(s, colony.x, colony.y)) return false;
   return pop >= next.minPop;
 }

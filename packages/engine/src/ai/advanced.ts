@@ -846,7 +846,7 @@ function missionaryTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void
   const st = Object.values(s.settlements)
     .filter((o) => !o.mission && tensionOf(o, p.id) < 500 && s.tribes.find((t) => t.id === o.tribe)?.stance[p.id] !== 'war')
     .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];
-  if (!st) return;
+  if (!st || !prof.missions) return;
   if (distance(st.x, st.y, pos.x, pos.y) === 1) {
     establishMission(s, u.id, st.id);
     return;

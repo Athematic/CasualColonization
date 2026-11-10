@@ -154,6 +154,24 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
     expect(sc.council.categories.length).toBeGreaterThan(0);
     for (const f of sc.council.members) expect(sc.council.categories).toContain(FATHERS[f].category);
   });
+
+  it('switches mechanics on consistently', () => {
+    const m = sc.mechanics;
+    // A War of Independence needs a Royal Expeditionary Force to fight; boycotts need taxes to refuse.
+    if (m.independence) expect(m.ref).toBe(true);
+    if (m.boycotts) expect(m.taxes).toBe(true);
+    if (m.charter) expect(m.charter.base).toBeGreaterThan(0);
+    // Units the mechanics need are in play.
+    if (m.ref) for (const u of ['kingsRegular', 'artillery', 'manOfWar'] as const) expect(sc.units).toContain(u);
+    if (m.customHouse) expect(sc.buildings).toContain('customHouse');
+  });
+
+  it('has a rumour table with odds', () => {
+    expect(sc.rumours.length).toBeGreaterThan(0);
+    expect(sc.rumours.some((r) => !r.tribal && r.weight > 0)).toBe(true);
+    for (const r of sc.rumours) for (const w of [r.weight, r.scout, r.expert]) if (w !== undefined) expect(w).toBeGreaterThanOrEqual(0);
+    if (sc.rumours.some((r) => r.outcome === 'colonist' || r.outcome === 'fountain')) expect(sc.units).toContain('freeColonist');
+  });
 });
 
 describe('game settings and the scenario', () => {

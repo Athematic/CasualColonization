@@ -21,7 +21,7 @@ import { portBasePrice, portCharacter, portDepth, portPriceBand } from './rules/
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import { PIONEER_MAX_TOOLS, PURCHASABLE, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
 import type { GameState, MarketEntry, Player, Unit } from './types.js';
-import { difficultyOf, goodsOf, unitsOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, mechanicsOf, unitsOf } from './scenarios/index.js';
 
 export const SAIL_TURNS = 3;
 
@@ -158,14 +158,17 @@ export function sellToMarket(s: GameState, p: Player, good: GoodId, amount: numb
 }
 
 function maybeRaiseTax(s: GameState, p: Player, gross: number, good: GoodId): void {
+  const mechanics = mechanicsOf(s);
+  if (!mechanics.taxes) return;
   const rules = difficultyOf(s, p);
   if (p.tax >= rules.taxCeiling || gross < 100 || p.pendingTax) return;
   const chance = Math.min(0.12, 0.015 + s.turn / 3000) * rules.taxChance;
   if (random(s) >= chance) return;
   const rate = Math.min(rules.taxCeiling, p.tax + Math.max(1, Math.round((1 + randInt(s, 4)) * rules.taxRaise)));
-  if (p.human || (p.ai && p.ai !== 'naive')) {
+  if (mechanics.boycotts && (p.human || (p.ai && p.ai !== 'naive'))) {
     // People decide: accept, or refuse and hold a party with the goods. The advanced computer
-    // levels decide too, at the start of their next turn (ai/foreign.ts); Naive always accepts.
+    // levels decide too, at the start of their next turn (ai/foreign.ts); Naive always accepts,
+    // and without boycotts in the scenario every raise simply applies.
     p.pendingTax = { rate, good };
   } else {
     p.tax = rate;
@@ -179,6 +182,7 @@ export function answerTax(s: GameState, nation: Player['id'], accept: boolean): 
   const p = player(s, nation);
   const pending = p.pendingTax;
   if (!pending) fail('There is no tax raise to answer.');
+  if (!accept && !mechanicsOf(s).boycotts) fail('A tax raise cannot be refused in this scenario.');
   p.pendingTax = null;
   track(nation, 'cmd:answerTax');
   track(nation, accept ? 'tax:raise accepted' : 'tax:refused (boycott)');
@@ -216,7 +220,7 @@ export function payArrears(s: GameState, nation: Player['id'], good: GoodId): vo
 /** End-of-turn sales by a colony's custom house; keeps 50 of each exported good. */
 export function runCustomHouse(s: GameState, colonyId: string): void {
   const colony = s.colonies[colonyId];
-  if (!colony || colony.buildings.customHouse === 0) return;
+  if (!colony || colony.buildings.customHouse === 0 || !mechanicsOf(s).customHouse) return;
   const p = player(s, colony.owner);
   if (p.independence === 'declared') return;
   let total = 0;
