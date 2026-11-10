@@ -7,7 +7,7 @@
  * manifest and images then load in the background, and views redraw as they arrive.
  */
 import { NATIONS, UNIT_TYPES } from '@cc/engine';
-import type { IconRequest, MapRenderer, Scene, StylePlugin } from '@cc/render-api';
+import { FATHER_FIGURE_ASPECT, type IconRequest, type MapRenderer, type Scene, type StylePlugin } from '@cc/render-api';
 import { SpriteIds } from './ids.js';
 import { createLayerHooks } from './layers.js';
 import { completePack, type SpritePack } from './pack.js';
@@ -21,6 +21,9 @@ export interface SpriteStyleOptions {
   /** Sprite folder, overriding the pack's source and any ?sprites= setting; null: procedural only. */
   base?: string | null;
 }
+
+/** The head of a full-length figure: a square starting 8% down the image and 30% of its height tall. */
+const HEAD_CROP = { top: 0.08, side: 0.3 };
 
 /** Device pixels per CSS pixel of a context (the shell scales icon contexts by the pixel ratio). */
 function contextScale(ctx: CanvasRenderingContext2D): number {
@@ -127,8 +130,15 @@ export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts
         return p.square(ctx, ids.good(icon.product), 0, 0, size, dpr);
       case 'building':
         return p.square(ctx, ids.building(icon.building, icon.level), 0, 0, size, dpr);
-      case 'father':
-        return p.square(ctx, ids.father(icon.id), 0, 0, size, dpr);
+      case 'father': {
+        if (icon.variant === 'figure') {
+          // A full-length figure, 2:3, as tall as the box and centred in it.
+          const w = size * FATHER_FIGURE_ASPECT;
+          return p.fitted(ctx, ids.father(icon.id, 'figure'), (size - w) / 2, 0, w, size, dpr);
+        }
+        // A head: the pack's crop, else the top of the figure.
+        return p.fitted(ctx, ids.father(icon.id, 'head'), 0, 0, size, size, dpr, { head: { top: HEAD_CROP.top, side: HEAD_CROP.side } });
+      }
       case 'tile': {
         if (!p.square(ctx, ids.terrain(icon.tile), 0, 0, size, dpr, { fill: true })) return false;
         const lw = Math.max(1.1, size * 0.035);
@@ -154,6 +164,10 @@ export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts
     },
     createMapRenderer,
     drawIcon,
+    drawBackdrop(ctx, kind, width, height) {
+      if (!procedural.has('icons') && getPainter().fitted(ctx, ids.backdrop(kind), 0, 0, width, height, contextScale(ctx), { cover: true })) return true;
+      return fallback.drawBackdrop?.(ctx, kind, width, height) ?? false;
+    },
     tileColor: (tile) => fallback.tileColor(tile),
     onAssetsChanged: (listener) => getPainter().store.subscribe(listener),
   };

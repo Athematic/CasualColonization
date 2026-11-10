@@ -6,6 +6,7 @@ import {
   congressOverview,
   createGame,
   declareWar,
+  fatherJoinTurns,
   deserialize,
   historyFor,
   joinCongress,
@@ -239,5 +240,17 @@ describe('report queries', () => {
     expect(c.fatherBells).toBe(p.fatherBells);
     expect(c.colonies.length).toBe(coloniesOverview(s, nation).length);
     if (c.current && c.bellsPerTurn > 0) expect(c.turnsToFather).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('father join turns', () => {
+  it('reads the turn each father joined from the history', () => {
+    const st = createGame({ seed: 3, mapSize: 'small', map: 'north-america', nations: ['england'], humans: ['england'] });
+    st.turn = 12;
+    joinCongress(st, player(st, 'england'), 'adamSmith');
+    st.turn = 20;
+    joinCongress(st, player(st, 'england'), 'pocahontas');
+    expect(fatherJoinTurns(st, 'england')).toEqual({ adamSmith: 12, pocahontas: 20 });
+    expect(congressOverview(st, 'england').joined).toEqual({ adamSmith: 12, pocahontas: 20 });
   });
 });

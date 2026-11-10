@@ -8,6 +8,7 @@ import {
   isTileExplored,
   isTileVisible,
   drawFatherCameo,
+  drawFatherFigure,
   riverCourse,
   roadDrawing,
   tileToScreen,
@@ -266,7 +267,8 @@ function drawIcon(ctx: CanvasRenderingContext2D, icon: IconRequest, size: number
     ctx.fillStyle = '#4a5560';
     ctx.fillRect(size * 0.15, size * 0.3, size * 0.7, size * 0.55);
   } else if (icon.kind === 'father') {
-    drawFatherCameo(ctx, icon.id, icon.category, size, '#e9edf1', FONT);
+    if (icon.variant === 'figure') drawFatherFigure(ctx, icon.id, icon.category, size, '#e9edf1', FONT);
+    else drawFatherCameo(ctx, icon.id, icon.category, size, '#e9edf1', FONT);
   } else {
     ctx.fillStyle = tileColor(icon.tile);
     ctx.fillRect(0, 0, size, size);

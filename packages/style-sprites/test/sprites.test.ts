@@ -434,6 +434,18 @@ describe('createSpriteStyle', () => {
     expect(calls.icons).toBe(2);
   });
 
+  it('maps the figure and head variants of a father, the head falling back to the figure', () => {
+    const ids = new SpriteIds(DEFAULT_MAPPING);
+    expect(ids.father('laSalle')).toEqual(['fathers/la-salle']);
+    expect(ids.father('laSalle', 'figure')).toEqual(['fathers/la-salle']);
+    expect(ids.father('bartolomeDeLasCasas', 'head')).toEqual(['fathers/bartolome-de-las-casas__head', 'fathers/bartolome-de-las-casas']);
+    expect(ids.backdrop('congress-hall')).toEqual(['ui/congress-hall']);
+    // A pack can rename them.
+    const own = new SpriteIds({ ...DEFAULT_MAPPING, fatherHeads: 'faces/{father}', backdrops: { 'congress-hall': 'halls/main' } });
+    expect(own.father('adamSmith', 'head')).toEqual(['faces/adam-smith', 'fathers/adam-smith']);
+    expect(own.backdrop('congress-hall')).toEqual(['halls/main']);
+  });
+
   it('names the new enclosure, brave and artillery sprites exactly', () => {
     const ids = new SpriteIds(DEFAULT_MAPPING);
     expect(ids.unit('damagedArtillery', 'none')[0]).toBe('units/damaged-artillery__none');

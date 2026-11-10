@@ -18,6 +18,9 @@ export function fill(slot: IdSlot | undefined, vars: Record<string, string | num
   return [...new Set(out)];
 }
 
+const DEFAULT_HEADS = 'fathers/{father}__head';
+const DEFAULT_BACKDROPS = { 'congress-hall': 'ui/congress-hall' } as const;
+
 export class SpriteIds {
   constructor(readonly mapping: SpriteMapping) {}
 
@@ -105,9 +108,16 @@ export class SpriteIds {
     return fill(own && product in own ? own[product] : this.mapping.goods, { product });
   }
 
-  /** A Founding Father's portrait. */
-  father(id: FatherId): string[] {
-    return fill(this.mapping.fathers, { father: id });
+  /** A Founding Father: the full standing figure (`fathers/<id>`), or his head (`fathers/<id>__head`, then the figure). */
+  father(id: FatherId, variant: 'figure' | 'head' = 'figure'): string[] {
+    const figure = fill(this.mapping.fathers, { father: id });
+    if (variant === 'figure') return figure;
+    return [...fill(this.mapping.fatherHeads ?? DEFAULT_HEADS, { father: id }), ...figure];
+  }
+
+  /** The sprite ids of a full-frame backdrop. */
+  backdrop(kind: 'congress-hall'): string[] {
+    return fill(this.mapping.backdrops?.[kind] ?? DEFAULT_BACKDROPS[kind]);
   }
 
   road(): { hub: string[]; spoke: string[]; diagonal: string[] } {

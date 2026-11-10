@@ -130,8 +130,15 @@ export type IconRequest =
   | { kind: 'product'; product: ProductId }
   | { kind: 'building'; building: BuildingKind; level: number }
   | { kind: 'tile'; tile: Tile }
-  /** A Founding Father's portrait (an oval cameo); `category` colours the fallback and the sprite's background. */
-  | { kind: 'father'; id: FatherId; category: FatherCategory };
+  /**
+   * A Founding Father. `variant` 'head' (the default) is a portrait: an oval cameo in a size×size box. 'figure' is the
+   * full standing figure, `size` tall and 2:3 narrow, centred horizontally in the size×size box, feet on a baseline at
+   * 92% of the height. `category` colours the fallback and the sprite's background.
+   */
+  | { kind: 'father'; id: FatherId; category: FatherCategory; variant?: FatherVariant };
+
+export type FatherVariant = 'figure' | 'head';
+
 
 /** CSS custom properties the shell applies while a style is active. */
 export interface StyleTheme {
@@ -168,6 +175,11 @@ export interface StylePlugin {
   createMapRenderer(canvas: HTMLCanvasElement, hooks?: MapLayerHooks): MapRenderer;
   /** Draws an icon centred in a size×size box at the origin of the context. */
   drawIcon(ctx: CanvasRenderingContext2D, icon: IconRequest, size: number): void;
+  /**
+   * Optional: paints a full-frame backdrop (`congress-hall`, a 3:2 assembly hall) filling width×height at the origin of
+   * the context. Returns false when the style has none (yet); the shell then draws drawCongressHallBackdrop.
+   */
+  drawBackdrop?(ctx: CanvasRenderingContext2D, kind: 'congress-hall', width: number, height: number): boolean;
   /** Flat colour for a tile, used by the minimap. */
   tileColor(tile: Tile): string;
   /**
@@ -348,6 +360,8 @@ export function hash2(x: number, y: number, salt = 0): number {
 export type { GoodId };
 
 export * from './meander.js';
+export * from './congress.js';
+import { FATHER_FEET } from './congress.js';
 
 /** Cameo colours of the Founding Father categories (also the sprite portraits' backgrounds). */
 export const FATHER_COLORS: Record<FatherCategory, string> = {
@@ -405,4 +419,139 @@ export function drawFatherCameo(ctx: CanvasRenderingContext2D, id: FatherId, cat
   ctx.strokeText(text, cx, cy + size * 0.02);
   ctx.fillStyle = '#1b1b1b';
   ctx.fillText(text, cx, cy + size * 0.02);
+}
+
+/**
+ * A simple procedural full-length father: a standing silhouette in a period coat and tricorn hat, tinted by
+ * category, with his initials on a small plaque. The figure is `size` tall and centred in the size×size box; the feet
+ * stand at FATHER_FEET of the height.
+ */
+export function drawFatherFigure(ctx: CanvasRenderingContext2D, id: FatherId, category: FatherCategory, size: number, ink: string, font: string): void {
+  const cx = size / 2;
+  const h = size;
+  const u = h / 100; // 1% of the figure image
+  const feet = FATHER_FEET * h;
+  const top = feet - 0.8 * h; // adults stand about 80% of the image
+  const lw = Math.max(1, h * 0.012);
+  const coat = FATHER_COLORS[category];
+  // A little variety of build and hair by id, so a row of fathers does not look cloned.
+  let sum = 0;
+  for (const ch of id) sum = (sum * 31 + ch.charCodeAt(0)) % 9973;
+  const k = hash2(sum, 3, 17);
+  const k2 = hash2(sum, 11, 5);
+  const wide = 1 + k * 0.18;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = lw;
+  // Ground shadow.
+  ctx.fillStyle = 'rgba(0,0,0,0.16)';
+  ctx.beginPath();
+  ctx.ellipse(cx, feet, 14 * u * wide, 2.2 * u, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Legs and shoes.
+  ctx.fillStyle = '#ece6d6';
+  for (const dx of [-4.2, 4.2]) {
+    ctx.beginPath();
+    ctx.rect(cx + dx * u - 2.4 * u, feet - 22 * u, 4.8 * u, 20 * u);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.fillStyle = ink;
+  for (const dx of [-5.2, 5.2]) {
+    ctx.beginPath();
+    ctx.ellipse(cx + dx * u, feet - 1.2 * u, 4 * u, 2 * u, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Long coat, wider at the hem.
+  const shoulderY = top + 23 * u;
+  const hemY = feet - 15 * u;
+  const sw = 10 * u * wide;
+  const hw = 15 * u * wide;
+  ctx.fillStyle = coat;
+  ctx.beginPath();
+  ctx.moveTo(cx - sw, shoulderY);
+  ctx.quadraticCurveTo(cx - sw - 1.5 * u, shoulderY + 8 * u, cx - hw, hemY);
+  ctx.lineTo(cx + hw, hemY);
+  ctx.quadraticCurveTo(cx + sw + 1.5 * u, shoulderY + 8 * u, cx + sw, shoulderY);
+  ctx.quadraticCurveTo(cx, shoulderY - 3 * u, cx - sw, shoulderY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Arms at the sides.
+  for (const sgn of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(cx + sgn * sw, shoulderY + 1 * u);
+    ctx.quadraticCurveTo(cx + sgn * (sw + 5 * u), shoulderY + 14 * u, cx + sgn * (sw + 3 * u), shoulderY + 28 * u);
+    ctx.lineTo(cx + sgn * (sw - 2 * u), shoulderY + 28 * u);
+    ctx.quadraticCurveTo(cx + sgn * (sw - 1 * u), shoulderY + 14 * u, cx + sgn * (sw - 4 * u), shoulderY + 4 * u);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#e8c9a0';
+    ctx.beginPath();
+    ctx.arc(cx + sgn * (sw + 0.5 * u), shoulderY + 29.5 * u, 2.2 * u, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = coat;
+  }
+  // Coat front: a centre seam, buttons and a white cravat.
+  ctx.beginPath();
+  ctx.moveTo(cx, shoulderY + 1 * u);
+  ctx.lineTo(cx, hemY);
+  ctx.stroke();
+  ctx.fillStyle = ink;
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    ctx.arc(cx + 2 * u, shoulderY + (7 + i * 7) * u, 0.8 * u, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#fbfaf4';
+  ctx.beginPath();
+  ctx.moveTo(cx - 3.5 * u, shoulderY - 1 * u);
+  ctx.lineTo(cx + 3.5 * u, shoulderY - 1 * u);
+  ctx.lineTo(cx, shoulderY + 7 * u);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Head, wig and tricorn hat.
+  const headY = top + 14 * u;
+  ctx.fillStyle = '#e8c9a0';
+  ctx.beginPath();
+  ctx.ellipse(cx, headY, 5.4 * u, 6.4 * u, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = k2 > 0.5 ? '#f4f0e6' : '#5b4a3a';
+  for (const sgn of [-1, 1]) {
+    ctx.beginPath();
+    ctx.ellipse(cx + sgn * 5.6 * u, headY + 2.5 * u, 2.4 * u, 4.6 * u, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.fillStyle = ink;
+  ctx.beginPath();
+  ctx.moveTo(cx - 13 * u, headY - 4 * u);
+  ctx.quadraticCurveTo(cx, headY - 9.5 * u, cx + 13 * u, headY - 4 * u);
+  ctx.lineTo(cx + 7 * u, headY - 12 * u);
+  ctx.quadraticCurveTo(cx, headY - 15 * u, cx - 7 * u, headY - 12 * u);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Plaque with the initials on the coat.
+  const text = fatherInitials(id);
+  const pw = Math.max(text.length * 5.2 * u + 3 * u, 8 * u);
+  const py = shoulderY + 33 * u;
+  ctx.fillStyle = '#fbfaf4';
+  ctx.beginPath();
+  ctx.roundRect?.(cx - pw / 2, py - 3.4 * u, pw, 6.8 * u, 1.4 * u);
+  if (!ctx.roundRect) ctx.rect(cx - pw / 2, py - 3.4 * u, pw, 6.8 * u);
+  ctx.fill();
+  ctx.stroke();
+  ctx.font = `700 ${Math.round(5 * u)}px ${font}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#1b1b1b';
+  ctx.fillText(text, cx, py + 0.3 * u);
+  ctx.restore();
 }

@@ -77,6 +77,10 @@ export interface SpriteMapping {
   goods: IdSlot;
   /** Founding Father portraits: `{father}` is the kebab-case FatherId. Missing ones are drawn procedurally. */
   fathers?: IdSlot;
+  /** Small head-and-shoulders crops of the fathers (default `fathers/{father}__head`); the figure is cropped when missing. */
+  fatherHeads?: IdSlot;
+  /** Full-frame backdrops, by name (`congress-hall`: default `ui/congress-hall`, 1536x1024). */
+  backdrops?: Partial<Record<'congress-hall', IdSlot>>;
   /** White-cloth markers tinted to a nation's colour. */
   overlays: { pennant: IdSlot; flag: IdSlot; mission: IdSlot };
   /** Ids per building kind or product, replacing the templates. */
@@ -237,6 +241,8 @@ export const DEFAULT_MAPPING: SpriteMapping = {
   buildings: 'buildings/{building}__{level}',
   goods: 'goods/{product}',
   fathers: 'fathers/{father}',
+  fatherHeads: 'fathers/{father}__head',
+  backdrops: { 'congress-hall': 'ui/congress-hall' },
   overlays: { pennant: 'overlays/pennant', flag: 'overlays/flag', mission: 'overlays/mission' },
 };
 
