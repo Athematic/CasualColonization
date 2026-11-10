@@ -19,3 +19,12 @@ Twelve-page comic scripts, one for each front cover in [BOX_ART_PROMPTS.md](../B
 | M. Australia: Into the outback | [m-australia-into-the-outback.md](m-australia-into-the-outback.md) |
 | N. Vinland: The longships | [n-vinland-the-longships.md](n-vinland-the-longships.md) |
 | O. Vinland: The first winter | [o-vinland-the-first-winter.md](o-vinland-the-first-winter.md) |
+
+## Before lettering
+
+- **Names and words:** most Indigenous personal names are invented, and only a few Indigenous-language words are used. Each script has a note on its choices. Have a speaker or a language consultant check spellings and names for each people.
+- **History:**
+  - **C:** the cargo avoids the sugar and rum trade.
+  - **J:** the bridge keepers' exemption from mine labour is a plausible colonial practice but not a verified one. It is presented as one officer's appeal.
+  - **L and M:** both state plainly that land was taken, and that the Eora and Wiradjuri are still there today.
+- **Wording:** none of the scripts uses real flags, real famous people, names from the box-art "names to keep out" list, or characters from other comics.
