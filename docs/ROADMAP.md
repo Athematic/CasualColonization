@@ -111,8 +111,8 @@ Done before Beta, so the cooperation rules are scenario data from the start. See
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | in progress: plan steps 0 (golden-hash test in `npm test`), 1 (the `Scenario` type, registry and the Americas as the first scenario) and 2 (the calendar as scenario data) done; provisional decisions on Q2–Q4 and Q7–Q10 pending Simon ([scenario-framework.md](design/scenario-framework.md), section 8; proposed size XL) |
-| Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | design (same note) |
+| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | in progress: plan steps 0 (golden-hash test in `npm test`), 1 (the `Scenario` type, registry and the Americas as the first scenario), 2 (the calendar as scenario data) and 3 (selections: goods, peoples, nation sets, units, buildings, council and the computer players' goods lists read from the scenario) done; provisional decisions on Q2–Q4 and Q7–Q10 pending Simon ([scenario-framework.md](design/scenario-framework.md), section 8; proposed size XL) |
+| Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | in progress: the Rivals select on the New game screen works for the Americas (real rivals: England, France, the Netherlands, Spain); the tournament takes `--rivals real`; maps per scenario still to do (same note) |
 | Proof scenario that exercises the framework with little new art (proposed: The Caribbean, 1650–1750: the lesser powers) | M | P1 | design (same note, section 7) |
 
 ## Beta 1–2: Cooperation
