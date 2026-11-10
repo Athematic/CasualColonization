@@ -116,13 +116,16 @@ export function icon(req: IconRequest, size = 40, title?: string): HTMLImageElem
   return img;
 }
 
-/** Paints the Congress hall backdrop into a canvas of width x height CSS px: the style's art, else a procedural hall. */
-export function drawHallBackdrop(canvas: HTMLCanvasElement, width: number, height: number): void {
+/**
+ * Paints the council hall backdrop into a canvas of width x height CSS px: the scenario's hall
+ * (`sprite`, Scenario.art.councilHall), else the style's, else a procedural hall.
+ */
+export function drawHallBackdrop(canvas: HTMLCanvasElement, width: number, height: number, sprite?: string): void {
   const dpr = Math.min(3, window.devicePixelRatio || 1);
   canvas.width = Math.round(width * dpr);
   canvas.height = Math.round(height * dpr);
   const ctx = canvas.getContext('2d')!;
   ctx.scale(dpr, dpr);
-  if (active.drawBackdrop?.(ctx, 'congress-hall', width, height)) return;
+  if (active.drawBackdrop?.(ctx, 'congress-hall', width, height, sprite)) return;
   drawCongressHallBackdrop(ctx, width, height, active.theme['--ink']);
 }

@@ -1,8 +1,9 @@
 import {
   cargoRoomFor,
   GOOD_DEFS,
+  goodsOf,
   incitePrice,
-  NATIONS,
+  nationOf,
   nationTitle,
   nativeOffer,
   nativeUnitPrice,
@@ -13,7 +14,6 @@ import {
   type GoodId,
   type NationId,
   type Unit,
-  goodsOf,
 } from '@cc/engine';
 import type { App } from '../app.js';
 import { h } from '../dom.js';
@@ -82,7 +82,7 @@ export async function inciteDialog(app: App, u: Unit, settlementId: string): Pro
     'Incite the natives',
     `For ${price} gold the ${TRIBES[st.tribe].name} will turn against a rival nation: their anger with it rises sharply, and they may go to war. You have ${app.me.gold} gold.`,
     [
-      ...rivals.map((n) => ({ label: `Against ${nationTitle(n)}`, value: n, disabled: app.me.gold < price || s.tribes.find((t) => t.id === st.tribe)?.stance[n] === 'war', hint: NATIONS[n].name })),
+      ...rivals.map((n) => ({ label: `Against ${nationTitle(app.state, n)}`, value: n, disabled: app.me.gold < price || s.tribes.find((t) => t.id === st.tribe)?.stance[n] === 'war', hint: nationOf(app.state, n).name })),
       { label: 'Never mind', value: null as unknown as NationId },
     ],
   );

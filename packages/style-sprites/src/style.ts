@@ -6,7 +6,7 @@
  * hand anything else to the fallback's drawIcon. Nothing is fetched until the style is used; the
  * manifest and images then load in the background, and views redraw as they arrive.
  */
-import { NATIONS, UNIT_TYPES } from '@cc/engine';
+import { UNIT_TYPES } from '@cc/engine';
 import { FATHER_FIGURE_ASPECT, type IconRequest, type MapRenderer, type Scene, type StylePlugin } from '@cc/render-api';
 import { SpriteIds } from './ids.js';
 import { createLayerHooks } from './layers.js';
@@ -142,7 +142,7 @@ export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts
         const kind = UNIT_TYPES[icon.type].kind;
         const military = icon.role === 'soldier' || icon.role === 'dragoon';
         const flies = (kind === 'ship' && icon.type !== 'privateer') || (kind === 'colonist' && military) || kind === 'artillery';
-        if (flies && r.pennant && size >= r.pennant.minIcon) p.tinted(ctx, ids.overlay('pennant'), 0, 0, size * r.pennant.size, dpr, NATIONS[icon.nation].color);
+        if (flies && r.pennant && size >= r.pennant.minIcon) p.tinted(ctx, ids.overlay('pennant'), 0, 0, size * r.pennant.size, dpr, icon.color);
         return true;
       }
       case 'product':
@@ -183,9 +183,9 @@ export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts
     },
     createMapRenderer,
     drawIcon,
-    drawBackdrop(ctx, kind, width, height) {
-      if (!procedural.has('icons') && getPainter().fitted(ctx, ids.backdrop(kind), 0, 0, width, height, contextScale(ctx), { cover: true })) return true;
-      return fallback.drawBackdrop?.(ctx, kind, width, height) ?? false;
+    drawBackdrop(ctx, kind, width, height, sprite) {
+      if (!procedural.has('icons') && getPainter().fitted(ctx, ids.backdrop(kind, sprite), 0, 0, width, height, contextScale(ctx), { cover: true })) return true;
+      return fallback.drawBackdrop?.(ctx, kind, width, height, sprite) ?? false;
     },
     tileColor: (tile) => fallback.tileColor(tile),
     onAssetsChanged: (listener) => getPainter().store.subscribe(listener),

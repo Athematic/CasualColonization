@@ -9,7 +9,7 @@ import {
   colonyWorkers,
   inBounds,
   isShip,
-  NATIONS,
+  nationOf,
   sightRadius,
   TRIBES,
   unitPosition,
@@ -18,6 +18,7 @@ import {
   type FatherCategory,
   type FatherId,
   type GameState,
+  type ScenarioLike,
   type GoodId,
   type NationId,
   type ProductId,
@@ -122,8 +123,10 @@ export interface MapLayerHooks {
   relief?(ctx: Ctx2D, t: LayerTile, z: number): boolean;
   bonus?(ctx: Ctx2D, t: LayerTile, z: number): boolean;
   rumour?(ctx: Ctx2D, t: LayerTile, z: number): boolean;
-  settlement?(ctx: Ctx2D, settlement: Readonly<Settlement>, px: number, py: number, z: number): boolean;
-  colony?(ctx: Ctx2D, colony: Readonly<Colony>, size: number, px: number, py: number, z: number): boolean;
+  /** `state` gives the scenario's nations (a mission's colour). */
+  settlement?(ctx: Ctx2D, settlement: Readonly<Settlement>, px: number, py: number, z: number, state: Readonly<GameState>): boolean;
+  /** `state` gives the scenario's nations (the owner's colour). */
+  colony?(ctx: Ctx2D, colony: Readonly<Colony>, size: number, px: number, py: number, z: number, state: Readonly<GameState>): boolean;
   /** The unit on top of a stack, centred at (x, y) in a box of size s (nation pennants stay with the renderer). */
   unit?(ctx: Ctx2D, stack: MapUnitStack, x: number, y: number, s: number): boolean;
   /** A native brave, centred at (x, y) in a box of size s (the tribe's pennant stays with the renderer). */
@@ -131,7 +134,8 @@ export interface MapLayerHooks {
 }
 
 export type IconRequest =
-  | { kind: 'unit'; type: UnitTypeId; role: RoleId; nation: NationId }
+  /** A unit; `color` is its owner's colour in its game (`nationColor(s, owner)`), for flags, pennants and coats. */
+  | { kind: 'unit'; type: UnitTypeId; role: RoleId; color: string }
   | { kind: 'product'; product: ProductId }
   | { kind: 'building'; building: BuildingKind; level: number }
   | { kind: 'tile'; tile: Tile }
@@ -183,8 +187,9 @@ export interface StylePlugin {
   /**
    * Optional: paints a full-frame backdrop (`congress-hall`, a 3:2 assembly hall) filling width×height at the origin of
    * the context. Returns false when the style has none (yet); the shell then draws drawCongressHallBackdrop.
+   * `sprite` is the scenario's own art for it (`Scenario.art.councilHall`), tried before the style's usual one.
    */
-  drawBackdrop?(ctx: CanvasRenderingContext2D, kind: 'congress-hall', width: number, height: number): boolean;
+  drawBackdrop?(ctx: CanvasRenderingContext2D, kind: 'congress-hall', width: number, height: number, sprite?: string): boolean;
   /** Flat colour for a tile, used by the minimap. */
   tileColor(tile: Tile): string;
   /**
@@ -269,8 +274,9 @@ export function isTileVisible(scene: Scene, x: number, y: number): boolean {
   return scene.revealAll || scene.visible[y * scene.state.map.width + x] === 1;
 }
 
-export function nationColor(nation: NationId): string {
-  return NATIONS[nation].color;
+/** A nation's colour in its game's scenario (Q2: nations are per scenario). */
+export function nationColor(s: ScenarioLike, nation: NationId): string {
+  return nationOf(s, nation).color;
 }
 
 export interface MapUnitStack {

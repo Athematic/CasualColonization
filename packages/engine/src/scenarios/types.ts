@@ -23,6 +23,7 @@ import type { EntrySide } from '../mapgen.js';
 import type { TerrainId } from '../rules/terrain.js';
 import type { GameState, MapSize } from '../types.js';
 import type { Calendar } from './calendar.js';
+import type { ScenarioText } from './terms.js';
 
 export type ScenarioId = string;
 
@@ -38,6 +39,11 @@ export interface Scenario {
   version: number;
   name: string;
   description: string;
+  /**
+   * Left out of the New game screen's Scenario select (test scenarios and works in progress). A
+   * hidden scenario still loads and plays.
+   */
+  hidden?: boolean;
 
   /** How turns map to years, when the game ends and where head starts can jump to. */
   calendar: Calendar;
@@ -77,6 +83,13 @@ export interface Scenario {
   difficulty?: Partial<Record<DifficultyId, Partial<DifficultyRules>>>;
   /** Overrides merged over the engine's SCORE_WEIGHTS; absent fields keep the engine's values. */
   score?: Partial<ScoreWeights>;
+  /**
+   * The scenario's terms (scenarios/terms.ts): the words and templates it changes; the others are
+   * the Americas'. Read with `term(s, key)`.
+   */
+  text?: ScenarioText;
+  /** The scenario's pictures in the web game; absent ones are the Americas'. */
+  art?: ScenarioArt;
 
   /**
    * Converts a save made with an older version of this scenario. Without it such saves are
@@ -260,19 +273,49 @@ export interface ClimateZone {
   moisture: { below?: number; terrain: TerrainId }[];
 }
 
+/** Pictures the web game shows for a scenario (docs/design/scenario-framework.md, section 6). */
+export interface ScenarioArt {
+  /**
+   * The title screen's covers, by the web game's cover ids (apps/web/src/ui/landing.ts COVERS:
+   * 'landfall', 'trade'…). Absent or empty: the Americas' covers.
+   */
+  covers?: string[];
+  /**
+   * The sprite id of the council hall's backdrop (the Americas: 'ui/congress-hall'). A style that
+   * lacks it falls back to its own hall, then to the procedural one.
+   */
+  councilHall?: string;
+}
+
 export interface ScenarioNations {
   /** Alternative history (any nations) is always offered; real rivals when the scenario has them. */
   sets: { alternative: NationEntry[]; real?: NationEntry[] };
   default: Rivals;
   /** Most nations in one game. */
   max: number;
+  /**
+   * The Crown as a player (the Royal Expeditionary Force's owner): its name, adjective, colour and
+   * port. Its bonus and colony names are not used.
+   */
+  crown: NationEntry;
+}
+
+/** How a nation is named and shown: per scenario (Q2), read with `nationOf(s, id)`. */
+export interface NationIdentity {
+  /** "England", "the Netherlands" (lower-case article: `nationTitle` capitalises). */
+  name: string;
+  /** "English", "Dutch". */
+  adjective: string;
+  /** Its flag colour on the map and in tables, as a CSS colour. */
+  color: string;
 }
 
 /**
- * A nation's game facts in this scenario. Its identity (name, adjective, colour) stays in the
- * catalogue (NATIONS).
+ * A nation in this scenario (Q2: nations are wholly per scenario): its identity and its game facts.
+ * The engine and the web game read it through `nationOf(s, id)`; the catalogue's NATIONS only
+ * supplies the Americas' values.
  */
-export interface NationEntry {
+export interface NationEntry extends NationIdentity {
   id: NationId;
   /** The bonus: its shown text and the modifiers that make it work (rules/modifiers.ts). */
   bonus: { text: string; modifiers?: Modifier[] };

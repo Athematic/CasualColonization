@@ -12,7 +12,7 @@ import { TERRAIN } from '../rules/terrain.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState } from '../types.js';
 import type { Effect, EventVars, EventsState, GoodRef, Num } from './types.js';
-import { difficultyOf, goodsOf } from '../scenarios/index.js';
+import { difficultyOf, goodsOf, portMarketOf } from '../scenarios/index.js';
 
 /** What a point of tax is worth to a nation over the rest of a game, in gold (measured against 30-turn outcomes in docs/design/events.md). */
 export const TAX_POINT_VALUE = 150;
@@ -102,7 +102,7 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
       const g = goodOf(e.good, v);
       if (!g) return;
       const m = p.market[g];
-      const band = portPriceBand(p.id, g);
+      const band = portPriceBand(portMarketOf(s, p.id), g);
       const change = e.delta ?? Math.round((m.price * (e.pct ?? 0)) / 100);
       m.price = Math.max(band.min, Math.min(band.max * 2, m.price + change));
       return;

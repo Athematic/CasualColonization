@@ -1,4 +1,4 @@
-import { calendarOf, DIFFICULTY, formatDate, NATIONS, resolveDifficulty, nationTitle, scoreBreakdown, STAT_INFO, STAT_KEYS, statsHistory, turnOfYear, yearOf, type NationId, type StatKey, type StatsSeries } from '@cc/engine';
+import { calendarOf, DIFFICULTY, formatDate, nationOf, nationTitle, resolveDifficulty, withTerms, scoreBreakdown, STAT_INFO, STAT_KEYS, statsHistory, turnOfYear, yearOf, type GameState, type NationId, type StatKey, type StatsSeries } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
 import { activeStyle } from '../styles.js';
@@ -79,8 +79,8 @@ function darkPanel(): boolean {
   return lum < 0.4;
 }
 
-function nationColor(nation: NationId, dark: boolean): string {
-  const c = NATIONS[nation].color;
+function nationColor(s: GameState, nation: NationId, dark: boolean): string {
+  const c = nationOf(s, nation).color;
   return dark ? `color-mix(in srgb, ${c} 72%, white)` : c;
 }
 
@@ -146,7 +146,7 @@ export class ProgressScreen implements Screen {
     this.drawnKey = `${s.stats?.turns.length ?? 0}|${s.turn}|${activeStyle().id}`;
     clear(this.body);
     const select = h('select', { 'aria-label': 'Statistic to show', onchange: (e: Event) => this.setMetric((e.target as HTMLSelectElement).value as Metric) },
-      METRICS.map((m) => h('option', { value: m.id, selected: m.id === this.metric || undefined }, m.name)));
+      METRICS.map((m) => h('option', { value: m.id, selected: m.id === this.metric || undefined }, withTerms(this.app.state, m.name))));
     const step = (d: number) => {
       const i = METRICS.findIndex((m) => m.id === this.metric);
       this.setMetric(METRICS[(i + d + METRICS.length) % METRICS.length].id);
@@ -168,7 +168,7 @@ export class ProgressScreen implements Screen {
         h('button', { class: 'btn small', 'aria-label': 'Previous statistic', onclick: () => step(-1) }, '‹'),
         h('label', { class: 'field' }, h('span', null, 'Statistic'), select),
         h('button', { class: 'btn small', 'aria-label': 'Next statistic', onclick: () => step(1) }, '›'),
-        h('p', { class: 'muted small progress-desc' }, info.description)),
+        h('p', { class: 'muted small progress-desc' }, withTerms(this.app.state, info.description))),
       h('div', { class: 'card progress-card' }, this.chartHost, this.legend),
       this.breakdownCard(),
       h('p', { class: 'muted small' }, 'All nations are shown, as in the reports of the original game. Figures are recorded at the end of every turn; games saved before this feature start recording when loaded. Tap or hover the graph to read values; tap a nation to hide or show it.'),
@@ -189,7 +189,7 @@ export class ProgressScreen implements Screen {
         h('table', { class: 'scores breakdown' },
           h('thead', null, h('tr', null,
             h('th', null, 'Component'),
-            players.map((p) => h('th', { title: nationTitle(p.id) }, h('span', { class: 'flag', style: `background:${NATIONS[p.id].color}` }), ' ', NATIONS[p.id].name)))),
+            players.map((p) => h('th', { title: nationTitle(this.app.state, p.id) }, h('span', { class: 'flag', style: `background:${nationOf(this.app.state, p.id).color}` }), ' ', nationOf(this.app.state, p.id).name)))),
           h('tbody', null,
             lines.map((line, i) => h('tr', null,
               h('td', { title: line.unit }, line.label),
@@ -207,9 +207,9 @@ export class ProgressScreen implements Screen {
       h('p', null, over.reason),
       h('p', { class: 'muted small', title: level.description }, `Difficulty: ${level.name}`),
       this.app.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used'), ` since ${formatDate(this.app.state.cheated.turn, calendarOf(this.app.state))}.`) : null,
-      over.winner ? h('p', null, h('strong', null, `${nationTitle(over.winner)} ${over.winner === over.viewer ? '(you) ' : ''}wins.`)) : null,
+      over.winner ? h('p', null, h('strong', null, `${nationTitle(this.app.state, over.winner)} ${over.winner === over.viewer ? '(you) ' : ''}wins.`)) : null,
       h('table', { class: 'scores' }, rows.map(([n, score]) => h('tr', null,
-        h('td', null, h('span', { class: 'flag', style: `background:${NATIONS[n].color}` }), ' ', nationTitle(n)),
+        h('td', null, h('span', { class: 'flag', style: `background:${nationOf(this.app.state, n).color}` }), ' ', nationTitle(this.app.state, n)),
         h('td', null, String(score))))));
   }
 
@@ -260,7 +260,7 @@ export class ProgressScreen implements Screen {
     const x = (turn: number) => m.l + ((turn - t0) / (t1 - t0)) * (W - m.l - m.r);
     const y = (v: number) => m.t + (1 - (v - yMin) / (yMax - yMin || 1)) * (H - m.t - m.b);
 
-    const root = svg('svg', { class: 'progress-svg', width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `${METRICS.find((mm) => mm.id === metric)!.name} by nation over time` });
+    const root = svg('svg', { class: 'progress-svg', width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `${withTerms(this.app.state, METRICS.find((mm) => mm.id === metric)!.name)} by nation over time` });
     const grid = svg('g', { class: 'grid' });
     for (let v = yMin; v <= yMax + yStep / 2; v += yStep) {
       grid.append(svg('line', { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: v === 0 ? 'base' : '' }));
@@ -283,7 +283,7 @@ export class ProgressScreen implements Screen {
     for (const nn of shown) {
       const vs = data.get(nn)!;
       const pts = vs.map((v, i) => `${x(hist.turns[i]).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-      const color = nationColor(nn, dark);
+      const color = nationColor(this.app.state, nn, dark);
       if (n === 1) {
         lines.append(svg('circle', { cx: x(hist.turns[0]), cy: y(vs[0]), r: 4, fill: color, class: 'dot' }));
         continue;
@@ -309,13 +309,13 @@ export class ProgressScreen implements Screen {
       }
       const tx = x(hist.turns[i]);
       cross.append(svg('line', { x1: tx, x2: tx, y1: m.t, y2: H - m.b, class: 'crosshair' }));
-      for (const nn of shown) cross.append(svg('circle', { cx: tx, cy: y(data.get(nn)![i]), r: 4, class: 'dot', style: `fill:${nationColor(nn, dark)}` }));
+      for (const nn of shown) cross.append(svg('circle', { cx: tx, cy: y(data.get(nn)![i]), r: 4, class: 'dot', style: `fill:${nationColor(this.app.state, nn, dark)}` }));
       clear(this.tooltip);
       const rows = shown.map((nn) => [nn, data.get(nn)![i]] as const).sort((a, b) => b[1] - a[1]);
       this.tooltip.append(
         h('strong', null, formatDate(hist.turns[i], calendarOf(this.app.state))),
         h('table', null, rows.map(([nn, v]) => h('tr', null,
-          h('td', null, h('span', { class: 'swatch', style: `background:${nationColor(nn, dark)}` }), nationTitle(nn)),
+          h('td', null, h('span', { class: 'swatch', style: `background:${nationColor(this.app.state, nn, dark)}` }), nationTitle(this.app.state, nn)),
           h('td', null, format(metric, v))))));
       this.tooltip.hidden = false;
       const left = tx > W / 2;
@@ -352,8 +352,8 @@ export class ProgressScreen implements Screen {
         onclick: (e: MouseEvent) => this.toggle(nn, e.shiftKey),
         ondblclick: () => this.toggle(nn, true),
       },
-      h('span', { class: 'swatch', style: `background:${nationColor(nn, dark)}` }),
-      nationTitle(nn),
+      h('span', { class: 'swatch', style: `background:${nationColor(this.app.state, nn, dark)}` }),
+      nationTitle(this.app.state, nn),
       h('span', { class: 'legend-value' }, format(this.metric, v)));
       this.legend.append(btn);
     }

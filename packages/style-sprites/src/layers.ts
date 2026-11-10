@@ -2,7 +2,7 @@
  * The map layers a sprite pack paints over its fallback style, as MapLayerHooks. Each hook returns
  * false when its sprite is missing or not loaded yet, and the fallback draws that piece instead.
  */
-import { NATIONS, TERRAIN, type GameState, type TerrainId } from '@cc/engine';
+import { nationOf, TERRAIN, type GameState, type TerrainId } from '@cc/engine';
 import type { LayerTile, MapLayerHooks } from '@cc/render-api';
 import type { SpriteIds } from './ids.js';
 import type { PackLayer, Placement, SpritePack } from './pack.js';
@@ -185,17 +185,17 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
 
   if (!off.has('settlements')) {
     const mission = ids.overlay('mission');
-    hooks.settlement = (ctx, st, px, py, z) => {
+    hooks.settlement = (ctx, st, px, py, z, state) => {
       if (!placed(ctx, ids.settlement(st.tribe, st.capital), rules.settlement, px, py, z)) return false;
       const m = rules.mission;
-      if (st.mission && m) painter.tinted(ctx, mission, px + m.x * z, py + m.y * z, m.size * z, dpr, NATIONS[st.mission].color);
+      if (st.mission && m) painter.tinted(ctx, mission, px + m.x * z, py + m.y * z, m.size * z, dpr, nationOf(state, st.mission).color);
       return true;
     };
   }
 
   if (!off.has('colonies')) {
     const flagIds = ids.overlay('flag');
-    hooks.colony = (ctx, c, size, px, py, z) => {
+    hooks.colony = (ctx, c, size, px, py, z, state) => {
       const p = rules.colony;
       const town = ids.colony(size);
       if (!painter.pick(town, p.scale * z, dpr)) return false;
@@ -206,7 +206,7 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
       const wall = (part: 'back' | 'front') => painter.anchored(ctx, walls, px + w.x * z, py + w.y * z, w.scale * z, dpr, { part });
       if (walls.length) wall('back');
       const f = rules.colonyFlag;
-      if (f) colonyFlag(ctx, painter, flagIds, px + f.x * z, py + f.y * z, f.height * z, dpr, NATIONS[c.owner].color, ink, z);
+      if (f) colonyFlag(ctx, painter, flagIds, px + f.x * z, py + f.y * z, f.height * z, dpr, nationOf(state, c.owner).color, ink, z);
       placed(ctx, town, p, px, py, z);
       if (walls.length) wall('front');
       return true;

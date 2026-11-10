@@ -23,8 +23,8 @@ import {
 } from './queries.js';
 import { alliesGoHome, isToryColony, offerMercenaries, processRebellion, startRebellion, TORY_LANDING } from './rebellion.js';
 import { lapseFavoured } from './relations.js';
-import { difficultyOf, mechanicsOf } from './scenarios/index.js';
-import { NATIONS, type NationId } from './rules/nations.js';
+import { difficultyOf, mechanicsOf, nationOf, term, Term } from './scenarios/index.js';
+import { type NationId } from './rules/nations.js';
 import { checkVictory, finishNation } from './victory.js';
 import { crownSideOf } from './world.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
@@ -111,9 +111,9 @@ export function declareIndependence(s: GameState, nation: NationId): string {
       continentals++;
     } else if (committed) continentals++;
   }
-  const text = `${NATIONS[nation].name}'s colonies have declared independence! The Crown sends ${p.ref.regulars} regulars, ${p.ref.dragoons} dragoons, ${p.ref.artillery} artillery and ${p.ref.menOfWar} men-of-war to crush the rebellion.`;
+  const text = `${nationOf(s, nation).name}'s colonies have declared independence! ${Term(s, 'crown')} sends ${p.ref.regulars} regulars, ${p.ref.dragoons} dragoons, ${p.ref.artillery} artillery and ${p.ref.menOfWar} men-of-war to crush the rebellion.`;
   message(s, text);
-  noteHistory(s, 'independence', [nation], `${NATIONS[nation].name}'s colonies declare independence.`);
+  noteHistory(s, 'independence', [nation], `${nationOf(s, nation).name}'s colonies declare independence.`);
   // A mercenary company offers its services (rebellion.ts).
   offerMercenaries(s, nation);
   return text;
@@ -197,7 +197,7 @@ function landWave(s: GameState, p: Player): void {
       ship.against = p.id;
       ref.menOfWar--;
     }
-    if (landed) message(s, `Royal troops land outside ${target.name}!${wave > WAVE ? ' Local Tories guide them ashore.' : ''}`, p.id, target);
+    if (landed) message(s, `${Term(s, 'royalTroops')} land outside ${target.name}!${wave > WAVE ? ` Local ${term(s, 'loyalists')} guide them ashore.` : ''}`, p.id, target);
     return;
   }
 }
@@ -216,7 +216,7 @@ function checkOutcome(s: GameState, p: Player): void {
     track(p.id, 'independence:won');
     endRebellion(s, p);
     for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === p.id) delete s.units[u.id];
-    const text = `${NATIONS[p.id].name} has won the War of Independence! A new nation is born.`;
+    const text = term(s, 'gameOver.won', { nation: nationOf(s, p.id).name });
     message(s, text);
     noteHistory(s, 'independence', [p.id], text);
     warEnded(s, p, 'won', text);
@@ -228,7 +228,7 @@ function checkOutcome(s: GameState, p: Player): void {
     p.independence = 'lost';
     track(p.id, 'independence:lost');
     endRebellion(s, p);
-    const text = `The rebellion in ${NATIONS[p.id].name}'s colonies has been crushed.`;
+    const text = term(s, 'gameOver.lost', { nation: nationOf(s, p.id).name });
     message(s, text);
     noteHistory(s, 'independence', [p.id], text);
     warEnded(s, p, 'lost', text);

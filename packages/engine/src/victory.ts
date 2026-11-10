@@ -13,7 +13,7 @@
  * Kinds are pure functions of the state and draw no random numbers.
  */
 import { finalScores, scoreBreakdown } from './score.js';
-import { calendarOf, lastTurn, scenarioOf } from './scenarios/index.js';
+import { calendarOf, lastTurn, scenarioOf, term } from './scenarios/index.js';
 import type { NationId } from './rules/nations.js';
 import type { GameState, Player } from './types.js';
 
@@ -73,7 +73,7 @@ registerVictory({
     const cal = calendarOf(s);
     if (s.turn < lastTurn(cal)) return null;
     const scores = finalScores(s);
-    return { turn: s.turn, reason: `The year ${cal.end.year} has come and the age of colonization is over.`, winner: leader(scores), scores };
+    return { turn: s.turn, reason: term(s, 'gameOver.time', { year: cal.end.year }), winner: leader(scores), scores };
   },
 });
 
@@ -86,7 +86,7 @@ registerVictory({
       // Arena play-on: the game goes on while any nation still plays.
       if (s.players.some((p) => p.id !== 'crown' && !p.finished)) return null;
       const scores = finalScores(s);
-      return { turn: s.turn, reason: 'Every nation has fought its War of Independence.', winner: leader(scores), scores };
+      return { turn: s.turn, reason: term(s, 'gameOver.playOn'), winner: leader(scores), scores };
     }
     if (moment.outcome === 'won') return { turn: s.turn, reason: moment.text, winner: moment.nation, scores: finalScores(s) };
     const humansLeft = s.players.some((o) => o.human && o.independence !== 'lost');

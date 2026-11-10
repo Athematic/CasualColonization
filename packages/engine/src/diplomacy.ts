@@ -3,38 +3,39 @@ import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { fail } from './errors.js';
 import { hasModifier } from './scenarios/modifiers.js';
-import { message, nationTitle, player } from './queries.js';
-import { NATIONS, type NationId } from './rules/nations.js';
+import { message, player } from './queries.js';
+import { type NationId } from './rules/nations.js';
 import { isFavoured, onPeace } from './relations.js';
 import type { GameState } from './types.js';
+import { nationOf, nationTitle, term, Term } from './scenarios/index.js';
 
 /** Turns of war after which a computer nation is willing to talk peace. */
 export const WAR_WEARINESS = 6;
 
 export function startWar(s: GameState, nation: NationId, other: NationId): string {
   if (nation === other) fail('A nation cannot fight itself.');
-  if (other === 'crown') fail('Declare independence to fight the Crown.');
+  if (other === 'crown') fail(`Declare independence to fight ${term(s, 'crown')}.`);
   const p = player(s, nation);
-  if (p.stance[other] === 'war') fail(`You are already at war with ${NATIONS[other].name}.`);
+  if (p.stance[other] === 'war') fail(`You are already at war with ${nationOf(s, other).name}.`);
   if (!p.human && isFavoured(s, nation, other)) fail('Computer players never declare war on a Favoured Nation.');
   track(nation, 'cmd:declareWar');
   declareWar(s, nation, other);
-  return `You are now at war with ${NATIONS[other].name}.`;
+  return `You are now at war with ${nationOf(s, other).name}.`;
 }
 
 /** Offers peace. People always accept (they share the device); computer nations accept once tired of war. */
 export function proposePeace(s: GameState, nation: NationId, other: NationId): string {
   const p = player(s, nation);
   const o = player(s, other);
-  if (p.stance[other] !== 'war') fail(`You are not at war with ${NATIONS[other].name}.`);
-  if (other === 'crown') fail('The Crown does not negotiate with rebels.');
+  if (p.stance[other] !== 'war') fail(`You are not at war with ${nationOf(s, other).name}.`);
+  if (other === 'crown') fail(`${Term(s, 'crown')} does not negotiate with rebels.`);
   track(nation, 'cmd:proposePeace');
   const tired = s.turn - (p.warSince[other] ?? s.turn) >= WAR_WEARINESS;
   if (!o.human && !tired && !hasModifier(s, nation, 'peaceAccepted')) {
-    return `${NATIONS[other].name} refuses to make peace for now.`;
+    return `${nationOf(s, other).name} refuses to make peace for now.`;
   }
   makePeace(s, nation, other);
-  return `${NATIONS[nation].name} and ${NATIONS[other].name} have made peace.`;
+  return `${nationOf(s, nation).name} and ${nationOf(s, other).name} have made peace.`;
 }
 
 export function makePeace(s: GameState, a: NationId, b: NationId): void {
@@ -47,8 +48,8 @@ export function makePeace(s: GameState, a: NationId, b: NationId): void {
   onPeace(s, a, b);
   track(a, 'diplomacy:peace made');
   track(b, 'diplomacy:peace made');
-  message(s, `${NATIONS[a].name} and ${NATIONS[b].name} have made peace.`);
-  noteHistory(s, 'peace', [a, b], `${nationTitle(a)} and ${NATIONS[b].name} make peace.`);
+  message(s, `${nationOf(s, a).name} and ${nationOf(s, b).name} have made peace.`);
+  noteHistory(s, 'peace', [a, b], `${nationTitle(s, a)} and ${nationOf(s, b).name} make peace.`);
 }
 
 /** Computer nations tired of fighting each other settle their wars. */

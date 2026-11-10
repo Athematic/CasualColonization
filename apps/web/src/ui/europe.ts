@@ -1,32 +1,34 @@
 import {
-  mechanicsOf,
   arrears,
   buyableInPartnerPort,
   buyPrice,
-  player,
-  portName,
-  portOf,
-  portSummary,
-  portsFor,
   cargoFree,
   describeForce,
   GOOD_DEFS,
+  goodsOf,
   isShip,
-  NATIONS,
+  mechanicsOf,
+  nationOf,
+  player,
+  portName,
+  portOf,
+  portsFor,
+  portSummary,
   recruitPrice,
-  trainPrice,
   ROLES,
   sellPrice,
+  term,
+  Term,
+  trainPrice,
+  UNIT_TYPES,
   unitName,
   unitsAboard,
-  UNIT_TYPES,
+  unitsOf,
   type GoodId,
   type NationId,
   type Player,
   type RoleId,
   type Unit,
-  goodsOf,
-  unitsOf,
 } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -42,7 +44,7 @@ export class EuropeScreen implements Screen {
   /** The home port on view: the viewer's own, or a Favoured Nation partner's where it has ships. */
   constructor(private app: App, private port?: NationId) {
     this.body = h('div', { class: 'screen-body' });
-    this.el = h('section', { class: 'screen europe-screen', role: 'dialog', 'aria-label': 'Europe' }, this.body);
+    this.el = h('section', { class: 'screen europe-screen', role: 'dialog', 'aria-label': `${Term(this.app.state, 'homeland')}` }, this.body);
   }
 
   private dispatch(cmd: Parameters<App['dispatch']>[0]): boolean {
@@ -75,32 +77,32 @@ export class EuropeScreen implements Screen {
     if (me.independence !== 'none') {
       this.body.append(
         h('header', { class: 'screen-head' },
-          h('h2', null, 'Europe'),
-          h('button', { class: 'btn close', onclick: () => this.app.closeScreen(), 'aria-label': 'Close Europe' }, 'Close')),
-        h('p', null, me.independence === 'won' ? 'As an independent nation you trade on your own terms; European ports are not part of this alpha yet.' : 'Europe has closed its ports to the rebellious colonies.'));
+          h('h2', null, `${Term(this.app.state, 'homeland')}`),
+          h('button', { class: 'btn close', onclick: () => this.app.closeScreen(), 'aria-label': `Close ${term(this.app.state, 'homeland')}` }, 'Close')),
+        h('p', null, me.independence === 'won' ? 'As an independent nation you trade on your own terms; European ports are not part of this alpha yet.' : `${Term(this.app.state, 'homeland')} has closed its ports to the rebellious colonies.`));
       return;
     }
     this.body.append(
       h('header', { class: 'screen-head' },
-        h('h2', null, `Europe — Port of ${portName(port)}`),
+        h('h2', null, `${Term(this.app.state, 'homeland')} — Port of ${portName(this.app.state, port)}`),
         h('span', { class: 'muted' }, home
-          ? `Gold ${me.gold.toLocaleString()} · Tax ${me.tax}% · ${NATIONS[viewer].bonus}`
-          : `${NATIONS[port].adjective} home port (Favoured Nation) · Gold ${me.gold.toLocaleString()} · ${NATIONS[port].adjective} tax ${host.tax}%`),
+          ? `Gold ${me.gold.toLocaleString()} · Tax ${me.tax}% · ${nationOf(this.app.state, viewer).bonus.text}`
+          : `${nationOf(this.app.state, port).adjective} home port (Favoured Nation) · Gold ${me.gold.toLocaleString()} · ${nationOf(this.app.state, port).adjective} tax ${host.tax}%`),
         me.pendingTax ? h('button', { class: 'btn small', onclick: () => void this.app.answerPending() }, 'Answer the tax raise') : null,
-        h('button', { class: 'btn close', onclick: () => this.app.closeScreen(), 'aria-label': 'Close Europe' }, 'Close')),
+        h('button', { class: 'btn close', onclick: () => this.app.closeScreen(), 'aria-label': `Close ${term(this.app.state, 'homeland')}` }, 'Close')),
       h('p', { class: 'muted small port-character', title: 'Each home port has its own prices, depth of market and ship prices.' }, `${portSummary(port, goodsOf(this.app.state))}.`),
-      ...(!mechanicsOf(this.app.state).ref ? [] : [h('p', { class: 'muted small royal-forces', title: 'The Royal Expeditionary Force the Crown holds against a rebellion. It grows during the game, faster as your colonies ring more liberty bells, and sails if you declare independence.' },
+      ...(!mechanicsOf(this.app.state).ref ? [] : [h('p', { class: 'muted small royal-forces', title: `The ${term(this.app.state, 'ref')} ${term(this.app.state, 'crown')} holds against a rebellion. It grows during the game, faster as your colonies ring more liberty bells, and sails if you declare independence.` },
         `Royal forces: ${describeForce(me.ref)}.`)]),
       views.length > 1 ? h('div', { class: 'port-tabs', role: 'tablist', 'aria-label': 'Ports' }, views.map((p) =>
         h('button', { class: `tab${p === port ? ' active' : ''}`, role: 'tab', 'aria-selected': String(p === port), onclick: () => { this.port = p; this.ship = undefined; this.selected = undefined; this.app.requestRender(); } },
-          h('span', { class: 'foreign-flag', style: `background:${NATIONS[p].color}` }), portName(p), p === viewer ? ' (home)' : ''))) : '',
+          h('span', { class: 'foreign-flag', style: `background:${nationOf(this.app.state, p).color}` }), portName(this.app.state, p), p === viewer ? ' (home)' : ''))) : '',
       h('div', { class: 'europe-grid' },
         this.market(ship, host),
         h('div', { class: 'card' },
           h('h3', null, 'Ships in port'),
-          ships.length ? ships.map((x) => this.shipCard(x)) : h('p', { class: 'muted small' }, 'No ships in port. Send a ship out onto the high seas and choose “Sail to Europe”.'),
+          ships.length ? ships.map((x) => this.shipCard(x)) : h('p', { class: 'muted small' }, `No ships in port. Send a ship out onto the high seas and choose “Sail to ${term(this.app.state, 'homeland')}”.`),
           sailing.length ? h('h3', null, 'At sea') : null,
-          sailing.map((x) => h('div', { class: 'muted small' }, `${unitName(x)} — ${x.loc.kind === 'sailing' ? `${x.loc.to === 'europe' ? `to ${portName(portOf(x))}` : 'to the New World'}, ${x.loc.turnsLeft} turn${x.loc.turnsLeft === 1 ? '' : 's'}` : ''}`)),
+          sailing.map((x) => h('div', { class: 'muted small' }, `${unitName(x)} — ${x.loc.kind === 'sailing' ? `${x.loc.to === 'europe' ? `to ${portName(this.app.state, portOf(x))}` : `to ${term(this.app.state, 'colonyLand')}`}, ${x.loc.turnsLeft} turn${x.loc.turnsLeft === 1 ? '' : 's'}` : ''}`)),
           home ? h('h3', null, 'On the docks') : null,
           home ? (docks.length ? h('div', { class: 'chips' }, docks.map((u) => this.unitChip(u))) : h('p', { class: 'muted small' }, 'Nobody is waiting on the docks.')) : h('p', { class: 'muted small' }, 'Colonists are recruited, trained and go ashore only in your own home port. Here you can trade and buy merchant ships.'),
           this.selectedActions(ship)),
@@ -132,14 +134,14 @@ export class EuropeScreen implements Screen {
       })),
       h('p', { class: 'muted small' }, home
         ? 'Prices are sell/buy per unit. Selling a lot lowers the price; taxes are taken from every sale.'
-        : `${NATIONS[host.id].adjective} prices, sell/buy per unit, and the ${NATIONS[host.id].adjective} tax rate. Boycotts do not apply here. Selling a lot lowers the price in this market.`));
+        : `${nationOf(this.app.state, host.id).adjective} prices, sell/buy per unit, and the ${nationOf(this.app.state, host.id).adjective} tax rate. Boycotts do not apply here. Selling a lot lowers the price in this market.`));
   }
 
   /** In a Favoured Nation partner's port: merchant ships at its prices (no warships, artillery or colonists). */
   private partnerShipyard(host: Player): HTMLElement {
     const list = unitsOf(this.app.state).purchasable.filter(buyableInPartnerPort);
     return h('div', { class: 'card recruit' },
-      h('h3', null, `Shipyard of ${portName(host.id)}`),
+      h('h3', null, `Shipyard of ${portName(this.app.state, host.id)}`),
       h('div', { class: 'offers' }, list.map((type) => this.offer(type, trainPrice(this.app.state, host, type), () => this.dispatch({ type: 'train', unitType: type, port: host.id })))),
       h('p', { class: 'muted small' }, 'Merchant ships only: warships and artillery are not sold to foreigners. A ship bought here starts in this port.'));
   }
@@ -154,16 +156,16 @@ export class EuropeScreen implements Screen {
     const active = ship.id === this.ship;
     return h('div', { class: `carrier${active ? ' selected' : ''}` },
       h('button', { class: 'chip', onclick: () => { this.ship = ship.id; this.app.requestRender(); } },
-        icon({ kind: 'unit', type: ship.type, role: 'none', nation: ship.owner }, 40), `${unitName(ship)} (${ship.repair ? `repairing, ${ship.repair} turns` : `${cargoFree(s, ship)} free`})`),
+        icon({ kind: 'unit', type: ship.type, role: 'none', color: nationOf(this.app.state, ship.owner).color }, 40), `${unitName(ship)} (${ship.repair ? `repairing, ${ship.repair} turns` : `${cargoFree(s, ship)} free`})`),
       h('div', { class: 'chips' },
         unitsAboard(s, ship).map((u) => this.unitChip(u)),
         goodsOf(s).filter((g) => (ship.cargo?.[g] ?? 0) > 0).map((g) => h('span', { class: 'chip' }, icon({ kind: 'product', product: g }, 22), ship.cargo![g]))),
-      h('button', { class: 'btn small primary', disabled: !!ship.repair, onclick: () => this.dispatch({ type: 'sailToAmerica', unitId: ship.id }) }, 'Sail to the New World'));
+      h('button', { class: 'btn small primary', disabled: !!ship.repair, onclick: () => this.dispatch({ type: 'sailToAmerica', unitId: ship.id }) }, `Sail to ${term(this.app.state, 'colonyLand')}`));
   }
 
   private unitChip(u: Unit): HTMLElement {
     return h('button', { class: `chip${u.id === this.selected ? ' selected' : ''}`, onclick: () => { this.selected = this.selected === u.id ? undefined : u.id; this.app.requestRender(); } },
-      icon({ kind: 'unit', type: u.type, role: u.role, nation: u.owner }, 32), unitName(u));
+      icon({ kind: 'unit', type: u.type, role: u.role, color: nationOf(this.app.state, u.owner).color }, 32), unitName(u));
   }
 
   private selectedActions(ship: Unit | undefined): HTMLElement | null {
@@ -203,7 +205,7 @@ export class EuropeScreen implements Screen {
 
   private offer(type: keyof typeof UNIT_TYPES, price: number, buy: () => void): HTMLElement {
     return h('div', { class: 'offer' },
-      icon({ kind: 'unit', type, role: 'none', nation: this.app.viewer }, 36),
+      icon({ kind: 'unit', type, role: 'none', color: nationOf(this.app.state, this.app.viewer).color }, 36),
       h('span', null, UNIT_TYPES[type].name),
       h('button', { class: 'btn tiny', disabled: this.app.me.gold < price, onclick: buy }, `${price}`));
   }

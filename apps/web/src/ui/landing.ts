@@ -1,4 +1,4 @@
-import { calendarOf, formatDate, type GameState } from '@cc/engine';
+import { AMERICAS, calendarOf, formatDate, getScenario, playableScenarios, term, type GameState, type Scenario } from '@cc/engine';
 import colony from '../assets/cover-colony.webp';
 import colonySmall from '../assets/cover-colony-small.webp';
 import landfall from '../assets/cover-landfall.webp';
@@ -32,20 +32,39 @@ export interface LandingActions {
   load: () => void;
 }
 
-/** The front covers for the Americas (docs/BOX_ART_PROMPTS.md, section 3, A–K); the title screen shows one at random. */
-const COVERS: { src: string; small: string; alt: string }[] = [
-  { src: landfall, small: landfallSmall, alt: 'Colonists come ashore from a longboat on a wild coast; a caravel lies at anchor, a scout on horseback points inland, and longhouses stand by a river under snow-capped mountains.' },
-  { src: trade, small: tradeSmall, alt: 'By a river, a colonist in a blue coat and a native trader kneel on a mat and shake hands over cloth, an axe, furs, maize and tobacco; canoes, a ship and a village lie beyond.' },
-  { src: colony, small: colonySmall, alt: 'A busy colony harbour: a ship unloads barrels and cotton onto the quay, colonists carry crates, and a town of red-roofed houses, a church and a hilltop fort rises behind.' },
-  { src: map, small: mapSmall, alt: 'In a ship\'s cabin lit by a lantern, a captain and a young sailor with a telescope study a hand-drawn map of the coast, with compass and dividers, while a ship sails past the windows.' },
-  { src: liberty, small: libertySmall, alt: 'Townspeople, farmers, soldiers and native neighbours cheer and throw their hats as a new blue and white flag is raised beside a ringing bell tower above a harbour full of ships.' },
-  { src: coverWinter, small: coverWinterSmall, alt: 'In a snowy forest clearing, colonists greet Wendat visitors on snowshoes who bring a toboggan of corn, fish and furs; log cabins and a palisade stand behind, chimney smoke rising into a pale winter sky.' },
-  { src: coverRiver, small: coverRiverSmall, alt: 'A birch-bark canoe with voyageurs, a mapmaker and an Anishinaabe guide pointing ahead glides down a wide river past a trading post on a bluff, under towering summer clouds.' },
-  { src: coverFeast, small: coverFeastSmall, alt: 'At a long harvest table under autumn trees, colonists of two nations and their Lenape hosts share turkey, corn and pumpkins while an elder and two governors raise their cups.' },
-  { src: coverHarbours, small: coverHarboursSmall, alt: 'Two merchant ships with blue and green pennants lie at a stone quay in a European port; two merchants shake hands over a crate of furs while porters load coffee, tobacco and casks.' },
-  { src: coverSilver, small: coverSilverSmall, alt: 'A mule train led by Quechua drivers and a Spanish officer winds down a mountain road in the Andes past green terraces, a llama in front, a white town and snowy peaks beyond.' },
-  { src: coverLostCity, small: coverLostCitySmall, alt: 'A Tupi guide holds back vines to show a European scout and a young cartographer the overgrown stone stairways of a ruined city in the rainforest, with parrots and a waterfall.' },
+/**
+ * Every front cover by id (docs/BOX_ART_PROMPTS.md, section 3, A–K: the Americas'). A scenario names its covers by
+ * these ids (`Scenario.art.covers`); the title screen shows one at random.
+ */
+const COVERS: { id: string; src: string; small: string; alt: string }[] = [
+  { id: 'landfall', src: landfall, small: landfallSmall, alt: 'Colonists come ashore from a longboat on a wild coast; a caravel lies at anchor, a scout on horseback points inland, and longhouses stand by a river under snow-capped mountains.' },
+  { id: 'trade', src: trade, small: tradeSmall, alt: 'By a river, a colonist in a blue coat and a native trader kneel on a mat and shake hands over cloth, an axe, furs, maize and tobacco; canoes, a ship and a village lie beyond.' },
+  { id: 'colony', src: colony, small: colonySmall, alt: 'A busy colony harbour: a ship unloads barrels and cotton onto the quay, colonists carry crates, and a town of red-roofed houses, a church and a hilltop fort rises behind.' },
+  { id: 'map', src: map, small: mapSmall, alt: 'In a ship\'s cabin lit by a lantern, a captain and a young sailor with a telescope study a hand-drawn map of the coast, with compass and dividers, while a ship sails past the windows.' },
+  { id: 'liberty', src: liberty, small: libertySmall, alt: 'Townspeople, farmers, soldiers and native neighbours cheer and throw their hats as a new blue and white flag is raised beside a ringing bell tower above a harbour full of ships.' },
+  { id: 'winter', src: coverWinter, small: coverWinterSmall, alt: 'In a snowy forest clearing, colonists greet Wendat visitors on snowshoes who bring a toboggan of corn, fish and furs; log cabins and a palisade stand behind, chimney smoke rising into a pale winter sky.' },
+  { id: 'river', src: coverRiver, small: coverRiverSmall, alt: 'A birch-bark canoe with voyageurs, a mapmaker and an Anishinaabe guide pointing ahead glides down a wide river past a trading post on a bluff, under towering summer clouds.' },
+  { id: 'feast', src: coverFeast, small: coverFeastSmall, alt: 'At a long harvest table under autumn trees, colonists of two nations and their Lenape hosts share turkey, corn and pumpkins while an elder and two governors raise their cups.' },
+  { id: 'harbours', src: coverHarbours, small: coverHarboursSmall, alt: 'Two merchant ships with blue and green pennants lie at a stone quay in a European port; two merchants shake hands over a crate of furs while porters load coffee, tobacco and casks.' },
+  { id: 'silver', src: coverSilver, small: coverSilverSmall, alt: 'A mule train led by Quechua drivers and a Spanish officer winds down a mountain road in the Andes past green terraces, a llama in front, a white town and snowy peaks beyond.' },
+  { id: 'lostcity', src: coverLostCity, small: coverLostCitySmall, alt: 'A Tupi guide holds back vines to show a European scout and a young cartographer the overgrown stone stairways of a ruined city in the rainforest, with parrots and a waterfall.' },
 ];
+
+/**
+ * The scenarios the title screen shows (Q14): the one of the autosaved game when there is one, else
+ * every scenario people can choose.
+ */
+function shownScenarios(saved: GameState | undefined): Scenario[] {
+  const last = saved && getScenario(saved.config.scenario ?? 'americas');
+  return last ? [last] : playableScenarios();
+}
+
+/** The covers of those scenarios (a scenario without covers of its own shows the Americas'). */
+export function coversFor(scenarios: Scenario[]): typeof COVERS {
+  const ids = new Set(scenarios.flatMap((sc) => (sc.art?.covers?.length ? sc.art.covers : AMERICAS.art?.covers ?? [])));
+  const covers = COVERS.filter((c) => ids.has(c.id));
+  return covers.length ? covers : COVERS;
+}
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -76,8 +95,12 @@ function titleLettering(): SVGSVGElement {
 export function landingScreen(host: HTMLElement, actions: LandingActions): HTMLElement {
   const loaded = loadAuto();
   const saved = loaded?.state;
-  let shown = Math.floor(Math.random() * COVERS.length);
-  const cover = COVERS[shown];
+  const scenarios = shownScenarios(saved);
+  const covers = coversFor(scenarios);
+  // The text of the one scenario shown; with several, the Americas' (the default terms) until there is a general text.
+  const text: Scenario = scenarios.length === 1 ? scenarios[0] : AMERICAS;
+  let shown = Math.floor(Math.random() * covers.length);
+  const cover = covers[shown];
   const img = h('img', {
     class: 'cover-image',
     src: cover.src,
@@ -89,8 +112,8 @@ export function landingScreen(host: HTMLElement, actions: LandingActions): HTMLE
   });
   /** Shows the next cover in turn (the first one is picked at random on load). */
   const nextCover = () => {
-    shown = (shown + 1) % COVERS.length;
-    const next = COVERS[shown];
+    shown = (shown + 1) % covers.length;
+    const next = covers[shown];
     img.setAttribute('srcset', `${next.small} 512w, ${next.src} 1024w`);
     img.setAttribute('src', next.src);
     img.setAttribute('alt', next.alt);
@@ -110,10 +133,9 @@ export function landingScreen(host: HTMLElement, actions: LandingActions): HTMLE
       },
     }, img, titleLettering()),
     h('section', { class: 'landing-panel' },
-      h('p', { class: 'eyebrow' }, 'A game of the New World, 1492–1850'),
-      h('h1', { class: 'landing-heading' }, 'Found colonies. Trade with Europe. Win your independence.'),
-      h('p', { class: 'landing-pitch' },
-        'Sail west, land your first colonists and build a nation: work the land, run the market, meet the native peoples, bring Founding Fathers into Congress, and decide when to break with the Crown. Play against up to seven nations, each led by a person or a computer.'),
+      h('p', { class: 'eyebrow' }, term(text, 'landing.eyebrow')),
+      h('h1', { class: 'landing-heading' }, term(text, 'landing.heading')),
+      h('p', { class: 'landing-pitch' }, term(text, 'landing.pitch')),
       h('div', { class: 'landing-actions' },
         saved ? h('button', { class: 'btn primary big', onclick: () => actions.resume(saved) }, `Continue (${formatDate(saved.turn, calendarOf(saved))})`) : null,
         loaded?.error ? h('p', { class: 'save-error', role: 'status' }, `Your autosaved game can't be continued: ${loaded.error}`) : null,
@@ -123,7 +145,7 @@ export function landingScreen(host: HTMLElement, actions: LandingActions): HTMLE
           h('button', { class: 'btn', onclick: actions.watch }, 'Watch the computers play'),
           h('button', { class: 'btn', onclick: actions.load }, 'Load from file'))),
       h('ul', { class: 'landing-features' },
-        h('li', null, 'Generated worlds, or hand-made maps of the Americas'),
+        h('li', null, term(text, 'landing.maps')),
         h('li', null, 'Four computer personalities, from Naive to Creative'),
         h('li', null, 'Head starts: jump in at 1600, 1700 or later'),
         h('li', null, 'Hot-seat play for friends on one device')),

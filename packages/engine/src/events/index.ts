@@ -9,11 +9,11 @@
 import { fail } from '../errors.js';
 import { noteHistory } from '../history.js';
 import { random } from '../rng.js';
-import { message, nationTitle, player, unitName } from '../queries.js';
-import { calendarOf, formatDate, yearOf } from '../scenarios/index.js';
+import { message, player, unitName } from '../queries.js';
+import { calendarOf, formatDate, nationOf, nationTitle, yearOf } from '../scenarios/index.js';
 import { buildingName } from '../rules/buildings.js';
 import { GOOD_DEFS } from '../rules/goods.js';
-import { NATIONS, TRIBES, type NationId } from '../rules/nations.js';
+import { TRIBES, type NationId } from '../rules/nations.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import { track, tracking } from '../telemetry.js';
 import type { GameState, Player } from '../types.js';
@@ -87,9 +87,9 @@ export function eventText(s: GameState, text: string, v: EventVars): string {
   return text.replace(/\{(\w+)\}/g, (all, key: string) => {
     switch (key) {
       case 'nation':
-        return NATIONS[v.nation].name;
+        return nationOf(s, v.nation).name;
       case 'Nation':
-        return nationTitle(v.nation);
+        return nationTitle(s, v.nation);
       case 'colony':
         return (v.colony && s.colonies[v.colony]?.name) || 'the colony';
       case 'tribe':

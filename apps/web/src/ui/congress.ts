@@ -1,4 +1,4 @@
-import { calendarOf, congressOverview, FATHERS, formatDate, NATIONS, type FatherId, type NationId } from '@cc/engine';
+import { calendarOf, congressOverview, FATHERS, formatDate, nationOf, scenarioOf, term, Term, type FatherId, type NationId } from '@cc/engine';
 import { CONGRESS_HALL_ASPECT, hallPaintOrder, hallSpotBox, layoutCongressHall } from '@cc/render-api';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -26,11 +26,11 @@ export class CongressScreen implements Screen {
 
   constructor(private app: App) {
     this.stage = h('div', { class: 'hall-stage' });
-    this.frame = h('div', { class: 'hall-frame', tabindex: 0, role: 'group', 'aria-label': 'Continental Congress hall' }, this.stage);
+    this.frame = h('div', { class: 'hall-frame', tabindex: 0, role: 'group', 'aria-label': `${Term(app.state, 'council')} hall` }, this.stage);
     this.head = h('div', null);
     this.caption = h('div', { class: 'hall-caption' });
     this.tip = h('div', { class: 'hall-tip', role: 'status', hidden: true });
-    this.el = h('section', { class: 'screen congress-screen', role: 'dialog', 'aria-label': 'Continental Congress' }, this.head, this.frame, this.caption);
+    this.el = h('section', { class: 'screen congress-screen', role: 'dialog', 'aria-label': `${Term(app.state, 'council')}` }, this.head, this.frame, this.caption);
     this.ro = new ResizeObserver(() => {
       const w = Math.max(HALL_MIN_WIDTH, Math.floor(this.frame.clientWidth));
       if (this.frame.clientWidth && w !== this.width) {
@@ -84,7 +84,7 @@ export class CongressScreen implements Screen {
     const canvas = h('canvas', { class: 'hall-bg', 'aria-hidden': 'true' });
     canvas.style.width = `${W}px`;
     canvas.style.height = `${H}px`;
-    drawHallBackdrop(canvas, W, H);
+    drawHallBackdrop(canvas, W, H, scenarioOf(app.state).art?.councilHall);
     this.stage.append(canvas);
 
     const seeking = c.fathers.length < 25;
@@ -114,7 +114,7 @@ export class CongressScreen implements Screen {
       } else {
         const cur = c.current ? FATHERS[c.current] : null;
         const pct = c.fatherCost > 0 ? Math.min(100, Math.round((c.fatherBells / c.fatherCost) * 100)) : 0;
-        const seat = h('div', { class: 'hall-seat', style: hit, title: cur ? `${cur.name} is expected: ${c.fatherBells} of ${c.fatherCost} bells` : 'Seat waiting for the next Founding Father' },
+        const seat = h('div', { class: 'hall-seat', style: hit, title: cur ? `${cur.name} is expected: ${c.fatherBells} of ${c.fatherCost} bells` : `Seat waiting for the next ${term(app.state, 'member')}` },
           h('span', { class: 'hall-seat-label' }, 'Seat waiting'),
           h('span', { class: 'hall-seat-bar' }, h('span', { style: `width:${pct}%` })),
           h('span', { class: 'hall-seat-bells' }, `${c.fatherBells}/${c.fatherCost}`));
@@ -134,22 +134,22 @@ export class CongressScreen implements Screen {
     clear(this.head);
     this.head.append(
       h('header', { class: 'screen-head' },
-        h('h2', null, 'Continental Congress'),
-        h('span', { class: 'muted' }, `${NATIONS[nation].name} · ${formatDate(app.state.turn, calendarOf(app.state))}`),
-        h('button', { class: 'btn close', onclick: () => app.closeScreen(), 'aria-label': 'Close the Congress hall' }, 'Close')));
+        h('h2', null, `${Term(app.state, 'council')}`),
+        h('span', { class: 'muted' }, `${nationOf(app.state, nation).name} · ${formatDate(app.state.turn, calendarOf(app.state))}`),
+        h('button', { class: 'btn close', onclick: () => app.closeScreen(), 'aria-label': `Close the ${term(app.state, 'councilShort')} hall` }, 'Close')));
     clear(this.caption);
     this.caption.append(
       h('div', { class: 'hall-stats' },
-        h('span', null, h('strong', null, `${c.fathers.length}/25`), ' Founding Fathers'),
+        h('span', null, h('strong', null, `${c.fathers.length}/25`), ` ${term(app.state, 'members')}`),
         h('span', null, h('strong', null, c.bells.toLocaleString()), ` bells (${c.bellsPerTurn} per turn)`),
         h('span', null, h('strong', null, `${c.rebels}%`), p.independence === 'none' ? ' rebels (50% to declare)' : ' rebels'),
         h('span', { class: 'hall-next' },
           cur
             ? [h('strong', null, 'Next: '), `${cur.name} (${cur.category}) · ${c.fatherBells}/${c.fatherCost} bells${c.turnsToFather ? `, about ${c.turnsToFather} turn${c.turnsToFather === 1 ? '' : 's'}` : ''}`]
             : seeking
-              ? [h('strong', null, 'Next: '), 'no Founding Father chosen ', mine ? h('button', { class: 'btn small', onclick: () => { app.closeScreen(); void app.chooseFather(); } }, 'Choose one') : null]
-              : [h('strong', null, 'The Congress is complete.')])),
-      h('p', { class: 'muted small' }, c.fathers.length ? 'Fathers stand in the order they joined, front row first. Hover or tap one to read about him. Press K or Escape to close the hall.' : 'No Founding Father has joined yet; the first takes the empty seat.'),
+              ? [h('strong', null, 'Next: '), `no ${term(app.state, 'member')} chosen `, mine ? h('button', { class: 'btn small', onclick: () => { app.closeScreen(); void app.chooseFather(); } }, 'Choose one') : null]
+              : [h('strong', null, `The ${term(app.state, 'councilShort')} is complete.`)])),
+      h('p', { class: 'muted small' }, c.fathers.length ? 'Fathers stand in the order they joined, front row first. Hover or tap one to read about him. Press K or Escape to close the hall.' : `No ${term(app.state, 'member')} has joined yet; the first takes the empty seat.`),
     );
   }
 

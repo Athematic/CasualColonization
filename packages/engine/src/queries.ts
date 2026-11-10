@@ -1,5 +1,4 @@
 import { BUILDINGS, WAREHOUSE_CAPACITY } from './rules/buildings.js';
-import { NATIONS } from './rules/nations.js';
 import type { GoodId } from './rules/goods.js';
 import type { NationId } from './rules/nations.js';
 import { FOREST_DEFENCE, TERRAIN, type TerrainDef } from './rules/terrain.js';
@@ -267,8 +266,3 @@ export function createUnit(s: GameState, owner: NationId, type: UnitTypeId, loc:
   return u;
 }
 
-/** A nation's name for the start of a sentence or a table cell ("The Netherlands"). */
-export function nationTitle(nation: NationId): string {
-  const name = NATIONS[nation].name;
-  return name[0].toUpperCase() + name.slice(1);
-}

@@ -4,10 +4,10 @@
  */
 import { fail } from './errors.js';
 import { message, player } from './queries.js';
-import { NATIONS, type NationId } from './rules/nations.js';
+import { type NationId } from './rules/nations.js';
 import { onPeace } from './relations.js';
 import type { GameState } from './types.js';
-import { goodsOf } from './scenarios/index.js';
+import { goodsOf, nationOf, term } from './scenarios/index.js';
 
 export type CheatId = 'gold' | 'doublePrices' | 'peace' | 'doubleYields' | 'reveal';
 
@@ -70,18 +70,18 @@ export function applyCheat(s: GameState, cheat: CheatId, nation: NationId, on?: 
   const def = CHEATS[cheat];
   if (!def) fail(`Unknown cheat ${cheat}.`);
   if (def.perNation) {
-    if (nation === 'crown') fail('Cheats cannot be used for the Crown.');
+    if (nation === 'crown') fail(`Cheats cannot be used for ${term(s, 'crown')}.`);
     if (!s.players.some((p) => p.id === nation)) fail(`${nation} is not taking part.`);
   }
   let text: string;
   switch (cheat) {
     case 'gold':
       player(s, nation).gold += CHEAT_GOLD;
-      text = `${NATIONS[nation].name} receives ${CHEAT_GOLD.toLocaleString('en')} gold.`;
+      text = `${nationOf(s, nation).name} receives ${CHEAT_GOLD.toLocaleString('en')} gold.`;
       break;
     case 'doublePrices':
       for (const g of goodsOf(s)) player(s, nation).market[g].price *= 2;
-      text = `Prices in the ${NATIONS[nation].adjective} home port have doubled.`;
+      text = `Prices in the ${nationOf(s, nation).adjective} home port have doubled.`;
       break;
     case 'peace': {
       const europeans = s.players.filter((x) => x.id !== 'crown');
@@ -111,7 +111,7 @@ export function applyCheat(s: GameState, cheat: CheatId, nation: NationId, on?: 
       if (enable) list.push(nation);
       if (list.length) mods.reveal = list;
       else delete mods.reveal;
-      text = enable ? `The whole map is revealed to ${NATIONS[nation].name}.` : `${NATIONS[nation].name} sees only what it has explored again.`;
+      text = enable ? `The whole map is revealed to ${nationOf(s, nation).name}.` : `${nationOf(s, nation).name} sees only what it has explored again.`;
       break;
     }
     default:

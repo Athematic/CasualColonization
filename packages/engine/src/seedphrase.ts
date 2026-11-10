@@ -8,6 +8,7 @@
 import { AI_LEVELS, type AiLevel } from './ai/profiles.js';
 import { DIFFICULTY_LEVELS, type DifficultyId } from './rules/difficulty.js';
 import { NATION_ORDER, type NationId } from './rules/nations.js';
+import { DEFAULT_SCENARIO, getScenario } from './scenarios/index.js';
 import type { GameConfig, MapSize } from './types.js';
 
 /** Version written into game codes. Bump when a change makes the same code produce another game. */
@@ -81,6 +82,8 @@ export interface GameCodeSettings {
   headStartTurn?: number;
   /** 'real' when the game was set up with the scenario's real rivals; absent for alternative history. */
   rivals?: 'real';
+  /** The scenario's id; absent for the Americas (DEFAULT_SCENARIO), so their codes are as before. */
+  scenario?: string;
 }
 
 const PREFIX = 'CC1';
@@ -104,6 +107,7 @@ export function settingsFromConfig(config: GameConfig): GameCodeSettings {
     colonyCharter: !!config.colonyCharter,
     ...(config.headStart ? { headStartTurn: config.headStart.turn } : {}),
     ...(config.rivals === 'real' ? { rivals: 'real' as const } : {}),
+    ...(config.scenario && config.scenario !== DEFAULT_SCENARIO ? { scenario: config.scenario } : {}),
   };
 }
 
@@ -122,7 +126,8 @@ function fromBase64Url(text: string): Uint8Array {
  * A compact, URL-safe code: `CC1~<game version>~<payload>`. The payload is base64url of a short
  * JSON array: [seed, phrase|0, map|0, size index, [[nation index, "h" or AI level]...],
  * difficulty index, flags (1 historical, 2 random, 4 charter), head start turn|0], followed by
- * "real" only for a game with real rivals (so other codes are as before).
+ * "real" only for a game with real rivals, and then the scenario's id only for a game outside the
+ * Americas (with 0 in the rivals' place for alternative history), so Americas codes are as before.
  */
 export function encodeGameCode(settings: GameCodeSettings): string {
   const payload = [
@@ -134,7 +139,7 @@ export function encodeGameCode(settings: GameCodeSettings): string {
     DIFFICULTY_LEVELS.indexOf(settings.difficulty),
     (settings.historicalEvents ? 1 : 0) | (settings.randomEvents ? 2 : 0) | (settings.colonyCharter ? 4 : 0),
     settings.headStartTurn ?? 0,
-    ...(settings.rivals === 'real' ? ['real'] : []),
+    ...(settings.scenario && settings.scenario !== DEFAULT_SCENARIO ? [settings.rivals === 'real' ? 'real' : 0, settings.scenario] : settings.rivals === 'real' ? ['real'] : []),
   ];
   return `${PREFIX}${SEP}${GAME_VERSION}${SEP}${toBase64Url(new TextEncoder().encode(JSON.stringify(payload)))}`;
 }
@@ -153,10 +158,12 @@ export function decodeGameCode(code: string): DecodedGameCode {
   if (parts.length !== 3 || parts[0] !== PREFIX) return bad;
   try {
     const p = JSON.parse(new TextDecoder().decode(fromBase64Url(parts[2]))) as unknown[];
-    const [seed, phrase, map, size, nations, diff, flags, head, rivals] = p;
+    const [seed, phrase, map, size, nations, diff, flags, head, rivals, scenario] = p;
     const mapSize = SIZES[size as number];
     const difficulty = DIFFICULTY_LEVELS[diff as number];
     if (typeof seed !== 'number' || !Number.isFinite(seed) || !mapSize || !difficulty || !Array.isArray(nations) || nations.length < 1 || nations.length > 8 || typeof flags !== 'number') return bad;
+    if (scenario !== undefined && typeof scenario !== 'string') return bad;
+    if (typeof scenario === 'string' && !getScenario(scenario)) return { ok: false, error: `This code is for the scenario "${scenario}", which this version of the game does not have.` };
     const list: GameCodeSettings['nations'] = [];
     for (const n of nations as [number, string][]) {
       const nation = NATION_ORDER[n[0]];
@@ -176,6 +183,7 @@ export function decodeGameCode(code: string): DecodedGameCode {
       colonyCharter: !!(flags & 4),
       ...(typeof head === 'number' && head > 0 ? { headStartTurn: head } : {}),
       ...(rivals === 'real' ? { rivals: 'real' as const } : {}),
+      ...(typeof scenario === 'string' && scenario !== DEFAULT_SCENARIO ? { scenario } : {}),
     };
     const version = parts[1];
     return {

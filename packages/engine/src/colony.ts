@@ -24,7 +24,7 @@ import {
 } from './queries.js';
 import { BUILDINGS, SCHOOL_TEACHERS, TEACH_TURNS, type BuildingKind } from './rules/buildings.js';
 import { GOOD_DEFS, emptyGoods, type GoodId } from './rules/goods.js';
-import { NATIONS, TRIBES, type NationId } from './rules/nations.js';
+import { TRIBES, type NationId } from './rules/nations.js';
 import { COLONY_BUILDS, PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId } from './rules/units.js';
 import { runCustomHouse } from './europe.js';
 import { modifiers } from './scenarios/modifiers.js';
@@ -32,7 +32,7 @@ import { noteMining } from './mines.js';
 import { noteProduction } from './stats.js';
 import { nativeLandOwner, onColonyFounded } from './natives.js';
 import type { BuildTarget, Colony, GameState, Job, Unit } from './types.js';
-import { buildingsOf, difficultyOf, goodsOf, mechanicsOf, unitsOf } from './scenarios/index.js';
+import { buildingsOf, difficultyOf, goodsOf, mechanicsOf, nationOf, unitsOf } from './scenarios/index.js';
 
 export function canFoundColony(s: GameState, u: Unit): string | null {
   if (UNIT_TYPES[u.type].kind !== 'colonist') return 'Only colonists can found colonies.';
@@ -90,13 +90,13 @@ export function stripRole(colony: Colony, u: Unit): void {
 
 export function nextColonyName(s: GameState, nation: Colony['owner']): string {
   const p = player(s, nation);
-  const names = NATIONS[nation].colonyNames;
+  const names = nationOf(s, nation).colonyNames;
   const used = new Set(Object.values(s.colonies).map((c) => c.name));
   for (let i = 0; i < names.length; i++) {
     const n = names[(p.coloniesFounded + i) % names.length];
     if (!used.has(n)) return n;
   }
-  return `${NATIONS[nation].adjective} Colony ${p.coloniesFounded + 1}`;
+  return `${nationOf(s, nation).adjective} Colony ${p.coloniesFounded + 1}`;
 }
 
 export function foundColony(s: GameState, unitId: string, name?: string): Colony {

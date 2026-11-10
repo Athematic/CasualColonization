@@ -1,16 +1,18 @@
 import {
-  mechanicsOf,
+  calendarOf,
   coloniesOverview,
   congressOverview,
   FATHERS,
-  calendarOf,
   formatDate,
   GOOD_DEFS,
+  goodsOf,
   historyFor,
   landForces,
+  mechanicsOf,
   militaryStrength,
-  NATIONS,
+  nationOf,
   nationTitle,
+  withTerms,
   nativesOverview,
   navalOverview,
   player,
@@ -20,6 +22,8 @@ import {
   PRODUCT_NAMES,
   religionOverview,
   royalForces,
+  term,
+  Term,
   tradeOverview,
   TRIBES,
   UNIT_TYPES,
@@ -27,12 +31,12 @@ import {
   yearOf,
   type ColonyOverview,
   type ForceKind,
+  type GameState,
   type GoodId,
   type HistoryEntry,
   type HistoryKind,
   type NationId,
   type ProductId,
-  goodsOf,
 } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h, type Child } from '../dom.js';
@@ -86,8 +90,8 @@ function turns(n: number | null, never = '—'): string {
   return n === null ? never : `${n} turn${n === 1 ? '' : 's'}`;
 }
 
-function flag(n: NationId): HTMLElement {
-  return h('span', { class: 'flag', style: `background:${NATIONS[n].color}` });
+function flag(s: GameState, n: NationId): HTMLElement {
+  return h('span', { class: 'flag', style: `background:${nationOf(s, n).color}` });
 }
 
 function stat(label: string, value: Child, note?: Child): HTMLElement {
@@ -232,17 +236,17 @@ function tradeTab(ctx: ReportContext): Child[] {
   const boycotts = rows.filter((r) => r.boycotted).map((r) => r.good);
   type Row = (typeof rows)[number];
   const cols: Column<Row>[] = [
-    { key: 'good', label: 'Good', sort: (r) => GOOD_DEFS[r.good].name, cell: (r) => h('span', { class: 'report-good' }, goodIcon(r.good), GOOD_DEFS[r.good].name, r.boycotted ? h('span', { class: 'pill bad', title: 'Boycotted: pay the arrears in Europe to trade it again' }, 'boycott') : null) },
-    { key: 'home', label: portName(nation), title: `Sell / buy price in ${portName(nation)}`, num: true, sort: (r) => r.prices[0].sell, cell: (r) => `${r.prices[0].sell} / ${r.prices[0].buy}` },
+    { key: 'good', label: 'Good', sort: (r) => GOOD_DEFS[r.good].name, cell: (r) => h('span', { class: 'report-good' }, goodIcon(r.good), GOOD_DEFS[r.good].name, r.boycotted ? h('span', { class: 'pill bad', title: `Boycotted: pay the arrears in ${term(app.state, 'homeland')} to trade it again` }, 'boycott') : null) },
+    { key: 'home', label: portName(app.state, nation), title: `Sell / buy price in ${portName(app.state, nation)}`, num: true, sort: (r) => r.prices[0].sell, cell: (r) => `${r.prices[0].sell} / ${r.prices[0].buy}` },
     ...partners.map((port, i): Column<Row> => ({
-      key: `p${port}`, label: portName(port), title: `Sell / buy price in ${portName(port)} (${NATIONS[port].adjective}, Favoured Nation, tax ${rows[0].prices[i + 1].tax}%)`, num: true,
+      key: `p${port}`, label: portName(app.state, port), title: `Sell / buy price in ${portName(app.state, port)} (${nationOf(app.state, port).adjective}, Favoured Nation, tax ${rows[0].prices[i + 1].tax}%)`, num: true,
       sort: (r) => r.prices[i + 1].sell,
       cell: (r) => h('span', { class: r.prices[i + 1].sell > r.prices[0].sell ? 'good-text' : undefined }, `${r.prices[i + 1].sell} / ${r.prices[i + 1].buy}`),
     })),
     { key: 'stored', label: 'In stock', title: 'Units in all your warehouses', num: true, sort: (r) => r.stored, cell: (r) => (r.stored ? String(r.stored) : '') },
-    { key: 'now', label: 'This turn', title: 'Units sold in Europe this turn', num: true, sort: (r) => r.sold.now, cell: (r) => (r.sold.now ? String(r.sold.now) : '') },
-    { key: 'last', label: 'Last turn', title: 'Units sold in Europe last turn (custom houses sell at the end of a turn)', num: true, sort: (r) => r.sold.last, cell: (r) => (r.sold.last ? String(r.sold.last) : '') },
-    { key: 'total', label: 'This game', title: 'Units sold in Europe since records began, custom house sales included', num: true, sort: (r) => r.sold.total, cell: (r) => (r.sold.total ? String(r.sold.total) : '') },
+    { key: 'now', label: 'This turn', title: `Units sold in ${term(app.state, 'homeland')} this turn`, num: true, sort: (r) => r.sold.now, cell: (r) => (r.sold.now ? String(r.sold.now) : '') },
+    { key: 'last', label: 'Last turn', title: `Units sold in ${term(app.state, 'homeland')} last turn (custom houses sell at the end of a turn)`, num: true, sort: (r) => r.sold.last, cell: (r) => (r.sold.last ? String(r.sold.last) : '') },
+    { key: 'total', label: 'This game', title: `Units sold in ${term(app.state, 'homeland')} since records began, custom house sales included`, num: true, sort: (r) => r.sold.total, cell: (r) => (r.sold.total ? String(r.sold.total) : '') },
     { key: 'custom', label: 'Custom house', title: 'Units the custom houses sold this game, and how many colonies export the good', num: true, sort: (r) => r.custom,
       cell: (r) => (r.custom || r.exportedBy ? h('span', null, r.custom ? String(r.custom) : '', r.exportedBy ? h('span', { class: 'muted small' }, ` (${r.exportedBy} export${r.exportedBy > 1 ? '' : 's'})`) : null) : '') },
     { key: 'route', label: 'By routes', title: 'Units trade routes unloaded in your colonies this game', num: true, sort: (r) => r.delivered, cell: (r) => (r.delivered ? String(r.delivered) : '') },
@@ -250,10 +254,10 @@ function tradeTab(ctx: ReportContext): Child[] {
   ];
   return [
     h('div', { class: 'report-stats' },
-      stat('Tax rate', `${p.tax}%`, closed ? 'Europe is closed to rebels' : `in ${portName(nation)}`),
+      stat('Tax rate', `${p.tax}%`, closed ? `${Term(app.state, 'homeland')} is closed to rebels` : `in ${portName(app.state, nation)}`),
       stat('Gold', p.gold.toLocaleString()),
       stat('Boycotts', boycotts.length, boycotts.length ? boycotts.map((g) => GOOD_DEFS[g].name).join(', ') : 'none'),
-      stat('Favoured ports', partners.length, partners.length ? partners.map((n) => portName(n)).join(', ') : 'none')),
+      stat('Favoured ports', partners.length, partners.length ? partners.map((n) => portName(app.state, n)).join(', ') : 'none')),
     card(null,
       sortableTable('trade', cols, rows, ctx.rerender, (r) => (r.boycotted ? 'boycott' : undefined)),
       h('p', { class: 'muted small' }, `Prices are sell / buy per unit before tax. ${partners.length ? 'Favoured Nation ports are shown at their own prices; green means they pay more than home. ' : ''}Sales are counted from the moment this report was added; games saved before start counting when loaded.`),
@@ -298,7 +302,7 @@ function militaryTab(ctx: ReportContext): Child[] {
               if (f.unit.loc.kind === 'map' && f.unit.owner === app.viewer) app.select(f.unit.id);
               else app.centerOn(f.at.x, f.at.y);
             },
-          }, icon({ kind: 'unit', type: f.unit.type, role: f.unit.role, nation: f.unit.owner }, 26), f.unit.state === 'fortified' ? '▪' : '')))))))))
+          }, icon({ kind: 'unit', type: f.unit.type, role: f.unit.role, color: nationOf(app.state, f.unit.owner).color }, 26), f.unit.state === 'fortified' ? '▪' : '')))))))))
     : empty('No land units outside your colonies.');
 
   // Units by type and role.
@@ -311,7 +315,7 @@ function militaryTab(ctx: ReportContext): Child[] {
   const byType = scroll(h('table', { class: 'table report-table' },
     h('thead', null, h('tr', null, h('th', null, 'Unit'), h('th', null, 'Role'), h('th', { class: 'num' }, 'Count'))),
     h('tbody', null, [...types.values()].sort((a, b) => b.n - a.n).map((t) => h('tr', null,
-      h('td', null, h('span', { class: 'report-good' }, icon({ kind: 'unit', type: t.sample.unit.type, role: t.sample.unit.role, nation }, 24), t.name)),
+      h('td', null, h('span', { class: 'report-good' }, icon({ kind: 'unit', type: t.sample.unit.type, role: t.sample.unit.role, color: nationOf(app.state, nation).color }, 24), t.name)),
       h('td', { class: 'muted' }, FORCE_NAMES[t.kind]),
       h('td', { class: 'num' }, String(t.n)))))));
 
@@ -343,7 +347,7 @@ function militaryTab(ctx: ReportContext): Child[] {
     ? card('Mercenaries and allies',
       h('p', null, support.mercenaries.length ? `Mercenaries in your service: ${kinds(support.mercenaries)}.` : 'No mercenaries in your service.'),
       iv?.came
-        ? h('p', null, `${powerName(iv.came.by)} intervened in ${formatDate(iv.came.turn, calendarOf(s))} with ${iv.came.land} land units and men-of-war.${support.allies.length ? ` Still fighting: ${kinds(support.allies)}. They fight the Crown on their own and go home when the war ends.` : ' None of them is still fighting.'}`)
+        ? h('p', null, `${powerName(s, iv.came.by)} intervened in ${formatDate(iv.came.turn, calendarOf(s))} with ${iv.came.land} land units and men-of-war.${support.allies.length ? ` Still fighting: ${kinds(support.allies)}. They fight ${term(s, 'crown')} on their own and go home when the war ends.` : ' None of them is still fighting.'}`)
         : iv ? h('p', null, `Foreign intervention: a European power will send a force once the war has lasted ${iv.minTurns} turns (now ${iv.turns}), your colonies have rung ${iv.needBells.toLocaleString()} liberty bells since the declaration (now ${iv.bells.toLocaleString()}) and you still hold ${iv.needHeld} colonies (now ${iv.held}).`)
         : null)
     : null;
@@ -354,12 +358,12 @@ function militaryTab(ctx: ReportContext): Child[] {
       stat('Dragoons', count('dragoon')),
       stat('Artillery', count('artillery')),
       stat('Other units', forces.length - count('soldier') - count('dragoon') - count('artillery'))),
-    ref ? card('Royal Expeditionary Force',
+    ref ? card(`${Term(app.state, 'ref')}`,
       h('p', null, p.independence === 'declared'
-        ? `Still to land: ${ref.regulars} regulars, ${ref.dragoons} dragoons, ${ref.artillery} artillery and ${ref.menOfWar} men-of-war. ${ref.landed} royal units are already in the New World.`
-        : p.independence === 'won' ? 'The Crown’s forces have been defeated.'
-        : `The Crown keeps ${ref.regulars} regulars, ${ref.dragoons} dragoons, ${ref.artillery} artillery and ${ref.menOfWar} men-of-war ready to sail against a rebellion${refTotal ? '' : ' (none yet)'}. The King adds to it during the game, faster as your colonies ring more liberty bells.`),
-      h('p', { class: 'muted small' }, 'Your own strength above counts soldiers at 2, dragoons at 3 and artillery at 5, as the Crown’s regulars would.')) : null,
+        ? `Still to land: ${ref.regulars} regulars, ${ref.dragoons} dragoons, ${ref.artillery} artillery and ${ref.menOfWar} men-of-war. ${ref.landed} royal units are already in ${term(app.state, 'colonyLand')}.`
+        : p.independence === 'won' ? `${Term(app.state, 'crown')}’s forces have been defeated.`
+        : `${Term(app.state, 'crown')} keeps ${ref.regulars} regulars, ${ref.dragoons} dragoons, ${ref.artillery} artillery and ${ref.menOfWar} men-of-war ready to sail against a rebellion${refTotal ? '' : ' (none yet)'}. ${Term(app.state, 'king')} adds to it during the game, faster as your colonies ring more liberty bells.`),
+      h('p', { class: 'muted small' }, `Your own strength above counts soldiers at 2, dragoons at 3 and artillery at 5, as ${term(app.state, 'crown')}’s regulars would.`)) : null,
     supportCard,
     card('By place', byPlace),
     h('div', { class: 'report-columns' }, card('By type', forces.length ? byType : empty('None.')), card('Fortifications', colonies.length ? forts : empty('No colonies.'))),
@@ -376,13 +380,13 @@ function navalTab(ctx: ReportContext): Child[] {
   const holds = ships.reduce((n, sh) => n + sh.holds, 0);
   const used = ships.reduce((n, sh) => n + sh.used, 0);
   const cols: Column<Row>[] = [
-    { key: 'ship', label: 'Ship', sort: (r) => r.name, cell: (r) => h('span', { class: 'report-good' }, icon({ kind: 'unit', type: r.unit.type, role: r.unit.role, nation }, 28), r.name) },
+    { key: 'ship', label: 'Ship', sort: (r) => r.name, cell: (r) => h('span', { class: 'report-good' }, icon({ kind: 'unit', type: r.unit.type, role: r.unit.role, color: nationOf(app.state, nation).color }, 28), r.name) },
     { key: 'where', label: 'Where', sort: (r) => r.where, cell: (r) => where(app, r.where === 'In the field' ? (r.at ? `At sea ${r.at.x},${r.at.y}` : 'At sea') : r.where, r.at) },
     { key: 'holds', label: 'Holds', title: 'Holds in use / holds', num: true, sort: (r) => r.used, cell: (r) => `${r.used}/${r.holds}` },
     { key: 'cargo', label: 'Cargo', cell: (r) => (r.cargo.length || r.passengers.length
       ? h('div', { class: 'report-chips' },
           r.cargo.map((c) => goodChip(c.good, String(c.amount))),
-          r.passengers.map((u) => h('span', { class: 'report-chip unit', title: u.type === 'treasure' ? `Treasure (${u.treasure ?? 0} gold)` : UNIT_TYPES[u.type].name }, icon({ kind: 'unit', type: u.type, role: u.role, nation: u.owner }, 24))))
+          r.passengers.map((u) => h('span', { class: 'report-chip unit', title: u.type === 'treasure' ? `Treasure (${u.treasure ?? 0} gold)` : UNIT_TYPES[u.type].name }, icon({ kind: 'unit', type: u.type, role: u.role, color: nationOf(app.state, u.owner).color }, 24))))
       : h('span', { class: 'muted' }, 'Empty')) },
     { key: 'orders', label: 'Orders', sort: (r) => r.orders, cell: (r) => h('span', { class: r.repair ? 'bad-text' : undefined }, r.orders) },
     { key: 'str', label: 'Attack', title: 'Attack strength (warships)', num: true, sort: (r) => UNIT_TYPES[r.unit.type].offence, cell: (r) => (UNIT_TYPES[r.unit.type].offence ? String(UNIT_TYPES[r.unit.type].offence) : '') },
@@ -395,7 +399,7 @@ function navalTab(ctx: ReportContext): Child[] {
       stat('On routes', ships.filter((sh) => sh.unit.route).length),
       stat('Under repair', repairing)),
     card(null, sortableTable('naval', cols, ships, ctx.rerender, (r) => (r.repair ? 'alert' : undefined)),
-      h('p', { class: 'muted small' }, 'Damaged ships are repaired at a drydock or in Europe; their cargo was lost in the fight.')),
+      h('p', { class: 'muted small' }, `Damaged ships are repaired at a drydock or in ${term(app.state, 'homeland')}; their cargo was lost in the fight.`)),
   ];
 }
 
@@ -414,8 +418,8 @@ function religionTab(ctx: ReportContext): Child[] {
       stat('Native converts', r.converts)),
     card('Immigration',
       bar(r.crosses, r.crossesRequired, 'Crosses towards the next immigrant'),
-      h('p', { class: 'small' }, `${r.crosses} of ${r.crossesRequired} crosses. `, r.closed ? 'Europe sends no one to rebels.' : r.turnsToImmigrant ? `At this rate the next immigrant reaches the docks in about ${turns(r.turnsToImmigrant)}.` : 'Build a church and put a preacher to work to draw immigrants.'),
-      p.recruitPool.length && !r.closed ? h('div', null, h('span', { class: 'muted small' }, 'Waiting to emigrate: '), h('div', { class: 'report-chips' }, p.recruitPool.map((t) => h('span', { class: 'report-chip unit', title: UNIT_TYPES[t].name }, icon({ kind: 'unit', type: t, role: 'none', nation }, 24), UNIT_TYPES[t].name)))) : null),
+      h('p', { class: 'small' }, `${r.crosses} of ${r.crossesRequired} crosses. `, r.closed ? `${Term(app.state, 'homeland')} sends no one to rebels.` : r.turnsToImmigrant ? `At this rate the next immigrant reaches the docks in about ${turns(r.turnsToImmigrant)}.` : 'Build a church and put a preacher to work to draw immigrants.'),
+      p.recruitPool.length && !r.closed ? h('div', null, h('span', { class: 'muted small' }, 'Waiting to emigrate: '), h('div', { class: 'report-chips' }, p.recruitPool.map((t) => h('span', { class: 'report-chip unit', title: UNIT_TYPES[t].name }, icon({ kind: 'unit', type: t, role: 'none', color: nationOf(app.state, nation).color }, 24), UNIT_TYPES[t].name)))) : null),
     h('div', { class: 'report-columns' },
       card('Crosses by colony', r.colonies.length
         ? scroll(h('table', { class: 'table report-table' },
@@ -429,7 +433,7 @@ function religionTab(ctx: ReportContext): Child[] {
             h('tbody', null, r.missions.map((m) => h('tr', null,
               h('td', null, h('span', { class: 'flag', style: `background:${TRIBES[m.tribe].color}` }), ' ', TRIBES[m.tribe].name),
               h('td', { class: 'num' }, String(m.own)),
-              h('td', null, (Object.entries(m.rival) as [NationId, number][]).map(([n, k]) => h('span', { class: 'report-chip' }, flag(n), `${NATIONS[n].adjective} ${k}`))))))))
+              h('td', null, (Object.entries(m.rival) as [NationId, number][]).map(([n, k]) => h('span', { class: 'report-chip' }, flag(app.state, n), `${nationOf(app.state, n).adjective} ${k}`))))))))
         : empty('No missions among the settlements you know.'),
         h('p', { class: 'muted small' }, 'Missions calm their settlement and now and then send a convert to your nearest colony. Only settlements you have found are counted.'))),
   ];
@@ -456,7 +460,7 @@ function nativesTab(ctx: ReportContext): Child[] {
         { key: 'skill', label: 'Teaches', sort: (r) => (r.skill === undefined ? 'zz' : r.skill === null ? 'zy' : UNIT_TYPES[r.skill].name),
           cell: (r) => (r.skill === undefined ? h('span', { class: 'muted' }, '?') : r.skill === null ? h('span', { class: 'muted' }, 'Taught') : UNIT_TYPES[r.skill].name) },
         { key: 'wants', label: 'Wants', cell: (r) => (r.wants ? h('div', { class: 'report-chips' }, r.wants.map((g) => goodChip(g, GOOD_DEFS[g].name))) : h('span', { class: 'muted' }, '?')) },
-        { key: 'mission', label: 'Mission', sort: (r) => (r.mission ? NATIONS[r.mission].adjective : ''), cell: (r) => (r.mission ? h('span', null, flag(r.mission), ' ', r.mission === nation ? 'Yours' : NATIONS[r.mission].adjective) : '') },
+        { key: 'mission', label: 'Mission', sort: (r) => (r.mission ? nationOf(app.state, r.mission).adjective : ''), cell: (r) => (r.mission ? h('span', null, flag(app.state, r.mission), ' ', r.mission === nation ? 'Yours' : nationOf(app.state, r.mission).adjective) : '') },
         { key: 'visited', label: 'Scout', title: 'Has your scout spoken with the chief?', sort: (r) => (r.visited ? 1 : 0), cell: (r) => (r.visited ? '✓' : h('span', { class: 'muted' }, 'no')) },
         { key: 'land', label: 'Land claimed', title: 'Tiles around the settlement claimed by you / by others / still native', sort: (r) => r.land.own + r.land.others,
           cell: (r) => h('span', null, `${r.land.own} / ${r.land.others}`, h('span', { class: 'muted small' }, ` of ${r.land.own + r.land.others + r.land.native}`)) },
@@ -486,16 +490,16 @@ function congressTab(ctx: ReportContext): Child[] {
     h('div', { class: 'report-stats' },
       stat('Bells per turn', c.bellsPerTurn),
       stat('Bells rung', c.bells.toLocaleString()),
-      stat('Rebels', `${c.rebels}%`, p.independence === 'none' ? (c.rebels >= 50 ? 'enough to declare independence' : '50% needed to declare') : p.independence === 'declared' ? 'at war with the Crown' : p.independence),
-      stat('Founding Fathers', `${c.fathers.length}/25`)),
-    h('p', null, h('button', { class: 'btn', onclick: () => app.openCongress() }, 'Open the Congress hall')),
-    card('Next Founding Father',
+      stat('Rebels', `${c.rebels}%`, p.independence === 'none' ? (c.rebels >= 50 ? 'enough to declare independence' : '50% needed to declare') : p.independence === 'declared' ? `at war with ${term(app.state, 'crown')}` : p.independence),
+      stat(`${Term(app.state, 'members')}`, `${c.fathers.length}/25`)),
+    h('p', null, h('button', { class: 'btn', onclick: () => app.openCongress() }, `Open the ${term(app.state, 'councilShort')} hall`)),
+    card(`Next ${term(app.state, 'member')}`,
       cur
         ? h('div', null,
             h('div', { class: 'congress-sought' },
               icon({ kind: 'father', id: c.current!, category: cur.category }, 96, cur.name),
               h('p', null, h('strong', null, cur.name), h('span', { class: 'muted small' }, ` (${cur.category})`), ` — ${cur.effect}`)),
-            bar(c.fatherBells, c.fatherCost, 'Bells towards the next Founding Father'),
+            bar(c.fatherBells, c.fatherCost, `Bells towards the next ${term(app.state, 'member')}`),
             h('p', { class: 'small' }, `${c.fatherBells} of ${c.fatherCost} bells · ${c.turnsToFather ? `joins in about ${turns(c.turnsToFather)}` : 'no bells are being rung'}`))
         : h('p', null, `No candidate chosen (${c.fatherBells} bells collected). `, mine ? h('button', { class: 'btn small', onclick: () => { app.closeScreen(); void app.chooseFather(); } }, 'Choose one') : null)),
     card('Sons of Liberty by colony', c.colonies.length
@@ -503,17 +507,17 @@ function congressTab(ctx: ReportContext): Child[] {
           { key: 'name', label: 'Colony', sort: (r) => r.colony.name, cell: (r) => h('button', { class: 'link', onclick: () => app.openColony(r.colony.id) }, r.colony.name) },
           { key: 'pop', label: 'Pop', num: true, sort: (r) => r.population, cell: (r) => String(r.population) },
           { key: 'sol', label: 'Rebels', num: true, sort: (r) => r.sol, cell: (r) => h('span', null, `${r.sol}%`, h('span', { class: 'report-mini-bar' }, h('span', { style: `width:${r.sol}%` }))) },
-          { key: 'tory', label: 'Tories', num: true, sort: (r) => r.population - Math.round((r.population * r.sol) / 100), cell: (r) => String(r.population - Math.round((r.population * r.sol) / 100)) },
-          { key: 'bonus', label: 'Bonus', title: 'Production per worker: +1 at 50% rebels, +2 at 100%; too many Tories cost 1 or 2', num: true, sort: (r) => r.bonus,
+          { key: 'tory', label: `${Term(app.state, 'loyalists')}`, num: true, sort: (r) => r.population - Math.round((r.population * r.sol) / 100), cell: (r) => String(r.population - Math.round((r.population * r.sol) / 100)) },
+          { key: 'bonus', label: 'Bonus', title: `Production per worker: +1 at 50% rebels, +2 at 100%; too many ${term(app.state, 'loyalists')} cost 1 or 2`, num: true, sort: (r) => r.bonus,
             cell: (r) => h('span', { class: r.bonus > 0 ? 'good-text' : r.bonus < 0 ? 'bad-text' : 'muted' }, r.bonus ? signed(r.bonus) : '0') },
           { key: 'bells', label: 'Bells', num: true, sort: (r) => r.bells, cell: (r) => String(r.bells) },
         ], c.colonies, ctx.rerender)
       : empty('No colonies.')),
-    card('Members of the Congress', c.fathers.length
+    card(`Members of the ${term(app.state, 'councilShort')}`, c.fathers.length
       ? h('ul', { class: 'report-fathers' }, c.fathers.map((id) => h('li', null,
           icon({ kind: 'father', id, category: FATHERS[id].category }, 48, FATHERS[id].name),
           h('div', null, h('strong', null, FATHERS[id].name), h('span', { class: 'muted small' }, ` ${FATHERS[id].category}`), h('div', { class: 'small' }, FATHERS[id].effect)))))
-      : empty('No Founding Fathers have joined yet.')),
+      : empty(`No ${term(app.state, 'members')} have joined yet.`)),
   ];
 }
 
@@ -522,10 +526,10 @@ function congressTab(ctx: ReportContext): Child[] {
 const HISTORY_FILTERS: { id: string; name: string; kinds: HistoryKind[] }[] = [
   { id: 'all', name: 'Everything', kinds: [] },
   { id: 'colonies', name: 'Colonies', kinds: ['colony', 'captured'] },
-  { id: 'congress', name: 'Congress', kinds: ['father', 'independence'] },
+  { id: 'congress', name: '{councilShort}', kinds: ['father', 'independence'] },
   { id: 'diplomacy', name: 'Diplomacy', kinds: ['war', 'peace', 'trade', 'favoured', 'cancel', 'tribe'] },
   { id: 'treasure', name: 'Treasure and conquest', kinds: ['treasure', 'burned'] },
-  { id: 'crown', name: 'The Crown', kinds: ['crown'] },
+  { id: 'crown', name: '{Crown}', kinds: ['crown'] },
   { id: 'events', name: 'Events', kinds: ['event'] },
 ];
 
@@ -553,8 +557,8 @@ function historyTab(ctx: ReportContext): Child[] {
     years.at(-1)!.entries.push(e);
   }
   const controls = h('div', { class: 'report-filters', role: 'group', 'aria-label': 'Filter the history' },
-    HISTORY_FILTERS.map((f) => h('button', { class: `chip${f.id === filter.id ? ' on' : ''}`, 'aria-pressed': String(f.id === filter.id), onclick: () => { historyFilter = f.id; ctx.rerender(); } }, f.name)),
-    all ? null : h('label', { class: 'small report-check' }, h('input', { type: 'checkbox', checked: historyMine || undefined, onchange: (e: Event) => { historyMine = (e.target as HTMLInputElement).checked; ctx.rerender(); } }), ` Only ${NATIONS[nation].name}`),
+    HISTORY_FILTERS.map((f) => h('button', { class: `chip${f.id === filter.id ? ' on' : ''}`, 'aria-pressed': String(f.id === filter.id), onclick: () => { historyFilter = f.id; ctx.rerender(); } }, withTerms(s, f.name))),
+    all ? null : h('label', { class: 'small report-check' }, h('input', { type: 'checkbox', checked: historyMine || undefined, onchange: (e: Event) => { historyMine = (e.target as HTMLInputElement).checked; ctx.rerender(); } }), ` Only ${nationOf(app.state, nation).name}`),
     h('button', { class: 'btn tiny', onclick: () => { historyNewest = !historyNewest; ctx.rerender(); } }, historyNewest ? 'Newest first' : 'Oldest first'));
   const started = s.history?.[0]?.turn;
   return [
@@ -565,10 +569,10 @@ function historyTab(ctx: ReportContext): Child[] {
             h('ul', null, y.entries.map((e) => h('li', { class: `history-${e.kind}` },
               h('span', { class: 'history-mark', 'aria-hidden': 'true' }, HISTORY_MARKS[e.kind]),
               h('span', { class: 'muted small history-date' }, formatDate(e.turn, calendarOf(s))),
-              e.nations[0] ? flag(e.nations[0]) : null,
+              e.nations[0] ? flag(app.state, e.nations[0]) : null,
               e.at ? where(app, e.text, e.at) : h('span', null, e.text)))))))
         : empty('Nothing recorded yet.'),
-      h('p', { class: 'muted small' }, `Events are recorded as they happen${started !== undefined && started > 0 ? `, here since ${formatDate(started, calendarOf(s))} (games saved before this report start recording when loaded)` : ''}. You hear of other nations’ wars, treaties, Founding Fathers and declarations; their colonies and treasures stay their own business. The oldest entries are dropped after 800.`)),
+      h('p', { class: 'muted small' }, `Events are recorded as they happen${started !== undefined && started > 0 ? `, here since ${formatDate(started, calendarOf(s))} (games saved before this report start recording when loaded)` : ''}. You hear of other nations’ wars, treaties, ${term(app.state, 'members')} and declarations; their colonies and treasures stay their own business. The oldest entries are dropped after 800.`)),
   ];
 }
 
@@ -579,7 +583,7 @@ export const REPORT_TABS: ReportTab[] = [
   { id: 'naval', name: 'Naval', title: 'Naval advisor', render: navalTab },
   { id: 'religion', name: 'Religion', title: 'Religious advisor', render: religionTab },
   { id: 'natives', name: 'Natives', title: 'Indian advisor', render: nativesTab },
-  { id: 'congress', name: 'Congress', title: 'Continental Congress', render: congressTab },
+  { id: 'congress', name: '{councilShort}', title: '{council}', render: congressTab },
   { id: 'history', name: 'History', title: 'History of the colonies', render: historyTab },
 ];
 
@@ -649,12 +653,12 @@ export class ReportsScreen implements Screen {
     const pick = app.observer && app.watch === 'all'
       ? h('label', { class: 'field report-nation' }, h('span', null, 'Nation'),
           h('select', { onchange: (e: Event) => { lastNation = (e.target as HTMLSelectElement).value as NationId; this.build(); } },
-            s.players.filter((p) => p.id !== 'crown').map((p) => h('option', { value: p.id, selected: p.id === nation || undefined }, nationTitle(p.id)))))
+            s.players.filter((p) => p.id !== 'crown').map((p) => h('option', { value: p.id, selected: p.id === nation || undefined }, nationTitle(app.state, p.id)))))
       : null;
     this.body.append(
       h('header', { class: 'screen-head' },
         h('h2', null, 'Reports'),
-        h('span', { class: 'muted' }, formatDate(s.turn, calendarOf(s)), ' · ', flag(nation), ' ', nationTitle(nation)),
+        h('span', { class: 'muted' }, formatDate(s.turn, calendarOf(s)), ' · ', flag(app.state, nation), ' ', nationTitle(app.state, nation)),
         pick,
         h('button', { class: 'btn close', onclick: () => app.closeScreen(), 'aria-label': 'Close reports' }, 'Close')),
       h('nav', { class: 'report-tabs', role: 'tablist', 'aria-label': 'Advisors' },
@@ -662,10 +666,10 @@ export class ReportsScreen implements Screen {
           class: `tab${t.id === this.tab ? ' active' : ''}`,
           role: 'tab',
           'aria-selected': String(t.id === this.tab),
-          title: `${t.title} (F${i + 1}, or ${i + 1} while the reports are open)`,
+          title: `${withTerms(this.app.state, t.title)} (F${i + 1}, or ${i + 1} while the reports are open)`,
           onclick: () => this.setTab(t.id),
-        }, h('kbd', null, String(i + 1)), t.name))),
-      h('h3', { class: 'report-title' }, tab.title),
+        }, h('kbd', null, String(i + 1)), withTerms(this.app.state, t.name)))),
+      h('h3', { class: 'report-title' }, withTerms(this.app.state, tab.title)),
       h('div', { class: 'report-body', role: 'tabpanel' }, tab.render(ctx)),
     );
     // Keep the scroll position when a sort or filter rebuilds the same tab.

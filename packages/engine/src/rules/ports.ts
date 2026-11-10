@@ -51,13 +51,19 @@ export const PORT_CHARACTER: Partial<Record<NationId, PortEntry>> = {
 
 const NONE: PortCharacter = {};
 
+/**
+ * A home port: a game's port character (the engine passes the scenario's, `portEntryOf(s, nation)`
+ * in europe.ts), or a nation id, which means the Americas' (PORT_CHARACTER; tests and tools).
+ */
+export type PortRef = NationId | PortCharacter;
+
 /** A home port's character; none for a port without an entry (the Crown). */
-export function portCharacter(port: NationId): PortCharacter {
-  return PORT_CHARACTER[port]?.market ?? NONE;
+export function portCharacter(port: PortRef): PortCharacter {
+  return typeof port === 'string' ? (PORT_CHARACTER[port]?.market ?? NONE) : port;
 }
 
 /** Whole gold a port's character adds to (or takes from) a good's starting price. */
-export function portPriceShift(port: NationId, good: GoodId): number {
+export function portPriceShift(port: PortRef, good: GoodId): number {
   const f = portCharacter(port).prices?.[good];
   if (f === undefined) return 0;
   const def = GOOD_DEFS[good];
@@ -65,19 +71,19 @@ export function portPriceShift(port: NationId, good: GoodId): number {
 }
 
 /** A good's starting (and resting) sell price in a port. */
-export function portBasePrice(port: NationId, good: GoodId): number {
+export function portBasePrice(port: PortRef, good: GoodId): number {
   return GOOD_DEFS[good].price + portPriceShift(port, good);
 }
 
 /** The lowest and highest sell price of a good in a port. */
-export function portPriceBand(port: NationId, good: GoodId): { min: number; max: number } {
+export function portPriceBand(port: PortRef, good: GoodId): { min: number; max: number } {
   const def = GOOD_DEFS[good];
   const d = portPriceShift(port, good);
   return { min: Math.max(1, def.minPrice + Math.min(0, d)), max: Math.max(def.minPrice + 1, def.maxPrice + d) };
 }
 
 /** Multiplier on the units traded before a good's price moves in a port. */
-export function portDepth(port: NationId, good: GoodId): number {
+export function portDepth(port: PortRef, good: GoodId): number {
   return portCharacter(port).depth?.[good] ?? 1;
 }
 
@@ -90,7 +96,7 @@ function list(goods: GoodId[]): string {
 }
 
 /** A short description of a port's character, e.g. "tobacco and furs fetch more; sugar fetches less". Empty when it has none. */
-export function portCharacterText(port: NationId, goods: readonly GoodId[] = GOODS): string {
+export function portCharacterText(port: PortRef, goods: readonly GoodId[] = GOODS): string {
   const c = portCharacter(port);
   const prices = goods.map((g) => [g, portPriceShift(port, g)] as [GoodId, number]).filter(([, d]) => d !== 0);
   const depth = Object.entries(c.depth ?? {}) as [GoodId, number][];
@@ -116,9 +122,13 @@ export function portCharacterText(port: NationId, goods: readonly GoodId[] = GOO
   return parts.join('; ');
 }
 
-/** "Amsterdam: tobacco and furs fetch more; plenty of trade goods; sugar and cloth fetch less". */
-export function portSummary(port: NationId, goods: readonly GoodId[] = GOODS): string {
-  const name = PORT_CHARACTER[port]?.name ?? HOME_PORTS[port];
-  const text = portCharacterText(port, goods);
+/**
+ * "Amsterdam: tobacco and furs fetch more; plenty of trade goods; sugar and cloth fetch less". A
+ * nation id means the Americas' port; the web game passes the game's (`nationOf(s, id).port`).
+ */
+export function portSummary(port: NationId | PortEntry, goods: readonly GoodId[] = GOODS): string {
+  const entry: PortEntry = typeof port === 'string' ? (PORT_CHARACTER[port] ?? { name: HOME_PORTS[port] }) : port;
+  const name = entry.name;
+  const text = portCharacterText(entry.market ?? NONE, goods);
   return text ? `${name}: ${text}` : name;
 }
