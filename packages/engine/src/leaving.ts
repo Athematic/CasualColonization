@@ -5,6 +5,7 @@ import { calendarOf, formatDate, yearOf } from './scenarios/index.js';
 import { finalScores } from './score.js';
 import { track } from './telemetry.js';
 import type { GameState } from './types.js';
+import { setUnitLoc, removeColony } from './unitindex.js';
 
 /** A colony of more than this many colonists cannot be abandoned. */
 export const ABANDON_MAX_COLONISTS = 3;
@@ -30,12 +31,12 @@ export function abandonColony(s: GameState, colonyId: string): string {
   const reason = abandonProblem(s, colonyId);
   if (reason) fail(reason);
   for (const u of colonyWorkers(s, colony)) {
-    u.loc = { kind: 'map', x: colony.x, y: colony.y };
+    setUnitLoc(s, u, { kind: 'map', x: colony.x, y: colony.y });
     u.moves = maxMoves(u, s);
     u.state = 'active';
     delete u.teach;
   }
-  delete s.colonies[colony.id];
+  removeColony(s, colony.id);
   track(colony.owner, 'cmd:abandonColony');
   const text = `${colony.name} has been abandoned.`;
   message(s, text, colony.owner, colony);

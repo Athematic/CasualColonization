@@ -32,6 +32,8 @@ import {
   type NationId,
   type PortEntry,
   type RouteStop,
+  setUnitLoc,
+  removeUnit,
 } from '../src/index.js';
 import { routePort } from '../src/ai/logistics.js';
 
@@ -126,7 +128,7 @@ describe('routes calling at a partner’s port', () => {
     const port = coastalColony(s);
     const [en, fr] = s.players;
     const ship = Object.values(s.units).find((u) => u.owner === 'england' && u.type === 'caravel')!;
-    for (const u of Object.values(s.units)) if (u.loc.kind === 'carrier') delete s.units[u.id];
+    for (const u of Object.values(s.units)) if (u.loc.kind === 'carrier') removeUnit(s, u.id);
     return { s, port, en, fr, ship };
   }
   const stops = (port: Colony, europe: Partial<RouteStop> = {}): RouteStop[] => [
@@ -153,7 +155,7 @@ describe('routes calling at a partner’s port', () => {
     fr.tax = 20;
     en.boycotts.furs = true;
     const r = applyCommand(s, { type: 'createRoute', name: 'Furs to France', stops: stops(port, { port: 'france' }) }) as { ok: true; id?: string };
-    ship.loc = { kind: 'europe' };
+    setUnitLoc(s, ship, { kind: 'europe' });
     ship.moves = 12;
     ship.cargo = { furs: 100 };
     const colonist = createUnit(s, 'england', 'expertFarmer', { kind: 'europe' });
@@ -162,7 +164,7 @@ describe('routes calling at a partner’s port', () => {
     expect(ship.loc.kind).toBe('sailing');
     expect(ship.cargo).toEqual({ furs: 100 });
     // Arriving in La Rochelle.
-    ship.loc = { kind: 'europe', port: 'france' };
+    setUnitLoc(s, ship, { kind: 'europe', port: 'france' });
     ship.route!.stop = 1;
     const furs = fr.market.furs.price;
     const tools = fr.market.tools.price + 1;

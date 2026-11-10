@@ -14,12 +14,16 @@ import {
   type Colony,
   type GameState,
   type UnitTypeId,
+  setUnitLoc,
+  removeUnit,
+  removeColony,
+  addColony as storeColony,
 } from '../src/index.js';
 
 function bare(): GameState {
   const s = createGame({ seed: 11, mapSize: 'small', nations: ['england', 'france'], humans: [], ai: { england: 'competent', france: 'competent' } });
-  for (const u of Object.values(s.units)) delete s.units[u.id];
-  for (const c of Object.values(s.colonies)) delete s.colonies[c.id];
+  for (const u of Object.values(s.units)) removeUnit(s, u.id);
+  for (const c of Object.values(s.colonies)) removeColony(s, c.id);
   for (const st of Object.values(s.settlements)) delete s.settlements[st.id];
   const p = player(s, 'england');
   p.gold = 0;
@@ -38,7 +42,7 @@ function addColony(s: GameState, n: number, workers: number, experts: number, ex
     }
   }
   const c: Colony = { id: `c${n}`, owner: 'england', name: `Colony ${n}`, x: n, y: 1, goods: emptyGoods(), buildings, build: null, hammers: 0, liberty: 0, founded: 0, exports: {} };
-  s.colonies[c.id] = c;
+  storeColony(s, c);
   for (let i = 0; i < workers; i++) {
     const type: UnitTypeId = i < experts ? 'expertFarmer' : 'freeColonist';
     createUnit(s, 'england', type, { kind: 'colony', colonyId: c.id, job: { kind: 'tile', x: n, y: 2 + i, good: 'food' } });
@@ -72,7 +76,7 @@ describe('score breakdown', () => {
     const s = bare();
     const c = addColony(s, 0, 2, 2, 0);
     expect(scoreBreakdown(s, player(s, 'england')).lines.find((l) => l.key === 'experts')?.value).toBe(2);
-    for (const u of Object.values(s.units)) u.loc = { kind: 'colony', colonyId: c.id, job: { kind: 'tile', x: 0, y: 0, good: 'lumber' } };
+    for (const u of Object.values(s.units)) setUnitLoc(s, u, { kind: 'colony', colonyId: c.id, job: { kind: 'tile', x: 0, y: 0, good: 'lumber' } });
     expect(scoreBreakdown(s, player(s, 'england')).lines.find((l) => l.key === 'experts')?.value).toBe(0);
   });
 

@@ -21,6 +21,7 @@ import {
   type GameMap,
   type GameState,
   type Tile,
+  removeUnit,
 } from '../src/index.js';
 import { roadTargets } from '../src/ai/roads.js';
 
@@ -81,7 +82,7 @@ function forestGame(): GameState {
     Object.assign(t, { t: 'plains', f: true });
   }
   s.settlements = {};
-  for (const u of Object.values(s.units)) if (u.loc.kind === 'map') delete s.units[u.id];
+  for (const u of Object.values(s.units)) if (u.loc.kind === 'map') removeUnit(s, u.id);
   s.players[0].explored.fill(1);
   return s;
 }

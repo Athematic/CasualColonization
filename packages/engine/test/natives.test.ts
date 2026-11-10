@@ -28,6 +28,7 @@ import {
   type GameState,
   type NationId,
   type Settlement,
+  removeUnit,
 } from '../src/index.js';
 import { resolveRumour, tribalLandOwner } from '../src/rumours.js';
 import { buyFromNatives, maybeIncite } from '../src/ai/natives.js';
@@ -350,7 +351,7 @@ describe('burial grounds', () => {
         const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', ...at });
         resolveRumour(s, u);
         if (s.tribes.some((t) => t.burial?.length)) n++;
-        delete s.units[u.id];
+        removeUnit(s, u.id);
       }
       return n;
     };
@@ -366,7 +367,7 @@ describe('burial grounds', () => {
     for (let i = 0; i < 500; i++) {
       const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', ...far! });
       resolveRumour(s, u);
-      delete s.units[u.id];
+      removeUnit(s, u.id);
     }
     expect(s.tribes.some((t) => t.burial?.length)).toBe(false);
   });
@@ -378,7 +379,7 @@ describe('burial grounds', () => {
     while (!tribeOf(s, st).burial?.length && guard++ < 5000) {
       const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', ...at });
       resolveRumour(s, u);
-      delete s.units[u.id];
+      removeUnit(s, u.id);
     }
     const tribe = tribeOf(s, st);
     expect(tribe.burial).toEqual(['england']);

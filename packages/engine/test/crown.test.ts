@@ -24,6 +24,7 @@ import {
   type GameState,
   type NationId,
   type Player,
+  addColony,
 } from '../src/index.js';
 import { payDemand, rebelPower, refPower } from '../src/ai/royal.js';
 import { AI_PROFILES } from '../src/ai/profiles.js';
@@ -54,7 +55,7 @@ function colony(s: GameState, owner: NationId, name = 'Testtown'): Colony {
 
 /** Copies of a colony record, to give a nation many colonies cheaply (the Crown only counts them). */
 function moreColonies(s: GameState, c: Colony, n: number): void {
-  for (let i = 0; i < n; i++) s.colonies[`fake${i}`] = { ...c, id: `fake${i}`, goods: { ...c.goods } };
+  for (let i = 0; i < n; i++) addColony(s, { ...c, id: `fake${i}`, goods: { ...c.goods } });
 }
 
 /** Plays the Crown's part of `rounds` rounds, with `bells` new liberty bells per round for england. */

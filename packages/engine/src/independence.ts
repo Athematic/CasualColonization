@@ -28,6 +28,7 @@ import { type NationId } from './rules/nations.js';
 import { checkVictory, finishNation } from './victory.js';
 import { crownSideOf } from './world.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
+import { removeUnit } from './unitindex.js';
 
 /** Share of all colonists, across every colony, who support independence. */
 export function rebelShare(s: GameState, nation: NationId): number {
@@ -97,7 +98,7 @@ export function declareIndependence(s: GameState, nation: NationId): string {
     if (u.owner !== nation) continue;
     const inEurope = u.loc.kind === 'europe' || (u.loc.kind === 'sailing' && u.loc.to === 'europe');
     const aboardInEurope = u.loc.kind === 'carrier' && s.units[u.loc.carrierId]?.loc.kind === 'europe';
-    if (inEurope || aboardInEurope) delete s.units[u.id];
+    if (inEurope || aboardInEurope) removeUnit(s, u.id);
   }
   // Veterans, and half the soldiers of committed colonies, form the Continental Army.
   let continentals = 0;
@@ -215,7 +216,7 @@ function checkOutcome(s: GameState, p: Player): void {
     p.independence = 'won';
     track(p.id, 'independence:won');
     endRebellion(s, p);
-    for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === p.id) delete s.units[u.id];
+    for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === p.id) removeUnit(s, u.id);
     const text = term(s, 'gameOver.won', { nation: nationOf(s, p.id).name });
     message(s, text);
     noteHistory(s, 'independence', [p.id], text);

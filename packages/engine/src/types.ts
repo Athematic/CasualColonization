@@ -195,17 +195,20 @@ export interface MercenaryOffer {
   turn: number;
 }
 
+// Jobs and locations are read-only where units are indexed by them (unitindex.ts): a unit moves
+// only through setUnitLoc, which gives it a new location object. Only a port and the turns left at
+// sea, which no index uses, change in place.
 export type Job =
-  | { kind: 'tile'; x: number; y: number; good: GoodId }
-  | { kind: 'building'; building: BuildingKind };
+  | { readonly kind: 'tile'; readonly x: number; readonly y: number; readonly good: GoodId }
+  | { readonly kind: 'building'; readonly building: BuildingKind };
 
 export type UnitLocation =
-  | { kind: 'map'; x: number; y: number }
-  | { kind: 'colony'; colonyId: string; job: Job }
-  | { kind: 'carrier'; carrierId: string }
+  | { readonly kind: 'map'; readonly x: number; readonly y: number }
+  | { readonly kind: 'colony'; readonly colonyId: string; readonly job: Job }
+  | { readonly kind: 'carrier'; readonly carrierId: string }
   /** In a home port in Europe. `port` is a Favoured Nation partner whose port the ship visits; missing means the owner's own. */
-  | { kind: 'europe'; port?: NationId }
-  | { kind: 'sailing'; to: 'europe' | 'america'; turnsLeft: number; port?: NationId };
+  | { readonly kind: 'europe'; port?: NationId }
+  | { readonly kind: 'sailing'; readonly to: 'europe' | 'america'; turnsLeft: number; port?: NationId };
 
 export type UnitState = 'active' | 'fortified' | 'sentry';
 
@@ -218,7 +221,8 @@ export interface Unit {
   role: RoleId;
   /** Tools carried by a pioneer. */
   tools: number;
-  loc: UnitLocation;
+  /** Where the unit is. Read-only: change it with setUnitLoc (unitindex.ts), which keeps the unit index up to date. */
+  readonly loc: UnitLocation;
   /** Move points left this turn (3 per move). */
   moves: number;
   state: UnitState;
@@ -289,8 +293,9 @@ export interface Colony {
   id: string;
   owner: NationId;
   name: string;
-  x: number;
-  y: number;
+  /** A colony never moves (colonies are indexed by tile in unitindex.ts). */
+  readonly x: number;
+  readonly y: number;
   goods: Record<GoodId, number>;
   buildings: Record<BuildingKind, number>;
   build: BuildTarget | null;
@@ -433,8 +438,10 @@ export interface GameState {
   nextId: number;
   map: GameMap;
   players: Player[];
-  units: Record<string, Unit>;
-  colonies: Record<string, Colony>;
+  /** Read-only record: add and remove units with addUnit and removeUnit (unitindex.ts), which keep the unit index up to date. */
+  units: { readonly [id: string]: Unit };
+  /** Read-only record: add and remove colonies with addColony and removeColony (unitindex.ts). */
+  colonies: { readonly [id: string]: Colony };
   tribes: Tribe[];
   settlements: Record<string, Settlement>;
   messages: GameMessage[];

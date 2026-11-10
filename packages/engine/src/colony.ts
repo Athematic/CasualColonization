@@ -33,6 +33,7 @@ import { noteProduction } from './stats.js';
 import { nativeLandOwner, onColonyFounded } from './natives.js';
 import type { BuildTarget, Colony, GameState, Job, Unit } from './types.js';
 import { buildingsOf, difficultyOf, goodsOf, mechanicsOf, nationOf, unitsOf } from './scenarios/index.js';
+import { addColony, setUnitLoc, removeUnit } from './unitindex.js';
 
 export function canFoundColony(s: GameState, u: Unit): string | null {
   if (UNIT_TYPES[u.type].kind !== 'colonist') return 'Only colonists can found colonies.';
@@ -122,7 +123,7 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
     founded: s.turn,
     exports: {},
   };
-  s.colonies[colony.id] = colony;
+  addColony(s, colony);
   const tile = tileAt(s, x, y)!;
   tile.r = true;
   delete tile.lcr;
@@ -130,7 +131,7 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
   stripRole(colony, u);
   const job = bestJob(s, colony, u);
   if (!job) fail('There is no work for this colonist here.');
-  u.loc = { kind: 'colony', colonyId: colony.id, job };
+  setUnitLoc(s, u, { kind: 'colony', colonyId: colony.id, job });
   u.state = 'active';
   delete u.dest;
   delete u.roadTo;
@@ -147,8 +148,8 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
 }
 
 /**
- * Who works around and inside a colony, gathered in one pass over the units (a hot path for the
- * computer players). Valid until a unit changes jobs or moves, or the land around changes.
+ * Who works around and inside a colony, from the unit indexes (a hot path for the computer
+ * players). Valid until a unit changes jobs or moves, or the land around changes.
  */
 export interface ColonyOccupancy {
   /** The tiles around the colony, in `neighbours` order. */
@@ -167,29 +168,20 @@ export interface ColonyOccupancy {
 export function colonyOccupancy(s: GameState, colony: Colony): ColonyOccupancy {
   const tiles = neighbours(s, colony.x, colony.y);
   const w = s.map.width;
-  const near = new Set<number>();
   const closed = new Set<number>();
+  const worked = new Map<number, Unit>();
   for (const p of tiles) {
     const i = p.y * w + p.x;
-    near.add(i);
     if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y) || nativeLandOwner(s, p.x, p.y)) closed.add(i);
+    const v = tileWorkedBy(s, p.x, p.y);
+    if (v) worked.set(i, v);
   }
-  const worked = new Map<number, Unit>();
   const inBuilding = new Map<string, number>();
-  let pop = 0;
-  for (const id in s.units) {
-    const v = s.units[id];
-    if (v.loc.kind !== 'colony') continue;
-    const job = v.loc.job;
-    if (v.loc.colonyId === colony.id) {
-      pop++;
-      if (job.kind === 'building') inBuilding.set(job.building, (inBuilding.get(job.building) ?? 0) + 1);
-    }
-    if (job.kind === 'tile') {
-      const i = job.y * w + job.x;
-      if (near.has(i) && !worked.has(i)) worked.set(i, v);
-    }
+  const workers = colonyWorkers(s, colony);
+  for (const v of workers) {
+    if (v.loc.kind === 'colony' && v.loc.job.kind === 'building') inBuilding.set(v.loc.job.building, (inBuilding.get(v.loc.job.building) ?? 0) + 1);
   }
+  const pop = workers.length;
   return { tiles, worked, closed, inBuilding, pop, bonus: libertyBonus(s, colony, pop) };
 }
 
@@ -324,7 +316,7 @@ export function assignJob(s: GameState, unitId: string, colonyId: string, job?: 
   const wasTeaching = u.loc.kind === 'colony' && u.loc.job.kind === 'building' && u.loc.job.building === 'schoolhouse';
   const willTeach = chosen.kind === 'building' && chosen.building === 'schoolhouse';
   if (wasTeaching !== willTeach || !willTeach) delete u.teach;
-  u.loc = { kind: 'colony', colonyId, job: chosen };
+  setUnitLoc(s, u, { kind: 'colony', colonyId, job: chosen });
   u.state = 'active';
   u.moves = 0;
   track(u.owner, 'cmd:assignJob');
@@ -338,7 +330,7 @@ export function leaveColony(s: GameState, unitId: string): void {
   if (u.loc.kind !== 'colony') fail('The unit is not working in a colony.');
   const colony = s.colonies[u.loc.colonyId];
   if (colonyPopulation(s, colony) <= 1) fail('The last colonist cannot leave the colony.');
-  u.loc = { kind: 'map', x: colony.x, y: colony.y };
+  setUnitLoc(s, u, { kind: 'map', x: colony.x, y: colony.y });
   u.moves = maxMoves(u, s);
   delete u.teach;
   track(u.owner, 'cmd:leaveColony');
@@ -473,7 +465,7 @@ export function processColony(s: GameState, colony: Colony): void {
     const workers = colonyWorkers(s, colony);
     if (workers.length > 1) {
       const victim = workers[workers.length - 1];
-      delete s.units[victim.id];
+      removeUnit(s, victim.id);
       track(colony.owner, 'colony:colonist starved');
       message(s, `${unitName(victim)} has starved to death in ${colony.name}.`, colony.owner, colony);
     } else {

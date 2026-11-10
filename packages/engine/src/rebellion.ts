@@ -50,6 +50,7 @@ import { type NationId } from './rules/nations.js';
 import { difficultyOf, nationOf, nationSet, scenarioOf, term, Term, type ScenarioLike } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, MercenaryOffer, Player, Unit } from './types.js';
+import { removeUnit } from './unitindex.js';
 
 /** A seeded draw for this nation and purpose. */
 const draw = (s: GameState, nation: NationId, purpose: string) => pairRandom(s, nation, 'crown', `rebellion ${purpose}`);
@@ -318,7 +319,7 @@ function interventionRound(s: GameState, p: Player): void {
 /** When the war ends, the intervention force sails home. */
 export function alliesGoHome(s: GameState, nation: NationId): void {
   const allies = Object.values(s.units).filter((u) => u.owner === nation && u.ally);
-  for (const u of allies) delete s.units[u.id];
+  for (const u of allies) removeUnit(s, u.id);
   if (allies.length) message(s, `The ${term(s, 'independenceWar')} is over: the intervention force sails home.`, nation);
 }
 
@@ -436,7 +437,7 @@ function toryRound(s: GameState, p: Player): void {
       .filter((u) => (u.role === 'soldier' || u.role === 'dragoon') && !u.mercenary && !u.ally && u.type !== 'continentalSoldier')
       .sort((a, b) => a.id.localeCompare(b.id))[0];
     if (!deserter) continue;
-    delete s.units[deserter.id];
+    removeUnit(s, deserter.id);
     track(p.id, 'rebellion:desertion');
     message(s, `${Term(s, 'loyalist')} sentiment in ${c.name}: a ${deserter.role} deserts to ${term(s, 'crown')}.`, p.id, c);
     noteHistory(s, 'independence', [p.id], `${Term(s, 'loyalist')} sentiment in ${c.name}: troops desert.`, { secret: true, at: c });

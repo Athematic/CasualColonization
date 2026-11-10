@@ -21,6 +21,7 @@ import { UNIT_TYPES } from './rules/units.js';
 import { track } from './telemetry.js';
 import type { GameState, RouteCargo, RouteStop, TradeRoute, Unit } from './types.js';
 import { goodsOf, nationOf, term, Term } from './scenarios/index.js';
+import { setUnitLoc } from './unitindex.js';
 
 export const EUROPE_STOP = 'europe';
 export const MAX_ROUTE_STOPS = 12;
@@ -34,7 +35,12 @@ export function routesOf(s: GameState, nation: NationId): TradeRoute[] {
 
 /** Units following a route. */
 export function routeUnits(s: GameState, routeId: string): Unit[] {
-  return Object.values(s.units).filter((u) => u.route?.id === routeId);
+  const out: Unit[] = [];
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (u.route?.id === routeId) out.push(u);
+  }
+  return out;
 }
 
 /** A stop's name; with `owner` (the route's owner), a foreign colony's name carries its nation, e.g. "Québec (French)". */
@@ -257,7 +263,7 @@ function serveStop(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop): v
   if (isShip(u)) {
     for (const p of unitsAboard(s, u)) {
       if (p.type === 'treasure') continue;
-      p.loc = { kind: 'map', x: colony.x, y: colony.y };
+      setUnitLoc(s, p, { kind: 'map', x: colony.x, y: colony.y });
       p.state = 'active';
     }
   }
