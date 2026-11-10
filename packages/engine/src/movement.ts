@@ -285,14 +285,33 @@ interface PathIndex {
   units: ReadonlyMap<number, readonly Unit[]>;
   /** Tribes whose braves stand on each tile. */
   braves: Map<number, TribeId[]>;
+  /** Tiles with any of the above have `occupied[i] === gen`, tiles with a colony `colony[i] === gen`, so empty tiles skip the lookups. */
+  occupied: Uint32Array;
+  colony: Uint32Array;
+  gen: number;
 }
+
+// Stamps for PathIndex, reused between searches as the search buffers are.
+let occupiedStamp = new Uint32Array(0);
+let colonyStamp = new Uint32Array(0);
+let stampGen = 0;
 
 function pathIndex(s: GameState): PathIndex {
   const w = s.map.width;
+  const size = w * s.map.height;
+  if (occupiedStamp.length !== size || stampGen >= 0xfffffff0) {
+    occupiedStamp = new Uint32Array(size);
+    colonyStamp = new Uint32Array(size);
+    stampGen = 0;
+  }
+  const gen = ++stampGen;
+  const occupied = occupiedStamp;
   const settlements = new Set<number>();
   for (const id in s.settlements) {
     const st = s.settlements[id];
-    settlements.add(st.y * w + st.x);
+    const i = st.y * w + st.x;
+    settlements.add(i);
+    occupied[i] = gen;
   }
   const braves = new Map<number, TribeId[]>();
   const all = s.braves;
@@ -303,9 +322,17 @@ function pathIndex(s: GameState): PathIndex {
       const list = braves.get(i);
       if (list) list.push(b.tribe);
       else braves.set(i, [b.tribe]);
+      occupied[i] = gen;
     }
   }
-  return { colonies: colonyTiles(s), settlements, units: unitTiles(s), braves };
+  const colonies = colonyTiles(s);
+  for (const i of colonies.keys()) {
+    occupied[i] = gen;
+    colonyStamp[i] = gen;
+  }
+  const units = unitTiles(s);
+  for (const i of units.keys()) occupied[i] = gen;
+  return { colonies, settlements, units, braves, occupied, colony: colonyStamp, gen };
 }
 
 function passable(s: GameState, ctx: SearchContext, x: number, y: number, isGoal: boolean, index: PathIndex): boolean {
@@ -339,14 +366,17 @@ function searchContext(s: GameState, u: Unit): SearchContext {
 function passableAt(s: GameState, ctx: SearchContext, i: number, isGoal: boolean, index: PathIndex): boolean {
   const tile = s.map.tiles[i];
   if (!tile) return false;
-  const colonyOwner = index.colonies.get(i)?.owner;
-  if (colonyOwner && colonyOwner !== ctx.owner) return false;
-  if (index.settlements.has(i)) return false;
-  // Any other nation's unit on the tile blocks it.
-  const here = index.units.get(i);
-  if (here) for (const v of here) if (v.owner !== ctx.owner) return false;
-  const tribes = isGoal ? undefined : index.braves.get(i);
-  if (tribes) for (const t of tribes) if (ctx.war.has(t)) return false;
+  let colonyOwner: string | undefined;
+  if (index.occupied[i] === index.gen) {
+    colonyOwner = index.colonies.get(i)?.owner;
+    if (colonyOwner && colonyOwner !== ctx.owner) return false;
+    if (index.settlements.has(i)) return false;
+    // Any other nation's unit on the tile blocks it.
+    const here = index.units.get(i);
+    if (here) for (const v of here) if (v.owner !== ctx.owner) return false;
+    const tribes = isGoal ? undefined : index.braves.get(i);
+    if (tribes) for (const t of tribes) if (ctx.war.has(t)) return false;
+  }
   // People can only route through land they have seen; the AI knows the map.
   const owner = ctx.player;
   if (!owner) throw new Error(`No player ${ctx.owner}`);
@@ -361,8 +391,8 @@ function stepCost(s: GameState, ctx: SearchContext, fi: number, ti: number, fx: 
   if (ctx.ship) return 3;
   const from = s.map.tiles[fi];
   const to = s.map.tiles[ti];
-  const roadFrom = from.r || index.colonies.has(fi);
-  const roadTo = to.r || index.colonies.has(ti);
+  const roadFrom = from.r || index.colony[fi] === index.gen;
+  const roadTo = to.r || index.colony[ti] === index.gen;
   if (roadFrom && roadTo) return ROAD_MOVE_COST;
   // Along a river: as cheap as a road, and the two do not add up.
   if (to.rv && from.rv && riverLinked(s.map, fx, fy, tx, ty)) return RIVER_MOVE_COST;
