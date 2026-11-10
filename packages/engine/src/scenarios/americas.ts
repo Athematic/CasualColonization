@@ -170,9 +170,11 @@ export const AMERICAS: Scenario = {
     charter: COLONY_CHARTER,
     customHouse: true,
     missions: true,
+    alliances: true,
   },
-  // Winning the War of Independence ends the game; otherwise it ends after autumn 1850.
-  victory: [{ id: 'independence-war' }, { id: 'time' }],
+  // Winning the War of Independence ends the game; otherwise it ends after autumn 1850, won by an
+  // alliance holding most of the score together, or else by the highest score.
+  victory: [{ id: 'independence-war' }, { id: 'concord' }, { id: 'time' }],
   rumours: AMERICAS_RUMOURS,
   // No `difficulty` or `score`: the Americas play by the engine's own DIFFICULTY and SCORE_WEIGHTS.
   // The Americas' terms are the defaults every scenario starts from (scenarios/terms.ts).

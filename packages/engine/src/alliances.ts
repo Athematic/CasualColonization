@@ -35,9 +35,9 @@ import type { GoodId } from './rules/goods.js';
 /** The engine's alliance rules; a scenario's `alliances` is merged over them. */
 export const ALLIANCE_RULES: AllianceRules = {
   // Favoured Nation needs 8–12 years of peace; an alliance about twice as long.
-  peaceYears: { base: 20, spread: 4 },
+  peaceYears: { base: 18, spread: 4 },
   // Favoured Nation's computer players want 300 gold traded; an alliance more.
-  volume: { min: 400, max: 1200 },
+  volume: { min: 250, max: 750 },
   // Cancelling Favoured Nation: waiting 7–13 years, hostility 10–20.
   waitingYears: { base: 15, spread: 3 },
   hostilityYears: { base: 25, spread: 5 },

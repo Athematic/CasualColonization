@@ -50,7 +50,9 @@ import { foreignAffairs } from '../src/ai/foreign.js';
 /** The Americas with alliances on; and a copy whose computer players cooperate eagerly. */
 const ALLIED: Scenario = { ...AMERICAS, id: 'test-alliances', name: 'test-alliances', hidden: true, mechanics: { ...AMERICAS.mechanics, alliances: true }, victory: [{ id: 'independence-war' }, { id: 'concord', params: { share: 0.6 } }, { id: 'time' }] };
 const EAGER: Scenario = { ...ALLIED, id: 'test-alliances-eager', name: 'test-alliances-eager', ai: { ...AMERICAS.ai, cooperation: { proposeAlliance: 1, acceptAlliance: 1 } } };
+const NONE: Scenario = { ...AMERICAS, id: 'test-no-alliances', name: 'test-no-alliances', hidden: true, mechanics: { ...AMERICAS.mechanics, alliances: false } };
 registerScenario(ALLIED);
+registerScenario(NONE);
 registerScenario(EAGER);
 
 type Seat = 'england' | 'france' | 'spain';
@@ -128,8 +130,7 @@ function ripen(s: GameState, a: NationId, b: NationId) {
 
 describe('alliances: unlocking and proposals', () => {
   it('are refused when the scenario has none', () => {
-    const s = game({ scenario: 'americas' as string });
-    s.config.scenario = undefined;
+    const s = game({ scenario: 'test-no-alliances' });
     expect(allianceProblem(s, 'england', 'france')).toMatch(/no alliances/);
     expect(refused(s, 'england', { type: 'proposeAlliance', nation: 'france' })).toMatch(/no alliances/);
   });
@@ -385,7 +386,7 @@ describe('alliances: computer players', () => {
   it('make no alliances when the scenario has none', () => {
     const s = game({ humans: [], scenario: 'test-alliances-eager' });
     ripen(s, 'england', 'france');
-    s.config.scenario = undefined; // the Americas, alliances off
+    s.config.scenario = 'test-no-alliances';
     s.turn = reviewTurn(300);
     foreignAffairs(s, s.players[1], AI_PROFILES.creative, 0, 0);
     expect(isAllied(s, 'england', 'france')).toBe(false);

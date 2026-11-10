@@ -319,8 +319,10 @@ function reconsiderFavoured(s: GameState, p: Player, prof: AiProfile, strength: 
   const target = bestWarTarget(s, p, prof, strength, true);
   if (!target || !isFavoured(s, p.id, target.c.owner) || target.score < 1.5 * (2.5 / target.aggression)) return;
   if (s.treaties && isAllied(s, p.id, target.c.owner)) {
-    // Leaving an alliance costs more: only for a target twice as good as the level of war.
-    if (target.score < 2 * (2.5 / target.aggression)) return;
+    // Leaving an alliance costs more: only for a target three times as good as the level of war,
+    // and not in the alliance's first 40 turns.
+    const since = allianceOf(s, p.id)!.start;
+    if (target.score < 3 * (2.5 / target.aggression) || s.turn - since < 40) return;
     track(p.id, 'diplomacy:alliance left for war');
     leaveAlliance(s, p.id);
     memory.warPlan = { nation: target.c.owner, turn: s.turn + WAR_AFTER_CANCEL };

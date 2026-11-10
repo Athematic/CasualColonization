@@ -355,8 +355,9 @@ export const CARIBBEAN: Scenario = {
     charter: { base: 150, cap: 3000 },
     customHouse: true,
     missions: true,
+    alliances: true,
   },
-  victory: [{ id: 'time' }],
+  victory: [{ id: 'concord' }, { id: 'time' }],
   rumours: AMERICAS.rumours,
   // A century of trade: wealth and trade agreements weigh more than in the Americas (1/800, 3, 4).
   score: { wealth: 1 / 500, tradeAgreement: 5, favoured: 6 },
