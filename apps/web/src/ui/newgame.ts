@@ -13,6 +13,9 @@ import {
   formatDate,
   nationTitle,
   type AiLevel,
+  decodeGameCode,
+  looksLikeGameCode,
+  parseSeedInput,
   type DifficultyId,
   type GameConfig,
   type GameState,
@@ -33,6 +36,13 @@ interface Slot {
 /** Years a head start can jump to, as turns (one per year until 1600, then two). */
 const HEAD_START_YEARS = [1550, 1600, 1650, 1700, 1750, 1800];
 const turnOfYear = (year: number) => (year <= 1600 ? year - 1492 : 108 + (year - 1600) * 2);
+
+/** The line under the seed field: the number the text gives, and the phrase it came from. */
+function seedLine(text: string): string {
+  if (looksLikeGameCode(text)) return 'This looks like a game code: it is applied when you leave the field.';
+  const r = parseSeedInput(text);
+  return r.seedPhrase ? `Seed number: ${r.seed} (from "${r.seedPhrase}")` : `Seed number: ${r.seed}`;
+}
 
 /** "Fixed (W×H)" for a stored map. */
 function storedMapSize(id: string): string {
@@ -67,13 +77,21 @@ export function newGameScreen(
   start: (config: GameConfig, head?: { turn: number; watch: boolean }) => void,
   resume: (state: GameState) => void,
   back?: () => void,
+  /** A game code from a share link: fills in the screen (nothing starts by itself). */
+  initialCode?: string,
 ): HTMLElement {
   let count = 4;
   const slots: Slot[] = NATION_ORDER.map((nation, i) => ({ nation, controller: i === 0 ? 'human' : 'competent' }));
   let mapSize: MapSize = 'medium';
   /** Stored map id; empty for a generated map. */
   let map = '';
-  let seed = Math.floor(Math.random() * 1e9);
+  const randomSeed = () => String(Math.floor(Math.random() * 1e9));
+  /** What the Game seed field holds: a number, a phrase, or a pasted game code. */
+  let seedText = randomSeed();
+  /** Notice from the last pasted game code (a version warning, or why it was refused). */
+  let codeNote = '';
+  /** A game code was applied: the start button says so. */
+  let fromCode = false;
   /** Year to take over in; 0 starts at the beginning. */
   let headYear = 0;
   let watchHeadStart = true;
@@ -81,6 +99,44 @@ export function newGameScreen(
   let historicalEvents = true;
   let randomEvents = true;
   let colonyCharter = true;
+
+  /** Restores the New game choices from a game code. Returns false (and says why) when it is not one. */
+  const applyCode = (text: string): boolean => {
+    const r = decodeGameCode(text);
+    if (!r.ok) {
+      codeNote = r.error;
+      return false;
+    }
+    const c = r.settings;
+    const rest = NATION_ORDER.filter((n) => !c.nations.some((x) => x.nation === n)).map((nation): Slot => ({ nation, controller: 'competent' }));
+    slots.splice(0, slots.length, ...c.nations.map((x): Slot => ({ nation: x.nation, controller: x.controller })), ...rest);
+    count = c.nations.length;
+    mapSize = c.mapSize;
+    map = c.map ?? '';
+    difficulty = c.difficulty;
+    historicalEvents = c.historicalEvents;
+    randomEvents = c.randomEvents;
+    colonyCharter = c.colonyCharter;
+    headYear = HEAD_START_YEARS.find((y) => turnOfYear(y) === c.headStartTurn) ?? 0;
+    seedText = c.seedPhrase ?? String(c.seed);
+    fromCode = true;
+    codeNote = r.versionWarning ?? `Game code applied (game version ${r.version}).`;
+    return true;
+  };
+
+  const pasteCode = async () => {
+    let text: string | null = null;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      text = null;
+    }
+    if (!text || !looksLikeGameCode(text)) text = window.prompt('Paste a game code (from the Game menu, Copy game code):', '') ?? '';
+    if (text.trim()) applyCode(text);
+    render();
+  };
+
+  if (initialCode) applyCode(initialCode);
 
   const el = h('main', { class: 'menu-screen' });
   const render = () => {
@@ -178,9 +234,31 @@ export function newGameScreen(
                   h('option', { value: 'watch', selected: watchHeadStart || undefined }, 'Watch the speedrun'),
                   h('option', { value: 'skip', selected: !watchHeadStart || undefined }, 'Skip ahead (faster)')))
             : null,
-          h('label', { class: 'field', title: 'Starts the random number generator for the whole game: the generated map, where native settlements, bonus resources and rumours go, and every roll during play. The same seed and the same choices give the same game.' },
+          h('label', { class: 'field', title: 'Starts the random number generator for the whole game: the generated map, where native settlements, bonus resources and rumours go, and every roll during play. The same seed and the same choices give the same game. A phrase is turned into a number, so a game is easy to share by name; a game code from the Game menu restores all the choices on this screen.' },
             h('span', null, 'Game seed'),
-            h('input', { type: 'number', value: seed, onchange: (e: Event) => (seed = Number((e.target as HTMLInputElement).value) || 0) }))),
+            h('input', {
+              type: 'text',
+              id: 'game-seed',
+              'aria-label': 'Game seed',
+              value: seedText,
+              placeholder: 'a number or a phrase, e.g. Peters Game',
+              autocomplete: 'off',
+              spellcheck: false,
+              oninput: (e: Event) => {
+                seedText = (e.target as HTMLInputElement).value;
+                const shown = el.querySelector('#seed-shown');
+                if (shown) shown.textContent = seedLine(seedText);
+              },
+              onchange: (e: Event) => {
+                seedText = (e.target as HTMLInputElement).value;
+                if (looksLikeGameCode(seedText)) applyCode(seedText);
+                render();
+              },
+            })),
+          h('button', { class: 'btn small', id: 'seed-random', title: 'Pick a random seed number', onclick: () => { seedText = randomSeed(); codeNote = ''; render(); } }, 'Random'),
+          h('button', { class: 'btn small', id: 'seed-paste', title: 'Restore all these choices from a game code (Game menu, Copy game code)', onclick: () => void pasteCode() }, 'Paste game code')),
+        h('p', { class: 'muted small', id: 'seed-shown', 'aria-live': 'polite' }, seedLine(seedText)),
+        codeNote ? h('p', { class: codeNote.startsWith('Game code applied') ? 'muted small' : 'save-error', role: 'status' }, codeNote) : null,
         humans > 0 && headYear
           ? h('p', { class: 'muted small' }, `The strongest computer player runs your nation until ${headYear}, then hands it to you. Everyone else plays at the levels chosen above.`)
           : null,
@@ -188,7 +266,7 @@ export function newGameScreen(
           h('button', {
             class: 'btn primary big',
             onclick: () => start({
-              seed,
+              ...parseSeedInput(seedText),
               mapSize,
               ...(map ? { map } : {}),
               nations: chosen.map((s) => s.nation),
@@ -199,7 +277,7 @@ export function newGameScreen(
               randomEvents,
               colonyCharter,
             }, humans > 0 && headYear ? { turn: turnOfYear(headYear), watch: watchHeadStart } : undefined),
-          }, humans === 0 ? 'Watch the computers play' : 'Set sail'),
+          }, fromCode ? 'Start this game' : humans === 0 ? 'Watch the computers play' : 'Set sail'),
           h('button', {
             class: 'btn',
             onclick: async () => {

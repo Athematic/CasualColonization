@@ -13,6 +13,7 @@
     "@cc/render-api": "0.1.0",
     "@cc/style-ligne-claire": "0.1.0",
     "@cc/style-schematic": "0.1.0",
-    "@cc/style-sprites": "0.1.0"
+    "@cc/style-sprites": "0.1.0",
+    "qrcode-generator": "2.0.4"
   }
 }
