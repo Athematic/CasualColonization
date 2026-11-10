@@ -55,7 +55,7 @@ import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangle
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { stopPort } from '../routes.js';
 import { maybeIncite } from './natives.js';
-import { armyForIndependence, supportParts, colonyDefences, crownAffairs, defenceShort, expectedSupport, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
+import { armyForIndependence, supportParts, rebelColonyDefence, crownAffairs, defenceShort, expectedSupport, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
 import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './plan.js';
 import { equippedPrice, trainEquipped } from './outfit.js';
 import type { AiProfile } from './profiles.js';
@@ -683,10 +683,11 @@ function soldierTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   // out alone (ai/royal.ts, powerNeeded) march to the nearest colony with too little.
   if (turnArming && here && here.owner === p.id) {
     const need = powerNeeded(s, p);
-    const surplus = new Map(colonyDefences(s, p).map((d) => [d.colony.id, d.power - need]));
-    const thin = (surplus.get(here.id) ?? 0) >= REBEL_DEFENCE
+    // Each colony's defence is worked out only when needed (most garrisons have nothing to spare).
+    const surplus = (c: Colony) => rebelColonyDefence(s, p, c) - need;
+    const thin = surplus(here) >= REBEL_DEFENCE
       ? colonies
-          .filter((c) => c.id !== here.id && colonyWorkers(s, c).length > 0 && (surplus.get(c.id) ?? 0) < 0 && distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE)
+          .filter((c) => c.id !== here.id && distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE && colonyWorkers(s, c).length > 0 && surplus(c) < 0)
           .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0]
       : undefined;
     if (thin && findPath(s, u, thin.x, thin.y)) {
@@ -808,9 +809,9 @@ function reinforce(s: GameState, p: Player, u: Unit): boolean {
   if (!pos || u.moves <= 0) return false;
   const here = colonyAt(s, pos.x, pos.y);
   if (!here || here.owner !== p.id || royalsNear(s, p, here, 3) > 0) return false;
-  const defence = colonyDefences(s, p).find((d) => d.colony.id === here.id);
+  const defence = rebelColonyDefence(s, p, here);
   const keep = powerNeeded(s, p) * (isCoastal(s, here.x, here.y) ? 2 : 1);
-  if (!defence || defence.power - keep < REBEL_DEFENCE || armedAt(s, p, here.x, here.y).length <= 1) return false;
+  if (defence - keep < REBEL_DEFENCE || armedAt(s, p, here.x, here.y).length <= 1) return false;
   const target = ownColonies(s, p)
     .filter((c) => c.id !== here.id && distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE)
     .map((c) => ({ c, threat: royalsNear(s, p, c) - armedAt(s, p, c.x, c.y).length }))

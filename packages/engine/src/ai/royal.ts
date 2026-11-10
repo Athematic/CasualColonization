@@ -266,3 +266,19 @@ function royalWarTurn(s: GameState, p: Player, prof: AiProfile, strength: number
   }
   if (s.turn - (p.warSince[enemy] ?? s.turn) >= WAR_WEARINESS) proposePeace(s, p.id, enemy);
 }
+
+/**
+ * One colony's power in `colonyDefences`, worked out alone (the same sum): for a caller that needs
+ * only a few colonies, such as a soldier weighing its own colony against those nearby.
+ */
+export function rebelColonyDefence(s: GameState, p: Player, c: Colony): number {
+  const committed = sonsOfLiberty(s, c) >= COMMITTED;
+  const armed = unitsAt(s, c.x, c.y).filter((u) => u.owner === p.id && !isShip(u) && isArmed(u) && !u.ally);
+  let power = armed.reduce((n, u) => n + rebelDefence(c, committed, u), 0);
+  const muskets = Math.floor(c.goods.muskets / 50);
+  const dragoons = armed.filter((u) => u.role === 'dragoon');
+  const horses = dragoons.length ? Math.floor(c.goods.horses / 50) : 0;
+  power += muskets * rebelDefence(c, committed);
+  if (horses) power += horses * rebelDefence(c, committed, dragoons[0]);
+  return power;
+}
