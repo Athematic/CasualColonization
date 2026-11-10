@@ -1,0 +1,64 @@
+# 0.10 measurement jobs for the Mac worker
+
+These are the measurement jobs for 0.10, Faster turns. They run on Simon's MacBook (Apple M2, 8 cores, 16 GB), the "CasualColonization worker", so every timing in 0.10 comes from the same machine. The code changes are made in a cloud session on branch `claude/0.10-faster-turns`. The Mac session only measures and reports.
+
+If you are the Claude session on the Mac, read this whole file, then do the job Simon names (start with job 1 if he names none).
+
+## Rules for every job
+
+- **Measure only.** Don't change code, tests, `scripts/bench-hashes.json` or snapshots. Never run `npm run bench -- --write` or `npm run test:golden:write`.
+- **Same conditions each time.** The Mac is on mains power. Close heavy apps (browsers with many tabs, video calls, builds). Run one measurement at a time, never two in parallel.
+- **Repeat timings.** Run each timing 3 times and report the median and the spread. The first run after `npm install` or a fresh build is a warm-up and is not counted.
+- **Record the setup:** the commit (`git rev-parse --short HEAD`), the Node and npm versions, and the date and time.
+- **Results go on a branch of their own.** Write them to `docs/perf/results/<YYYY-MM-DD>-<job>-<commit>.md`. Commit them to branch `claude/0.10-mac-results`: create it from the measured commit the first time, then merge new results into it. Push that branch, and never push to `claude/0.10-faster-turns`. Commit messages end with a line `Measured on the Mac worker`.
+- **Report back.** Send the summary table and the results file's path to the cloud session `session_01Vgy9QYBpiHxzmYr17Ez8zF` (the session that wrote this file) with the session messaging tool, if you have it. If you don't, tell Simon the results branch is pushed.
+- **When something fails** (a test, `bench --verify` not "same", a crash), stop that job. Report the exact command and the last 40 lines of output. Don't try to fix it.
+
+## Job 0: set up (once, and again after `package-lock.json` changes)
+
+```sh
+git fetch origin claude/0.10-faster-turns
+git checkout --detach origin/claude/0.10-faster-turns   # or the commit the job names
+npm ci
+node --version; npm --version
+npm run bench -- --verify     # must print "same" for every game; this is also the warm-up
+```
+
+## Job 1: baseline (before any 0.10 change)
+
+Measure commit `origin/claude/0.10-faster-turns` as it is when the job starts. Until the first speed-up lands, that is 0.9's code.
+
+1. **Head starts.** Use the bench's game, seed 2024, played by computer players. Run each 3 times and report the median and spread of the seconds it prints:
+   ```sh
+   npm run bench -- --year 1600 --quiet
+   npm run bench -- --year 1700 --quiet
+   npm run bench -- --year 1750 --quiet
+   npm run bench -- --scenario caribbean --year 1725 --quiet
+   ```
+   Check the bench script's printed usage if `--year` or `--quiet` behave differently than expected, and say so.
+2. **Determinism check:** `npm run bench -- --verify` and `npm run bench -- --verify --scenario caribbean`. Every line must say "same".
+3. **CPU profile of a head start to 1700.** Profile one run and list the 30 functions with the most self time: name, file:line, self ms and percentage. Write the list into the results file. Don't commit the `.cpuprofile` file itself; it's large.
+   ```sh
+   npm run bench -- --year 1700 --quiet          # builds scripts/.bench.mjs
+   node --cpu-prof --cpu-prof-dir=/tmp/cc-prof scripts/.bench.mjs --year 1700 --quiet
+   ```
+   Summarise it with a short Node script that reads the `.cpuprofile` JSON and adds up `timeDeltas` per node `callFrame` (functionName, url, lineNumber). Put that script in `/tmp`, not in the repo.
+4. **Test suite.** Run `time npm test` 3 times. Report the wall time and vitest's own duration line. Also report the 10 slowest test files (`npx vitest run --reporter=verbose` gives the durations per file, or use the JSON reporter).
+5. **Tournaments.** These are the reference for "the computer players play as well as before". Run each once, timed:
+   ```sh
+   time npm run tournament -- --games 8 --turns 609 --play-on --events --seed 1000
+   time npm run tournament -- --scenario caribbean --games 8 --turns 202 --events --seed 1000
+   ```
+   Copy each tournament's full summary tables into the results file: scores, wins, colonies per level, relations and trade, and the Crown table.
+
+**Results file:** start with a summary table with one row per measurement (median, spread). Then give the profile list, the slowest test files and the tournament tables. End with anything unusual: noise between runs, warnings, a run that was much slower.
+
+## Job 2: measure a change
+
+Simon or the cloud session names a commit, usually the head of `claude/0.10-faster-turns` after a speed-up. Do job 0 on that commit, then repeat job 1's steps 1–4 on it. Add a column comparing it with the baseline (seconds and percentage).
+
+A speed-up that changes game outcomes re-records the hashes on the branch. Its commit message says so, and `bench --verify` then has to be "same" against the new hashes. If the job says the change alters outcomes, also run step 5's tournaments and set their tables side by side with the baseline's.
+
+## Job 3: release check (at the end of 0.10)
+
+Do job 2 on the release candidate commit with all five steps, and compare with the baseline. The 0.10 target for a head start to 1700 is set from job 1's numbers and recorded in `docs/ROADMAP.md`.
