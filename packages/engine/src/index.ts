@@ -24,6 +24,7 @@ export * from './fathers.js';
 export * from './diplomacy.js';
 export * from './independence.js';
 export * from './crown.js';
+export * from './rebellion.js';
 export * from './score.js';
 export * from './mines.js';
 export * from './rules/mines.js';

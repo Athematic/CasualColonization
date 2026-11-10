@@ -6,6 +6,8 @@
  */
 import { defencePower } from '../combat.js';
 import { answerDemand, demandPenalty, REF_ON_REFUSAL } from '../crown.js';
+import { colonyReport } from '../production.js';
+import { answerMercenaries, INTERVENTION, interventionBells, interventionForce, mercenaryCompany } from '../rebellion.js';
 import { proposePeace, WAR_WEARINESS } from '../diplomacy.js';
 import { distance, isShip, unitsAt } from '../queries.js';
 import { ROLES, UNIT_TYPES } from '../rules/units.js';
@@ -57,10 +59,10 @@ export function rebelPower(s: GameState, p: Player): number {
  * holds, for its defence to reach `ratio` of the Royal Expeditionary Force, between the plan's
  * own minimum and 4.
  */
-export function armyForIndependence(s: GameState, p: Player, plan: { armyPerColony: number; ratio: number }): number {
+export function armyForIndependence(s: GameState, p: Player, plan: { armyPerColony: number; ratio: number }, support = 0): number {
   const colonies = ownColonies(s, p).length;
   if (!colonies) return plan.armyPerColony;
-  const units = (refPower(p) * plan.ratio) / REBEL_DEFENCE;
+  const units = Math.max(0, refPower(p) * plan.ratio - support) / REBEL_DEFENCE;
   return Math.min(4, Math.max(plan.armyPerColony, Math.ceil(units / colonies)));
 }
 
@@ -70,15 +72,69 @@ export function armyForIndependence(s: GameState, p: Player, plan: { armyPerColo
  * an army takes cost more score than the war could bring (tournaments: arming from far behind
  * cost Creative about 100 points a game without a single declaration).
  */
-export function armingPays(s: GameState, p: Player, ratio: number): boolean {
-  const have = rebelPower(s, p);
+export function armingPays(s: GameState, p: Player, ratio: number, support = 0): boolean {
+  const have = rebelPower(s, p) + support;
   const need = refPower(p) * ratio;
   return have < need && have >= need * ARMING_REACH;
 }
 
-/** Whether the nation's defence can plausibly beat the Royal Expeditionary Force waiting for it. */
-export function canBeatRef(s: GameState, p: Player, ratio: number): boolean {
-  return rebelPower(s, p) >= refPower(p) * ratio;
+/**
+ * Whether the nation's defence can plausibly beat the Royal Expeditionary Force waiting for it,
+ * with `support` (see `expectedSupport`) from mercenaries and a foreign intervention.
+ */
+export function canBeatRef(s: GameState, p: Player, ratio: number, support = 0): boolean {
+  return rebelPower(s, p) + support >= refPower(p) * ratio;
+}
+
+/**
+ * Defence one mercenary or intervention soldier, dragoon or artillery brings once fortified in a
+ * rebel colony (a veteran soldier there defends at about 9, a veteran dragoon at 13, artillery at
+ * 11, before the quarter `rebelPower` adds).
+ */
+export const SUPPORT_DEFENCE = { soldiers: 9, dragoons: 13, artillery: 11 };
+/**
+ * Share of the intervention force a nation counts on before declaring: it comes only if the
+ * rebellion lasts and holds, and it lands in the middle of the war, not at the start.
+ */
+export const INTERVENTION_TRUST = 0.6;
+/** The intervention counts only if the nation's bells would bring it within this many turns of the declaration. */
+export const INTERVENTION_HORIZON = 20;
+
+const supportPower = (c: { soldiers: number; dragoons: number; artillery: number }) =>
+  c.soldiers * SUPPORT_DEFENCE.soldiers + c.dragoons * SUPPORT_DEFENCE.dragoons + c.artillery * SUPPORT_DEFENCE.artillery;
+
+/**
+ * The help a nation can expect if it declares now (rebellion.ts): the mercenary company that
+ * would offer its services at the declaration, if the treasury can pay for it, and
+ * INTERVENTION_TRUST of the intervention force when the colonies ring enough bells for it to come
+ * within INTERVENTION_HORIZON turns.
+ */
+export function expectedSupport(s: GameState, p: Player): number {
+  if (p.independence !== 'none') return 0;
+  const company = mercenaryCompany(s, p.id);
+  let support = company ? supportPower(company) : 0;
+  const bells = ownColonies(s, p).reduce((n, c) => n + colonyReport(s, c).produced.bells, 0);
+  const turns = bells > 0 ? Math.max(INTERVENTION.minTurns, Math.ceil(interventionBells(p) / bells)) : Infinity;
+  if (turns <= INTERVENTION_HORIZON) support += supportPower(interventionForce(p)) * INTERVENTION_TRUST;
+  return support;
+}
+
+/**
+ * Hires the mercenary company offering its services, or turns it away. Naive never hires. The
+ * advanced levels hire a company they can pay at the declaration (their decision to declare
+ * counted on it), and later in the war whenever their defence is short of `ratio` times the
+ * royal troops still to land and already ashore.
+ */
+export function hireMercenaries(s: GameState, p: Player, prof: AiProfile | null, ratio: number): void {
+  const offer = p.mercenaryOffer;
+  if (!offer) return;
+  let hire = !!prof && p.gold >= offer.price && p.independence === 'declared';
+  if (hire && offer.turn !== p.refAtDeclaration?.turn) {
+    const ashore = Object.values(s.units).filter((u) => u.owner === 'crown' && u.against === p.id && !isShip(u)).length;
+    const threat = refPower(p) + ashore * REGULAR;
+    hire = rebelPower(s, p) < threat * ratio;
+  }
+  safely(() => void answerMercenaries(s, p.id, hire));
 }
 
 /**

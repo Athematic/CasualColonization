@@ -251,6 +251,7 @@ export function assignJob(s: GameState, unitId: string, colonyId: string, job?: 
   if (!u || !colony) fail('No such unit or colony.');
   if (colony.owner !== u.owner) fail('That is not your colony.');
   if (UNIT_TYPES[u.type].kind !== 'colonist') fail('Only colonists can work in a colony.');
+  if (u.ally) fail('The intervention force does not work in colonies.');
   const inside = u.loc.kind === 'colony' && u.loc.colonyId === colonyId;
   const atGate = u.loc.kind === 'map' && u.loc.x === colony.x && u.loc.y === colony.y;
   const docked = u.loc.kind === 'carrier' && (() => {

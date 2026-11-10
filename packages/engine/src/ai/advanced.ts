@@ -51,7 +51,7 @@ import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { maybeIncite } from './natives.js';
-import { armingPays, armyForIndependence, canBeatRef, crownAffairs } from './royal.js';
+import { armingPays, armyForIndependence, canBeatRef, crownAffairs, expectedSupport, hireMercenaries } from './royal.js';
 import { equippedPrice, trainEquipped } from './outfit.js';
 import type { AiProfile } from './profiles.js';
 import { buildRoads, equipPioneer, pioneerToolsWanted } from './roads.js';
@@ -65,13 +65,17 @@ export function runAdvanced(s: GameState, p: Player, prof: AiProfile): void {
   turnExpansion = expansionCheck(s, p, prof);
   turnSaving = turnExpansion === 'ready' || turnExpansion === 'gold' ? charterCost(s, p.id) : 0;
   const plan = prof.independence;
-  turnArmy = plan ? (plan.arm ? armyForIndependence(s, p, plan) : plan.armyPerColony) : 0;
-  turnArming = !!plan?.arm && preparingIndependence(prof) && armingPays(s, p, plan.ratio);
+  // Mercenaries and a foreign intervention count towards the defence (ai/royal.ts, rebellion.ts).
+  const support = plan && p.independence === 'none' && preparingIndependence(prof, 20) ? expectedSupport(s, p) : 0;
+  turnArmy = plan ? (plan.arm ? armyForIndependence(s, p, plan, support) : plan.armyPerColony) : 0;
+  turnArming = !!plan?.arm && preparingIndependence(prof) && armingPays(s, p, plan.ratio, support);
   const army = spareArmy(s, p, prof);
   const strength = army.reduce((n, u) => n + offencePower(s, u), 0);
   safely(() => foreignAffairs(s, p, prof, strength, army.length));
   // The King's demands and wars (ai/royal.ts).
   crownAffairs(s, p, prof, preparingIndependence(prof, 20), strength);
+  // A mercenary company offering its services during the War of Independence.
+  if (p.mercenaryOffer) hireMercenaries(s, p, prof, plan?.ratio ?? 1.2);
   safely(() => diplomacy(s, p, prof));
   for (const c of ownColonies(s, p)) safely(() => manageColony(s, p, c, prof));
   safely(() => sendSettler(s, p, prof));
@@ -116,7 +120,7 @@ function spareArmy(s: GameState, p: Player, prof: AiProfile): Unit[] {
   const out: Unit[] = [];
   const kept = new Map<string, number>();
   for (const u of Object.values(s.units)) {
-    if (u.owner !== p.id || !isArmed(u) || u.loc.kind !== 'map') continue;
+    if (u.owner !== p.id || !isArmed(u) || u.loc.kind !== 'map' || u.ally) continue;
     const c = colonyAt(s, u.loc.x, u.loc.y);
     if (c && c.owner === p.id) {
       const n = kept.get(c.id) ?? 0;
@@ -458,7 +462,8 @@ function acquireLand(s: GameState, p: Player, c: Colony, prof: AiProfile): void 
 // Units
 
 function unitTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
-  if (u.loc.kind !== 'map' || u.work || u.repair || u.route) return;
+  // The intervention force fights on its own (rebellion.ts).
+  if (u.loc.kind !== 'map' || u.work || u.repair || u.route || u.ally) return;
   const def = UNIT_TYPES[u.type];
   if (def.kind === 'ship') return shipTurn(s, p, u, prof);
   if (def.kind === 'treasure') return treasureTurn(s, p, u);
@@ -1003,8 +1008,11 @@ function independence(s: GameState, p: Player, prof: AiProfile): void {
   const armed = countOwned(s, p, isArmed);
   const fortified = colonies.filter((c) => c.buildings.stockade > 0).length;
   if (armed < colonies.length * plan.armyPerColony || fortified < colonies.length / 3) return;
-  // The Royal Expeditionary Force has grown all game: declare only when the defence can plausibly beat it.
-  if (!canBeatRef(s, p, plan.ratio)) return;
-  if (canDeclareIndependence(s, p.id) === null) declareIndependence(s, p.id);
+  // The Royal Expeditionary Force has grown all game: declare only when the defence can plausibly
+  // beat it, counting the mercenaries the treasury can hire and the intervention the bells bring.
+  if (!canBeatRef(s, p, plan.ratio, expectedSupport(s, p))) return;
+  if (canDeclareIndependence(s, p.id) !== null) return;
+  declareIndependence(s, p.id);
+  hireMercenaries(s, p, prof, plan.ratio);
 }
 

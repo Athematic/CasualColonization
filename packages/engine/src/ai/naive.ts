@@ -21,7 +21,7 @@ export function runNaive(s: GameState, p: Player): void {
   crownAffairs(s, p, null);
   const units = Object.values(s.units).filter((u) => u.owner === p.id);
   for (const u of units) {
-    if (!s.units[u.id] || u.owner !== p.id) continue;
+    if (!s.units[u.id] || u.owner !== p.id || u.ally) continue;
     safely(() => aiUnit(s, p, u));
   }
   safely(() => aiEurope(s, p));

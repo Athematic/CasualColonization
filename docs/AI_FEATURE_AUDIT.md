@@ -281,6 +281,15 @@ What the numbers say:
 
 - **No doomed declarations** (Competent scored 31 in the game where it declared before, against 90 now), and scores are no lower: +4 to +27 a level, within the noise of 8 games.
 - **Still no winning declaration.** Under these rules a computer nation's defence reaches 0.7–0.9 of the REF's power at best (Creative arming, probe games), short of the 1.1–1.25 the war needs. Getting there needs a stronger economy behind the army (armories staffed for muskets, artillery from colonies) or a smaller force; worth revisiting with the 0.7 items (mercenaries, foreign intervention).
+
+### Mercenaries, foreign intervention and Tories (0.7)
+
+The rules are in `packages/engine/src/rebellion.ts` (README, "War of Independence"); tests in `packages/engine/test/rebellion.test.ts`.
+
+- **The decision to declare** (`expectedSupport` in `ai/royal.ts`) now adds to the rebels' defence the mercenary company that would offer its services at the declaration, if the treasury can pay it (a veteran soldier counts 9, a veteran dragoon 13, artillery 11, as fortified in a colony), and 0.6 (`INTERVENTION_TRUST`) of the intervention force when the colonies' bells per turn would bring it within 20 turns of the declaration (`INTERVENTION_HORIZON`). The same support lowers the army wanted for independence and lets Creative start arming from further behind (`armingPays`). Ratios are unchanged (Competent 1.25, Combative 1.1, Creative 1.15 in its independence focus); Naive never declares.
+- **Mercenaries**: Naive never hires. The advanced levels hire a company they can pay at the declaration (the decision counted on it), and later offers only while their defence is short of the ratio times the royal troops still to land and ashore.
+- **The intervention force** belongs to the rebels but is played by the engine (`runAllies`, at the start of the rebels' turn): it attacks royal troops in the open next to it at even odds or better and otherwise marches to the rebel colony most threatened by royal troops. The rebels' own turn (human or computer) cannot order it.
+- **Arena** (2 games, 330 turns, medium map; `npm run tournament -- --games 2 --turns 330 --size medium`): before and after the rules, with the first support weights (intervention share 0.3, trust 0.5), the games were identical: no level declared (Creative and Competent ended with REFs of 61–63 land units, about 390 attack power, against defences short of it). The share was then raised to 0.4 and the trust to 0.6; under the user's cost rule this final setting has not had an arena run yet. A constructed late-game position (`rebellion.test.ts`) shows Creative declaring once the mercenaries tip the balance, and not without the gold.
 - **Demands are almost always paid**, and **royal wars** are now most of the wars between Europeans; Combative uses them (0.8 a game) to attack, the others make peace.
 - Royal wars hit trade partners more often than the quarter weight suggests (most nations have agreements with every neighbour); never a Favoured Nation.
 
