@@ -21,7 +21,7 @@ import {
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
-import { difficultyOf, goodsOf, mechanicsOf, nationOf, nativeProduceOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, mechanicsOf, nationOf, nativeProduceOf, peopleOf } from './scenarios/index.js';
 
 /**
  * The settlement next to a unit, checked for a visit. A wagon train or ship trading there may
@@ -105,8 +105,8 @@ export function learnSkill(s: GameState, unitId: string, settlementId: string): 
   return text;
 }
 
-export function nativeOffer(st: Settlement, good: GoodId, amount: number): number {
-  const tribe = TRIBES[st.tribe];
+export function nativeOffer(s: GameState, st: Settlement, good: GoodId, amount: number): number {
+  const tribe = peopleOf(s, st.tribe);
   const wanted = tribe.wants.indexOf(good);
   const factor = wanted === 0 ? 2 : wanted > 0 ? 1.5 : 1;
   const offer = Math.round(amount * GOOD_DEFS[good].nativeValue * factor * (st.capital ? 1.3 : 1));
@@ -118,10 +118,10 @@ export function tradeWithSettlement(s: GameState, unitId: string, settlementId: 
   const u = s.units[unitId];
   const st = adjacentSettlement(s, u, settlementId, 'sold');
   const cargo = u.cargo ?? {};
-  const chosen = good ?? goodsOf(s).filter((g) => (cargo[g] ?? 0) > 0).sort((a, b) => nativeOffer(st, b, cargo[b]!) - nativeOffer(st, a, cargo[a]!))[0];
+  const chosen = good ?? goodsOf(s).filter((g) => (cargo[g] ?? 0) > 0).sort((a, b) => nativeOffer(s, st, b, cargo[b]!) - nativeOffer(s, st, a, cargo[a]!))[0];
   if (!chosen || !(cargo[chosen] ?? 0)) fail('There is nothing to trade.');
   const amount = Math.min(100, cargo[chosen]!);
-  const gold = nativeOffer(st, chosen, amount);
+  const gold = nativeOffer(s, st, chosen, amount);
   if (gold <= 0) fail('The natives have no gold left to trade.');
   cargo[chosen] = cargo[chosen]! - amount;
   st.gold -= gold;

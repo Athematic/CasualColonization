@@ -10,7 +10,7 @@ import { fail } from '../errors.js';
 import { noteHistory } from '../history.js';
 import { random } from '../rng.js';
 import { message, player, unitName } from '../queries.js';
-import { calendarOf, formatDate, nationOf, nationTitle, yearOf } from '../scenarios/index.js';
+import { calendarOf, formatDate, nationOf, nationTitle, scenarioOf, yearOf } from '../scenarios/index.js';
 import { buildingName } from '../rules/buildings.js';
 import { GOOD_DEFS } from '../rules/goods.js';
 import { TRIBES, type NationId } from '../rules/nations.js';
@@ -18,12 +18,14 @@ import { UNIT_TYPES } from '../rules/units.js';
 import { track, tracking } from '../telemetry.js';
 import type { GameState, Player } from '../types.js';
 import { AMERICAS_EVENTS } from './americas.js';
+import { CARIBBEAN_EVENTS } from './caribbean.js';
 import { applyEffects, atRoundEnd, eventsState, num, valueEffects } from './effects.js';
 import type { EventChoice, EventDef, EventKind, EventVars, PendingEvent } from './types.js';
 
 export * from './types.js';
 export { eventProductionPct } from './modifiers.js';
 export { HISTORICAL_EVENTS, RANDOM_EVENTS, AMERICAS_EVENTS } from './americas.js';
+export { CARIBBEAN_EVENTS } from './caribbean.js';
 export { applyEffects, valueEffects, tensionCost, tensionValue, TAX_POINT_VALUE } from './effects.js';
 
 /** Chance per round that a nation has a random event (if one has a target). */
@@ -34,7 +36,7 @@ export const RANDOM_COOLDOWN = 40;
 // ---------------------------------------------------------------------------
 // Registry
 
-const SETS: Record<string, EventDef[]> = { americas: AMERICAS_EVENTS };
+const SETS: Record<string, EventDef[]> = { americas: AMERICAS_EVENTS, caribbean: CARIBBEAN_EVENTS };
 
 /** Registers an event set (a scenario's), replacing one with the same id. */
 export function registerEventSet(id: string, defs: EventDef[]): void {
@@ -51,9 +53,9 @@ export function hasEventSet(id: string): boolean {
   return id in SETS;
 }
 
-/** The events of the game's set. */
+/** The events of the game's set: `config.eventSet` (tests), else its scenario's. */
 export function eventDefs(s: GameState): EventDef[] {
-  return SETS[s.config.eventSet ?? 'americas'] ?? AMERICAS_EVENTS;
+  return SETS[s.config.eventSet ?? scenarioOf(s).events] ?? AMERICAS_EVENTS;
 }
 
 export function eventDef(s: GameState, id: string): EventDef | undefined {

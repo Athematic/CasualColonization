@@ -25,7 +25,7 @@ import { favouredPartners, hasTradeAgreement, isHostile } from '../relations.js'
 import { boardInEurope, buyGoods, buyPrice, inHomePort, portOf, recruit, recruitPrice, sailToAmerica, sellGoods, train, trainPrice } from '../europe.js';
 import { canDeclareIndependence, declareIndependence, rebelShare } from '../independence.js';
 import { abandonColony } from '../leaving.js';
-import { canImprove, findPath, setDestination, startImprovement } from '../movement.js';
+import { boardShip, canImprove, findPath, setDestination, startImprovement } from '../movement.js';
 import { buyLand, establishMission, giftToTribe, landPrice, learnSkill, nativeLandOwner, speakToChief, takeLand, tensionOf } from '../natives.js';
 import { colonyReport, type ColonyReport } from '../production.js';
 import {
@@ -49,7 +49,7 @@ import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
 import type { GoodId, ProductId } from '../rules/goods.js';
 import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import type { BuildTarget, Colony, GameState, Job, Player, Unit } from '../types.js';
-import { aiFight, bestColonySite, disembarkAll, keenSiteScore, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
+import { aiFight, bestColonySite, boardRescue, disembarkAll, fetchStranded, keenSiteScore, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
 import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
@@ -60,7 +60,7 @@ import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './p
 import { equippedPrice, trainEquipped } from './outfit.js';
 import type { AiProfile } from './profiles.js';
 import { buildRoads, equipPioneer, pioneerToolsWanted } from './roads.js';
-import { aiGoodsOf, aiTurn, goodsOf } from '../scenarios/index.js';
+import { aiGoodsOf, aiTurn, goodsOf, scenarioOf } from '../scenarios/index.js';
 
 const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
 
@@ -260,13 +260,85 @@ function sendSettler(s: GameState, p: Player, prof: AiProfile): void {
     .sort((a, b) => b.workers.length - a.workers.length || (a.c.id < b.c.id ? -1 : 1))[0];
   if (!from) return;
   const site = bestColonySite(s, from.c.x, from.c.y, { radius: 8, score: (x, y) => keenSiteScore(s, x, y), perTile: 1.1, stay: false, overLand: true, penalty: nativeCrowding(s) });
-  if (site.score <= 14) return;
+  if (site.score <= 14) {
+    if (scenarioOf(s).ai.islands) sendSeaSettler(s, p, colonies, keep);
+    return;
+  }
   const settler = from.workers
     .filter((w) => w.type !== 'nativeConvert' && !w.teach)
     .sort((a, b) => UNIT_TYPES[a.type].skill - UNIT_TYPES[b.type].skill || (a.id < b.id ? -1 : 1))[0];
   if (!settler) return;
   leaveColony(s, settler.id);
   markSettler(p, settler);
+}
+
+/**
+ * Among islands (`ai.islands`): with no site within walking distance, the largest coastal colony
+ * sends a settler to wait on its quay for a ship to the best site on another island within 12
+ * tiles (carrySeaSettler). One at a time.
+ */
+function sendSeaSettler(s: GameState, p: Player, colonies: Colony[], keep: number): void {
+  const memory = (p.aiMemory = p.aiMemory ?? {});
+  const sea = (memory.seaSettlers = memory.seaSettlers ?? {});
+  for (const id of Object.keys(sea)) if (!s.units[id] || s.units[id].owner !== p.id) delete sea[id];
+  if (Object.keys(sea).length) return;
+  const from = colonies
+    .filter((c) => isCoastal(s, c.x, c.y))
+    .map((c) => ({ c, workers: colonyWorkers(s, c) }))
+    .filter((e) => e.workers.length > keep)
+    .sort((a, b) => b.workers.length - a.workers.length || (a.c.id < b.c.id ? -1 : 1))[0];
+  if (!from) return;
+  const site = bestColonySite(s, from.c.x, from.c.y, {
+    radius: 12,
+    score: (x, y) => (isCoastal(s, x, y) ? keenSiteScore(s, x, y) : -Infinity),
+    perTile: 0.5,
+    stay: false,
+    penalty: nativeCrowding(s),
+  });
+  if (site.score <= 14) return;
+  const settler = from.workers
+    .filter((w) => w.type !== 'nativeConvert' && !w.teach)
+    .sort((a, b) => UNIT_TYPES[a.type].skill - UNIT_TYPES[b.type].skill || (a.id < b.id ? -1 : 1))[0];
+  if (!settler) return;
+  leaveColony(s, settler.id);
+  settler.state = 'sentry';
+  sea[settler.id] = { x: site.x, y: site.y };
+}
+
+/**
+ * A ship in a colony where a sea settler waits takes it aboard, and carries it to water next to its
+ * site; there the usual landing (disembarkAll) puts it ashore and it founds the colony
+ * (colonistTurn). Returns whether the ship is on that errand this turn.
+ */
+function carrySeaSettler(s: GameState, p: Player, ship: Unit, here: Colony | undefined): boolean {
+  const sea = p.aiMemory?.seaSettlers;
+  if (!sea) return false;
+  const passengers = unitsAboard(s, ship);
+  let settler = passengers.find((u) => sea[u.id]);
+  if (!settler && !passengers.length && here && here.owner === p.id && cargoFree(s, ship) > 0) {
+    settler = Object.keys(sea)
+      .map((id) => s.units[id])
+      .find((u) => u && u.owner === p.id && u.loc.kind === 'map' && u.loc.x === here.x && u.loc.y === here.y);
+    if (!settler) return false;
+    // A site taken in the meantime: the settler goes back to work.
+    if (keenSiteScore(s, sea[settler.id].x, sea[settler.id].y) === -Infinity) {
+      delete sea[settler.id];
+      return false;
+    }
+    boardShip(s, settler.id, ship.id);
+  }
+  if (!settler) return false;
+  const target = sea[settler.id];
+  const pos = unitPosition(s, ship)!;
+  // Next to the site (and not in a colony): the usual landing puts the settler ashore.
+  if (distance(pos.x, pos.y, target.x, target.y) <= 1 && !colonyAt(s, pos.x, pos.y)) return false;
+  const spot = neighbours(s, target.x, target.y).find((n) => isWater(tileAt(s, n.x, n.y)!) && findPath(s, ship, n.x, n.y));
+  if (!spot) {
+    delete sea[settler.id];
+    return false;
+  }
+  setDestination(s, ship.id, spot);
+  return true;
 }
 
 function adjacentTileTowards(s: GameState, u: Unit, tx: number, ty: number): { x: number; y: number } | null {
@@ -578,8 +650,9 @@ function unitTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   if (def.kind === 'treasure') return treasureTurn(s, p, u);
   if (def.kind === 'artillery') return soldierTurn(s, p, u, prof);
   if (def.kind !== 'colonist') return;
-  // Before the first colony exists, whoever lands first founds it.
-  if (!ownColonies(s, p).length && u.role !== 'scout') return colonistTurn(s, p, u, prof);
+  // Before the first colony exists, whoever lands first founds it; settlers stranded where they
+  // cannot (another nation's colony took their island) board a ship that comes for them.
+  if (!ownColonies(s, p).length && u.role !== 'scout') return boardRescue(s, p, u) ? undefined : colonistTurn(s, p, u, prof);
   if (u.role === 'soldier' || u.role === 'dragoon') return soldierTurn(s, p, u, prof);
   if (u.role === 'scout') return scoutTurn(s, p, u);
   if (u.role === 'pioneer') return pioneerTurn(s, p, u);
@@ -858,6 +931,13 @@ function missionaryTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void
 function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   const pos = unitPosition(s, u)!;
   const here = colonyAt(s, pos.x, pos.y);
+  // A settler waiting on the quay for a ship to another island (sendSeaSettler); once ashore, it founds as any settler.
+  const sea = p.aiMemory?.seaSettlers;
+  if (sea?.[u.id]) {
+    if (here) return;
+    delete sea[u.id];
+    markSettler(p, u);
+  }
   // Unskilled colonists learn a trade from the natives first.
   if (prof.learnFromNatives && UNIT_TYPES[u.type].skill <= 0 && u.type !== 'pettyCriminal' && u.type !== 'nativeConvert') {
     const teacher = Object.values(s.settlements)
@@ -952,6 +1032,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
   const pos = unitPosition(s, ship)!;
   const here = colonyAt(s, pos.x, pos.y);
   const mine = here && here.owner === p.id ? here : undefined;
+  if (carrySeaSettler(s, p, ship, mine)) return;
   const passengers = unitsAboard(s, ship);
 
   if (passengers.length) {
@@ -963,6 +1044,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
     disembarkAll(s, ship);
     return;
   }
+  if (fetchStranded(s, p, ship)) return;
   // Goods boycotted at home and with no partner port to sell them in stay in the colonies.
   const outlet = favouredPartners(s, p.id).length > 0;
   const shippable = (g: GoodId) => outlet || !p.boycotts[g];

@@ -14,7 +14,7 @@ import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
 import type { Modifier, RumourOutcome } from '../rules/modifiers.js';
 import type { Effect } from '../events/types.js';
-import type { Lifeway, NationId, TribeId } from '../rules/nations.js';
+import type { Lifeway, NationId, PeopleDef, TribeId } from '../rules/nations.js';
 import type { SettlementKindDef } from '../rules/natives.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { ScoreWeights } from '../rules/score.js';
@@ -335,6 +335,12 @@ export interface ScenarioPeoples {
    * lifeway here.
    */
   settlements: Partial<Record<Lifeway, SettlementKindDef>>;
+  /**
+   * A people's skills or wants as they are in this scenario, where they differ from the catalogue
+   * (TRIBES): goods and experts not in play (the Tupi want no coats in the Caribbean). Read with
+   * `peopleOf(s, id)`.
+   */
+  overrides?: Partial<Record<TribeId, Partial<Pick<PeopleDef, 'skills' | 'wants'>>>>;
 }
 
 /** The scenario's council (the Americas: the Continental Congress's Founding Fathers). */
@@ -370,6 +376,12 @@ export interface ScenarioAi {
    * turns (cooldowns, patience, war weariness) are not. Absent means 1.
    */
   pace?: number;
+  /**
+   * The land is islands: when no good site lies within walking distance, the advanced computer
+   * players send a settler by ship to a site on another island (ai/advanced.ts). Absent: settlers
+   * walk, as on the Americas' continents.
+   */
+  islands?: boolean;
   goods: {
     /** Goods ships move between colonies and sell (ai/logistics.ts), most valuable first. */
     trade: GoodId[];

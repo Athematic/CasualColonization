@@ -7,7 +7,7 @@
  */
 import { AI_LEVELS, type AiLevel } from './ai/profiles.js';
 import { DIFFICULTY_LEVELS, type DifficultyId } from './rules/difficulty.js';
-import { NATION_ORDER, type NationId } from './rules/nations.js';
+import { NATION_IDS, type NationId } from './rules/nations.js';
 import { DEFAULT_SCENARIO, getScenario } from './scenarios/index.js';
 import type { GameConfig, MapSize } from './types.js';
 
@@ -135,7 +135,7 @@ export function encodeGameCode(settings: GameCodeSettings): string {
     settings.seedPhrase ?? 0,
     settings.map ?? 0,
     SIZES.indexOf(settings.mapSize),
-    settings.nations.map((n) => [NATION_ORDER.indexOf(n.nation), n.controller === 'human' ? 'h' : n.controller]),
+    settings.nations.map((n) => [NATION_IDS.indexOf(n.nation as (typeof NATION_IDS)[number]), n.controller === 'human' ? 'h' : n.controller]),
     DIFFICULTY_LEVELS.indexOf(settings.difficulty),
     (settings.historicalEvents ? 1 : 0) | (settings.randomEvents ? 2 : 0) | (settings.colonyCharter ? 4 : 0),
     settings.headStartTurn ?? 0,
@@ -161,12 +161,12 @@ export function decodeGameCode(code: string): DecodedGameCode {
     const [seed, phrase, map, size, nations, diff, flags, head, rivals, scenario] = p;
     const mapSize = SIZES[size as number];
     const difficulty = DIFFICULTY_LEVELS[diff as number];
-    if (typeof seed !== 'number' || !Number.isFinite(seed) || !mapSize || !difficulty || !Array.isArray(nations) || nations.length < 1 || nations.length > 8 || typeof flags !== 'number') return bad;
+    if (typeof seed !== 'number' || !Number.isFinite(seed) || !mapSize || !difficulty || !Array.isArray(nations) || nations.length < 1 || nations.length > NATION_IDS.length || typeof flags !== 'number') return bad;
     if (scenario !== undefined && typeof scenario !== 'string') return bad;
     if (typeof scenario === 'string' && !getScenario(scenario)) return { ok: false, error: `This code is for the scenario "${scenario}", which this version of the game does not have.` };
     const list: GameCodeSettings['nations'] = [];
     for (const n of nations as [number, string][]) {
-      const nation = NATION_ORDER[n[0]];
+      const nation = NATION_IDS[n[0]];
       const controller = n[1] === 'h' ? 'human' : (AI_LEVELS as string[]).includes(n[1]) ? (n[1] as AiLevel) : undefined;
       if (!nation || !controller || list.some((x) => x.nation === nation)) return bad;
       list.push({ nation, controller });

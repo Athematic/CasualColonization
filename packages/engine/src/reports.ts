@@ -15,12 +15,12 @@ import { favouredPartners } from './relations.js';
 import { BUILDINGS } from './rules/buildings.js';
 import { FATHERS, type FatherId } from './rules/fathers.js';
 import type { GoodId } from './rules/goods.js';
-import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import type { NationId, TribeId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { ledgerFor } from './history.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
-import { goodsOf, term } from './scenarios/index.js';
+import { goodsOf, peopleOf, term } from './scenarios/index.js';
 
 // ---- Colonies ----
 
@@ -375,7 +375,7 @@ export function nativesOverview(s: GameState, nation: NationId): TribeOverview[]
         tension: t,
         mood: tensionLabel(t),
         skill: visited ? st.skill : undefined,
-        wants: visited ? (own ?? TRIBES[st.tribe].wants) : undefined,
+        wants: visited ? (own ?? peopleOf(s, st.tribe).wants) : undefined,
         mission: st.mission,
         visited,
         land,

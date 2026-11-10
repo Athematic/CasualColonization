@@ -7,10 +7,10 @@
  */
 import { BUILDING_ORDER } from '../rules/buildings.js';
 import { COLONY_CHARTER } from '../rules/difficulty.js';
-import { FATHER_CATEGORIES, FATHERS, type FatherId } from '../rules/fathers.js';
+import { AMERICAS_FATHERS, FATHER_CATEGORIES } from '../rules/fathers.js';
 import { GOODS } from '../rules/goods.js';
 import type { Modifier } from '../rules/modifiers.js';
-import { HOME_PORTS, NATION_ORDER, NATIONS, TRIBE_ORDER, type NationId } from '../rules/nations.js';
+import { HOME_PORTS, NATION_ORDER, NATIONS, TRIBE_ORDER, type AmericasNationId, type NationId } from '../rules/nations.js';
 import { BURIAL_WEIGHT, NATIVE_PRODUCE, SETTLEMENT_KINDS } from '../rules/natives.js';
 import { PORT_CHARACTER } from '../rules/ports.js';
 import { TERRAIN, type TerrainId } from '../rules/terrain.js';
@@ -78,7 +78,7 @@ const BONUSES: Partial<Record<NationId, Modifier[]>> = {
 };
 
 /** A nation of the Americas: the catalogue's identity, bonus and colony names (NATIONS) and port (PORT_CHARACTER). */
-function entry(id: NationId): NationEntry {
+function entry(id: AmericasNationId | 'crown'): NationEntry {
   const def = NATIONS[id];
   return {
     id,
@@ -108,7 +108,7 @@ const AMERICAS_RUMOURS: RumourEntry[] = [
 ];
 
 /** The original game's four rivals (Q9). */
-const REAL_RIVALS: NationId[] = ['england', 'france', 'netherlands', 'spain'];
+const REAL_RIVALS: AmericasNationId[] = ['england', 'france', 'netherlands', 'spain'];
 
 export const AMERICAS: Scenario = {
   id: 'americas',
@@ -146,7 +146,7 @@ export const AMERICAS: Scenario = {
   goods: [...GOODS],
   units: Object.keys(UNIT_TYPES) as UnitTypeId[],
   buildings: [...BUILDING_ORDER],
-  council: { categories: [...FATHER_CATEGORIES], members: Object.keys(FATHERS) as FatherId[] },
+  council: { categories: [...FATHER_CATEGORIES], members: [...AMERICAS_FATHERS] },
   events: 'americas',
   ai: {
     // The pace the computer players' turn thresholds were tuned for (scenarios/index.ts aiTurn).

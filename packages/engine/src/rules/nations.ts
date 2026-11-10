@@ -2,7 +2,20 @@ import { COLONY_NAMES } from './colonyNames.js';
 import type { GoodId } from './goods.js';
 import type { UnitTypeId } from './units.js';
 
-export type NationId = 'england' | 'france' | 'netherlands' | 'spain' | 'portugal' | 'sweden' | 'denmark' | 'russia' | 'crown';
+/** The Americas' eight nations, whose catalogue entries (NATIONS) are the Americas' values. */
+export type AmericasNationId = 'england' | 'france' | 'netherlands' | 'spain' | 'portugal' | 'sweden' | 'denmark' | 'russia';
+
+/**
+ * Every nation id a scenario may use (Q2: a scenario's `NationEntry` says all about the nation).
+ * The lesser powers of the Caribbean, 1650–1750 (scenarios/caribbean.ts) have no catalogue entry.
+ */
+export type NationId = AmericasNationId | 'courland' | 'brandenburg' | 'scotland' | 'malta' | 'crown';
+
+/**
+ * Every nation id but the Crown, in a fixed order that never changes: game codes store a nation as
+ * its index here (seedphrase.ts). The Americas' eight come first, as NATION_ORDER.
+ */
+export const NATION_IDS: Exclude<NationId, 'crown'>[] = ['england', 'france', 'netherlands', 'spain', 'portugal', 'sweden', 'denmark', 'russia', 'courland', 'brandenburg', 'scotland', 'malta'];
 
 export interface NationDef {
   id: NationId;
@@ -54,7 +67,7 @@ export const NATIONS = {
     bonus: 'Frontier: scouts and dragoons see further.',
     colonyNames: COLONY_NAMES.russia,
   },
-} as Record<NationId, NationDef>;
+} as Record<AmericasNationId | 'crown', NationDef>;
 
 /** The Royal Expeditionary Force; joins the game only when a colony declares independence. */
 NATIONS.crown = {
@@ -64,14 +77,14 @@ NATIONS.crown = {
 };
 
 /** Each nation's home port in Europe, where its ships trade (and, for Favoured Nations, its partners' ships). */
-export const HOME_PORTS: Record<NationId, string> = {
+export const HOME_PORTS: Record<AmericasNationId | 'crown', string> = {
   england: 'London', france: 'La Rochelle', netherlands: 'Amsterdam', spain: 'Seville',
   portugal: 'Lisbon', sweden: 'Gothenburg', denmark: 'Copenhagen', russia: 'Saint Petersburg', crown: 'London',
 };
 
-export const NATION_ORDER: NationId[] = ['england', 'france', 'netherlands', 'spain', 'portugal', 'sweden', 'denmark', 'russia'];
+export const NATION_ORDER: AmericasNationId[] = ['england', 'france', 'netherlands', 'spain', 'portugal', 'sweden', 'denmark', 'russia'];
 
-export type TribeId = 'iroquois' | 'cherokee' | 'sioux' | 'apache' | 'aztec' | 'arawak' | 'tupi' | 'inca';
+export type TribeId = 'iroquois' | 'cherokee' | 'sioux' | 'apache' | 'aztec' | 'arawak' | 'tupi' | 'inca' | 'kalinago';
 
 /**
  * How a people lives on the land. A scenario's settlement-kind table (`Scenario.peoples.settlements`)
@@ -103,6 +116,19 @@ export const TRIBES: Record<TribeId, PeopleDef> = {
   arawak: { id: 'arawak', name: 'Arawak', color: '#c99a1e', lifeway: 'agricultural', skills: ['masterSugarPlanter', 'expertFisherman', 'masterCottonPlanter'], wants: ['tradeGoods', 'cloth', 'rum'] },
   tupi: { id: 'tupi', name: 'Tupi', color: '#6a8f2a', lifeway: 'nomadic', skills: ['masterSugarPlanter', 'expertFisherman', 'expertLumberjack'], wants: ['tradeGoods', 'tools', 'coats'] },
   inca: { id: 'inca', name: 'Inca', color: '#8a2f5a', lifeway: 'urban', skills: ['expertSilverMiner', 'expertOreMiner', 'masterWeaver', 'expertFarmer'], wants: ['cloth', 'coats', 'muskets'] },
+  /**
+   * The Kalinago (the "Island Caribs" of European writers), of the Lesser Antilles: Dominica, St
+   * Vincent, St Lucia, Grenada, Martinique and Guadeloupe (the Caribbean, 1650–1750). They spoke an
+   * Arawakan language, Island Carib, and lived in villages of family houses around a large men's
+   * house (the karbet); they grew cassava, cotton, tobacco and peppers in cleared gardens, fished
+   * and travelled between the islands in large dugout canoes, and were known for their cotton
+   * hammocks. They traded with every European visitor for iron tools, knives and, later, guns, and
+   * resisted settlement of their islands for well over a century: the treaty of 1660 with England
+   * and France left Dominica and St Vincent to them. Their descendants live today in the Kalinago
+   * Territory on Dominica; the Garifuna descend from Kalinago and Africans of St Vincent. Their
+   * colour is the red of roucou (annatto), with which they painted themselves. Not in the Americas' set.
+   */
+  kalinago: { id: 'kalinago', name: 'Kalinago', color: '#a64b2a', lifeway: 'agricultural', skills: ['expertFisherman', 'masterCottonPlanter', 'masterTobaccoPlanter', 'seasonedScout'], wants: ['tools', 'muskets', 'tradeGoods'] },
 };
 
 /** North to south. */

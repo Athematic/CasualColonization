@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FATHERS, type FatherId } from '@cc/engine';
+import { AMERICAS_FATHERS, type FatherId } from '@cc/engine';
 import { fatherInitials, type StylePlugin } from '@cc/render-api';
 import { fill, kebab, SpriteIds } from '../src/ids.js';
 import { coastPieces, roadTurns } from '../src/layers.js';
@@ -418,7 +418,7 @@ describe('createSpriteStyle', () => {
       'benjamin-franklin', 'william-brewster', 'william-penn', 'jean-de-brebeuf', 'juan-de-sepulveda', 'bartolome-de-las-casas',
     ];
     const ids = new SpriteIds(DEFAULT_MAPPING);
-    const all = Object.keys(FATHERS) as FatherId[];
+    const all: FatherId[] = AMERICAS_FATHERS;
     expect(all).toHaveLength(25);
     expect(all.map((id) => ids.father(id)[0]).sort()).toEqual(expected.map((e) => `fathers/${e}`).sort());
     expect(ids.father('bartolomeDeLasCasas')).toEqual(['fathers/bartolome-de-las-casas']);

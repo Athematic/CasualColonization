@@ -311,7 +311,7 @@ export function newGameScreen(
             h('input', { type: 'checkbox', checked: randomEvents || undefined, 'aria-label': 'Random events', onchange: (e: Event) => (randomEvents = (e.target as HTMLInputElement).checked) }),
             h('span', null, h('b', null, 'Random events'), h('br'), h('span', { class: 'muted small' }, 'Storms, fires, bumper harvests, pirates.'))),
           // Shown only when the scenario has a charter (mechanics.charter).
-          CHARTER ? h('label', { class: 'rule-option', title: `Every colony after the first needs a charter from ${term(scenario, 'crown')}: ${CHARTER.base} gold for each colony the nation already has, at most ${CHARTER.cap}, scaled by difficulty. Free after the declaration of independence.` },
+          CHARTER ? h('label', { class: 'rule-option', title: `Every colony after the first needs a charter from ${term(scenario, 'crown')}: ${CHARTER.base} gold for each colony the nation already has, at most ${CHARTER.cap}, scaled by difficulty.${scenario.mechanics.independence ? ' Free after the declaration of independence.' : ''}` },
             h('input', { type: 'checkbox', checked: colonyCharter || undefined, 'aria-label': 'Colony charter (founding costs gold)', onchange: (e: Event) => (colonyCharter = (e.target as HTMLInputElement).checked) }),
             h('span', null, h('b', null, 'Colony charter (founding costs gold)'), h('br'), h('span', { class: 'muted small' }, `${Term(scenario, 'crown')} charges for each new colony after the first.`))) : null),
         h('details', { class: 'planned-options' },

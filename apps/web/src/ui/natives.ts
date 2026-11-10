@@ -7,6 +7,7 @@ import {
   nationTitle,
   nativeOffer,
   nativeUnitPrice,
+  peopleOf,
   settlementForSale,
   settlementName,
   tensionLabel,
@@ -39,7 +40,7 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
     for (const g of goodsOf(s)) {
       const n = Math.min(100, unit.cargo?.[g] ?? 0);
       if (n <= 0) continue;
-      const offer = nativeOffer(st, g, n);
+      const offer = nativeOffer(s, st, g, n);
       options.push({
         label: `Sell ${n} ${GOOD_DEFS[g].name.toLowerCase()} for ${offer} gold`,
         value: { kind: 'sell', good: g },
@@ -60,7 +61,7 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
     }
     const mood = tensionLabel(st.tension[unit.owner] ?? 0);
     const text = h('div', null,
-      h('p', null, `The people here are ${mood}. They pay ${st.gold} gold at most, and want ${TRIBES[st.tribe].wants.map((g) => GOOD_DEFS[g].name.toLowerCase()).join(', ')}.`),
+      h('p', null, `The people here are ${mood}. They pay ${st.gold} gold at most, and want ${peopleOf(s, st.tribe).wants.map((g) => GOOD_DEFS[g].name.toLowerCase()).join(', ')}.`),
       options.length ? null : h('p', { class: 'muted' }, 'You have nothing to sell, and they have nothing for sale.'));
     const choice: Deal | null = await choose<Deal>(`Trade with the ${settlementName(s, st)}`, text, [...options, { label: traded ? 'Done' : 'Leave', value: null as unknown as Deal }]);
     if (!choice) return traded;

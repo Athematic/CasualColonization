@@ -28,7 +28,11 @@ export type FatherId =
   | 'williamPenn'
   | 'jeanDeBrebeuf'
   | 'juanDeSepulveda'
-  | 'bartolomeDeLasCasas';
+  | 'bartolomeDeLasCasas'
+  // The Caribbean, 1650–1750 (scenarios/caribbean.ts).
+  | 'henryMorgan'
+  | 'williamDampier'
+  | 'mariaSibyllaMerian';
 
 export interface FatherDef {
   id: FatherId;
@@ -45,7 +49,7 @@ export interface FatherDef {
 
 const f = (id: FatherId, name: string, category: FatherCategory, effect: string, weight = 5, more: Partial<FatherDef> = {}): FatherDef => ({ id, name, category, effect, weight, ...more });
 
-export const FATHERS: Record<FatherId, FatherDef> = {
+export const FATHERS = {
   adamSmith: f('adamSmith', 'Adam Smith', 'trade', 'Manufacturing buildings produce 50% more.', 5, {
     modifiers: [{ hook: 'manufactureCapacity', mul: 1.5, except: ['carpenter'] }],
   }),
@@ -127,7 +131,41 @@ export const FATHERS: Record<FatherId, FatherDef> = {
     modifiers: [{ hook: 'convertsBecome', unit: 'freeColonist' }],
     onJoin: [{ kind: 'convertUnits', from: 'nativeConvert', to: 'freeColonist' }],
   }),
-};
+} as Record<FatherId, FatherDef>;
+
+/**
+ * Members of the Caribbean's council (scenarios/caribbean.ts), real people of the region and the
+ * period whose effects reuse the hooks above. Not in the Americas' Continental Congress.
+ */
+Object.assign(FATHERS, {
+  // Henry Morgan (c. 1635–1688), Welsh privateer sailing from Port Royal under commissions from the
+  // governor of Jamaica: Portobelo (1668), Maracaibo (1669), Panama (1671); later Lieutenant
+  // Governor of Jamaica.
+  henryMorgan: f('henryMorgan', 'Henry Morgan', 'military', 'Privateers fight 50% harder.', 5, {
+    modifiers: [{ hook: 'unitOffence', unit: 'privateer', mul: 1.5 }],
+  }),
+  // William Dampier (1651–1715), English buccaneer, navigator and naturalist; his "New Voyage Round
+  // the World" (1697) and "Discourse of Winds" (1699) charted the trade winds, currents and storms.
+  williamDampier: f('williamDampier', 'William Dampier', 'exploration', 'Ships gain one extra move.', 5, {
+    modifiers: [{ hook: 'shipMoves', add: 1 }],
+  }),
+  // Maria Sibylla Merian (1647–1717), German naturalist and artist, who sailed to Dutch Suriname
+  // in 1699 to study its plants and insects and published "Metamorphosis insectorum Surinamensium" (1705).
+  mariaSibyllaMerian: f('mariaSibyllaMerian', 'Maria Sibylla Merian', 'exploration', 'Scouts see one tile further, and rumours bring travellers\' accounts of the land twice as often.', 5, {
+    modifiers: [
+      { hook: 'sight', add: 1, roles: ['scout'] },
+      { hook: 'rumourOutcome', outcome: 'tales', mul: 2 },
+    ],
+  }),
+} satisfies Partial<Record<FatherId, FatherDef>>);
+
+/** The Americas' Continental Congress: the 25 Founding Fathers, in catalogue order. */
+export const AMERICAS_FATHERS: FatherId[] = [
+  'adamSmith', 'jakobFugger', 'peterMinuit', 'peterStuyvesant', 'janDeWitt', 'ferdinandMagellan', 'franciscoDeCoronado',
+  'hernandoDeSoto', 'henryHudson', 'laSalle', 'hernanCortes', 'georgeWashington', 'paulRevere', 'francisDrake',
+  'johnPaulJones', 'thomasJefferson', 'pocahontas', 'thomasPaine', 'simonBolivar', 'benjaminFranklin',
+  'williamBrewster', 'williamPenn', 'jeanDeBrebeuf', 'juanDeSepulveda', 'bartolomeDeLasCasas',
+];
 
 export const FATHER_CATEGORIES: FatherCategory[] = ['trade', 'exploration', 'military', 'political', 'religious'];
 
