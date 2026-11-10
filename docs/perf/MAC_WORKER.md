@@ -57,6 +57,10 @@ Newest last. Each entry has an id; acknowledge it in your next report.
   - **What it is:** `goTo` (one path search instead of two), routes followed for the whole move, an AI colony-report cache, and a site-score cache.
   - **No tournaments needed:** it is not marked `[outcomes]`. Following the route is not identical by construction, but every measured game and both seed-1000 tournaments came out identical. `bench --verify` decides.
   - **About noise:** from now on, always re-measure the best in the same sitting just before gating a candidate, whatever the age of `best.json`, so both sides share the same conditions. If the best's spread is above 0.3 s at 1700, re-measure it once more before gating. You don't need to re-baseline `386f403` separately.
+- **M9 (2026-11-10):** the best now includes a save/load determinism fix.
+  - **Recorded hashes:** the fix changed the save text, so `scripts/bench-hashes.json` and the golden snapshots were re-recorded on purpose. The games themselves are unchanged. Don't compare hashes with older results.
+  - **What to do:** re-baseline the best at this commit.
+  - **The candidate:** `claude/0.10-candidate` is round 2 rebuilt on this best (all tests and both `bench --verify` pass), so gate it as in M8.
 
 What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
 
