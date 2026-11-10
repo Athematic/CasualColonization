@@ -8,6 +8,7 @@ import {
   pendingEvents,
   canUseRoutes,
   canImprove,
+  IMPROVEMENT_TURNS,
   colonyAt,
   describeMove,
   DIRECTIONS,
@@ -84,6 +85,43 @@ export function pathTurns(s: GameState, u: Unit, path: Point[]): number {
   return turns;
 }
 
+/**
+ * Turns a "Road to…" order takes along a path, as the engine runs it: a roadless tile is built
+ * (3 turns, half for a hardy pioneer) before stepping on, and each step onto a roadless tile uses up
+ * the turn's moves. The tile under the unit and the target are both roaded.
+ */
+export function roadToTurns(s: GameState, u: Unit, path: Point[]): number {
+  const start = unitPosition(s, u);
+  if (!start) return 0;
+  const full = Math.max(1, maxMoves(u, s));
+  const index = buildMapIndex(s);
+  const build = u.type === 'hardyPioneer' ? Math.ceil(IMPROVEMENT_TURNS.road / 2) : IMPROVEMENT_TURNS.road;
+  const roaded = (p: Point) => !!tileAt(s, p.x, p.y)?.r || !!colonyAt(s, p.x, p.y);
+  let turns = 1;
+  let left = u.moves > 0 ? u.moves : full;
+  let at: Point = start;
+  const roadHere = () => {
+    if (roaded(at)) return;
+    if (left <= 0) {
+      turns++;
+      left = full;
+    }
+    turns += build;
+    left = full;
+  };
+  for (const step of path) {
+    roadHere();
+    if (left <= 0) {
+      turns++;
+      left = full;
+    }
+    left -= moveCost(s, u, at.x, at.y, step.x, step.y, index);
+    at = step;
+  }
+  roadHere();
+  return turns;
+}
+
 export interface Screen {
   el: HTMLElement;
   refresh(): void;
@@ -116,6 +154,8 @@ export class App {
   selected?: string;
   hover?: Point;
   gotoMode = false;
+  /** Waiting for a click on the tile a pioneer should build a road to. */
+  roadToMode = false;
   /** No people play: the computers play each other and the user watches. */
   observer: boolean;
   /** In observer mode, whose view of the world is shown ('all' reveals everything). */
@@ -309,7 +349,14 @@ export class App {
     const r = this.mapWrap.getBoundingClientRect();
     const u = this.selectedUnit();
     let path: Point[] | undefined;
-    if (u && u.dest && 'x' in u.dest) path = findPath(this.state, u, u.dest.x, u.dest.y) ?? undefined;
+    let pathKind: Scene['pathKind'];
+    if (u && u.roadTo) {
+      path = findPath(this.state, u, u.roadTo.x, u.roadTo.y) ?? undefined;
+      pathKind = 'road';
+    } else if (u && this.roadToMode && this.hover && u.role === 'pioneer') {
+      path = findPath(this.state, u, this.hover.x, this.hover.y) ?? undefined;
+      pathKind = 'road';
+    } else if (u && u.dest && 'x' in u.dest) path = findPath(this.state, u, u.dest.x, u.dest.y) ?? undefined;
     else if (u && this.hover && (this.gotoMode || this.hoverIsFar())) path = findPath(this.state, u, this.hover.x, this.hover.y) ?? undefined;
     return {
       state: this.state,
@@ -321,7 +368,8 @@ export class App {
       selectedUnitId: this.selected,
       hover: this.hover,
       path,
-      pathTurns: u && path?.length ? pathTurns(this.state, u, path) : undefined,
+      pathKind,
+      pathTurns: u && path?.length ? (pathKind === 'road' ? roadToTurns(this.state, u, path) : pathTurns(this.state, u, path)) : undefined,
       visible: computeVisibility(this.state, this.viewer),
       revealAll: this.revealAll(),
     };
@@ -459,6 +507,7 @@ export class App {
   select(unitId: string | undefined): void {
     this.selected = unitId;
     this.gotoMode = false;
+    this.roadToMode = false;
     const u = this.selectedUnit();
     const pos = u && unitPosition(this.state, u);
     if (pos) this.centerOn(pos.x, pos.y, true);
@@ -588,6 +637,17 @@ export class App {
       port = choice === u.owner ? undefined : choice;
     }
     if (this.dispatch(port ? { type, unitId: u.id, port } : { type, unitId: u.id })) this.afterUnitAction();
+  }
+
+  /** Starts picking the tile a pioneer should build a road to. */
+  startRoadTo(): void {
+    const u = this.selectedUnit();
+    if (!u || !this.isMyTurn()) return;
+    if (u.role !== 'pioneer' || u.tools <= 0) return toast('Only pioneers with tools can build roads.', 'error');
+    this.gotoMode = false;
+    this.roadToMode = true;
+    toast('Click the tile the road should lead to.');
+    this.requestRender();
   }
 
   buildRoad(): void {
@@ -803,6 +863,12 @@ export class App {
     const u = this.selectedUnit();
     const pos = u && unitPosition(s, u);
     const adjacent = !!pos && distance(pos.x, pos.y, t.x, t.y) === 1;
+    if (u && pos && this.roadToMode && this.isMyTurn()) {
+      this.roadToMode = false;
+      if (this.dispatch({ type: 'roadTo', unitId: u.id, x: t.x, y: t.y }, true)) this.afterUnitAction();
+      this.requestRender();
+      return;
+    }
     if (u && pos && (alt || this.gotoMode) && this.isMyTurn()) {
       this.gotoMode = false;
       if (this.dispatch({ type: 'goto', unitId: u.id, x: t.x, y: t.y }, true)) this.afterUnitAction();
@@ -884,7 +950,7 @@ export class App {
     const actions: Record<string, () => void> = {
       b: () => void this.foundColony(),
       p: () => this.improve(),
-      r: () => this.buildRoad(),
+      r: () => (e.shiftKey ? this.startRoadTo() : this.buildRoad()),
       f: () => this.unitCommand('fortify'),
       s: () => this.unitCommand('sentry'),
       ' ': () => this.unitCommand('skip'),
@@ -892,6 +958,7 @@ export class App {
       tab: () => this.selectNext(),
       n: () => this.selectNext(),
       g: () => {
+        this.roadToMode = false;
         this.gotoMode = !!this.selected;
         if (this.gotoMode) toast('Click where the unit should go.');
       },
@@ -909,6 +976,7 @@ export class App {
       enter: () => void this.endTurn(),
       escape: () => {
         this.gotoMode = false;
+        this.roadToMode = false;
         this.requestRender();
       },
       '+': () => this.zoomBy(1.2),

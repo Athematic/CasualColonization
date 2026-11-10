@@ -187,7 +187,7 @@ export class Sidebar {
     const aboard = unitsAboard(s, u);
     const cargo = GOODS.filter((g) => (u.cargo?.[g] ?? 0) > 0);
     const route = u.route && s.routes?.[u.route.id];
-    const orders = u.repair ? `Under repair (${u.repair} turns)` : route ? `Trade route: ${route.name}${route.stops.length ? `, next ${routeStopName(s, route.stops[u.route!.stop % route.stops.length], route.owner)}` : ''}` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? (u.dest.port ? `Sailing for ${portName(u.dest.port)}` : 'Sailing for Europe') : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
+    const orders = u.repair ? `Under repair (${u.repair} turns)` : route ? `Trade route: ${route.name}${route.stops.length ? `, next ${routeStopName(s, route.stops[u.route!.stop % route.stops.length], route.owner)}` : ''}` : u.roadTo ? `Building a road to ${u.roadTo.x},${u.roadTo.y}` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? (u.dest.port ? `Sailing for ${portName(u.dest.port)}` : 'Sailing for Europe') : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
     const mine = u.owner === app.viewer;
     const can = (fn: () => string | null) => mine && app.isMyTurn() && fn() === null;
     const terrain = tile?.f ? 'clear' : 'plow';
@@ -199,6 +199,7 @@ export class Sidebar {
       if (u.role === 'pioneer') {
         btn(terrain === 'clear' ? 'Clear forest' : 'Plow', 'P', () => app.improve(), can(() => canImprove(s, u, terrain)));
         btn('Build road', 'R', () => app.buildRoad(), can(() => canImprove(s, u, 'road')));
+        btn('Road to…', 'Shift+R', () => app.startRoadTo(), mine && app.isMyTurn() && u.tools > 0);
       }
       btn('Go to…', 'G', () => {
         app.gotoMode = true;
@@ -210,7 +211,7 @@ export class Sidebar {
       btn('Fortify', 'F', () => app.unitCommand('fortify'), !isShip(u));
       btn('Sentry', 'S', () => app.unitCommand('sentry'));
       btn('Skip', 'Space', () => app.unitCommand('skip'));
-      if (u.state !== 'active' || u.dest || u.work || u.route) btn('Clear orders', '', () => app.unitCommand('clearOrders'));
+      if (u.state !== 'active' || u.dest || u.roadTo || u.work || u.route) btn('Clear orders', '', () => app.unitCommand('clearOrders'));
       const colony = pos && colonyAt(s, pos.x, pos.y);
       if (colony && colony.owner === app.viewer) btn('Open colony', '', () => app.openColony(colony.id));
       btn('Disband', '', () => app.unitCommand('disband'));

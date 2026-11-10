@@ -184,8 +184,9 @@ class SchematicRenderer implements MapRenderer {
     }
     for (const step of scene.path ?? []) {
       const p = tileToScreen(scene, step.x, step.y);
-      ctx.fillStyle = '#ffe28a';
-      ctx.fillRect(p.x + z * 0.45, p.y + z * 0.45, z * 0.1, z * 0.1);
+      ctx.fillStyle = scene.pathKind === 'road' ? '#c98a4b' : '#ffe28a';
+      const d = scene.pathKind === 'road' ? 0.2 : 0.1;
+      ctx.fillRect(p.x + z * (0.5 - d / 2), p.y + z * (0.5 - d / 2), z * d, z * d);
     }
     if (scene.hover) {
       const p = tileToScreen(scene, scene.hover.x, scene.hover.y);

@@ -31,6 +31,7 @@ Or build a static site with `npm run build` (output in `apps/web/dist`), or a si
 | Go to a tile | Click a distant tile, right-click, or Shift-click | `G`, then click |
 | Found a colony | *Found colony* button | `B` |
 | Plow / clear forest, build road | Pioneer buttons | `P`, `R` |
+| Build a road along a path | *Road to…* button, then click the target | `Shift`+`R`, then click |
 | Fortify, sentry, skip | Unit buttons | `F`, `S`, `Space` |
 | Open a colony | Click it | |
 | Europe | *Europe* button | `E` |
@@ -48,7 +49,7 @@ In a colony, click a colonist and then a field or building to put them to work. 
 - **Liberty**: Sons of Liberty bonuses and the Tory penalty for colonies with many royalists.
 - **Schools**: a schoolhouse, college or university lets experts teach. Criminals become servants, servants become free colonists, and free colonists become experts.
 - **Continental Congress**: liberty bells bring 25 Founding Fathers, offered one per category, each with its classic effect (Jefferson, Pocahontas, Brewster, Stuyvesant, Cortés, de Soto and the rest).
-- **Units**: 36 unit types, including experts, wagon trains, artillery, treasure trains and six kinds of ship. Colonists can take the soldier, dragoon, pioneer, scout or missionary role. Pioneers plow, clear forest and build roads.
+- **Units**: 36 unit types, including experts, wagon trains, artillery, treasure trains and six kinds of ship. Colonists can take the soldier, dragoon, pioneer, scout or missionary role. Pioneers plow, clear forest and build roads. **Road to…** (`Shift`+`R`, then click a tile) sends a pioneer to road its own tile, step on, and repeat along the cheapest path to the target, skipping tiles that already have a road; the preview shows the planned road as a dashed brown line with the number of turns it will take, and the order ends with a report when the road is finished, the tools run out or the way is blocked.
 - **Europe**: a market whose prices move with your trading, immigration driven by crosses, recruiting, training experts and buying ships and artillery. Every nation has its own home port, market and tax rate.
 - **Trade routes**: name a round trip of stops (your colonies, and Europe for ships) and say per stop which goods to unload and load, optionally with an amount: how much to leave in the warehouse, how far to fill it, or how much to buy in Europe. Ships and wagon trains on a route move by themselves at the start of each of your turns, before you give orders, and never count as waiting for orders. In Europe they sell at market prices less tax (boycotted goods stay aboard) and can take colonists from the docks. Unloading into a colony stops when its warehouse is full, so nothing spoils. Open the *Routes* screen from the side panel, with `T`, or from a selected ship or wagon train; *Clear orders* takes a unit off its route.
 - **Taxes and boycotts**: the Crown raises taxes. Refuse a raise and your colonists dump the goods in the harbour, and that good is boycotted until you pay the arrears. A custom house (with Stuyvesant) sells exports automatically.

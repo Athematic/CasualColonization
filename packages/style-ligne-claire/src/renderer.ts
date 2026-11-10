@@ -429,7 +429,26 @@ export class LigneClaireMapRenderer implements MapRenderer {
     }
 
     // 6. Route and selection markers under the units.
-    if (scene.path?.length) {
+    if (scene.path?.length && scene.pathKind === 'road') {
+      // A planned road: dashed brown line through the tile centres.
+      ctx.save();
+      ctx.beginPath();
+      for (const [i, step] of scene.path.entries()) {
+        const p = tileToScreen(scene, step.x, step.y);
+        if (i === 0) ctx.moveTo(p.x + z / 2, p.y + z / 2);
+        else ctx.lineTo(p.x + z / 2, p.y + z / 2);
+      }
+      ctx.setLineDash([z * 0.2, z * 0.14]);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = z * 0.11 + lw;
+      ctx.stroke();
+      ctx.strokeStyle = '#a0662f';
+      ctx.lineWidth = z * 0.11;
+      ctx.stroke();
+      ctx.restore();
+    } else if (scene.path?.length) {
       for (const [i, step] of scene.path.entries()) {
         const p = tileToScreen(scene, step.x, step.y);
         const last = i === scene.path.length - 1;
