@@ -19,6 +19,11 @@ export type Yields = Partial<Record<GoodId, number>>;
 
 export interface TerrainDef {
   id: TerrainId;
+  /**
+   * The terrain's letter in stored maps (maps/index.ts): lowercase, or a symbol; the uppercase letter
+   * is the same terrain with forest.
+   */
+  char: string;
   name: string;
   water: boolean;
   /** Movement cost in move points (3 points = one move). */
@@ -35,43 +40,43 @@ export interface TerrainDef {
 const t = (def: TerrainDef) => def;
 
 export const TERRAIN: Record<TerrainId, TerrainDef> = {
-  ocean: t({ id: 'ocean', name: 'Ocean', water: true, moveCost: 3, yields: { food: 4 }, defence: 0, bonusGood: 'food' }),
-  highSeas: t({ id: 'highSeas', name: 'High Seas', water: true, moveCost: 3, yields: { food: 2 }, defence: 0 }),
+  ocean: t({ id: 'ocean', char: '.', name: 'Ocean', water: true, moveCost: 3, yields: { food: 4 }, defence: 0, bonusGood: 'food' }),
+  highSeas: t({ id: 'highSeas', char: '~', name: 'High Seas', water: true, moveCost: 3, yields: { food: 2 }, defence: 0 }),
   plains: t({
-    id: 'plains', name: 'Plains', water: false, moveCost: 3, yields: { food: 5, cotton: 2 }, defence: 0, bonusGood: 'food',
+    id: 'plains', char: 'p', name: 'Plains', water: false, moveCost: 3, yields: { food: 5, cotton: 2 }, defence: 0, bonusGood: 'food',
     forest: { name: 'Mixed Forest', yields: { food: 3, furs: 3, lumber: 6 } },
   }),
   grassland: t({
-    id: 'grassland', name: 'Grassland', water: false, moveCost: 3, yields: { food: 3, tobacco: 3 }, defence: 0, bonusGood: 'tobacco',
+    id: 'grassland', char: 'g', name: 'Grassland', water: false, moveCost: 3, yields: { food: 3, tobacco: 3 }, defence: 0, bonusGood: 'tobacco',
     forest: { name: 'Conifer Forest', yields: { food: 2, furs: 2, lumber: 6 } },
   }),
   prairie: t({
-    id: 'prairie', name: 'Prairie', water: false, moveCost: 3, yields: { food: 3, cotton: 3 }, defence: 0, bonusGood: 'cotton',
+    id: 'prairie', char: 'r', name: 'Prairie', water: false, moveCost: 3, yields: { food: 3, cotton: 3 }, defence: 0, bonusGood: 'cotton',
     forest: { name: 'Broadleaf Forest', yields: { food: 2, furs: 3, lumber: 4 } },
   }),
   savannah: t({
-    id: 'savannah', name: 'Savannah', water: false, moveCost: 3, yields: { food: 4, sugar: 3 }, defence: 0, bonusGood: 'sugar',
+    id: 'savannah', char: 's', name: 'Savannah', water: false, moveCost: 3, yields: { food: 4, sugar: 3 }, defence: 0, bonusGood: 'sugar',
     forest: { name: 'Tropical Forest', yields: { food: 3, furs: 2, lumber: 4 } },
   }),
   marsh: t({
-    id: 'marsh', name: 'Marsh', water: false, moveCost: 6, yields: { food: 3, tobacco: 2, ore: 2 }, defence: 0, bonusGood: 'ore',
+    id: 'marsh', char: 'm', name: 'Marsh', water: false, moveCost: 6, yields: { food: 3, tobacco: 2, ore: 2 }, defence: 0, bonusGood: 'ore',
     forest: { name: 'Wetland Forest', yields: { food: 2, furs: 2, lumber: 4, ore: 1 } },
   }),
   swamp: t({
-    id: 'swamp', name: 'Swamp', water: false, moveCost: 6, yields: { food: 3, sugar: 2, ore: 2 }, defence: 0, bonusGood: 'sugar',
+    id: 'swamp', char: 'w', name: 'Swamp', water: false, moveCost: 6, yields: { food: 3, sugar: 2, ore: 2 }, defence: 0, bonusGood: 'sugar',
     forest: { name: 'Rain Forest', yields: { food: 2, furs: 1, lumber: 4, ore: 1 } },
   }),
   desert: t({
-    id: 'desert', name: 'Desert', water: false, moveCost: 3, yields: { food: 2, cotton: 1, ore: 2 }, defence: 0, bonusGood: 'food',
+    id: 'desert', char: 'd', name: 'Desert', water: false, moveCost: 3, yields: { food: 2, cotton: 1, ore: 2 }, defence: 0, bonusGood: 'food',
     forest: { name: 'Scrub Forest', yields: { food: 2, furs: 2, lumber: 2, ore: 1 } },
   }),
   tundra: t({
-    id: 'tundra', name: 'Tundra', water: false, moveCost: 3, yields: { food: 3, ore: 2 }, defence: 0, bonusGood: 'ore',
+    id: 'tundra', char: 't', name: 'Tundra', water: false, moveCost: 3, yields: { food: 3, ore: 2 }, defence: 0, bonusGood: 'ore',
     forest: { name: 'Boreal Forest', yields: { food: 2, furs: 3, lumber: 4, ore: 1 } },
   }),
-  arctic: t({ id: 'arctic', name: 'Arctic', water: false, moveCost: 6, yields: {}, defence: 0 }),
-  hills: t({ id: 'hills', name: 'Hills', water: false, moveCost: 6, yields: { food: 4, ore: 4 }, defence: 50, bonusGood: 'ore' }),
-  mountains: t({ id: 'mountains', name: 'Mountains', water: false, moveCost: 9, yields: { ore: 4, silver: 1 }, defence: 150, bonusGood: 'silver' }),
+  arctic: t({ id: 'arctic', char: 'a', name: 'Arctic', water: false, moveCost: 6, yields: {}, defence: 0 }),
+  hills: t({ id: 'hills', char: 'h', name: 'Hills', water: false, moveCost: 6, yields: { food: 4, ore: 4 }, defence: 50, bonusGood: 'ore' }),
+  mountains: t({ id: 'mountains', char: '^', name: 'Mountains', water: false, moveCost: 9, yields: { ore: 4, silver: 1 }, defence: 150, bonusGood: 'silver' }),
 };
 
 export const FOREST_MOVE_COST = 6;

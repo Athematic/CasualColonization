@@ -12,32 +12,34 @@
  *   d  desert       D  scrub forest       t  tundra      T  boreal forest
  *   a  arctic       h  hills              ^  mountains
  *
+ * The letters are the terrains' `char` in the catalogue (rules/terrain.ts), so a new terrain
+ * brings its own.
+ *
  * Rivers are an optional list of courses in tile coordinates, one river per line, from the
  * source to the water it runs into (or the river it joins); the format is described at
  * `parseRivers` in rivers.ts.
  *
- * Native settlements are placed by region rules: each tribe lists rectangles of the
- * map and how many settlements it should have there. The game seed picks the exact
- * spots, and also sprinkles bonus resources and Lost City Rumours.
+ * Native settlements are placed by region rules that belong to the scenario, not the map
+ * (Scenario.map.stored): each people lists rectangles of the map and how many settlements it
+ * should have there. The game seed picks the exact spots, and also sprinkles bonus resources
+ * and Lost City Rumours at the scenario's odds.
  */
 import type { TribeId } from '../rules/nations.js';
 import { TERRAIN, type TerrainId } from '../rules/terrain.js';
 import { randInt } from '../rng.js';
 import { parseRivers } from '../rivers.js';
-import { entryPoints, newSettlement, sprinkleExtras, type EntrySide, type GeneratedWorld } from '../mapgen.js';
+import { entryPoints, newSettlement, settlementGround, sprinkleExtras, type EntrySide, type GeneratedWorld } from '../mapgen.js';
 import type { GameMap, Settlement, Tile } from '../types.js';
+import { AMERICAS } from '../scenarios/americas.js';
+import { settlementKindIn } from '../scenarios/index.js';
+import type { PeopleRegion, Scenario, StoredMapEntry } from '../scenarios/types.js';
 import { americas } from './americas.js';
 import { australia } from './australia.js';
 import { northAmerica } from './north-america.js';
 import { southAmerica } from './south-america.js';
 
-/** Where a tribe lives: an inclusive tile rectangle and the number of settlements in it. */
-export interface TribeRegion {
-  tribe: TribeId;
-  /** [x0, y0, x1, y1], inclusive. */
-  region: [number, number, number, number];
-  count: number;
-}
+/** Where a people lives on a stored map (scenarios/types.ts PeopleRegion). */
+export type TribeRegion = PeopleRegion;
 
 export interface StoredMap {
   id: string;
@@ -47,7 +49,6 @@ export interface StoredMap {
   rows: string;
   /** River courses, one per line, see `parseRivers` in rivers.ts. Optional. */
   rivers?: string;
-  tribes: TribeRegion[];
   /** Rows (inclusive) along the arrival edge where European expeditions arrive. Defaults to the whole height. */
   entryRows?: [number, number];
   /**
@@ -65,10 +66,8 @@ export function storedMap(id: string): StoredMap {
   return def;
 }
 
-const CHARS: Record<string, TerrainId> = {
-  '~': 'highSeas', '.': 'ocean', p: 'plains', g: 'grassland', r: 'prairie', s: 'savannah', m: 'marsh',
-  w: 'swamp', d: 'desert', t: 'tundra', a: 'arctic', h: 'hills', '^': 'mountains',
-};
+/** The legend: each terrain's character in the catalogue (TerrainDef.char). */
+const CHARS: Record<string, TerrainId> = Object.fromEntries(Object.values(TERRAIN).map((d) => [d.char, d.id]));
 
 /** Turns a stored map's rows into map tiles. Throws on unknown characters or ragged rows. */
 export function parseStoredMap(def: StoredMap): GameMap {
@@ -91,15 +90,26 @@ export function parseStoredMap(def: StoredMap): GameMap {
   return map;
 }
 
-/** Builds the world for a stored map. The rng only places settlements, bonuses and rumours. */
-export function storedWorld(rng: { rng: number }, id: string): GeneratedWorld {
+/** A scenario's entry for a stored map: the map is one it offers, with its peoples on it. */
+export function storedMapEntry(scenario: Scenario, id: string): StoredMapEntry {
+  const entry = scenario.map.stored.find((e) => e.id === id);
+  if (!entry) throw new Error(`${scenario.name} has no map "${id}".`);
+  return entry;
+}
+
+/**
+ * Builds the world for a stored map in a scenario, with the scenario's peoples where its entry for
+ * the map places them. The rng only places settlements, bonuses and rumours.
+ */
+export function storedWorld(rng: { rng: number }, id: string, scenario: Scenario = AMERICAS): GeneratedWorld {
   const def = storedMap(id);
+  const { peoples } = storedMapEntry(scenario, id);
   const map = parseStoredMap(def);
-  sprinkleExtras(rng, map);
+  sprinkleExtras(rng, map, scenario.map.extras);
   const entryRows = def.entryRows ?? [0, map.height - 1];
   // Keep clear of every arrival point any number of nations could use.
   const arrivals = Array.from({ length: 8 }, (_, i) => entryPoints(map, i + 1, entryRows, def.entrySide)).flat();
-  const settlements = placeRegionSettlements(rng, map, def.tribes, arrivals);
+  const settlements = placeRegionSettlements(rng, map, peoples, arrivals, scenario);
   for (const st of settlements) delete map.tiles[st.y * map.width + st.x].lcr;
   return def.entrySide ? { map, settlements, entryRows, entrySide: def.entrySide } : { map, settlements, entryRows };
 }
@@ -108,17 +118,17 @@ const distance = (ax: number, ay: number, bx: number, by: number) => Math.max(Ma
 
 /**
  * Places settlements tribe by tribe in turn, so every tribe gets its capital before any
- * tribe gets a second settlement. Settlements stay at least 4 tiles apart and away from
- * the European arrival points.
+ * tribe gets a second settlement. Settlements stay the scenario's spacing apart (4 tiles in the
+ * Americas) and away from the European arrival points.
  */
-function placeRegionSettlements(rng: { rng: number }, map: GameMap, regions: TribeRegion[], avoid: { x: number; y: number }[]): Settlement[] {
+function placeRegionSettlements(rng: { rng: number }, map: GameMap, regions: TribeRegion[], avoid: { x: number; y: number }[], scenario: Scenario): Settlement[] {
   const { width, height, tiles } = map;
+  const { spacing } = scenario.map.settlements;
   const lists = regions.map(({ region: [x0, y0, x1, y1] }) => {
     const list: { x: number; y: number }[] = [];
     for (let y = Math.max(1, y0); y <= Math.min(height - 2, y1); y++) {
       for (let x = Math.max(0, x0); x <= Math.min(width - 1, x1); x++) {
-        const t = tiles[y * width + x].t;
-        if (!TERRAIN[t].water && t !== 'arctic' && t !== 'mountains') list.push({ x, y });
+        if (settlementGround(scenario, tiles[y * width + x].t)) list.push({ x, y });
       }
     }
     for (let i = list.length - 1; i > 0; i--) {
@@ -137,11 +147,11 @@ function placeRegionSettlements(rng: { rng: number }, map: GameMap, regions: Tri
       const list = lists[i];
       while (list.length) {
         const c = list.pop()!;
-        if (placed.some((p) => distance(p.x, p.y, c.x, c.y) < 4)) continue;
+        if (placed.some((p) => distance(p.x, p.y, c.x, c.y) < spacing)) continue;
         if (avoid.some((a) => distance(a.x, a.y, c.x, c.y) < 2)) continue;
         const capital = !capitals.has(r.tribe);
         capitals.add(r.tribe);
-        placed.push(newSettlement(rng, `s${placed.length + 1}`, r.tribe, c.x, c.y, capital));
+        placed.push(newSettlement(rng, `s${placed.length + 1}`, r.tribe, c.x, c.y, capital, settlementKindIn(scenario, r.tribe)));
         counts[i]++;
         progress = true;
         break;

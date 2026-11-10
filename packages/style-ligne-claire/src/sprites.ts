@@ -1,4 +1,4 @@
-import type { GoodId, NationId, ProductId, RoleId, TribeId, UnitTypeId } from '@cc/engine';
+import type { GoodId, NationId, ProductId, RoleId, SettlementLook, TribeId, UnitTypeId } from '@cc/engine';
 import { NATIONS, TRIBES, UNIT_TYPES } from '@cc/engine';
 import { HULL, INK, ROOF, SAIL, SKIN, STONE, TRUNK, WALL, WHITE, WOOD, shade, type TreeShape } from './palette.js';
 
@@ -199,10 +199,11 @@ export function colonySprite(ctx: Ctx, x: number, y: number, s: number, nation: 
   for (const [dx, dy, w] of order) house(ctx, x + dx * s, base + dy * s - s * 0.06, w * s, lw);
 }
 
-export function settlementSprite(ctx: Ctx, x: number, y: number, s: number, tribe: TribeId, capital: boolean, lw: number): void {
+/** A native settlement drawn as its kind looks (a camp of tipis, a village of huts, a stepped city). */
+export function settlementSprite(ctx: Ctx, x: number, y: number, s: number, tribe: TribeId, capital: boolean, lw: number, look: SettlementLook): void {
   const def = TRIBES[tribe];
   const base = y + s * 0.3;
-  if (def.settlement === 'camp') {
+  if (look === 'camp') {
     const tipi = (tx: number, w: number) => {
       inked(ctx, '#ecd7a6', lw, () => {
         ctx.moveTo(tx - w / 2, base);
@@ -223,7 +224,7 @@ export function settlementSprite(ctx: Ctx, x: number, y: number, s: number, trib
     tipi(x - s * 0.18, s * 0.34);
     tipi(x + s * 0.17, s * 0.3);
     tipi(x, s * 0.38);
-  } else if (def.settlement === 'village') {
+  } else if (look === 'village') {
     const hut = (hx: number, w: number) => {
       inked(ctx, '#c99a5b', lw, () => {
         ctx.ellipse(hx, base, w / 2, w * 0.55, 0, Math.PI, 0);

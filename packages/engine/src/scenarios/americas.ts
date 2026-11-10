@@ -11,11 +11,58 @@ import { FATHER_CATEGORIES, FATHERS, type FatherId } from '../rules/fathers.js';
 import { GOODS } from '../rules/goods.js';
 import type { Modifier } from '../rules/modifiers.js';
 import { NATION_ORDER, NATIONS, TRIBE_ORDER, type NationId } from '../rules/nations.js';
-import { BURIAL_WEIGHT, NATIVE_PRODUCE } from '../rules/natives.js';
+import { BURIAL_WEIGHT, NATIVE_PRODUCE, SETTLEMENT_KINDS } from '../rules/natives.js';
 import { PORT_CHARACTER } from '../rules/ports.js';
+import { TERRAIN, type TerrainId } from '../rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
+import { AMERICAS_PEOPLES } from '../maps/americas.js';
+import { AUSTRALIA_PLACEHOLDER_PEOPLES } from '../maps/australia.js';
+import { NORTH_AMERICA_PEOPLES } from '../maps/north-america.js';
+import { SOUTH_AMERICA_PEOPLES } from '../maps/south-america.js';
 import { AMERICAS_CALENDAR } from './calendar.js';
-import type { NationEntry, RumourEntry, Scenario } from './types.js';
+import type { GeneratorSettings, NationEntry, RumourEntry, Scenario } from './types.js';
+
+/**
+ * The generated New World (mapgen.ts): one continent a little west of the middle, with Europe across
+ * the eastern high seas; cold at the top and bottom, warm in the middle rows.
+ */
+export const AMERICAS_GENERATOR: GeneratorSettings = {
+  sizes: {
+    small: { width: 36, height: 44 },
+    medium: { width: 46, height: 58 },
+    large: { width: 58, height: 72 },
+  },
+  noise: { land: [9, 4, 2], heat: [7, 3], wet: [6, 3], elevation: [5, 2], wood: [4, 2] },
+  land: {
+    centre: [0.45, 0.5],
+    spread: [0.3, 0.47],
+    falloff: { x: 0.9, y: 0.6, strength: 0.55 },
+    threshold: 0.33,
+    margin: { west: 3, east: 5, north: 1, south: 1 },
+  },
+  climate: {
+    heatNoise: 0.35,
+    warmth: 0,
+    poles: { rows: 2, terrain: 'arctic' },
+    zones: [
+      { below: 0.1, moisture: [{ terrain: 'arctic' }] },
+      { below: 0.25, heights: [{ above: 0.68, terrain: 'hills' }], moisture: [{ terrain: 'tundra' }] },
+      {
+        below: 0.62,
+        heights: [{ above: 0.74, terrain: 'mountains' }, { above: 0.64, terrain: 'hills' }],
+        moisture: [{ below: 0.36, terrain: 'prairie' }, { below: 0.52, terrain: 'plains' }, { below: 0.68, terrain: 'grassland' }, { terrain: 'marsh' }],
+      },
+      {
+        heights: [{ above: 0.74, terrain: 'mountains' }, { above: 0.64, terrain: 'hills' }],
+        moisture: [{ below: 0.33, terrain: 'desert' }, { below: 0.6, terrain: 'savannah' }, { terrain: 'swamp' }],
+      },
+    ],
+  },
+  forest: 0.47,
+  highSeas: { distance: 2, columns: 2 },
+  entrySide: 'east',
+  peoples: { perTiles: 34, min: 8, edgeRows: 2 },
+};
 
 /** What each nation's bonus does (its text is NATIONS[id].bonus), read at the engine's hook points (rules/modifiers.ts). */
 const BONUSES: Partial<Record<NationId, Modifier[]>> = {
@@ -61,16 +108,30 @@ export const AMERICAS: Scenario = {
   calendar: AMERICAS_CALENDAR,
   map: {
     // The Australia map is a geography preview played with the Americas' rules until its scenario exists.
-    stored: ['north-america', 'south-america', 'americas', 'australia'],
-    generated: true,
+    stored: [
+      { id: 'north-america', peoples: NORTH_AMERICA_PEOPLES },
+      { id: 'south-america', peoples: SOUTH_AMERICA_PEOPLES },
+      { id: 'americas', peoples: AMERICAS_PEOPLES },
+      { id: 'australia', peoples: AUSTRALIA_PLACEHOLDER_PEOPLES },
+    ],
+    generator: AMERICAS_GENERATOR,
     default: 'generated',
+    extras: { bonus: 0.05, coastalBonus: 0.06, rumours: 0.03, noRumours: ['arctic'] },
+    settlements: { avoid: ['arctic', 'mountains'], spacing: 4 },
+    // The Crown sails in where the nations arrive: from the east, or the west on the Australia map (Q12).
+    crown: 'entry',
   },
+  terrain: Object.keys(TERRAIN) as TerrainId[],
   nations: {
     sets: { alternative: NATION_ORDER.map(entry), real: REAL_RIVALS.map(entry) },
     default: 'alternative',
     max: 8,
   },
-  peoples: { ids: [...TRIBE_ORDER], produce: [...NATIVE_PRODUCE] },
+  peoples: {
+    ids: [...TRIBE_ORDER],
+    produce: [...NATIVE_PRODUCE],
+    settlements: { nomadic: SETTLEMENT_KINDS.camp, agricultural: SETTLEMENT_KINDS.village, urban: SETTLEMENT_KINDS.city },
+  },
   goods: [...GOODS],
   units: Object.keys(UNIT_TYPES) as UnitTypeId[],
   buildings: [...BUILDING_ORDER],

@@ -49,7 +49,7 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
     }
     for (const r of settlementForSale(s, st).filter((o) => o.amount >= 10)) {
       const n = Math.min(100, r.amount, cargoRoomFor(s, unit, r.good));
-      const each = nativeUnitPrice(st, r.good, unit.owner);
+      const each = nativeUnitPrice(s, st, r.good, unit.owner);
       const price = each * Math.max(1, n);
       options.push({
         label: n > 0 ? `Buy ${n} ${GOOD_DEFS[r.good].name.toLowerCase()} for ${price} gold (${each} each)` : `${r.amount} ${GOOD_DEFS[r.good].name.toLowerCase()} for sale (no room aboard)`,
@@ -62,7 +62,7 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
     const text = h('div', null,
       h('p', null, `The people here are ${mood}. They pay ${st.gold} gold at most, and want ${TRIBES[st.tribe].wants.map((g) => GOOD_DEFS[g].name.toLowerCase()).join(', ')}.`),
       options.length ? null : h('p', { class: 'muted' }, 'You have nothing to sell, and they have nothing for sale.'));
-    const choice: Deal | null = await choose<Deal>(`Trade with the ${settlementName(st)}`, text, [...options, { label: traded ? 'Done' : 'Leave', value: null as unknown as Deal }]);
+    const choice: Deal | null = await choose<Deal>(`Trade with the ${settlementName(s, st)}`, text, [...options, { label: traded ? 'Done' : 'Leave', value: null as unknown as Deal }]);
     if (!choice) return traded;
     const ok: boolean = choice.kind === 'sell'
       ? app.dispatch({ type: 'tradeNatives', unitId: unit.id, settlementId, good: choice.good })
@@ -76,7 +76,7 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
 export async function inciteDialog(app: App, u: Unit, settlementId: string): Promise<boolean> {
   const s = app.state;
   const st = s.settlements[settlementId];
-  const price = incitePrice(st);
+  const price = incitePrice(s, st);
   const rivals = s.players.filter((p) => p.id !== u.owner && p.id !== 'crown').map((p) => p.id as NationId);
   const nation = await choose(
     'Incite the natives',

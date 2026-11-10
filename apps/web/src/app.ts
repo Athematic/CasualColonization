@@ -560,11 +560,11 @@ export class App {
       learn: st.skill ? `Live among the natives (learn: ${st.skill.replace(/([A-Z])/g, ' $1').toLowerCase()})` : 'Live among the natives (nothing left to teach)',
       trade: 'Trade: sell and buy goods',
       denounce: st.mission ? `Denounce the ${NATIONS[st.mission].adjective} mission` : 'Denounce a rival mission',
-      incite: `Incite the natives against a rival (${incitePrice(st)} gold)`,
+      incite: `Incite the natives against a rival (${incitePrice(this.state, st)} gold)`,
       attack: 'Attack the settlement',
     } as const;
     const mood = tensionLabel(st.tension[this.viewer] ?? 0);
-    const choice = await choose(settlementName(st), `The people here are ${mood}. What will you do?`, [
+    const choice = await choose(settlementName(this.state, st), `The people here are ${mood}. What will you do?`, [
       ...actions.map((a) => ({ label: labels[a], value: a, disabled: (a === 'learn' && !st.skill) || (a === 'mission' && !!st.mission) })),
       { label: 'Leave', value: null },
     ]);
@@ -576,7 +576,7 @@ export class App {
     if (choice === 'mission') ok = this.dispatch({ type: 'mission', unitId: u.id, settlementId });
     if (choice === 'denounce') ok = this.dispatch({ type: 'denounce', unitId: u.id, settlementId });
     if (choice === 'incite') ok = await inciteDialog(this, u, settlementId);
-    if (choice === 'attack' && (await confirmDialog('Attack?', `Attack the ${settlementName(st)}? Its people will never trust you again.`, 'Attack', 'Hold back'))) {
+    if (choice === 'attack' && (await confirmDialog('Attack?', `Attack the ${settlementName(this.state, st)}? Its people will never trust you again.`, 'Attack', 'Hold back'))) {
       ok = this.dispatch({ type: 'attack', unitId: u.id, target: { settlementId } });
     }
     if (ok) this.afterUnitAction();

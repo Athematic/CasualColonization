@@ -30,7 +30,7 @@ export function buyFromNatives(s: GameState, p: Player, wagon: Unit, st: Settlem
     .filter((r) => r.amount >= 30 && !p.boycotts[r.good])
     .map((r) => {
       const n = Math.min(100, r.amount, cargoRoomFor(s, wagon, r.good));
-      const unit = nativeUnitPrice(st, r.good, p.id);
+      const unit = nativeUnitPrice(s, st, r.good, p.id);
       return { good: r.good, n, unit, gain: n * (net(r.good) - unit) };
     })
     .filter((r) => r.n >= 30 && net(r.good) >= r.unit * NATIVE_BUY_MARGIN && p.gold >= r.unit * r.n + BUY_RESERVE)
@@ -53,7 +53,7 @@ export function maybeIncite(s: GameState, p: Player, u: Unit, st: Settlement, pr
   const memory = (p.aiMemory = p.aiMemory ?? {});
   if (memory.lastIncite !== undefined && s.turn - memory.lastIncite < INCITE_EVERY) return false;
   if (tensionOf(st, p.id) >= TENSION.angry) return false;
-  const price = incitePrice(st);
+  const price = incitePrice(s, st);
   if (p.gold < price + prof.reserve + 1000) return false;
   const tribe = s.tribes.find((t) => t.id === st.tribe)!;
   const enemy = (Object.keys(p.stance) as NationId[]).find(

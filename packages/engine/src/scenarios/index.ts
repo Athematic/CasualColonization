@@ -9,7 +9,8 @@ import type { BuildingKind } from '../rules/buildings.js';
 import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
 import { DEFAULT_DIFFICULTY, DIFFICULTY, DIFFICULTY_LEVELS, type DifficultyId, type DifficultyRules } from '../rules/difficulty.js';
-import type { NationId, TribeId } from '../rules/nations.js';
+import { TRIBES, type NationId, type TribeId } from '../rules/nations.js';
+import type { SettlementKindDef } from '../rules/natives.js';
 import { SCORE_WEIGHTS, type ScoreWeights } from '../rules/score.js';
 import { COLONY_BUILDS, IMMIGRANT_WEIGHTS, PURCHASABLE, TRAINABLE, type UnitTypeId } from '../rules/units.js';
 import type { GameConfig, GameState } from '../types.js';
@@ -19,7 +20,7 @@ import type { Mechanics, NationEntry, Rivals, RumourEntry, Scenario, ScenarioAi 
 
 export * from './types.js';
 export * from './calendar.js';
-export { AMERICAS } from './americas.js';
+export { AMERICAS, AMERICAS_GENERATOR } from './americas.js';
 
 /** The scenario of games that do not name one. */
 export const DEFAULT_SCENARIO = 'americas';
@@ -68,6 +69,21 @@ export function goodsOf(s: HasScenario): readonly GoodId[] {
 /** Peoples in play, north to south. */
 export function peoplesOf(s: HasScenario): readonly TribeId[] {
   return scenarioOf(s).peoples.ids;
+}
+
+/**
+ * The kind of settlement a people lives in, in a scenario: the row its settlement-kind table gives
+ * the people's lifeway.
+ */
+export function settlementKindIn(scenario: Scenario, tribe: TribeId): SettlementKindDef {
+  const kind = scenario.peoples.settlements[TRIBES[tribe].lifeway];
+  if (!kind) throw new Error(`${scenario.name} has no settlement kind for the ${TRIBES[tribe].lifeway} ${TRIBES[tribe].name}.`);
+  return kind;
+}
+
+/** The kind of a settlement in its game (camp, village, city…). */
+export function settlementKindOf(s: HasScenario, st: { tribe: TribeId }): SettlementKindDef {
+  return settlementKindIn(scenarioOf(s), st.tribe);
 }
 
 /** Goods native settlements produce for trade. */
@@ -194,6 +210,11 @@ export function checkScenarioConfig(config: GameConfig): Scenario {
   const set = nationSet(scenario, config.rivals);
   for (const nation of config.nations) {
     if (!set.some((e) => e.id === nation)) throw new Error(`${nation} is not one of the nations of ${scenario.name}.`);
+  }
+  if (config.map) {
+    if (!scenario.map.stored.some((e) => e.id === config.map)) throw new Error(`${scenario.name} has no map "${config.map}".`);
+  } else if (!scenario.map.generator) {
+    throw new Error(`${scenario.name} has no generated maps; choose one of its maps.`);
   }
   return scenario;
 }

@@ -79,7 +79,7 @@ describe('braves', () => {
     for (let i = 0; i < 40; i++) processNatives(s);
     const braves = Object.values(s.braves ?? {});
     expect(braves.length).toBeGreaterThan(0);
-    for (const st of Object.values(s.settlements)) expect(braves.filter((b) => b.home === st.id).length).toBeLessThanOrEqual(maxBraves(st));
+    for (const st of Object.values(s.settlements)) expect(braves.filter((b) => b.home === st.id).length).toBeLessThanOrEqual(maxBraves(s, st));
     for (const b of braves) expect(isWater(tileAt(s, b.x, b.y))).toBe(false);
     expect(braves.some((b) => b.x !== s.settlements[b.home].x || b.y !== s.settlements[b.home].y)).toBe(true);
   });
@@ -268,7 +268,7 @@ describe('buying from natives', () => {
     st.goods = { furs: 80, silver: 40 };
     const p = s.players[0];
     p.gold = 5000;
-    const price = nativeUnitPrice(st, 'furs', 'england') * 80;
+    const price = nativeUnitPrice(s, st, 'furs', 'england') * 80;
     expect(applyCommand(s, { type: 'buyNatives', unitId: wagon.id, settlementId: st.id, good: 'furs' }).ok).toBe(true);
     expect(wagon.cargo.furs).toBe(80);
     expect(p.gold).toBe(5000 - price);
@@ -284,9 +284,9 @@ describe('buying from natives', () => {
     const st = Object.values(s.settlements)[0];
     st.goods = { furs: 10 };
     st.tension.england = 0;
-    const calm = nativeUnitPrice(st, 'silver', 'england');
+    const calm = nativeUnitPrice(s, st, 'silver', 'england');
     st.tension.england = 900;
-    expect(nativeUnitPrice(st, 'silver', 'england')).toBeGreaterThan(calm);
+    expect(nativeUnitPrice(s, st, 'silver', 'england')).toBeGreaterThan(calm);
     for (let i = 0; i < 30; i++) processNatives(s);
     expect(Object.values(s.settlements).some((o) => Object.values(o.goods ?? {}).some((n) => (n ?? 0) > 0))).toBe(true);
   });
@@ -454,7 +454,7 @@ describe('missionaries', () => {
     const p = s.players[0];
     p.gold = 5000;
     st.tension.france = 500;
-    const price = incitePrice(st);
+    const price = incitePrice(s, st);
     const r = applyCommand(s, { type: 'incite', unitId: m.id, settlementId: st.id, nation: 'france' });
     expect(r.ok).toBe(true);
     expect(p.gold).toBe(5000 - price);

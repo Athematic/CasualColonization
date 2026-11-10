@@ -1,4 +1,4 @@
-import { colonyWorkers, NATIONS, RIVER_DIRS, TERRAIN, type Colony, type GameState, type Settlement, type Tile } from '@cc/engine';
+import { colonyWorkers, NATIONS, RIVER_DIRS, settlementKindOf, TERRAIN, type Colony, type GameState, type Settlement, type SettlementLook, type Tile } from '@cc/engine';
 import {
   braveMarkers,
   hash2,
@@ -453,7 +453,7 @@ export class LigneClaireMapRenderer implements MapRenderer {
     for (const st of Object.values(s.settlements).sort((a, b) => a.y - b.y || a.x - b.x)) {
       if (!isTileExplored(scene, st.x, st.y) || st.x < range.x0 - 1 || st.x > range.x1 + 1 || st.y < range.y0 - 1 || st.y > range.y1 + 1) continue;
       const p = tileToScreen(scene, st.x, st.y);
-      this.drawSettlement(st, p.x, p.y, z, lw);
+      this.drawSettlement(st, p.x, p.y, z, lw, settlementKindOf(s, st).look);
     }
     const labels: (() => void)[] = [];
     for (const c of Object.values(s.colonies).sort((a, b) => a.y - b.y || a.x - b.x)) {
@@ -665,9 +665,9 @@ export class LigneClaireMapRenderer implements MapRenderer {
     ruins(this.ctx, t.px + z / 2, t.py + z / 2, z * 0.7, lw);
   }
 
-  protected drawSettlement(st: Readonly<Settlement>, px: number, py: number, z: number, lw: number): void {
+  protected drawSettlement(st: Readonly<Settlement>, px: number, py: number, z: number, lw: number, look: SettlementLook): void {
     if (this.hooks.settlement?.(this.ctx, st, px, py, z)) return;
-    settlementSprite(this.ctx, px + z / 2, py + z / 2, z * 0.9, st.tribe, st.capital, lw);
+    settlementSprite(this.ctx, px + z / 2, py + z / 2, z * 0.9, st.tribe, st.capital, lw, look);
   }
 
   protected drawColony(c: Readonly<Colony>, size: number, px: number, py: number, z: number, lw: number): void {
