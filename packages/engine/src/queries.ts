@@ -231,7 +231,9 @@ export function buildingWorkers(s: GameState, colony: Colony, kind: keyof typeof
 }
 
 export function message(s: GameState, text: string, to?: NationId, at?: { x: number; y: number }): void {
-  s.messages.push({ turn: s.turn, to, text, at });
+  // Only the tile, copied: callers pass colonies, settlements and players' entries, and keeping
+  // the object itself would share it with the state (see GameState).
+  s.messages.push({ turn: s.turn, to, text, at: at && { x: at.x, y: at.y } });
   if (s.messages.length > 400) s.messages.splice(0, s.messages.length - 400);
 }
 
