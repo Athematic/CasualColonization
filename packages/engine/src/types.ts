@@ -66,6 +66,8 @@ export interface Tile {
    * sw 32, w 64, nw 128). A bit towards a water tile is the river's mouth.
    */
   rd?: number;
+  /** Worked out: the silver here has been mined thin (see mines.ts, rules/mines.ts). */
+  d?: boolean;
   /** European nation that bought or took this land from the natives. */
   claim?: NationId;
 }
@@ -137,10 +139,38 @@ export interface Player {
   warSince: Partial<Record<string, number>>;
   /** Colonies held when independence was declared. */
   coloniesAtDeclaration?: number;
+  /**
+   * A mercenary company offering its services to rebels (rebellion.ts), waiting to be hired or
+   * turned away; it leaves if unanswered for a round.
+   */
+  mercenaryOffer?: MercenaryOffer;
+  /**
+   * The War of Independence after the declaration (rebellion.ts): liberty bells rung by then,
+   * the nations that were Favoured Nations then, mercenary offers made (and the last one's
+   * turn), and the foreign intervention once it has come. Missing before the declaration.
+   */
+  rebellion?: {
+    bells: number;
+    friends?: NationId[];
+    offers: number;
+    lastOffer?: number;
+    intervention?: { by: NationId | 'foreign'; turn: number; land: number };
+  };
   /** Units of goods lost to full warehouses over the game; missing means none. */
   goodsSpoiled?: number;
   /** Difficulty whose economics this nation plays at; missing means Conquistador (computer players). */
   difficulty?: DifficultyId;
+}
+
+/** A mercenary company's offer to rebels: veteran soldiers, veteran dragoons and artillery for gold. */
+export interface MercenaryOffer {
+  /** Where the company comes from ("Hessian", "Swiss", …). */
+  name: string;
+  soldiers: number;
+  dragoons: number;
+  artillery: number;
+  price: number;
+  turn: number;
 }
 
 export type Job =
@@ -179,6 +209,13 @@ export interface Unit {
   repair?: number;
   /** For Royal troops: the rebel nation they were sent against. */
   against?: NationId;
+  /** A mercenary hired during the War of Independence (rebellion.ts). */
+  mercenary?: true;
+  /**
+   * A unit of a foreign intervention force (rebellion.ts): owned by the rebels it helps, it fights
+   * the Crown on its own and takes no orders; the value is the power that sent it.
+   */
+  ally?: NationId | 'foreign';
   /** Where the unit is going; for Europe, `port` is a Favoured Nation partner's port (missing: its own). */
   dest?: { x: number; y: number } | { europe: true; port?: NationId };
   /** "Road to…": a pioneer roads each tile on the way to this one, then steps on (see `continueRoadTo`). Missing in older saves. */
@@ -384,7 +421,9 @@ export interface GameState {
   braves?: Record<string, Brave>;
   /** Native demands and offers waiting for a person's answer. Missing means none. */
   nativeDemands?: NativeDemand[];
-  gameOver?: { turn: number; reason: string; winner?: NationId; scores: Partial<Record<NationId, number>> };
+  gameOver?: { turn: number; reason: string; winner?: NationId; scores: Partial<Record<NationId, number>>; /** The person ended the game early (leaving.ts). */ retired?: boolean };
+  /** Silver and ore dug so far from mining tiles, by "x,y" (see mines.ts). Missing means none. */
+  mined?: Record<string, number>;
   /** Set the first time a cheat is used and never cleared. Missing means the game is not cheated. */
   cheated?: { turn: number; cheats: CheatId[] };
   /** Game-wide modifiers set by cheats. Missing fields mean the normal rules. */

@@ -139,20 +139,41 @@ export function unitPosition(s: GameState, u: Unit): { x: number; y: number } | 
   }
 }
 
+// The lookups below are hot paths for the computer players: plain loops visit the records in the
+// same order as Object.values would, without building an array of every unit first.
+
 export function unitsAt(s: GameState, x: number, y: number): Unit[] {
-  return Object.values(s.units).filter((u) => u.loc.kind === 'map' && u.loc.x === x && u.loc.y === y);
+  const out: Unit[] = [];
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (u.loc.kind === 'map' && u.loc.x === x && u.loc.y === y) out.push(u);
+  }
+  return out;
 }
 
 export function colonyAt(s: GameState, x: number, y: number): Colony | undefined {
-  return Object.values(s.colonies).find((c) => c.x === x && c.y === y);
+  for (const id in s.colonies) {
+    const c = s.colonies[id];
+    if (c.x === x && c.y === y) return c;
+  }
+  return undefined;
 }
 
 export function settlementAt(s: GameState, x: number, y: number): Settlement | undefined {
-  return Object.values(s.settlements).find((c) => c.x === x && c.y === y);
+  for (const id in s.settlements) {
+    const st = s.settlements[id];
+    if (st.x === x && st.y === y) return st;
+  }
+  return undefined;
 }
 
 export function unitsAboard(s: GameState, carrier: Unit): Unit[] {
-  return Object.values(s.units).filter((u) => u.loc.kind === 'carrier' && u.loc.carrierId === carrier.id);
+  const out: Unit[] = [];
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (u.loc.kind === 'carrier' && u.loc.carrierId === carrier.id) out.push(u);
+  }
+  return out;
 }
 
 export function colonyWorkers(s: GameState, colony: Colony): Unit[] {
@@ -221,9 +242,11 @@ export function reveal(s: GameState, nation: NationId, x: number, y: number, rad
 
 /** True if the tile is worked by any colony's colonist. */
 export function tileWorkedBy(s: GameState, x: number, y: number): Unit | undefined {
-  return Object.values(s.units).find(
-    (u) => u.loc.kind === 'colony' && u.loc.job.kind === 'tile' && u.loc.job.x === x && u.loc.job.y === y,
-  );
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (u.loc.kind === 'colony' && u.loc.job.kind === 'tile' && u.loc.job.x === x && u.loc.job.y === y) return u;
+  }
+  return undefined;
 }
 
 export function colonyOwningTile(s: GameState, x: number, y: number): Colony | undefined {

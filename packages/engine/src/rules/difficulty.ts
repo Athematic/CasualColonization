@@ -69,6 +69,10 @@ export interface DifficultyRules {
   royalWarChance: number;
   /** Multiplier on the price of a colony charter (COLONY_CHARTER), when the game uses the rule. */
   colonyCharter: number;
+  /** Price of mercenary companies offered to rebels (rebellion.ts). */
+  mercenaryPrice: number;
+  /** Liberty bells the rebels must ring after the declaration before a foreign power intervenes (rebellion.ts). */
+  interventionBells: number;
 }
 
 /**
@@ -104,6 +108,8 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     demandSize: 0.7,
     royalWarChance: 0.5,
     colonyCharter: 0.5,
+    mercenaryPrice: 0.7,
+    interventionBells: 0.6,
   },
   explorer: {
     name: 'Explorer',
@@ -129,6 +135,8 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     demandSize: 0.85,
     royalWarChance: 0.75,
     colonyCharter: 0.75,
+    mercenaryPrice: 0.85,
+    interventionBells: 0.8,
   },
   conquistador: {
     name: 'Conquistador',
@@ -154,6 +162,8 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     demandSize: 1,
     royalWarChance: 1,
     colonyCharter: 1,
+    mercenaryPrice: 1,
+    interventionBells: 1,
   },
   governor: {
     name: 'Governor',
@@ -179,6 +189,8 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     demandSize: 1.15,
     royalWarChance: 1.25,
     colonyCharter: 1.25,
+    mercenaryPrice: 1.15,
+    interventionBells: 1.25,
   },
   viceroy: {
     name: 'Viceroy',
@@ -204,6 +216,8 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     demandSize: 1.3,
     royalWarChance: 1.5,
     colonyCharter: 1.5,
+    mercenaryPrice: 1.3,
+    interventionBells: 1.5,
   },
 };
 

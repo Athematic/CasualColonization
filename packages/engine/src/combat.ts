@@ -18,6 +18,8 @@ import {
   player,
   tileAt,
   tileDefence,
+  maxMoves,
+  neighbours,
   unitName,
   unitPosition,
   unitsAboard,
@@ -26,6 +28,7 @@ import {
 import { random, randInt } from './rng.js';
 import { isFavoured, onWar } from './relations.js';
 import { STOCKADE_DEFENCE } from './rules/buildings.js';
+import { AMBUSH_BONUS, BOMBARD_CHANCE, CAPTURE_CHANCE, REPAIR_COST } from './rules/combat.js';
 import { NATIONS, TRIBES, type NationId, type TribeId } from './rules/nations.js';
 import { SURRENDER_CHANCE, SURRENDER_TRIBUTE } from './rules/natives.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
@@ -50,12 +53,26 @@ function troopBonus(u: Unit, attacking: boolean): number {
   }
 }
 
-export function offencePower(s: GameState, u: Unit): number {
+/** Cover bonus (percent) of a unit that attacks out of forest, hills or mountains against a unit in the open. */
+export function ambushBonus(s: GameState, attacker: { x: number; y: number }, defender: Unit): number {
+  const from = tileAt(s, attacker.x, attacker.y);
+  if (!from || colonyAt(s, attacker.x, attacker.y)) return 0;
+  const cover = from.f ? AMBUSH_BONUS.forest : from.t === 'mountains' ? AMBUSH_BONUS.mountains : from.t === 'hills' ? AMBUSH_BONUS.hills : 0;
+  if (!cover) return 0;
+  const dp = unitPosition(s, defender);
+  if (!dp || isShip(defender) || colonyAt(s, dp.x, dp.y) || defender.state === 'fortified') return 0;
+  const to = tileAt(s, dp.x, dp.y);
+  return to && tileDefence(to) === 0 ? cover : 0;
+}
+
+export function offencePower(s: GameState, u: Unit, target?: Unit): number {
   const def = UNIT_TYPES[u.type];
   let power = def.kind === 'colonist' ? ROLES[u.role].offence : def.offence;
   power *= troopBonus(u, true);
   if (u.type === 'privateer' && hasFather(s, u.owner, 'francisDrake')) power *= 1.5;
-  return power * 1.5; // attack bonus
+  const pos = target && !isShip(u) ? unitPosition(s, u) : undefined;
+  const ambush = target && pos ? ambushBonus(s, pos, target) : 0;
+  return power * 1.5 * (1 + ambush / 100); // attack bonus, and the bonus for attacking out of cover
 }
 
 export function defencePower(s: GameState, u: Unit): number {
@@ -178,8 +195,78 @@ function demote(s: GameState, u: Unit, winner: Unit): string {
     delete u.dest;
     return `${name} is captured`;
   }
+  if (def.kind === 'artillery' && u.type === 'artillery') {
+    u.type = 'damagedArtillery';
+    u.state = 'active';
+    return `${name} is damaged`;
+  }
   delete s.units[u.id];
   return `${name} is destroyed`;
+}
+
+/**
+ * The winner of a fight in the open takes the loser's dropped horses or muskets, with a seeded
+ * chance: a soldier gets the horses and becomes a dragoon, an unarmed colonist gets the muskets.
+ * `before` is the loser's role before the fight; nothing happens when the loser re-armed or was
+ * in a colony. Returns text for the report.
+ */
+function takeEquipment(s: GameState, winner: Unit, loser: Unit, before: Unit['role'], at: { x: number; y: number } | null): string {
+  if (!at || colonyAt(s, at.x, at.y) || !s.units[loser.id] || UNIT_TYPES[winner.type].kind !== 'colonist') return '';
+  const horses = before === 'dragoon' && loser.role === 'soldier';
+  const muskets = before === 'soldier' && loser.role === 'none';
+  if (horses && winner.role === 'soldier' && random(s) < CAPTURE_CHANCE) {
+    winner.role = 'dragoon';
+    winner.moves = Math.min(winner.moves, maxMoves(winner, s));
+    return ` ${unitName(winner)} takes the horses.`;
+  }
+  if (muskets && winner.role === 'none' && random(s) < CAPTURE_CHANCE) {
+    winner.role = 'soldier';
+    return ` ${unitName(winner)} takes the muskets.`;
+  }
+  return '';
+}
+
+/** A damaged artillery piece in a colony with an armory (or in Europe) is mended for hammers and tools (or gold). */
+export function repairArtillery(s: GameState, nation: NationId, unitId: string): string {
+  const u = s.units[unitId];
+  if (!u || u.owner !== nation) fail('That is not your unit.');
+  if (u.type !== 'damagedArtillery') fail('Only damaged artillery needs repairs.');
+  const p = player(s, nation);
+  if (u.loc.kind === 'europe') {
+    if (p.gold < REPAIR_COST.gold) fail(`Repairs cost ${REPAIR_COST.gold} gold.`);
+    p.gold -= REPAIR_COST.gold;
+  } else if (u.loc.kind === 'map') {
+    const colony = colonyAt(s, u.loc.x, u.loc.y);
+    if (!colony || colony.owner !== nation) fail('Bring the artillery into one of your colonies.');
+    if (colony.buildings.armory === 0) fail(`${colony.name} needs an armory to repair artillery.`);
+    if (colony.hammers < REPAIR_COST.hammers || colony.goods.tools < REPAIR_COST.tools) fail(`Repairs need ${REPAIR_COST.hammers} hammers (built up) and ${REPAIR_COST.tools} tools in the warehouse.`);
+    colony.hammers -= REPAIR_COST.hammers;
+    colony.goods.tools -= REPAIR_COST.tools;
+  } else fail('The artillery must be in a colony or in Europe.');
+  u.type = 'artillery';
+  u.moves = 0;
+  return `${unitName(u)} has been repaired.`;
+}
+
+/**
+ * At the start of a nation's turn, its coastal forts and fortresses fire on adjacent enemy ships
+ * (nations at war with the owner; one seeded roll per ship). A hit damages the ship as in combat.
+ */
+export function bombardShips(s: GameState, nation: NationId): void {
+  const me = player(s, nation);
+  for (const colony of Object.values(s.colonies)) {
+    const level = colony.buildings.stockade;
+    if (colony.owner !== nation || level < 2 || !isCoastal(s, colony.x, colony.y)) continue;
+    for (const n of neighbours(s, colony.x, colony.y)) {
+      for (const ship of unitsAt(s, n.x, n.y)) {
+        if (!isShip(ship) || ship.owner === nation || ship.loc.kind !== 'map' || me.stance[ship.owner] !== 'war') continue;
+        if (random(s) >= BOMBARD_CHANCE[level - 1]) continue;
+        const text = `${colony.name}'s ${level > 2 ? 'fortress' : 'fort'} bombards ${unitName(ship)}: ${damageShip(s, ship)}.`;
+        message(s, text, nation, colony);
+        message(s, text, ship.owner, n);
+      }
+    }
+  }
 }
 
 /** Winning soldiers may become veterans; George Washington makes it certain. */
@@ -228,10 +315,13 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
   // Privateers sail under no flag, so their attacks do not start wars.
   if (u.type !== 'privateer') declareWar(s, u.owner, defender.owner);
 
-  const off = offencePower(s, u);
+  const off = offencePower(s, u, defender);
   const def = defencePower(s, defender);
   const won = random(s) < off / (off + def);
   const attackerName = unitName(u);
+  const defenderAt = unitPosition(s, defender);
+  const defenderRole = defender.role;
+  const attackerRole = u.role;
   let text: string;
   if (won) {
     const unarmed = UNIT_TYPES[defender.type].kind === 'colonist' && !isArmed(defender);
@@ -239,10 +329,12 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
       text = captureColony(s, u, colony);
     } else {
       text = `${attackerName} wins: ${demote(s, defender, u)}.`;
+      text += takeEquipment(s, u, defender, defenderRole, defenderAt ?? null);
     }
     text += promote(s, u);
   } else {
     text = `${attackerName} is defeated: ${demote(s, u, defender)}.`;
+    text += takeEquipment(s, defender, u, attackerRole, pos);
     text += promote(s, defender);
   }
   message(s, text, u.owner, pos);
@@ -293,13 +385,23 @@ function attackBrave(s: GameState, u: Unit, braveId: string): CombatResult {
   hostile(s, b.tribe, u.owner, b, `an attack on one of their braves`);
   const off = offencePower(s, u);
   const def = braveDefence(s, b);
+  const braveGear = { armed: !!b.armed, mounted: !!b.mounted };
   const won = random(s) < off / (off + def);
   const name = braveName(b);
   let text: string;
   if (won) {
     killBrave(s, b, u.owner, atWar);
     track(u.owner, 'combat:brave killed');
-    text = `${unitName(u)} kills the ${name}.${promote(s, u)}`;
+    text = `${unitName(u)} kills the ${name}.`;
+    // A brave's horses and muskets are taken like a European's.
+    if (braveGear.mounted && u.role === 'soldier' && !colonyAt(s, pos.x, pos.y) && random(s) < CAPTURE_CHANCE) {
+      u.role = 'dragoon';
+      text += ` ${unitName(u)} takes the horses.`;
+    } else if (braveGear.armed && u.role === 'none' && UNIT_TYPES[u.type].kind === 'colonist' && random(s) < CAPTURE_CHANCE) {
+      u.role = 'soldier';
+      text += ` ${unitName(u)} takes the muskets.`;
+    }
+    text += promote(s, u);
   } else {
     const role = u.role;
     text = `${unitName(u)} is beaten by the ${name}: ${demote(s, u, u)}.`;

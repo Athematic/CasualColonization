@@ -6,10 +6,14 @@
  */
 import { defencePower } from '../combat.js';
 import { answerDemand, demandPenalty, REF_ON_REFUSAL } from '../crown.js';
+import { WAVE } from '../independence.js';
+import { colonyReport, sonsOfLiberty, TORY_COLONY_BELOW } from '../production.js';
+import { answerMercenaries, INTERVENTION, interventionBells, interventionForce, mercenaryCompany, TORY_LANDING } from '../rebellion.js';
 import { proposePeace, WAR_WEARINESS } from '../diplomacy.js';
-import { distance, isShip, unitsAt } from '../queries.js';
+import { colonyWorkers, distance, isCoastal, isShip, unitsAt } from '../queries.js';
+import { STOCKADE_DEFENCE } from '../rules/buildings.js';
 import { ROLES, UNIT_TYPES } from '../rules/units.js';
-import type { GameState, Player, Unit } from '../types.js';
+import type { Colony, GameState, Player, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
 
@@ -17,10 +21,8 @@ import type { AiProfile } from './profiles.js';
 export const CHEAP_DEMAND = 0.15;
 /** Gold a royal regular added on refusal is reckoned to cost a nation that plans independence. */
 export const REGULAR_COST = 600;
-/** Defence a typical armed rebel brings once fortified in a colony after the declaration. */
-export const REBEL_DEFENCE = 7.5;
-/** Arming for independence starts only once the defence is this share of what it needs. */
-export const ARMING_REACH = 0.5;
+/** Defence a typical armed rebel brings once fortified in a colony after the declaration (a militia soldier in a committed colony with a stockade: 9). */
+export const REBEL_DEFENCE = 9;
 
 /** Attack power of a King's regular as a soldier and as a dragoon, and of royal artillery. */
 const REGULAR = ROLES.soldier.offence * 1.5 * 1.5;
@@ -37,48 +39,185 @@ export function refPower(p: Player): number {
 
 const isArmed = (u: Unit) => u.role === 'soldier' || u.role === 'dragoon' || UNIT_TYPES[u.type].kind === 'artillery';
 
+/** A colony whose Sons of Liberty are at least this share fights harder after a declaration (combat.ts) and turns half its soldiers into Continentals. */
+const COMMITTED = 50;
+
 /**
- * The defence the nation could put up after a declaration: its armed units in its colonies, a
- * quarter stronger (rebels fight hardest for colonies that believe in independence, and veterans
- * become Continentals), and every 50 muskets in the warehouses re-arms a beaten soldier.
+ * The defence an armed unit (or a militia soldier, for `u` undefined) would put up in colony `c`
+ * after a declaration, fortified: veterans become Continentals (twice as strong), so do half the
+ * soldiers of a committed colony; the walls, artillery's bonus in a colony, fortification and,
+ * in a committed colony, the rebels' own +50%.
+ */
+function rebelDefence(c: Colony, committed: boolean, u?: Unit): number {
+  const def = u ? UNIT_TYPES[u.type] : UNIT_TYPES.freeColonist;
+  const artillery = def.kind === 'artillery';
+  const base = artillery ? def.defence : ROLES[u?.role ?? 'soldier'].defence;
+  const troop = artillery ? 1 : u?.type === 'veteranSoldier' || u?.type === 'continentalSoldier' ? 2 : committed ? 1.5 : 1;
+  const walls = c.buildings.stockade > 0 ? STOCKADE_DEFENCE[c.buildings.stockade - 1] : 0;
+  const bonus = walls + (artillery ? 75 : 0) + 50 + (committed ? 50 : 0);
+  return base * troop * (1 + bonus / 100);
+}
+
+/** What a colony would hold out with after a declaration: its armed units, and the muskets and horses that re-arm them. */
+export interface ColonyDefence {
+  colony: Colony;
+  /** Defence of its armed units and stores, as `rebelDefence`. */
+  power: number;
+}
+
+/**
+ * Each colony's defence after a declaration: its armed units, every 50 muskets in the warehouse
+ * (a beaten soldier re-arms from it, or a colonist takes up arms), and every 50 horses where
+ * dragoons are (a beaten dragoon takes fresh ones).
+ */
+export function colonyDefences(s: GameState, p: Player): ColonyDefence[] {
+  return ownColonies(s, p).map((c) => {
+    const committed = sonsOfLiberty(s, c) >= COMMITTED;
+    const armed = unitsAt(s, c.x, c.y).filter((u) => u.owner === p.id && !isShip(u) && isArmed(u) && !u.ally);
+    let power = armed.reduce((n, u) => n + rebelDefence(c, committed, u), 0);
+    const muskets = Math.floor(c.goods.muskets / 50);
+    const dragoons = armed.filter((u) => u.role === 'dragoon');
+    const horses = dragoons.length ? Math.floor(c.goods.horses / 50) : 0;
+    power += muskets * rebelDefence(c, committed);
+    if (horses) power += horses * rebelDefence(c, committed, dragoons[0]);
+    return { colony: c, power };
+  });
+}
+
+/**
+ * The defence the nation could put up after a declaration (see `colonyDefences`): the sum over its
+ * colonies, a colony that would be a Tory colony after the declaration (Sons of Liberty below
+ * TORY_COLONY_BELOW) counting for less: landings there bring TORY_LANDING troops instead of WAVE
+ * (rebellion.ts). Compared with the Royal Expeditionary Force's attack power (`refPower`).
  */
 export function rebelPower(s: GameState, p: Player): number {
-  let power = 0;
-  let muskets = 0;
-  for (const c of ownColonies(s, p)) {
-    muskets += c.goods.muskets;
-    for (const u of unitsAt(s, c.x, c.y)) if (u.owner === p.id && !isShip(u) && isArmed(u)) power += defencePower(s, u) * 1.25;
-  }
-  return power + Math.floor(muskets / 50) * ROLES.soldier.defence;
+  return colonyDefences(s, p).reduce((n, d) => n + d.power * (sonsOfLiberty(s, d.colony) < TORY_COLONY_BELOW ? WAVE / TORY_LANDING : 1), 0);
 }
 
 /**
- * Armed units per colony a nation planning independence wants: enough, with the muskets it
- * holds, for its defence to reach `ratio` of the Royal Expeditionary Force, between the plan's
- * own minimum and 4.
+ * The defence a colony should have: an even share of HOLD_ALONE times the royal force. The King's
+ * troops land next to the weakest coastal colony and those ashore march on the nearest colony
+ * (independence.ts), so troops in a strong colony do not help a weak one: probe wars were lost
+ * colony by colony while the sum of the defence was higher than the King's force.
  */
-export function armyForIndependence(s: GameState, p: Player, plan: { armyPerColony: number; ratio: number }): number {
+export function powerNeeded(s: GameState, p: Player): number {
+  return (refPower(p) * HOLD_ALONE) / Math.max(1, ownColonies(s, p).length);
+}
+
+/** Share of `powerNeeded` below which a colony is weak: it would fall to the first royal troops. */
+export const WEAK_BELOW = 0.5;
+
+/**
+ * Colonies with less than WEAK_BELOW of `powerNeeded`. Muskets, horses and spare troops go there
+ * first, and a declaration waits while a third of the colonies are weak: the war is lost once half
+ * are taken (independence.ts). `mercenaries` (their defence, as `supportParts`) join the weakest
+ * coastal colony at the declaration (rebellion.ts, weakestColony).
+ */
+export function weakColonies(s: GameState, p: Player, mercenaries = 0): Colony[] {
+  const need = powerNeeded(s, p) * WEAK_BELOW;
+  const defences = colonyDefences(s, p);
+  if (mercenaries > 0) {
+    const coastal = defences.filter((d) => isCoastal(s, d.colony.x, d.colony.y));
+    const landing = (coastal.length ? coastal : defences).reduce<ColonyDefence | null>((a, d) => (!a || d.power < a.power ? d : a), null);
+    if (landing) landing.power += mercenaries;
+  }
+  return defences.filter((d) => d.power < need && colonyWorkers(s, d.colony).length > 0).map((d) => d.colony);
+}
+
+/** Most armed units a colony keeps while arming for independence (muskets and horses in store add to them). */
+export const MAX_GARRISON = 4;
+
+/**
+ * Armed units per colony a nation planning independence wants: enough for its defence to reach
+ * `ratio` of the Royal Expeditionary Force, between the plan's own minimum and MAX_GARRISON.
+ */
+export function armyForIndependence(s: GameState, p: Player, plan: { armyPerColony: number; ratio: number }, support = 0): number {
   const colonies = ownColonies(s, p).length;
   if (!colonies) return plan.armyPerColony;
-  const units = (refPower(p) * plan.ratio) / REBEL_DEFENCE;
-  return Math.min(4, Math.max(plan.armyPerColony, Math.ceil(units / colonies)));
+  const units = Math.max(0, refPower(p) * plan.ratio - support) / REBEL_DEFENCE;
+  return Math.min(MAX_GARRISON, Math.max(plan.armyPerColony, Math.ceil(units / colonies)));
+}
+
+/** Whether the defence, with `support`, is still short of `ratio` times the Royal Expeditionary Force. */
+export function defenceShort(s: GameState, p: Player, ratio: number, support = 0): boolean {
+  return rebelPower(s, p) + support < refPower(p) * ratio;
 }
 
 /**
- * Whether arming for independence is worth it: the defence is still short of `ratio` times the
- * REF, but already at least ARMING_REACH of the way there. Further behind, the colonists and gold
- * an army takes cost more score than the war could bring (tournaments: arming from far behind
- * cost Creative about 100 points a game without a single declaration).
+ * Whether the nation's defence can plausibly beat the Royal Expeditionary Force waiting for it,
+ * with `support` (see `expectedSupport`) from mercenaries and a foreign intervention.
  */
-export function armingPays(s: GameState, p: Player, ratio: number): boolean {
-  const have = rebelPower(s, p);
-  const need = refPower(p) * ratio;
-  return have < need && have >= need * ARMING_REACH;
+export function canBeatRef(s: GameState, p: Player, ratio: number, support = 0): boolean {
+  return rebelPower(s, p) + support >= refPower(p) * ratio;
 }
 
-/** Whether the nation's defence can plausibly beat the Royal Expeditionary Force waiting for it. */
-export function canBeatRef(s: GameState, p: Player, ratio: number): boolean {
-  return rebelPower(s, p) >= refPower(p) * ratio;
+/**
+ * Defence one mercenary or intervention soldier, dragoon or artillery brings once fortified in a
+ * committed rebel colony with a stockade (a veteran soldier there defends at about 9, a veteran
+ * dragoon at 13, artillery at 11: the same measure as `rebelPower`).
+ */
+export const SUPPORT_DEFENCE = { soldiers: 9, dragoons: 13, artillery: 11 };
+/**
+ * Share of the intervention force a nation counts on before declaring: it comes only if the
+ * rebellion lasts and holds, and it lands in the middle of the war, not at the start.
+ */
+export const INTERVENTION_TRUST = 0.6;
+/** The intervention counts only if the nation's bells would bring it within this many turns of the declaration. */
+export const INTERVENTION_HORIZON = 20;
+
+const supportPower = (c: { soldiers: number; dragoons: number; artillery: number }) =>
+  c.soldiers * SUPPORT_DEFENCE.soldiers + c.dragoons * SUPPORT_DEFENCE.dragoons + c.artillery * SUPPORT_DEFENCE.artillery;
+
+/**
+ * The help a nation can expect if it declares now (rebellion.ts): the mercenary company that
+ * would offer its services at the declaration, if the treasury can pay for it, and
+ * INTERVENTION_TRUST of the intervention force when the colonies ring enough bells for it to come
+ * within INTERVENTION_HORIZON turns.
+ */
+export function expectedSupport(s: GameState, p: Player): number {
+  const { mercenaries, intervention } = supportParts(s, p);
+  return mercenaries + intervention;
+}
+
+/** The two parts of `expectedSupport`: the mercenaries, there from the start, and the intervention, which comes later. */
+export function supportParts(s: GameState, p: Player): { mercenaries: number; intervention: number } {
+  if (p.independence !== 'none') return { mercenaries: 0, intervention: 0 };
+  const company = mercenaryCompany(s, p.id);
+  const mercenaries = company ? supportPower(company) : 0;
+  const bells = ownColonies(s, p).reduce((n, c) => n + colonyReport(s, c).produced.bells, 0);
+  const turns = bells > 0 ? Math.max(INTERVENTION.minTurns, Math.ceil(interventionBells(p) / bells)) : Infinity;
+  return { mercenaries, intervention: turns <= INTERVENTION_HORIZON ? supportPower(interventionForce(p)) * INTERVENTION_TRUST : 0 };
+}
+
+/**
+ * Share of the royal force's power the rebels' own defence (`rebelPower`) and the mercenaries must
+ * reach without the intervention: it comes INTERVENTION.minTurns into the war at the earliest, and
+ * a rebellion that cannot hold that long is crushed before it lands (probe games: wars declared
+ * on the strength of the intervention were lost in 5–9 turns).
+ */
+export const HOLD_ALONE = 1;
+
+/** Whether the nation's own defence and the mercenaries can hold until the intervention comes (HOLD_ALONE). */
+export function holdsAlone(s: GameState, p: Player, mercenaries = supportParts(s, p).mercenaries): boolean {
+  return rebelPower(s, p) + mercenaries >= refPower(p) * HOLD_ALONE;
+}
+
+/**
+ * Hires the mercenary company offering its services, or turns it away. Naive never hires. The
+ * advanced levels hire a company they can pay at the declaration (their decision to declare
+ * counted on it), and later in the war whenever their defence is short of `ratio` times the
+ * royal troops still to land and already ashore.
+ */
+export function hireMercenaries(s: GameState, p: Player, prof: AiProfile | null, ratio: number): void {
+  const offer = p.mercenaryOffer;
+  if (!offer) return;
+  let hire = !!prof && p.gold >= offer.price && p.independence === 'declared';
+  if (hire && offer.turn !== p.refAtDeclaration?.turn) {
+    const ashore = Object.values(s.units).filter((u) => u.owner === 'crown' && u.against === p.id && !isShip(u)).length;
+    const threat = refPower(p) + ashore * REGULAR;
+    hire = rebelPower(s, p) < threat * ratio;
+  }
+  safely(() => void answerMercenaries(s, p.id, hire));
 }
 
 /**

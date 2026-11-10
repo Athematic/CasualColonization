@@ -209,6 +209,7 @@ export class Sidebar {
       if (canUseRoutes(u)) btn(u.route ? 'Change route…' : 'Trade route…', 'T', () => app.openRoutes(u.id));
       if (isShip(u)) btn('Sail to Europe', '', () => app.unitCommand('gotoEurope'));
       if (u.type === 'treasure') btn('Ship treasure home', '', () => { if (app.dispatch({ type: 'cashTreasure', unitId: u.id })) app.afterUnitAction(); });
+      if (u.type === 'damagedArtillery') btn('Repair (colony armory)', '', () => { if (app.dispatch({ type: 'repairArtillery', unitId: u.id })) app.afterUnitAction(); });
       btn('Fortify', 'F', () => app.unitCommand('fortify'), !isShip(u));
       btn('Sentry', 'S', () => app.unitCommand('sentry'));
       btn('Skip', 'Space', () => app.unitCommand('skip'));
@@ -262,6 +263,7 @@ export class Sidebar {
         h('button', { class: 'btn small', onclick: () => toast(saveManual(serialize(app.state)) ? 'Game saved in this browser.' : 'Could not save here.') }, 'Save'),
         h('button', { class: 'btn small', onclick: () => downloadSave(serialize(app.state), `casual-colonization-${app.state.turn}.json`) }, 'Export save'),
         h('button', { class: 'btn small', onclick: () => app.exitToMenu() }, 'Main menu'),
+        app.observer ? null : h('button', { class: 'btn small', disabled: !app.isMyTurn() || !!app.state.gameOver, title: 'End the game now with your current score', onclick: () => void app.retire() }, 'Retire…'),
         h('button', { class: 'btn small', onclick: () => app.openReports(), title: 'Advisor reports (A, or F1–F8)' }, 'Reports…'),
         h('button', { class: 'btn small', onclick: () => app.openCheats(), title: 'Cheats for testing (Ctrl+Shift+C)' }, 'Cheats…')),
       this.difficultyLine(),

@@ -21,6 +21,7 @@ import {
   unitPosition,
   unitsAt,
 } from './queries.js';
+import { alliesGoHome, isToryColony, offerMercenaries, processRebellion, startRebellion, TORY_LANDING } from './rebellion.js';
 import { lapseFavoured } from './relations.js';
 import { difficultyRules } from './rules/difficulty.js';
 import { NATIONS, type NationId } from './rules/nations.js';
@@ -82,6 +83,8 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   track(nation, 'independence:royal land units', p.ref.regulars + p.ref.dragoons + p.ref.artillery);
   ensureCrown(s);
   declareWar(s, nation, 'crown');
+  // Remember the Favoured Nations for a foreign intervention later (rebellion.ts).
+  startRebellion(s, p);
   // The home port is lost, and with it every Favoured Nation status (no penalties).
   lapseFavoured(s, nation);
 
@@ -107,6 +110,8 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   const text = `${NATIONS[nation].name}'s colonies have declared independence! The Crown sends ${p.ref.regulars} regulars, ${p.ref.dragoons} dragoons, ${p.ref.artillery} artillery and ${p.ref.menOfWar} men-of-war to crush the rebellion.`;
   message(s, text);
   noteHistory(s, 'independence', [nation], `${NATIONS[nation].name}'s colonies declare independence.`);
+  // A mercenary company offers its services (rebellion.ts).
+  offerMercenaries(s, nation);
   return text;
 }
 
@@ -140,19 +145,28 @@ function landingTiles(s: GameState, c: Colony): { x: number; y: number }[] {
   return first.length ? first : [...new Map(free(ring).map((p) => [`${p.x},${p.y}`, p])).values()];
 }
 
-/** Lands the next wave of the Royal Expeditionary Force next to the weakest coastal rebel colony. */
+/** Land units in one wave of the Royal Expeditionary Force. */
+export const WAVE = 6;
+
+/**
+ * Lands the next wave of the Royal Expeditionary Force next to the weakest coastal rebel colony.
+ * Tories guide the King's troops ashore: a Tory colony (rebellion.ts) counts as half as strong
+ * when choosing where to land, and TORY_LANDING units land there instead of WAVE.
+ */
 function landWave(s: GameState, p: Player): void {
   const ref = p.ref;
   if (ref.regulars + ref.dragoons + ref.artillery + ref.menOfWar === 0) return;
+  const weight = (c: Colony) => colonyStrength(s, c) * (isToryColony(s, c) ? 0.5 : 1);
   const targets = Object.values(s.colonies)
     .filter((c) => c.owner === p.id && isCoastal(s, c.x, c.y))
-    .sort((a, b) => colonyStrength(s, a) - colonyStrength(s, b));
+    .sort((a, b) => weight(a) - weight(b));
   const all = targets.length ? targets : Object.values(s.colonies).filter((c) => c.owner === p.id);
   for (const target of all) {
     const tiles = landingTiles(s, target);
     if (!tiles.length) continue;
     let landed = 0;
-    while (landed < 6 && ref.regulars + ref.dragoons + ref.artillery > 0) {
+    const wave = isToryColony(s, target) ? TORY_LANDING : WAVE;
+    while (landed < wave && ref.regulars + ref.dragoons + ref.artillery > 0) {
       const at = tiles[landed % tiles.length];
       let u: Unit;
       if (ref.artillery > 0 && landed % 3 === 2) {
@@ -179,9 +193,15 @@ function landWave(s: GameState, p: Player): void {
       ship.against = p.id;
       ref.menOfWar--;
     }
-    if (landed) message(s, `Royal troops land outside ${target.name}!`, p.id, target);
+    if (landed) message(s, `Royal troops land outside ${target.name}!${wave > WAVE ? ' Local Tories guide them ashore.' : ''}`, p.id, target);
     return;
   }
+}
+
+/** The war is over: the intervention force goes home and no mercenaries wait for an answer. */
+function endRebellion(s: GameState, p: Player): void {
+  alliesGoHome(s, p.id);
+  delete p.mercenaryOffer;
 }
 
 function checkOutcome(s: GameState, p: Player): void {
@@ -190,6 +210,7 @@ function checkOutcome(s: GameState, p: Player): void {
   if (ref.regulars + ref.dragoons + ref.artillery === 0 && !royalsLeft) {
     p.independence = 'won';
     track(p.id, 'independence:won');
+    endRebellion(s, p);
     for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === p.id) delete s.units[u.id];
     const text = `${NATIONS[p.id].name} has won the War of Independence! A new nation is born.`;
     message(s, text);
@@ -202,6 +223,7 @@ function checkOutcome(s: GameState, p: Player): void {
   if (lost > 0 && held <= Math.floor((p.coloniesAtDeclaration ?? 1) / 2)) {
     p.independence = 'lost';
     track(p.id, 'independence:lost');
+    endRebellion(s, p);
     const text = `The rebellion in ${NATIONS[p.id].name}'s colonies has been crushed.`;
     message(s, text);
     noteHistory(s, 'independence', [p.id], text);
@@ -215,6 +237,8 @@ export function processIndependence(s: GameState): void {
   for (const p of s.players) {
     if (p.independence !== 'declared') continue;
     landWave(s, p);
+    // Mercenaries, foreign intervention and Tories (rebellion.ts).
+    processRebellion(s, p);
     checkOutcome(s, p);
   }
 }

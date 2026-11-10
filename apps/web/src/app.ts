@@ -476,6 +476,15 @@ export class App {
     await this.turnStart([], { father: true });
   }
 
+  /** Retire: after a confirmation, ends the game now with the current score. */
+  async retire(): Promise<void> {
+    const ok = await confirmDialog('Retire?', 'End the game now? Your score is counted as it stands.', 'Retire', 'Keep playing');
+    if (ok && this.dispatch({ type: 'retire' })) {
+      this.requestRender();
+      void this.showGameOver();
+    }
+  }
+
   private shownGameOver = false;
 
   async showGameOver(): Promise<void> {

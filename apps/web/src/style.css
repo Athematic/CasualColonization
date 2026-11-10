@@ -2068,3 +2068,28 @@ button.report-chip {
     display: none;
   }
 }
+
+.progress-breakdown {
+  margin-top: 0.6rem;
+}
+
+.progress-breakdown .table-scroll {
+  overflow-x: auto;
+}
+
+.progress-breakdown .breakdown th,
+.progress-breakdown .breakdown td {
+  padding: 0.2rem 0.4rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.progress-breakdown .breakdown th:first-child,
+.progress-breakdown .breakdown td:first-child {
+  text-align: left;
+}
+
+.progress-breakdown .breakdown .total th {
+  border-top: 2px solid var(--line);
+}

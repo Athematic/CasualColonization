@@ -1,4 +1,5 @@
 import {
+  abandonProblem,
   BUILDING_ORDER,
   BUILDINGS,
   buildOptions,
@@ -41,7 +42,7 @@ import type { MapRenderer } from '@cc/render-api';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
 import { activeStyle, icon } from '../styles.js';
-import { choose, toast } from './dialogs.js';
+import { choose, confirmDialog, toast } from './dialogs.js';
 
 const TILE = 76;
 
@@ -81,6 +82,11 @@ export class ColonyScreen implements Screen {
     return this.app.dispatch(cmd, true);
   }
 
+  private async abandon(colony: Colony): Promise<void> {
+    const ok = await confirmDialog('Abandon colony?', `Abandon ${colony.name}? Its colonists step out onto the land, but its goods and buildings are lost.`, 'Abandon', 'Keep');
+    if (ok) this.dispatch({ type: 'abandonColony', colonyId: colony.id });
+  }
+
   refresh(): void {
     const colony = this.colony;
     if (!colony || (colony.owner !== this.app.viewer && !this.app.observer)) {
@@ -102,6 +108,9 @@ export class ColonyScreen implements Screen {
       h('header', { class: 'screen-head' },
         h('h2', null, colony.name),
         h('span', { class: 'muted' }, `Population ${pop} · Sons of Liberty ${report.sonsOfLiberty}% · Food ${colony.goods.food}/${foodToGrow(colony)}`),
+        colony.owner === this.app.viewer && !this.app.observer
+          ? h('button', { class: 'btn small', disabled: !this.app.isMyTurn() || abandonProblem(s, colony.id) !== null, title: abandonProblem(s, colony.id) ?? 'Give up this small colony', onclick: () => void this.abandon(colony) }, 'Abandon')
+          : null,
         h('button', { class: 'btn close', onclick: () => this.app.closeScreen(), 'aria-label': 'Close colony' }, 'Close')),
       h('p', { class: 'hint' }, this.selected
         ? `Selected: ${unitName(s.units[this.selected])}. Click a field or building to put them to work, or use the buttons below.`

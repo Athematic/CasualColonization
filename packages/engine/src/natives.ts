@@ -1,6 +1,7 @@
 import { fail } from './errors.js';
 import { track } from './telemetry.js';
 import { describeMove } from './movement.js';
+import { perfEnd, perfStart } from './perf.js';
 import { hasSubmitted, nativeUnitPrice, processBraves, settlementKind } from './braves.js';
 import { hasFather } from './fathers.js';
 import { noteGoods, noteHistory } from './history.js';
@@ -338,7 +339,9 @@ export function processNatives(s: GameState): void {
       }
     }
   }
+  const t = perfStart();
   processBraves(s);
+  perfEnd('natives > braves', t);
 }
 
 // ---------------------------------------------------------------------------

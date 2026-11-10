@@ -281,8 +281,79 @@ What the numbers say:
 
 - **No doomed declarations** (Competent scored 31 in the game where it declared before, against 90 now), and scores are no lower: +4 to +27 a level, within the noise of 8 games.
 - **Still no winning declaration.** Under these rules a computer nation's defence reaches 0.7–0.9 of the REF's power at best (Creative arming, probe games), short of the 1.1–1.25 the war needs. Getting there needs a stronger economy behind the army (armories staffed for muskets, artillery from colonies) or a smaller force; worth revisiting with the 0.7 items (mercenaries, foreign intervention).
+
+### Mercenaries, foreign intervention and Tories (0.7)
+
+The rules are in `packages/engine/src/rebellion.ts` (README, "War of Independence"); tests in `packages/engine/test/rebellion.test.ts`.
+
+- **The decision to declare** (`expectedSupport` in `ai/royal.ts`) now adds to the rebels' defence the mercenary company that would offer its services at the declaration, if the treasury can pay it (a veteran soldier counts 9, a veteran dragoon 13, artillery 11, as fortified in a colony), and 0.6 (`INTERVENTION_TRUST`) of the intervention force when the colonies' bells per turn would bring it within 20 turns of the declaration (`INTERVENTION_HORIZON`). The same support lowers the army wanted for independence and lets Creative start arming from further behind (`armingPays`). Ratios are unchanged (Competent 1.25, Combative 1.1, Creative 1.15 in its independence focus); Naive never declares.
+- **Mercenaries**: Naive never hires. The advanced levels hire a company they can pay at the declaration (the decision counted on it), and later offers only while their defence is short of the ratio times the royal troops still to land and ashore.
+- **The intervention force** belongs to the rebels but is played by the engine (`runAllies`, at the start of the rebels' turn): it attacks royal troops in the open next to it at even odds or better and otherwise marches to the rebel colony most threatened by royal troops. The rebels' own turn (human or computer) cannot order it.
+- **Arena** (2 games, 330 turns, medium map; `npm run tournament -- --games 2 --turns 330 --size medium`): before and after the rules, with the first support weights (intervention share 0.3, trust 0.5), the games were identical: no level declared (Creative and Competent ended with REFs of 61–63 land units, about 390 attack power, against defences short of it). The share was then raised to 0.4 and the trust to 0.6; under the user's cost rule this final setting has not had an arena run yet. (It has since: see "Independence planning and buildings (0.7)" below.) A constructed late-game position (`rebellion.test.ts`) shows Creative declaring once the mercenaries tip the balance, and not without the gold.
 - **Demands are almost always paid**, and **royal wars** are now most of the wars between Europeans; Combative uses them (0.8 a game) to attack, the others make peace.
 - Royal wars hit trade partners more often than the quarter weight suggests (most nations have agreements with every neighbour); never a Favoured Nation.
+
+## Independence planning and buildings (0.7)
+
+The problem: no computer nation declared independence in any recent tournament, even with mercenaries and foreign intervention counted (at the end of a 330-turn game their Royal Expeditionary Force was 54–63 land units, about 390 attack power, and their defence 0.7–0.9 of what they needed), and the scoring review found 0–3.5 building points per nation at turn 200. Probe games showed why. Creative never left its *expand* focus after 0.6's pacing (its colony target is always ahead of what the pace allows), so it never reached its *liberty* or *independence* focus. Carpenters were worth less than almost any farm or craft job, so whole nations made 0–35 hammers a turn with 50–100 colonists. And the old measure of the defence (the sum over all colonies) had little to do with how the war goes: the King lands next to the weakest coastal colony, wave after wave, and takes colonies one by one.
+
+### What the computer players do now
+
+The code is in `packages/engine/src/ai/plan.ts` (the plan), `ai/royal.ts` (the measures) and `ai/advanced.ts` (buildings, arming, the war); tests in `packages/engine/test/independence-ai.test.ts`.
+
+- **An independence plan from mid-game** (`AiProfile.independence.adopt`, remembered in `AiMemory.independencePlan`). Creative takes it up from 25% rebels (after turn 100) or from turn 160 (`PLAN_FROM`), and then keeps its *independence* focus; Competent from 45% rebels or turn 240; Combative only once its defence, with the help it can expect, is 60% of what the declaration needs. Naive is unchanged and never declares.
+- **Liberty**: under the plan bells weigh at least 2 (`PLAN_LIBERTY`; Competent's normal weight is 1.4) until the rebels are 6 points past the share needed, and every colony builds a printing press, later a newspaper. Statesmen are bought only while the rebels still need to grow.
+- **Defences**: a stockade first in every colony, an armory, forts in colonies of five, warehouses for muskets and horses; stockades are bought outright with gold above the reserve while arming.
+- **Arming**, once the rebels are within 20 points of the share needed (`ARM_BELOW`) and the nation is not ready: muskets and horses in every hold to Europe and delivered first to the weakest coastal colonies; up to two armed units a colony (colonists otherwise stay at work: before the war, muskets in store count as militia); soldiers mount as dragoons on the horses in store; veterans and artillery only once every colony holds 100 muskets (50 muskets defend about as well as a veteran or a gun for a fraction of the price); troops from colonies with more defence than they need march to those with less. Within 5 points of the share needed no colony is founded (each makes the King's force grow and is too small to hold out). Once the rebels are 15 points past the share needed, bells are curbed (weight 0.3) in colonies already past half Sons of Liberty: the King adds troops for every bell, and membership does not fall without new colonists (the original game's tactic).
+- **The declaration** waits for three things (`readyToFight`): the defence plus the help expected (mercenaries the treasury can pay, 0.6 of the intervention force if the bells bring it within 20 turns) is `ratio` times the royal force (Creative 1.15, Competent 1.25, Combative 1.35, up from 1.1 after its declarations were crushed in probe games); the defence and the mercenaries alone reach the royal force (`HOLD_ALONE` 1: the intervention comes 8 turns into the war at the earliest, and wars declared on the strength of it were lost in 5–9 turns); and fewer than a third of the colonies are weak (less than half of an even share of the royal force, the mercenaries counted in the weakest coastal colony where they land). Tiny outposts (2 colonists or fewer, no stockade) that would fall at once are abandoned first (at least three colonies are kept): each colony held at the declaration counts towards the half that must be kept. This is the only time a computer player abandons a colony.
+- **The defence measure** (`colonyDefences`, `rebelPower`): each armed unit as it would defend fortified after the declaration (veterans become Continentals, half the soldiers of a colony with 50% Sons of Liberty too; the walls; artillery's colony bonus; the rebels' +50% in committed colonies), every 50 muskets in store as a militia soldier, every 50 horses as another life for a dragoon; a colony that would be a Tory colony counts at 6/8 (landings there bring 8 troops instead of 6).
+- **The war**: bells weigh at least 2.5 (the intervention needs 500 rung after the declaration); no colony is founded; troops hold their colonies and drop orders given before the war; they strike at royal troops in the open next to their colony at even odds (artillery a quarter better; a soldier or dragoon with a re-arm in store and another defender behind it at 0.8); troops in a colony nobody threatens march to the most threatened colony within 12 tiles, keeping what the colony needs itself (twice that on the coast, where the next landing comes); colonists take up the muskets in store only while their colony has fewer than two armed units, so the muskets re-arm beaten soldiers, Continentals among them.
+- **Buildings**: in a colony of four or more with a building in the queue, the first carpenters (up to 6 hammers a turn) are worth 7 a hammer instead of 3.2, and lumber 5 instead of 3 while the woodpile is low: enough to beat most farm and craft jobs, not food when the colony is short. Shops for the colony's goods are upgraded from one worker in colonies of six (two before). A building is hurried outright in a colony of four when the gold above the reserve is three times the price (idle gold scores 1 point per 800, a building level 1.5); a third-built one as before.
+
+### What was tried and dropped
+
+- **Curbing bells at a bare majority** (weight 0.1 from 6 points past the share needed) and **founding no colony once the plan is adopted**: Competent fell from 291 to 203 points in the first 2-game run (rebels and Founding Fathers lost, colonies frozen at turn ~170–240). Kept in the milder forms above.
+- **Freezing colonies from the start of arming**: the 4-game run A below; Creative ended with 7.3 colonies and 55 colonists (12.5 and 91 before) and 254.5 points. Moved to 5 points below the share needed (run B).
+- **Measures of the defence that only count the weakest colonies** (the half the King must take, or the coastal ones): in forced declarations at 0.06–0.36 of the royal force on that measure some wars were won and others with more lost; it predicted no better than the sum and blocked every declaration, so the sum stayed, with the weak-colony guard.
+- **Higher thresholds** (`HOLD_ALONE` 1.2): declarations moved past turn 325 and still lost about half of the time in probe games; 1.0 was kept.
+
+How the war goes is hard to predict from any one number. In about 30 probe declarations (natural and forced, seeds 1000–1011) wars were won from own defence at 0.7–1.5 of the royal force and lost from 0.5–1.3. What decides them: the royal force concentrates its waves on one weak coastal colony after another (a colony meets 10–20 attacks in two turns), troops in strong colonies never fight, and the intervention arrives only if the rebels last 8–10 turns. The guards above remove the clearest losses (spread-out garrisons, tiny outposts, wars that rely on the intervention); the rest is the chance of a war.
+
+### Tuning runs (2 games, 330 turns, medium map)
+
+All seeds 1000–1001 except the fourth (1002–1003). The tuning also used a probe script outside the product (single games to turn 330–390 printing the defence measures and each colony's state during the war, and forcing declarations at chosen turns): about 200 single games in all, more than planned, because the war's outcome had to be measured rather than estimated.
+
+| Run | Change | Creative | Competent | Combative | Naive | Independence |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Before | (baseline) | 345.5 | 291 | 268 | 169.5 | none |
+| 1 | plan, curb at +6, colonies frozen from adoption | 351 | 203 | 211 | 155 | Creative won (t300, 12 turns); Combative lost (t310, 8) |
+| 2 | no curb or freeze, muskets before veterans | 387.5 | 265 | 247.5 | 147.5 | none |
+| 3 | curb at +15 while arming, freeze while arming | 380 | 252.5 | 275.5 | 143.5 | none |
+| 4 | Creative plan from 25% / turn 160, arm from 20 below (seeds 1002–1003) | 271 | 197.5 | 268 | 146.5 | Combative lost (t319, 11) |
+| 5 | hold-alone rule, weak-colony guard, war behaviour, abandoning outposts | 341 | 282.5 | 170 | 150.5 | Combative lost (t313, 14) |
+
+Combative then got ratio 1.35 and the freeze moved to the start of arming (run A) and then to 5 points below the share needed (run B, the final setting).
+
+### Tournament (4 games, 330 turns, medium map, seeds 1000–1003)
+
+Before = this branch without these changes (`claude/0.7-classic-part-2`), the same command. Run A was the planned final run; run B, with the one change above, is the final setting. A won or lost war ends an arena game for every nation (no person is left playing), so the other nations' scores in those games are counted at that turn: run A's games ended at turns 280, 320 and 329, run B's game 4 at turn 319.
+
+| Level | Score before | A | B | Building points before | A | B | Colonies before | A | B | Declared / won / lost A | B | Turn declared, war turns A | B |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- |
+| Creative | 321.8 | 254.5 | 298.5 | 28 | 40.8 | 52.5 | 12.5 | 7.3 | 9.3 | 1 / 0 / 1 | 0 / 0 / 0 | 308, 12 | – |
+| Competent | 287.3 | 318.8 | 336.3 | 15.5 | 34.3 | 35.5 | 8.5 | 7.3 | 7.8 | 1 / 1 / 0 | 1 / 1 / 0 | 269, 11 | 306, 13 |
+| Combative | 269.8 | 245.8 | 240.5 | 16.8 | 22.3 | 38 | 15.3 | 8 | 10.5 | 1 / 1 / 0 | 0 / 0 / 0 | 315, 14 | – |
+| Naive | 171 | 148.8 | 152 | 4.3 | 6.8 | 9.3 | 10 | 8.8 | 8.5 | 0 | 0 | – | – |
+
+Royal Expeditionary Force at the end without a declaration (run B): Creative 51 land units, Competent 45, Combative 41, Naive 39 (before: 63, 61, 54 and 43). At the declarations: 34–46 land units.
+
+What the numbers say:
+
+- **Buildings**: about twice the building points for the advanced levels (Creative 28 → 52.5, Competent 15.5 → 35.5, Combative 16.8 → 38). Around turn 210 in the probe games (seeds 1000–1001) Creative had 30–38 building levels and Competent and Combative 8–13, against 0–3 before.
+- **Independence**: declarations happen now (none in any tournament before), and the wars that were declared in the final runs lasted 11–14 turns; three of four were won. But Creative, which was meant to declare in half its games, declared in one of four (run A, lost after 12 turns) and in none in run B. Its economy and its liberty are the limits: in seed 1001 it never has the gold to arm (it gives much of its income to calm the natives, and its ships sell rarely), in seed 1000 its rebels stay under half until about turn 320, and elsewhere its rebels reach a majority around turns 270–300, so its declarations fall after turn 300 (probe games to turn 380: turns 313–369), when a 330-turn game leaves little room; and in seeds 1002–1003 another nation's war ended the game first.
+- **Scores**: Competent gains (+49 in run B), mostly from its won war (+250 in one game) and buildings; Creative and Combative lose points (−23, −29), mostly in the games cut short by another nation's war, and Combative also from fewer colonies. Naive, unchanged, loses 19 points to the shorter games and the changed neighbours.
+
+Left to do: a war AI that concentrates troops where the royal troops land and strikes them on the beach with dragoons and artillery from neighbouring colonies; a stronger Creative economy (gifts, shipping) so it can afford the army; and longer tournaments (408 turns, to 1850) to judge declarations that come after turn 300.
 
 ## Colony spacing and pace (0.6)
 

@@ -84,7 +84,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     kind: 'warehouse', levels: [lvl('Warehouse', 80, 0, 1), lvl('Warehouse Expansion', 80, 20, 1)],
     initialLevel: 0, workplaces: 0,
   },
-  stockade: { kind: 'stockade', levels: [lvl('Stockade', 64, 0, 3), lvl('Fort', 120, 100, 4)], initialLevel: 0, workplaces: 0 },
+  stockade: { kind: 'stockade', levels: [lvl('Stockade', 64, 0, 3), lvl('Fort', 120, 100, 4), lvl('Fortress', 240, 100, 8)], initialLevel: 0, workplaces: 0 },
   printingPress: {
     kind: 'printingPress', levels: [lvl('Printing Press', 52, 20, 1), lvl('Newspaper', 120, 50, 4)],
     initialLevel: 0, workplaces: 0,
@@ -106,7 +106,7 @@ export const BUILDING_ORDER: BuildingKind[] = Object.keys(BUILDINGS) as Building
 /** Production per worker in a level-1 building, indexed by skill + 2 (criminal..expert). */
 export const BUILDING_SKILL_OUTPUT = [1, 2, 3, 6];
 
-export const STOCKADE_DEFENCE = [100, 150];
+export const STOCKADE_DEFENCE = [100, 150, 200];
 export const WAREHOUSE_CAPACITY = [100, 200, 300];
 export const PRINTING_BELL_BONUS = [50, 100];
 

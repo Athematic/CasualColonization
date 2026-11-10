@@ -29,6 +29,7 @@ import { NATIONS, TRIBES, type NationId } from './rules/nations.js';
 import { COLONY_BUILDS, PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
 import { runCustomHouse } from './europe.js';
 import { hasFather } from './fathers.js';
+import { noteMining } from './mines.js';
 import { noteProduction } from './stats.js';
 import { nativeLandOwner, onColonyFounded } from './natives.js';
 import type { BuildTarget, Colony, GameState, Job, Unit } from './types.js';
@@ -142,29 +143,84 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
   return colony;
 }
 
-/** All jobs open to a unit in a colony, with the amount it would produce. */
-export function jobOptions(s: GameState, colony: Colony, u: Unit): { job: Job; amount: number }[] {
+/**
+ * Who works around and inside a colony, gathered in one pass over the units (a hot path for the
+ * computer players). Valid until a unit changes jobs or moves, or the land around changes.
+ */
+export interface ColonyOccupancy {
+  /** The tiles around the colony, in `neighbours` order. */
+  tiles: { x: number; y: number }[];
+  /** The unit working each tile around the colony (the first found, as tileWorkedBy), by map index. */
+  worked: Map<number, Unit>;
+  /** Tiles around the colony nobody can work: a settlement, a colony or native land on them. */
+  closed: Set<number>;
+  /** Workers in each of the colony's buildings. */
+  inBuilding: Map<string, number>;
+  /** The colony's population and liberty bonus. */
+  pop: number;
+  bonus: number;
+}
+
+export function colonyOccupancy(s: GameState, colony: Colony): ColonyOccupancy {
+  const tiles = neighbours(s, colony.x, colony.y);
+  const w = s.map.width;
+  const near = new Set<number>();
+  const closed = new Set<number>();
+  for (const p of tiles) {
+    const i = p.y * w + p.x;
+    near.add(i);
+    if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y) || nativeLandOwner(s, p.x, p.y)) closed.add(i);
+  }
+  const worked = new Map<number, Unit>();
+  const inBuilding = new Map<string, number>();
+  let pop = 0;
+  for (const id in s.units) {
+    const v = s.units[id];
+    if (v.loc.kind !== 'colony') continue;
+    const job = v.loc.job;
+    if (v.loc.colonyId === colony.id) {
+      pop++;
+      if (job.kind === 'building') inBuilding.set(job.building, (inBuilding.get(job.building) ?? 0) + 1);
+    }
+    if (job.kind === 'tile') {
+      const i = job.y * w + job.x;
+      if (near.has(i) && !worked.has(i)) worked.set(i, v);
+    }
+  }
+  return { tiles, worked, closed, inBuilding, pop, bonus: libertyBonus(s, colony, pop) };
+}
+
+/**
+ * All jobs open to a unit in a colony, with the amount it would produce. Pass `occupancy` to reuse
+ * one gathered for the colony while nothing has changed.
+ */
+export function jobOptions(s: GameState, colony: Colony, u: Unit, occupancy = colonyOccupancy(s, colony)): { job: Job; amount: number }[] {
   const out: { job: Job; amount: number }[] = [];
-  const bonus = libertyBonus(s, colony);
-  for (const p of neighbours(s, colony.x, colony.y)) {
-    const worker = tileWorkedBy(s, p.x, p.y);
+  const { worked, closed, inBuilding, bonus } = occupancy;
+  const w = s.map.width;
+  for (const p of occupancy.tiles) {
+    const i = p.y * w + p.x;
+    const worker = worked.get(i);
     if (worker && worker.id !== u.id) continue;
-    if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y) || nativeLandOwner(s, p.x, p.y)) continue;
+    if (closed.has(i)) continue;
     for (const g of GOODS) {
       const amount = tileYield(s, colony, p.x, p.y, g, u.type, bonus);
       if (amount > 0) out.push({ job: { kind: 'tile', x: p.x, y: p.y, good: g }, amount });
     }
   }
+  // The unit's own place does not count against a building's room.
+  const own = u.loc.kind === 'colony' && u.loc.colonyId === colony.id && u.loc.job.kind === 'building' ? u.loc.job.building : null;
+  const others = (kind: string) => (inBuilding.get(kind) ?? 0) - (own === kind ? 1 : 0);
   for (const kind of BUILDING_ORDER) {
     const def = BUILDINGS[kind];
     if (def.workplaces === 0 || colony.buildings[kind] === 0 || !def.output) continue;
-    const here = colonyWorkers(s, colony).filter(
-      (w) => w.id !== u.id && w.loc.kind === 'colony' && w.loc.job.kind === 'building' && w.loc.job.building === kind,
-    );
-    if (here.length >= def.workplaces) continue;
+    if (others(kind) >= def.workplaces) continue;
     out.push({ job: { kind: 'building', building: kind }, amount: buildingCapacityPerWorker(s, colony, kind, u.type, bonus) });
   }
-  if (canTeachHere(s, colony, u, u.id)) out.push({ job: { kind: 'building', building: 'schoolhouse' }, amount: 0 });
+  // As canTeachHere.
+  const level = colony.buildings.schoolhouse;
+  const teach = UNIT_TYPES[u.type].teach;
+  if (level && teach && teach <= level && others('schoolhouse') < SCHOOL_TEACHERS[level - 1]) out.push({ job: { kind: 'building', building: 'schoolhouse' }, amount: 0 });
   return out;
 }
 
@@ -250,6 +306,7 @@ export function assignJob(s: GameState, unitId: string, colonyId: string, job?: 
   if (!u || !colony) fail('No such unit or colony.');
   if (colony.owner !== u.owner) fail('That is not your colony.');
   if (UNIT_TYPES[u.type].kind !== 'colonist') fail('Only colonists can work in a colony.');
+  if (u.ally) fail('The intervention force does not work in colonies.');
   const inside = u.loc.kind === 'colony' && u.loc.colonyId === colonyId;
   const atGate = u.loc.kind === 'map' && u.loc.x === colony.x && u.loc.y === colony.y;
   const docked = u.loc.kind === 'carrier' && (() => {
@@ -425,6 +482,7 @@ export function processColony(s: GameState, colony: Colony): void {
   p.fatherBells += report.produced.bells;
   p.crosses += report.produced.crosses;
   noteProduction(s, colony.owner, report.produced);
+  noteMining(s, colony, report.workers);
   colony.hammers += report.produced.hammers;
 
   if (colony.build) {

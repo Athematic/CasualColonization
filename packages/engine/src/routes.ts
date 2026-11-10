@@ -10,7 +10,7 @@
 import { fail, RuleError } from './errors.js';
 import { noteGoods } from './history.js';
 import { boardInEurope, buyGoods, buyPrice, inHomePort, sailToAmerica, sellGoods } from './europe.js';
-import { continueOrders, findPath } from './movement.js';
+import { continueOrders, findPath, pathHint } from './movement.js';
 import { cargoFree, cargoRoomFor, isCoastal, isShip, isWater, message, neighbours, newId, player, reveal, tileAt, unitName, unitPosition, unitsAboard, warehouseCapacity } from './queries.js';
 import { atPeace, besideColony, hasTradeAgreement, inWaitingPeriod, tradeAtForeignColony } from './relations.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
@@ -163,15 +163,20 @@ export function routeProblem(s: GameState, u: Unit, route: TradeRoute): string |
 }
 
 /** The tile next to a foreign colony from which a unit can trade with it most quickly, or null. */
-function approach(s: GameState, u: Unit, colonyId: string): { x: number; y: number } | null {
+function approach(s: GameState, u: Unit, colonyId: string): { goal: { x: number; y: number }; path: { x: number; y: number }[] } | null {
   const c = s.colonies[colonyId];
   let best: { x: number; y: number; d: number } | null = null;
+  let bestPath: { x: number; y: number }[] = [];
   for (const n of neighbours(s, c.x, c.y)) {
     if (isWater(tileAt(s, n.x, n.y)) !== isShip(u)) continue;
     const path = findPath(s, u, n.x, n.y);
-    if (path && (!best || path.length < best.d)) best = { ...n, d: path.length };
+    if (path && (!best || path.length < best.d)) {
+      best = { ...n, d: path.length };
+      bestPath = path;
+    }
   }
-  return best;
+  // The goal (kept as the unit's destination) and the route to it.
+  return best && { goal: best, path: bestPath };
 }
 
 /** Puts a ship or wagon train on a route and sets it moving with the moves it has left. */
@@ -387,15 +392,20 @@ export function runRoute(s: GameState, u: Unit): void {
     }
     if (u.moves <= 0) return;
     // A foreign colony is served from a tile next to it; one's own from the colony itself.
-    const goal = c.owner === u.owner ? (findPath(s, u, c.x, c.y) ? { x: c.x, y: c.y } : null) : approach(s, u, c.id);
-    if (!goal) {
+    let found: { goal: { x: number; y: number }; path: { x: number; y: number }[] } | null;
+    if (c.owner === u.owner) {
+      const path = findPath(s, u, c.x, c.y);
+      found = path && { goal: { x: c.x, y: c.y }, path };
+    } else found = approach(s, u, c.id);
+    if (!found) {
       // Blocked or unknown: try the next stop rather than stand still.
       if (++passed >= n) return;
       next();
       continue;
     }
-    u.dest = goal;
-    continueOrders(s, u);
+    u.dest = found.goal;
+    // The route just found is the first step's: continueOrders need not search again.
+    continueOrders(s, u, pathHint(u, found.goal, found.path));
     if (!atStop(s, u, stop)) return;
   }
 }

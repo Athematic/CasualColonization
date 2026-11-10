@@ -32,6 +32,7 @@ export type UnitTypeId =
   | 'treasure'
   | 'wagonTrain'
   | 'artillery'
+  | 'damagedArtillery'
   | 'caravel'
   | 'merchantman'
   | 'galleon'
@@ -104,6 +105,7 @@ export const UNIT_TYPES: Record<UnitTypeId, UnitTypeDef> = {
   treasure: { id: 'treasure', name: 'Treasure Train', kind: 'treasure', moves: 1, cargo: 0, offence: 0, defence: 1, skill: 0, special: true },
   wagonTrain: { id: 'wagonTrain', name: 'Wagon Train', kind: 'wagon', moves: 2, cargo: 2, offence: 0, defence: 1, skill: 0 },
   artillery: { id: 'artillery', name: 'Artillery', kind: 'artillery', moves: 1, cargo: 0, offence: 5, defence: 3, skill: 0, price: 500 },
+  damagedArtillery: { id: 'damagedArtillery', name: 'Damaged Artillery', kind: 'artillery', moves: 1, cargo: 0, offence: 3, defence: 2, skill: 0, special: true },
   caravel: { id: 'caravel', name: 'Caravel', kind: 'ship', moves: 4, cargo: 2, offence: 0, defence: 2, skill: 0, price: 1000 },
   merchantman: { id: 'merchantman', name: 'Merchantman', kind: 'ship', moves: 5, cargo: 4, offence: 0, defence: 6, skill: 0, price: 2000 },
   galleon: { id: 'galleon', name: 'Galleon', kind: 'ship', moves: 6, cargo: 6, offence: 0, defence: 10, skill: 0, price: 3000 },
