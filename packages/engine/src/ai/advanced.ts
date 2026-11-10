@@ -1145,7 +1145,12 @@ function privateer(s: GameState, p: Player, ship: Unit): boolean {
 // Europe
 
 function countOwned(s: GameState, p: Player, test: (u: Unit) => boolean): number {
-  return Object.values(s.units).filter((u) => u.owner === p.id && test(u)).length;
+  let n = 0;
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (u.owner === p.id && test(u)) n++;
+  }
+  return n;
 }
 
 /** Muskets a colony stocks while arming for independence, before veterans and artillery are bought. */

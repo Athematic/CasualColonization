@@ -154,10 +154,11 @@ export function pioneersWanted(colonies: number): number {
  * is short of pioneers and has land to improve. A hardy pioneer goes first.
  */
 export function equipPioneer(s: GameState, p: Player, c: Colony, toolsNeeded: number): boolean {
+  // The tools first: most colonies have none to spare, and counting the pioneers takes a look at every unit.
+  if (c.goods.tools - toolsNeeded < 60) return false;
   const colonies = ownColonies(s, p).length;
   const pioneers = Object.values(s.units).filter((u) => u.owner === p.id && u.role === 'pioneer').length;
   if (pioneers >= pioneersWanted(colonies)) return false;
-  if (c.goods.tools - toolsNeeded < 60) return false;
   const workers = colonyWorkers(s, c);
   const hardy = workers.find((u) => u.type === 'hardyPioneer');
   const plain = workers.length >= 5 ? workers.find((u) => UNIT_TYPES[u.type].skill === 0 && u.type !== 'nativeConvert') : undefined;
