@@ -4,6 +4,15 @@ These are the measurement jobs for 0.10, Faster turns. They run on Simon's MacBo
 
 If you are the Claude session on the Mac, read this whole file, then do the job Simon names (start with job 1 if he names none).
 
+**If you are the 10-minute polling loop: follow the section "Automation: the polling loop" at the end of this file, on every pull.** That section decides what to run:
+- it re-measures the best (`claude/0.10-faster-turns`) when its code changes;
+- it gates each new commit on `claude/0.10-candidate` against the best;
+- it reports.
+
+Job 4 is the gate that the loop runs; on its own, job 4 doesn't tell you when to run it. Watch **both** branches. A new commit on `claude/0.10-candidate` is the most common reason to run, even when `claude/0.10-faster-turns` hasn't changed.
+
+What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
+
 ## Rules for every job
 
 - **Measure only.** Don't change code, tests, `scripts/bench-hashes.json` or snapshots. Never run `npm run bench -- --write` or `npm run test:golden:write`.
