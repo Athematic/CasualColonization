@@ -1,5 +1,6 @@
 import type { AiLevel, AiMemory } from './ai/profiles.js';
 import type { CheatId } from './cheats.js';
+import type { EventsState } from './events/types.js';
 import type { BuildingKind } from './rules/buildings.js';
 import type { DifficultyId } from './rules/difficulty.js';
 import type { FatherCategory, FatherId } from './rules/fathers.js';
@@ -32,6 +33,12 @@ export interface GameConfig {
    * people's proposals). For tournaments that measure what the feature brings (`--no-favoured`).
    */
   noFavoured?: boolean;
+  /** Dated events from the period (events/, docs/design/events.md). Missing means off; the web game switches it on. */
+  historicalEvents?: boolean;
+  /** Random events in the Sim City spirit (storms, fires, bumper harvests). Missing means off. */
+  randomEvents?: boolean;
+  /** Id of the registered event set (events/index.ts); missing means 'americas'. Scenarios will set it. */
+  eventSet?: string;
 }
 
 export interface Tile {
@@ -385,6 +392,8 @@ export interface GameState {
   history?: HistoryEntry[];
   /** Goods sold and delivered per nation, for the Trade report (see history.ts). Missing in older saves. */
   ledger?: Partial<Record<NationId, Ledger>>;
+  /** The event framework's state: fired events, temporary modifiers, pending choices (events/). Missing until first used. */
+  events?: EventsState;
 }
 
 export type HistoryKind =
@@ -401,7 +410,9 @@ export type HistoryKind =
   | 'independence'
   | 'tribe'
   /** The King's demands for gold (paid or refused) and the wars he declares (crown.ts). */
-  | 'crown';
+  | 'crown'
+  /** Historical and random events (events/). */
+  | 'event';
 
 /** One event in the game's history (see history.ts). */
 export interface HistoryEntry {
