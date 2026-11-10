@@ -24,6 +24,7 @@ import { proposePeace, startWar } from './diplomacy.js';
 import { answerProposal, cancelFavoured, cancelTrade, proposeFavoured, proposeTrade } from './relations.js';
 import { declareIndependence } from './independence.js';
 import { answerDemand } from './crown.js';
+import { answerMercenaries } from './rebellion.js';
 import { answerEvent, setEvents } from './events/index.js';
 import type { FatherId } from './rules/fathers.js';
 import { cargoRoomFor, colonyAt, currentPlayer, type Direction } from './queries.js';
@@ -84,6 +85,8 @@ export type Command =
   | { type: 'answerTax'; accept: boolean }
   /** Pays (or refuses) the King's demand for gold. */
   | { type: 'answerDemand'; pay: boolean }
+  /** Hires (or turns away) the mercenary company offering its services during the War of Independence. */
+  | { type: 'answerMercenaries'; hire: boolean }
   /** Answers a pending event (events/): `choice` is the index of the choice taken. */
   | { type: 'answerEvent'; eventId: string; choice: number }
   /** Switches historical and/or random events on or off for the rest of the game. */
@@ -116,6 +119,7 @@ function ownUnit(s: GameState, nation: NationId, unitId: string) {
   const u = s.units[unitId];
   if (!u) fail('No such unit.');
   if (u.owner !== nation) fail('That is not your unit.');
+  if (u.ally) fail('The intervention force fights on its own and takes no orders.');
   return u;
 }
 
@@ -342,6 +346,9 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'answerDemand':
         text = answerDemand(s, nation, cmd.pay);
+        break;
+      case 'answerMercenaries':
+        text = answerMercenaries(s, nation, cmd.hire);
         break;
       case 'answerEvent':
         text = answerEvent(s, nation, cmd.eventId, cmd.choice);

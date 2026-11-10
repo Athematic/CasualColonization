@@ -137,10 +137,38 @@ export interface Player {
   warSince: Partial<Record<string, number>>;
   /** Colonies held when independence was declared. */
   coloniesAtDeclaration?: number;
+  /**
+   * A mercenary company offering its services to rebels (rebellion.ts), waiting to be hired or
+   * turned away; it leaves if unanswered for a round.
+   */
+  mercenaryOffer?: MercenaryOffer;
+  /**
+   * The War of Independence after the declaration (rebellion.ts): liberty bells rung by then,
+   * the nations that were Favoured Nations then, mercenary offers made (and the last one's
+   * turn), and the foreign intervention once it has come. Missing before the declaration.
+   */
+  rebellion?: {
+    bells: number;
+    friends?: NationId[];
+    offers: number;
+    lastOffer?: number;
+    intervention?: { by: NationId | 'foreign'; turn: number; land: number };
+  };
   /** Units of goods lost to full warehouses over the game; missing means none. */
   goodsSpoiled?: number;
   /** Difficulty whose economics this nation plays at; missing means Conquistador (computer players). */
   difficulty?: DifficultyId;
+}
+
+/** A mercenary company's offer to rebels: veteran soldiers, veteran dragoons and artillery for gold. */
+export interface MercenaryOffer {
+  /** Where the company comes from ("Hessian", "Swiss", …). */
+  name: string;
+  soldiers: number;
+  dragoons: number;
+  artillery: number;
+  price: number;
+  turn: number;
 }
 
 export type Job =
@@ -179,6 +207,13 @@ export interface Unit {
   repair?: number;
   /** For Royal troops: the rebel nation they were sent against. */
   against?: NationId;
+  /** A mercenary hired during the War of Independence (rebellion.ts). */
+  mercenary?: true;
+  /**
+   * A unit of a foreign intervention force (rebellion.ts): owned by the rebels it helps, it fights
+   * the Crown on its own and takes no orders; the value is the power that sent it.
+   */
+  ally?: NationId | 'foreign';
   /** Where the unit is going; for Europe, `port` is a Favoured Nation partner's port (missing: its own). */
   dest?: { x: number; y: number } | { europe: true; port?: NationId };
   /** "Road to…": a pioneer roads each tile on the way to this one, then steps on (see `continueRoadTo`). Missing in older saves. */

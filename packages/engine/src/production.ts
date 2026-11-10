@@ -23,12 +23,22 @@ export function sonsOfLiberty(s: GameState, colony: Colony, pop = colonyWorkers(
 /** Royalists in a colony beyond these counts slow production down. */
 export const TORY_PENALTY_AT = [6, 10];
 
+/**
+ * After a declaration of independence, a colony with Sons of Liberty below this share is a Tory
+ * colony: it resists the cause (one less per worker, see `libertyBonus`, and the unrest in
+ * rebellion.ts).
+ */
+export const TORY_COLONY_BELOW = 30;
+
 /** Production bonus per worker from Sons of Liberty membership, less the Tory penalty. */
 export function libertyBonus(s: GameState, colony: Colony, pop = colonyWorkers(s, colony).length): number {
   const sol = sonsOfLiberty(s, colony, pop);
   const tories = pop - Math.round((pop * sol) / 100);
   const penalty = tories > TORY_PENALTY_AT[1] ? 2 : tories > TORY_PENALTY_AT[0] ? 1 : 0;
-  return (sol >= 100 ? 2 : sol >= 50 ? 1 : 0) - penalty;
+  // Tories resist a declared rebellion.
+  const rebel = s.players.find((p) => p.id === colony.owner)?.independence === 'declared';
+  const resisting = rebel && pop > 0 && sol < TORY_COLONY_BELOW ? 1 : 0;
+  return (sol >= 100 ? 2 : sol >= 50 ? 1 : 0) - penalty - resisting;
 }
 
 /**

@@ -8,6 +8,7 @@ import { processCongress } from './fathers.js';
 import { processCrown } from './crown.js';
 import { processEvents } from './events/index.js';
 import { processIndependence } from './independence.js';
+import { runAllies } from './rebellion.js';
 import { processRoutes } from './routes.js';
 import { formatDate, maxMoves, message, unitName, unitPosition } from './queries.js';
 import { checkTimeLimit } from './score.js';
@@ -40,6 +41,8 @@ export function beginPlayerTurn(s: GameState, p: Player): void {
   }
   // Trade routes run here, before the player or the computer gives any orders this turn.
   processRoutes(s, p.id);
+  // A foreign intervention force fights the Crown on its own (rebellion.ts).
+  runAllies(s, p);
 }
 
 /** Ends the current player's turn, runs AI players, and advances the year when everyone has moved. */
@@ -88,7 +91,7 @@ function advance(s: GameState): void {
 /** Units of a player that still want orders this turn. */
 export function unitsAwaitingOrders(s: GameState, nation: Player['id']): string[] {
   return Object.values(s.units)
-    .filter((u) => u.owner === nation && u.moves > 0 && u.state === 'active' && !u.work && !u.dest && !u.roadTo && !u.route)
+    .filter((u) => u.owner === nation && !u.ally && u.moves > 0 && u.state === 'active' && !u.work && !u.dest && !u.roadTo && !u.route)
     .filter((u) => u.loc.kind === 'map')
     .map((u) => u.id);
 }
