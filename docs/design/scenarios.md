@@ -25,7 +25,7 @@ Every setting the game can be played in is a **scenario**: a data package the en
 | Scenario | Focus |
 | --- | --- |
 | **The Americas, 1492–1850** | The current game. Real rivals or alternative history; dedicated or generated map. Built: the first scenario. |
-| **The Caribbean, 1650–1750** | The lesser powers among the sugar islands. Built in 0.9 as the proof that the framework works. |
+| **The Caribbean, 1650–1750** | The lesser powers among the sugar islands. Built in 0.9 as the proof that the framework works; a stored map of the real Caribbean, drawn from coordinates, is its default. |
 | **Australia, 1788–1901** | Convicts, distance, drought, wool and gold; Federation by negotiation. See [australia.md](australia.md). |
 | **Vinland, around 1000** | Norse settlers sailing from Greenland. Survival with poor resources and a fragile supply line, not competition between nations. Few colonists, long winters, iron and timber scarce, relations with the Skrælings decide the outcome. Winning means a colony that still stands after N years. |
 

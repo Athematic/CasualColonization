@@ -35,6 +35,7 @@ import { peopleIn, settlementKindIn } from '../scenarios/index.js';
 import type { PeopleRegion, Scenario, StoredMapEntry } from '../scenarios/types.js';
 import { americas } from './americas.js';
 import { australia } from './australia.js';
+import { caribbean } from './caribbean.js';
 import { northAmerica } from './north-america.js';
 import { southAmerica } from './south-america.js';
 
@@ -58,7 +59,7 @@ export interface StoredMap {
   entrySide?: EntrySide;
 }
 
-export const STORED_MAPS: StoredMap[] = [northAmerica, southAmerica, americas, australia];
+export const STORED_MAPS: StoredMap[] = [northAmerica, southAmerica, americas, australia, caribbean];
 
 export function storedMap(id: string): StoredMap {
   const def = STORED_MAPS.find((m) => m.id === id);

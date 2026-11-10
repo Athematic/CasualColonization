@@ -74,7 +74,7 @@ In a colony, click a colonist and then a field or building to put them to work. 
 A scenario is the world a game is played in: its years, map, nations, peoples, goods, Founding Fathers (or their counterparts), events, rules and ways to win. The engine provides the mechanics; the scenario provides the data. Two are playable:
 
 - **The Americas, 1492–1850**: the original game. Alternative history (all eight nations) or real rivals (England, France, the Netherlands and Spain); generated worlds or the stored maps. It ends with the War of Independence or in 1850.
-- **The Caribbean, 1650–1750**: the lesser powers (Courland, Brandenburg, Scotland and the Order of Malta, beside England, France, the Netherlands, Spain and Denmark) among the sugar islands. 202 spring and autumn turns, a generated archipelago, the Arawak, the Kalinago and the Tupi, no furs, a Colonial Council, its own events. The Crown taxes and makes demands but sends no army, and nobody declares independence: it ends in 1750 and the highest score wins.
+- **The Caribbean, 1650–1750**: the lesser powers (Courland, Brandenburg, Scotland and the Order of Malta, beside England, France, the Netherlands, Spain and Denmark) among the sugar islands. 202 spring and autumn turns, a map of the real West Indies (or a generated archipelago), the Arawak, the Kalinago and the Tupi, no furs, a Colonial Council, its own events. The Crown taxes and makes demands but sends no army, and nobody declares independence: it ends in 1750 and the highest score wins.
 
 Australia (1788–1901) and Vinland (around 1000) are planned and shown on the New game screen as disabled choices.
 

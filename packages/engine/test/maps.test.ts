@@ -5,7 +5,8 @@ import {
   createGame,
   entryPoints,
   isWater,
-  NATION_ORDER,
+  listScenarios,
+  nationSet,
   parseStoredMap,
   serialize,
   STORED_MAPS,
@@ -14,17 +15,23 @@ import {
   TERRAIN,
   type GameMap,
   type GameState,
+  type Scenario,
   type StoredMap,
 } from '../src/index.js';
 
+/** The scenario that offers a stored map: the Americas for all but the Caribbean's. */
+const scenarioOf = (def: StoredMap): Scenario => listScenarios().find((sc) => sc.map.stored.some((e) => e.id === def.id))!;
+
 function play(def: StoredMap, nations: number, seed = 7, humans = 1): GameState {
-  const list = NATION_ORDER.slice(0, nations);
-  return createGame({ seed, mapSize: 'small', map: def.id, nations: list, humans: list.slice(0, humans) });
+  const sc = scenarioOf(def);
+  const list = nationSet(sc, sc.nations.default).map((e) => e.id).slice(0, nations);
+  const scenario = sc === AMERICAS ? {} : { scenario: sc.id };
+  return createGame({ seed, mapSize: 'small', map: def.id, nations: list, humans: list.slice(0, humans), ...scenario });
 }
 
 describe('stored maps', () => {
   it('lists each map once with a name and description', () => {
-    expect(STORED_MAPS.map((m) => m.id)).toEqual(['north-america', 'south-america', 'americas', 'australia']);
+    expect(STORED_MAPS.map((m) => m.id)).toEqual(['north-america', 'south-america', 'americas', 'australia', 'caribbean']);
     for (const def of STORED_MAPS) {
       expect(def.name).toBeTruthy();
       expect(def.description).toBeTruthy();
@@ -55,8 +62,11 @@ describe('stored maps', () => {
   for (const def of STORED_MAPS) {
     describe(def.name, () => {
       const map = parseStoredMap(def);
-      // The Americas scenario's peoples on this map.
-      const tribes = storedMapEntry(AMERICAS, def.id).peoples;
+      // The peoples of the scenario that offers this map.
+      const sc = scenarioOf(def);
+      const tribes = storedMapEntry(sc, def.id).peoples;
+      // Land per settlement a region needs; the Caribbean's one-tile islands hold one settlement each.
+      const landPer = def.id === 'caribbean' ? 1 : 4;
       const arrivalX = def.entrySide === 'west' ? 1 : map.width - 2;
 
       it('parses with consistent rows at about the large size or bigger', () => {
@@ -89,7 +99,7 @@ describe('stored maps', () => {
           for (let y = y0; y <= y1; y++) {
             for (let x = x0; x <= x1; x++) if (!TERRAIN[map.tiles[y * map.width + x].t].water) land++;
           }
-          expect(land, `${tribe} region ${[x0, y0, x1, y1]}`).toBeGreaterThanOrEqual(count * 4);
+          expect(land, `${tribe} region ${[x0, y0, x1, y1]}`).toBeGreaterThanOrEqual(count * landPer);
         }
         if (def.entryRows) {
           expect(def.entryRows[0]).toBeGreaterThanOrEqual(0);
@@ -112,7 +122,7 @@ describe('stored maps', () => {
             expect(['arctic', 'mountains']).not.toContain(tile.t);
             expect(tile.lcr).toBeUndefined();
             for (const b of settlements) {
-              if (a !== b) expect(Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y))).toBeGreaterThanOrEqual(4);
+              if (a !== b) expect(Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y))).toBeGreaterThanOrEqual(sc.map.settlements.spacing);
             }
             for (const p of s.players) expect(Math.max(Math.abs(a.x - p.entry.x), Math.abs(a.y - p.entry.y))).toBeGreaterThanOrEqual(2);
           }
