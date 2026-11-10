@@ -88,7 +88,7 @@ export function classify(id) {
     case 'units':
       if (SHIPS.has(type)) layout = 'ship';
       else if (VEHICLES.has(type)) layout = 'vehicle';
-      else if (role === 'dragoon' || role === 'scout') layout = 'mounted';
+      else if (role === 'dragoon' || role === 'scout' || role === 'mounted' || role === 'armed-mounted') layout = 'mounted';
       else layout = 'standing';
       break;
     case 'goods': layout = 'good'; break;
@@ -118,7 +118,7 @@ export function isGroundOverlay(id) {
  * behind the houses and the front wall in front. They split at this share of the master's height
  * (docs/SPRITE_PROMPTS.md, section 4.10).
  */
-export const SPLIT_SPRITES = { 'colonies/stockade': 0.58, 'colonies/fort': 0.58 };
+export const SPLIT_SPRITES = { 'colonies/stockade': 0.58, 'colonies/fort': 0.58, 'colonies/fortress': 0.58 };
 
 /**
  * Compute the master -> unit-canvas transform for a layout.
