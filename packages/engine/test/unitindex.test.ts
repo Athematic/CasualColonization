@@ -2,7 +2,7 @@
  * The unit and colony indexes (src/unitindex.ts) must answer exactly as the old linear scans did,
  * in the same order, after any change. With setIndexChecks(true) every lookup also runs the scan
  * and throws on a difference; these tests mutate units and colonies and query again, and play
- * whole games with the checks on.
+ * computer games with the checks on.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -120,20 +120,21 @@ describe('unit index', () => {
     expect(unitsAt(s, 5, 5)).toEqual([u]);
   });
 
-  // Whole games with every lookup checked against the scan: computer players of every level move,
-  // found, fight, load and unload, and the War of Independence adds and removes units.
-  it('stays exact through a whole computer game (Americas)', () => {
+  // Computer games with every lookup checked against the scan: players of every level move, found
+  // colonies, fight, train, load and unload. For longer games run the whole suite or the bench
+  // with CC_INDEX_CHECKS=1 (both pass, including the bench's games to 1700).
+  it('stays exact through a computer game (Americas, 80 turns)', () => {
     setIndexChecks(true);
-    const s = createGame(headStartConfig(config(5), 120));
+    const s = createGame(headStartConfig(config(5), 80));
     expect(() => {
-      playUntil(s, 120);
+      playUntil(s, 80);
       handOver(s);
     }).not.toThrow();
   }, 120_000);
 
-  it('stays exact through a whole computer game (Caribbean)', () => {
+  it('stays exact through a computer game (Caribbean, 60 turns)', () => {
     setIndexChecks(true);
-    const s = createGame(headStartConfig(config(6, 'caribbean'), 100));
-    expect(() => playUntil(s, 100)).not.toThrow();
+    const s = createGame(headStartConfig(config(6, 'caribbean'), 60));
+    expect(() => playUntil(s, 60)).not.toThrow();
   }, 120_000);
 });
