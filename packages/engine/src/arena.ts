@@ -9,7 +9,8 @@ import { endStateFeatures, type FeatureCounts } from './features.js';
 import { createGame } from './game.js';
 import { colonyWorkers } from './queries.js';
 import type { DifficultyId } from './rules/difficulty.js';
-import { NATION_ORDER, type NationId } from './rules/nations.js';
+import type { NationId } from './rules/nations.js';
+import { nationSet, scenarioOf, type Rivals } from './scenarios/index.js';
 import { scoreBreakdown, type ScoreComponent } from './score.js';
 import { setFeatureSink } from './telemetry.js';
 import { royalForce } from './independence.js';
@@ -39,6 +40,10 @@ export interface ArenaOptions {
   events?: boolean;
   /** Play without the colony charter (`--no-charter`); arena games use it by default, like new games. */
   noCharter?: boolean;
+  /** Scenario id (`--scenario`); missing means the Americas. Nations rotate over its chosen set. */
+  scenario?: string;
+  /** Which of the scenario's nation sets to rotate over (`--rivals real`); missing means its default. */
+  rivals?: Rivals;
 }
 
 /**
@@ -180,6 +185,7 @@ export function playArenaGame(
   noFavoured = false,
   events = false,
   charter = true,
+  setup: { scenario?: string; rivals?: Rivals } = {},
 ): { state: GameState; entries: Omit<ArenaEntry, 'game' | 'won'>[] } {
   const ai = Object.fromEntries(line.map((l) => [l.nation, l.level]));
   const config = {
@@ -193,6 +199,8 @@ export function playArenaGame(
     ...(noFavoured ? { noFavoured: true } : {}),
     ...(events ? { historicalEvents: true, randomEvents: true } : {}),
     ...(charter ? { colonyCharter: true } : {}),
+    ...(setup.scenario ? { scenario: setup.scenario } : {}),
+    ...(setup.rivals ? { rivals: setup.rivals } : {}),
   };
   const counts = new Map<string, FeatureCounts>();
   const tallies = new Map<string, RelationsTally>();
@@ -284,12 +292,15 @@ function royalStanding(p: Player, colonies: number): Pick<ArenaEntry, 'ref' | 'r
 export function runArena(opts: ArenaOptions, onGame?: (entries: ArenaEntry[], game: number) => void): { entries: ArenaEntry[]; summary: ArenaSummary[] } {
   const entries: ArenaEntry[] = [];
   const n = opts.levels.length;
-  if (n < 1 || n > 8) throw new Error('An arena game needs between 1 and 8 nations.');
+  const set = nationSet(scenarioOf({ config: { scenario: opts.scenario } }), opts.rivals).map((e) => e.id);
+  if (n < 1 || n > set.length) throw new Error(`An arena game needs between 1 and ${set.length} nations.`);
+  const setup = { scenario: opts.scenario, rivals: opts.rivals };
   for (let g = 0; g < opts.games; g++) {
     const seed = (opts.firstSeed ?? 1000) + g;
-    const nations = [...NATION_ORDER.slice(g % 8), ...NATION_ORDER.slice(0, g % 8)].slice(0, n);
+    const k = g % set.length;
+    const nations = [...set.slice(k), ...set.slice(0, k)].slice(0, n);
     const line = nations.map((nation, i) => ({ nation, level: opts.levels[(i + g) % n] }));
-    const { entries: game } = playArenaGame(seed, line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured, opts.events, !opts.noCharter);
+    const { entries: game } = playArenaGame(seed, line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured, opts.events, !opts.noCharter, setup);
     const best = Math.max(...game.map((e) => e.score));
     const rows = game.map((e) => ({ ...e, game: g, won: e.score === best }));
     entries.push(...rows);

@@ -6,8 +6,9 @@ import {
   DIFFICULTY,
   DIFFICULTY_LEVELS,
   MAP_SIZES,
-  NATION_ORDER,
   NATIONS,
+  nationEntry,
+  nationSet,
   STORED_MAPS,
   parseStoredMap,
   calendarOf,
@@ -25,6 +26,7 @@ import {
   type GameState,
   type MapSize,
   type NationId,
+  type Rivals,
 } from '@cc/engine';
 import { clear, h } from '../dom.js';
 import { loadAuto, loadManual, pickSaveFile } from '../save.js';
@@ -37,8 +39,12 @@ interface Slot {
   controller: 'human' | AiLevel;
 }
 
-/** The calendar of new games: the default scenario's, until the Scenario select is real. */
-const CALENDAR = scenarioOf({ config: {} }).calendar;
+/** The scenario of new games: the default one, until the Scenario select is real (plan step 7). */
+const SCENARIO = scenarioOf({ config: {} });
+const CALENDAR = SCENARIO.calendar;
+
+/** The nations the chosen rivals offer, in the scenario's order. */
+const nationsFor = (rivals: Rivals): NationId[] => nationSet(SCENARIO, rivals).map((e) => e.id);
 
 /** The line under the seed field: the number the text gives, and the phrase it came from. */
 function seedLine(text: string): string {
@@ -84,7 +90,22 @@ export function newGameScreen(
   initialCode?: string,
 ): HTMLElement {
   let count = 4;
-  const slots: Slot[] = NATION_ORDER.map((nation, i) => ({ nation, controller: i === 0 ? 'human' : 'competent' }));
+  /** Alternative history (any nations) or real rivals (as in history). */
+  let rivals: Rivals = SCENARIO.nations.default;
+  const slots: Slot[] = nationsFor(rivals).map((nation, i) => ({ nation, controller: i === 0 ? 'human' : 'competent' }));
+  /**
+   * Changes the nation set: nations already chosen that are in the new set keep their places, the
+   * rest of the set follows; the controllers stay with the seats (the first seat stays the player's).
+   */
+  const setRivals = (next: Rivals) => {
+    rivals = next;
+    const set = nationsFor(rivals);
+    const kept = slots.slice(0, count).map((s) => s.nation).filter((n) => set.includes(n));
+    const order = [...kept, ...set.filter((n) => !kept.includes(n))];
+    const controllers = slots.map((s) => s.controller);
+    slots.splice(0, slots.length, ...order.map((nation, i): Slot => ({ nation, controller: controllers[i] ?? 'competent' })));
+    count = Math.min(count, set.length);
+  };
   let mapSize: MapSize = 'medium';
   /** Stored map id; empty for a generated map. */
   let map = '';
@@ -111,7 +132,8 @@ export function newGameScreen(
       return false;
     }
     const c = r.settings;
-    const rest = NATION_ORDER.filter((n) => !c.nations.some((x) => x.nation === n)).map((nation): Slot => ({ nation, controller: 'competent' }));
+    rivals = c.rivals ?? 'alternative';
+    const rest = nationsFor(rivals).filter((n) => !c.nations.some((x) => x.nation === n)).map((nation): Slot => ({ nation, controller: 'competent' }));
     slots.splice(0, slots.length, ...c.nations.map((x): Slot => ({ nation: x.nation, controller: x.controller })), ...rest);
     count = c.nations.length;
     mapSize = c.mapSize;
@@ -187,21 +209,27 @@ export function newGameScreen(
         h('div', { class: 'row wrap' },
           plannedSelect('Scenario', 'Scenarios', ['The Americas, 1492–1850', 'Australia, 1788–1901', 'Vinland, around 1000'],
             'Each scenario brings its own map, peoples, goods, events and way to win.'),
-          plannedSelect('Rivals', 'Scenarios', ['Alternative history (any nations)', 'Real rivals (as in history)']),
+          SCENARIO.nations.sets.real
+            ? h('label', { class: 'field', title: 'Real rivals limits the choice of nations to those that colonised these lands in history; alternative history lets any nations take part.' },
+                h('span', null, 'Rivals'),
+                h('select', { 'aria-label': 'Rivals', onchange: (e: Event) => { setRivals((e.target as HTMLSelectElement).value as Rivals); render(); } },
+                  h('option', { value: 'alternative', selected: rivals === 'alternative' || undefined }, 'Alternative history (any nations)'),
+                  h('option', { value: 'real', selected: rivals === 'real' || undefined }, `Real rivals (${nationsFor('real').map((n) => NATIONS[n].name).join(', ')})`)))
+            : null,
           plannedSelect('Victory', 'Beta', ['Independence by war', 'Federation by negotiation', 'Prosperity and cooperation', 'Survival'])),
         h('label', { class: 'field' },
           h('span', null, `European nations: ${count}`),
-          h('input', { type: 'range', min: 1, max: 8, value: count, 'aria-label': 'Number of European nations', oninput: (e: Event) => { count = Number((e.target as HTMLInputElement).value); render(); } })),
+          h('input', { type: 'range', min: 1, max: nationsFor(rivals).length, value: count, 'aria-label': 'Number of European nations', oninput: (e: Event) => { count = Number((e.target as HTMLInputElement).value); render(); } })),
         h('div', { class: 'slots-table' }, chosen.map((slot, i) => {
           const taken = new Set(chosen.filter((_, j) => j !== i).map((s) => s.nation));
           return h('div', { class: 'slot-row' },
             h('span', { class: 'flag', style: `background:${NATIONS[slot.nation].color}` }),
             h('select', { 'aria-label': `Nation ${i + 1}`, onchange: (e: Event) => { slot.nation = (e.target as HTMLSelectElement).value as NationId; render(); } },
-              NATION_ORDER.filter((n) => !taken.has(n)).map((n) => h('option', { value: n, selected: n === slot.nation || undefined }, nationTitle(n)))),
+              nationsFor(rivals).filter((n) => !taken.has(n)).map((n) => h('option', { value: n, selected: n === slot.nation || undefined }, nationTitle(n)))),
             h('select', { 'aria-label': `Controller of nation ${i + 1}`, title: slot.controller === 'human' ? undefined : AI_LEVEL_INFO[slot.controller].description, onchange: (e: Event) => { slot.controller = (e.target as HTMLSelectElement).value as Slot['controller']; render(); } },
               h('option', { value: 'human', selected: slot.controller === 'human' || undefined }, 'Player'),
               AI_LEVELS.map((level) => h('option', { value: level, selected: slot.controller === level || undefined, title: AI_LEVEL_INFO[level].description }, `Computer: ${AI_LEVEL_INFO[level].name}`))),
-            h('span', { class: 'muted small bonus' }, NATIONS[slot.nation].bonus));
+            h('span', { class: 'muted small bonus' }, nationEntry(SCENARIO, rivals, slot.nation)?.bonus.text ?? NATIONS[slot.nation].bonus));
         })),
         h('div', { class: 'row wrap' },
           h('label', { class: 'field', title: `${DIFFICULTY[difficulty].description} Applies to the players; computer players use the standard (Conquistador) economics.` },
@@ -301,6 +329,8 @@ export function newGameScreen(
               historicalEvents,
               randomEvents,
               colonyCharter,
+              // Only real rivals is written, so alternative-history configs (and their saves and game codes) are as before.
+              ...(rivals !== SCENARIO.nations.default ? { rivals } : {}),
             }, humans > 0 && headYear ? { turn: turnOfYear(headYear, CALENDAR), watch: watchHeadStart } : undefined),
           }, fromCode ? 'Start this game' : humans === 0 ? 'Watch the computers play' : 'Set sail'),
           h('button', {

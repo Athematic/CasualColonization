@@ -48,6 +48,7 @@ import {
 import { hasTradeAgreement, isFavoured, pairRandom } from './relations.js';
 import { difficultyRules } from './rules/difficulty.js';
 import { NATIONS, type NationId } from './rules/nations.js';
+import { nationSet, scenarioOf } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, MercenaryOffer, Player, Unit } from './types.js';
 
@@ -269,7 +270,7 @@ export function interventionPower(s: GameState, nation: NationId): NationId | 'f
     let x = r * total;
     return (candidates.find((c) => (x -= c.weight) < 0) ?? candidates[candidates.length - 1]).id;
   }
-  const absent = (Object.keys(NATIONS) as NationId[]).filter((n) => n !== 'crown' && !s.players.some((o) => o.id === n));
+  const absent = nationSet(scenarioOf(s), s.config.rivals).map((e) => e.id).filter((n) => !s.players.some((o) => o.id === n));
   return absent.length ? absent[Math.floor(r * absent.length)] : 'foreign';
 }
 

@@ -79,6 +79,8 @@ export interface GameCodeSettings {
   colonyCharter: boolean;
   /** Turn on which the people take over (head start); absent for a start at the beginning. */
   headStartTurn?: number;
+  /** 'real' when the game was set up with the scenario's real rivals; absent for alternative history. */
+  rivals?: 'real';
 }
 
 const PREFIX = 'CC1';
@@ -101,6 +103,7 @@ export function settingsFromConfig(config: GameConfig): GameCodeSettings {
     randomEvents: !!config.randomEvents,
     colonyCharter: !!config.colonyCharter,
     ...(config.headStart ? { headStartTurn: config.headStart.turn } : {}),
+    ...(config.rivals === 'real' ? { rivals: 'real' as const } : {}),
   };
 }
 
@@ -118,7 +121,8 @@ function fromBase64Url(text: string): Uint8Array {
 /**
  * A compact, URL-safe code: `CC1~<game version>~<payload>`. The payload is base64url of a short
  * JSON array: [seed, phrase|0, map|0, size index, [[nation index, "h" or AI level]...],
- * difficulty index, flags (1 historical, 2 random, 4 charter), head start turn|0].
+ * difficulty index, flags (1 historical, 2 random, 4 charter), head start turn|0], followed by
+ * "real" only for a game with real rivals (so other codes are as before).
  */
 export function encodeGameCode(settings: GameCodeSettings): string {
   const payload = [
@@ -130,6 +134,7 @@ export function encodeGameCode(settings: GameCodeSettings): string {
     DIFFICULTY_LEVELS.indexOf(settings.difficulty),
     (settings.historicalEvents ? 1 : 0) | (settings.randomEvents ? 2 : 0) | (settings.colonyCharter ? 4 : 0),
     settings.headStartTurn ?? 0,
+    ...(settings.rivals === 'real' ? ['real'] : []),
   ];
   return `${PREFIX}${SEP}${GAME_VERSION}${SEP}${toBase64Url(new TextEncoder().encode(JSON.stringify(payload)))}`;
 }
@@ -148,7 +153,7 @@ export function decodeGameCode(code: string): DecodedGameCode {
   if (parts.length !== 3 || parts[0] !== PREFIX) return bad;
   try {
     const p = JSON.parse(new TextDecoder().decode(fromBase64Url(parts[2]))) as unknown[];
-    const [seed, phrase, map, size, nations, diff, flags, head] = p;
+    const [seed, phrase, map, size, nations, diff, flags, head, rivals] = p;
     const mapSize = SIZES[size as number];
     const difficulty = DIFFICULTY_LEVELS[diff as number];
     if (typeof seed !== 'number' || !Number.isFinite(seed) || !mapSize || !difficulty || !Array.isArray(nations) || nations.length < 1 || nations.length > 8 || typeof flags !== 'number') return bad;
@@ -170,6 +175,7 @@ export function decodeGameCode(code: string): DecodedGameCode {
       randomEvents: !!(flags & 2),
       colonyCharter: !!(flags & 4),
       ...(typeof head === 'number' && head > 0 ? { headStartTurn: head } : {}),
+      ...(rivals === 'real' ? { rivals: 'real' as const } : {}),
     };
     const version = parts[1];
     return {
