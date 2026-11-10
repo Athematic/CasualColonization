@@ -68,10 +68,18 @@ export function colonySiteProblem(s: GameState, x: number, y: number): string | 
   const tile = tileAt(s, x, y);
   if (!tile || isWater(tile)) return 'Colonies must be founded on land.';
   if (tile.t === 'arctic') return 'Nothing can grow on arctic land.';
-  for (const c of Object.values(s.colonies)) {
-    if (distance(c.x, c.y, x, y) < 2) return `Too close to ${c.name}.`;
+  // Most sites have no colony within a tile: the colony index says so without a scan; otherwise
+  // the scan names the first colony in record order, as before.
+  let near = false;
+  for (let dy = -1; dy <= 1 && !near; dy++) for (let dx = -1; dx <= 1 && !near; dx++) near = !!colonyAt(s, x + dx, y + dy);
+  if (near) {
+    for (const id in s.colonies) {
+      const c = s.colonies[id];
+      if (distance(c.x, c.y, x, y) < 2) return `Too close to ${c.name}.`;
+    }
   }
-  for (const st of Object.values(s.settlements)) {
+  for (const id in s.settlements) {
+    const st = s.settlements[id];
     if (distance(st.x, st.y, x, y) < 2) return 'Too close to a native settlement.';
   }
   return null;
