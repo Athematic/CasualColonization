@@ -13,6 +13,7 @@ import { buyPrice, sellPrice } from './europe.js';
 import { noteTrade } from './stats.js';
 import { cargoRoomFor, colonyAt, distance, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
 import { random } from './rng.js';
+import { calendarOf, turnAfterYears, yearValue } from './scenarios/index.js';
 import { GOODS } from './rules/goods.js';
 import { HOME_PORTS, NATIONS, type NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
@@ -99,19 +100,6 @@ export function initRelations(s: GameState): void {
   for (let i = 0; i < nations.length; i++) for (let j = i + 1; j < nations.length; j++) relation(s, nations[i], nations[j]);
 }
 
-/** The game year of a turn, with autumn turns as half years. */
-export function yearValue(turn: number): number {
-  return turn < 108 ? 1492 + turn : 1600 + (turn - 108) / 2;
-}
-
-/** The first turn at least `years` years after `turn`. */
-export function turnAfterYears(turn: number, years: number): number {
-  const goal = yearValue(turn) + years;
-  let t = turn;
-  while (yearValue(t) < goal) t++;
-  return t;
-}
-
 function other(rel: Relation, nation: NationId): NationId {
   return rel.a === nation ? rel.b : rel.a;
 }
@@ -127,7 +115,8 @@ export function atPeace(s: GameState, a: NationId, b: NationId): boolean {
 /** Years of continuous peace between two nations; 0 while at war. */
 export function yearsOfPeace(s: GameState, a: NationId, b: NationId): number {
   if (!europeanPair(a, b) || !atPeace(s, a, b)) return 0;
-  return yearValue(s.turn) - yearValue(relation(s, a, b).peaceSince);
+  const cal = calendarOf(s);
+  return yearValue(s.turn, cal) - yearValue(relation(s, a, b).peaceSince, cal);
 }
 
 export function hasTradeAgreement(s: GameState, a: NationId, b: NationId): boolean {
@@ -353,8 +342,9 @@ export function cancelFavoured(s: GameState, by: NationId, to: NationId, why: 'c
   if (!bothHuman(s, by, to)) {
     rel.cancels = (rel.cancels ?? 0) + 1;
     const r = stream(s, by, to, `cancel ${rel.cancels}`);
-    rel.waitUntil = turnAfterYears(s.turn, around(r, WAITING_YEARS));
-    rel.hostileUntil = turnAfterYears(s.turn, around(r, HOSTILITY_YEARS));
+    const cal = calendarOf(s);
+    rel.waitUntil = turnAfterYears(s.turn, around(r, WAITING_YEARS), cal);
+    rel.hostileUntil = turnAfterYears(s.turn, around(r, HOSTILITY_YEARS), cal);
   }
   // Favoured Nation status needs a new run of peace.
   rel.peaceSince = s.turn;

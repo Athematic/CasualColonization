@@ -1,4 +1,4 @@
-import { createGame, deserialize, gameCodeFromSearch, searchWithoutGameCode, formatDate, Game, handOver, headStartConfig, playUntil, serialize, type GameConfig, type GameState } from '@cc/engine';
+import { calendarOf, createGame, deserialize, gameCodeFromSearch, searchWithoutGameCode, formatDate, Game, handOver, headStartConfig, playUntil, serialize, type GameConfig, type GameState } from '@cc/engine';
 import { h } from './dom.js';
 import { App } from './app.js';
 import { savedStyle, setStyle } from './styles.js';
@@ -71,7 +71,7 @@ function skipAhead(state: GameState, turn: number): void {
     h('main', { class: 'menu-screen' },
       h('div', { class: 'menu-card' },
         h('h1', null, 'Head start'),
-        h('p', { class: 'muted' }, `The computer is playing your nation until ${formatDate(turn)}.`),
+        h('p', { class: 'muted' }, `The computer is playing your nation until ${formatDate(turn, calendarOf(state))}.`),
         h('div', { class: 'bar', role: 'progressbar', 'aria-label': 'Head start progress' }, bar),
         label,
         h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => { cancelled = true; showLanding(); } }, 'Cancel')))),
@@ -80,7 +80,7 @@ function skipAhead(state: GameState, turn: number): void {
     if (cancelled) return;
     const done = playUntil(state, turn, 3);
     bar.style.width = `${Math.min(100, Math.round((state.turn / turn) * 100))}%`;
-    label.textContent = `${formatDate(state.turn)} of ${formatDate(turn)}`;
+    label.textContent = `${formatDate(state.turn, calendarOf(state))} of ${formatDate(turn, calendarOf(state))}`;
     if (!done) {
       setTimeout(step, 0);
       return;

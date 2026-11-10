@@ -1,4 +1,4 @@
-import { DIFFICULTY, formatDate, NATIONS, resolveDifficulty, nationTitle, scoreBreakdown, STAT_INFO, STAT_KEYS, statsHistory, yearOf, type NationId, type StatKey, type StatsSeries } from '@cc/engine';
+import { calendarOf, DIFFICULTY, formatDate, NATIONS, resolveDifficulty, nationTitle, scoreBreakdown, STAT_INFO, STAT_KEYS, statsHistory, turnOfYear, yearOf, type NationId, type StatKey, type StatsSeries } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
 import { activeStyle } from '../styles.js';
@@ -156,7 +156,7 @@ export class ProgressScreen implements Screen {
     this.body.append(
       h('header', { class: 'screen-head' },
         h('h2', null, over ? 'The game is over' : 'Progress'),
-        h('span', { class: 'muted' }, formatDate(s.turn)),
+        h('span', { class: 'muted' }, formatDate(s.turn, calendarOf(s))),
         over
           ? h('div', { class: 'row close' },
               h('button', { class: 'btn', onclick: () => void shareDialog(this.app.state.config), title: 'A QR code and link so others can play this same game' }, 'Share this game'),
@@ -206,7 +206,7 @@ export class ProgressScreen implements Screen {
     return h('div', { class: 'card progress-over' },
       h('p', null, over.reason),
       h('p', { class: 'muted small', title: level.description }, `Difficulty: ${level.name}`),
-      this.app.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used'), ` since ${formatDate(this.app.state.cheated.turn)}.`) : null,
+      this.app.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used'), ` since ${formatDate(this.app.state.cheated.turn, calendarOf(this.app.state))}.`) : null,
       over.winner ? h('p', null, h('strong', null, `${nationTitle(over.winner)} ${over.winner === over.viewer ? '(you) ' : ''}wins.`)) : null,
       h('table', { class: 'scores' }, rows.map(([n, score]) => h('tr', null,
         h('td', null, h('span', { class: 'flag', style: `background:${NATIONS[n].color}` }), ' ', nationTitle(n)),
@@ -267,11 +267,12 @@ export class ProgressScreen implements Screen {
       grid.append(svg('text', { x: m.l - 6, y: y(v) + 4, 'text-anchor': 'end' }, isPercent(metric) ? `${v}%` : shortNumber(v)));
     }
     // Years on the time axis, spaced to fit.
-    const firstYear = yearOf(t0).year;
-    const lastYear = yearOf(t1).year;
+    const cal = calendarOf(this.app.state);
+    const firstYear = yearOf(t0, cal).year;
+    const lastYear = yearOf(t1, cal).year;
     const yearStep = niceStep(lastYear - firstYear, Math.max(2, Math.floor((W - m.l - m.r) / 70)));
     for (let yr = Math.ceil(firstYear / yearStep) * yearStep; yr <= lastYear; yr += yearStep) {
-      const turn = yr < 1600 ? yr - 1492 : 108 + (yr - 1600) * 2;
+      const turn = turnOfYear(yr, cal);
       if (turn < t0 || turn > t1) continue;
       grid.append(svg('line', { x1: x(turn), x2: x(turn), y1: H - m.b, y2: H - m.b + 4, class: 'tick' }));
       grid.append(svg('text', { x: x(turn), y: H - m.b + 17, 'text-anchor': 'middle' }, String(yr)));
@@ -312,7 +313,7 @@ export class ProgressScreen implements Screen {
       clear(this.tooltip);
       const rows = shown.map((nn) => [nn, data.get(nn)![i]] as const).sort((a, b) => b[1] - a[1]);
       this.tooltip.append(
-        h('strong', null, formatDate(hist.turns[i])),
+        h('strong', null, formatDate(hist.turns[i], calendarOf(this.app.state))),
         h('table', null, rows.map(([nn, v]) => h('tr', null,
           h('td', null, h('span', { class: 'swatch', style: `background:${nationColor(nn, dark)}` }), nationTitle(nn)),
           h('td', null, format(metric, v))))));

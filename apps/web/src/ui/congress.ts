@@ -1,4 +1,4 @@
-import { congressOverview, FATHERS, formatDate, NATIONS, type FatherId, type NationId } from '@cc/engine';
+import { calendarOf, congressOverview, FATHERS, formatDate, NATIONS, type FatherId, type NationId } from '@cc/engine';
 import { CONGRESS_HALL_ASPECT, hallPaintOrder, hallSpotBox, layoutCongressHall } from '@cc/render-api';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -135,7 +135,7 @@ export class CongressScreen implements Screen {
     this.head.append(
       h('header', { class: 'screen-head' },
         h('h2', null, 'Continental Congress'),
-        h('span', { class: 'muted' }, `${NATIONS[nation].name} · ${formatDate(app.state.turn)}`),
+        h('span', { class: 'muted' }, `${NATIONS[nation].name} · ${formatDate(app.state.turn, calendarOf(app.state))}`),
         h('button', { class: 'btn close', onclick: () => app.closeScreen(), 'aria-label': 'Close the Congress hall' }, 'Close')));
     clear(this.caption);
     this.caption.append(
@@ -168,7 +168,7 @@ export class CongressScreen implements Screen {
       h('strong', null, def.name),
       h('span', { class: 'muted small' }, ` ${def.category}`),
       h('div', { class: 'small' }, def.effect),
-      h('div', { class: 'small muted' }, joined !== undefined ? `Joined in ${formatDate(joined)}` : 'Joined: date not recorded'));
+      h('div', { class: 'small muted' }, joined !== undefined ? `Joined in ${formatDate(joined, calendarOf(this.app.state))}` : 'Joined: date not recorded'));
     tip.hidden = false;
     // Above the figure's head when there is room, else below its feet; kept inside the stage.
     const sw = this.stage.clientWidth;

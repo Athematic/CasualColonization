@@ -2,6 +2,7 @@ import {
   coloniesOverview,
   congressOverview,
   FATHERS,
+  calendarOf,
   formatDate,
   GOOD_DEFS,
   historyFor,
@@ -340,7 +341,7 @@ function militaryTab(ctx: ReportContext): Child[] {
     ? card('Mercenaries and allies',
       h('p', null, support.mercenaries.length ? `Mercenaries in your service: ${kinds(support.mercenaries)}.` : 'No mercenaries in your service.'),
       iv?.came
-        ? h('p', null, `${powerName(iv.came.by)} intervened in ${formatDate(iv.came.turn)} with ${iv.came.land} land units and men-of-war.${support.allies.length ? ` Still fighting: ${kinds(support.allies)}. They fight the Crown on their own and go home when the war ends.` : ' None of them is still fighting.'}`)
+        ? h('p', null, `${powerName(iv.came.by)} intervened in ${formatDate(iv.came.turn, calendarOf(s))} with ${iv.came.land} land units and men-of-war.${support.allies.length ? ` Still fighting: ${kinds(support.allies)}. They fight the Crown on their own and go home when the war ends.` : ' None of them is still fighting.'}`)
         : iv ? h('p', null, `Foreign intervention: a European power will send a force once the war has lasted ${iv.minTurns} turns (now ${iv.turns}), your colonies have rung ${iv.needBells.toLocaleString()} liberty bells since the declaration (now ${iv.bells.toLocaleString()}) and you still hold ${iv.needHeld} colonies (now ${iv.held}).`)
         : null)
     : null;
@@ -545,7 +546,7 @@ function historyTab(ctx: ReportContext): Child[] {
   // Group by year.
   const years: { year: number; entries: HistoryEntry[] }[] = [];
   for (const e of list) {
-    const y = yearOf(e.turn).year;
+    const y = yearOf(e.turn, calendarOf(s)).year;
     if (years.at(-1)?.year !== y) years.push({ year: y, entries: [] });
     years.at(-1)!.entries.push(e);
   }
@@ -561,11 +562,11 @@ function historyTab(ctx: ReportContext): Child[] {
             h('h4', null, String(y.year)),
             h('ul', null, y.entries.map((e) => h('li', { class: `history-${e.kind}` },
               h('span', { class: 'history-mark', 'aria-hidden': 'true' }, HISTORY_MARKS[e.kind]),
-              h('span', { class: 'muted small history-date' }, formatDate(e.turn)),
+              h('span', { class: 'muted small history-date' }, formatDate(e.turn, calendarOf(s))),
               e.nations[0] ? flag(e.nations[0]) : null,
               e.at ? where(app, e.text, e.at) : h('span', null, e.text)))))))
         : empty('Nothing recorded yet.'),
-      h('p', { class: 'muted small' }, `Events are recorded as they happen${started !== undefined && started > 0 ? `, here since ${formatDate(started)} (games saved before this report start recording when loaded)` : ''}. You hear of other nations’ wars, treaties, Founding Fathers and declarations; their colonies and treasures stay their own business. The oldest entries are dropped after 800.`)),
+      h('p', { class: 'muted small' }, `Events are recorded as they happen${started !== undefined && started > 0 ? `, here since ${formatDate(started, calendarOf(s))} (games saved before this report start recording when loaded)` : ''}. You hear of other nations’ wars, treaties, Founding Fathers and declarations; their colonies and treasures stay their own business. The oldest entries are dropped after 800.`)),
   ];
 }
 
@@ -651,7 +652,7 @@ export class ReportsScreen implements Screen {
     this.body.append(
       h('header', { class: 'screen-head' },
         h('h2', null, 'Reports'),
-        h('span', { class: 'muted' }, formatDate(s.turn), ' · ', flag(nation), ' ', nationTitle(nation)),
+        h('span', { class: 'muted' }, formatDate(s.turn, calendarOf(s)), ' · ', flag(nation), ' ', nationTitle(nation)),
         pick,
         h('button', { class: 'btn close', onclick: () => app.closeScreen(), 'aria-label': 'Close reports' }, 'Close')),
       h('nav', { class: 'report-tabs', role: 'tablist', 'aria-label': 'Advisors' },

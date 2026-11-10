@@ -8,9 +8,11 @@ import { SaveVersionError } from '../errors.js';
 import type { NationId } from '../rules/nations.js';
 import type { GameConfig, GameState } from '../types.js';
 import { AMERICAS } from './americas.js';
+import type { Calendar } from './calendar.js';
 import type { NationEntry, Rivals, Scenario } from './types.js';
 
 export * from './types.js';
+export * from './calendar.js';
 export { AMERICAS } from './americas.js';
 
 /** The scenario of games that do not name one. */
@@ -39,6 +41,11 @@ export function scenarioOf(s: { config: Pick<GameConfig, 'scenario'> }): Scenari
   const scenario = SCENARIOS.get(id);
   if (!scenario) throw new Error(`Unknown scenario "${id}".`);
   return scenario;
+}
+
+/** The calendar a game is played by (scenarios/calendar.ts). */
+export function calendarOf(s: { config: Pick<GameConfig, 'scenario'> }): Calendar {
+  return scenarioOf(s).calendar;
 }
 
 /** The nations a game's setup may choose from: the chosen set, or the scenario's default. */

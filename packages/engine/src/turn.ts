@@ -12,7 +12,8 @@ import { processEvents } from './events/index.js';
 import { processIndependence } from './independence.js';
 import { runAllies } from './rebellion.js';
 import { processRoutes } from './routes.js';
-import { formatDate, maxMoves, message, unitName, unitPosition } from './queries.js';
+import { maxMoves, message, unitName, unitPosition } from './queries.js';
+import { calendarOf, formatDate } from './scenarios/index.js';
 import { checkTimeLimit } from './score.js';
 import { recordStats } from './stats.js';
 import type { GameState, Player, Unit } from './types.js';
@@ -111,7 +112,7 @@ function advance(s: GameState): void {
     perfEnd('stats', t);
     s.turn++;
     checkTimeLimit(s);
-    message(s, `${formatDate(s.turn)} begins.`);
+    message(s, `${formatDate(s.turn, calendarOf(s))} begins.`);
   }
   beginPlayerTurn(s, s.players[s.current]);
 }

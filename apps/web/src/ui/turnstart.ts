@@ -1,4 +1,4 @@
-import { aBrave, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, TRIBES, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { aBrave, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, TRIBES, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import { icon } from '../styles.js';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -267,7 +267,7 @@ export function showTurnStart(app: App, news: TurnNews, opts: { father?: boolean
     const body = h('div', { class: 'turn-body' });
     const goOn = h('button', { class: 'btn primary', onclick: close }, 'Continue');
     const box = h('div', { class: 'dialog turn-modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'turn-modal-title' },
-      h('h2', { id: 'turn-modal-title' }, opts.heading ?? `${formatDate(app.state.turn)}: ${nationTitle(app.viewer)}`),
+      h('h2', { id: 'turn-modal-title' }, opts.heading ?? `${formatDate(app.state.turn, calendarOf(app.state))}: ${nationTitle(app.viewer)}`),
       body,
       h('div', { class: 'turn-footer' }, goOn));
     const backdrop = h('div', { class: 'backdrop turn-backdrop' }, box);

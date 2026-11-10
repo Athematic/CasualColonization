@@ -12,7 +12,7 @@
 // For a CPU profile: node --cpu-prof scripts/.bench.mjs (after one `npm run bench`).
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { createGame, handOver, headStartConfig, perfReport, playUntil, serialize, setPerf, type GameConfig, type GameState } from '../packages/engine/src/index.ts';
+import { AMERICAS_CALENDAR, createGame, handOver, headStartConfig, perfReport, playUntil, serialize, setPerf, turnOfYear as calendarTurn, type GameConfig, type GameState } from '../packages/engine/src/index.ts';
 
 const args = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
@@ -20,8 +20,8 @@ const opt = (name: string, fallback: string) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 
-/** The web game's turn for a year (apps/web/src/ui/newgame.ts). */
-const turnOfYear = (year: number) => (year <= 1600 ? year - 1492 : 108 + (year - 1600) * 2);
+/** The first turn of a year in the Americas (the engine's calendar, packages/engine/src/scenarios/calendar.ts). */
+const turnOfYear = (year: number) => calendarTurn(year, AMERICAS_CALENDAR);
 
 /** The New game screen's defaults, with England as the player. */
 function webConfig(seed: number): GameConfig {

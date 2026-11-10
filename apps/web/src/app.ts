@@ -15,6 +15,7 @@ import {
   DIRECTIONS,
   distance,
   findPath,
+  calendarOf,
   formatDate,
   Game,
   handOver,
@@ -316,7 +317,7 @@ export class App {
     }
     saveAuto(serialize(this.state));
     this.game.emit();
-    toast(`${formatDate(this.state.turn)}: ${nations.length > 1 ? 'your nations are' : `${nationTitle(this.viewer)} is`} yours to command.`);
+    toast(`${formatDate(this.state.turn, calendarOf(this.state))}: ${nations.length > 1 ? 'your nations are' : `${nationTitle(this.viewer)} is`} yours to command.`);
     void this.turnStart();
   }
 
@@ -698,7 +699,7 @@ export class App {
       const veil = h(
         'div',
         { class: 'handoff' },
-        h('div', { class: 'dialog' }, h('h2', null, `${nationTitle(nation)} to move`), h('p', null, `${formatDate(this.state.turn)}. Pass the device to the player of ${NATIONS[nation].name}.`),
+        h('div', { class: 'dialog' }, h('h2', null, `${nationTitle(nation)} to move`), h('p', null, `${formatDate(this.state.turn, calendarOf(this.state))}. Pass the device to the player of ${NATIONS[nation].name}.`),
           h('button', { class: 'btn primary', onclick: () => { veil.remove(); resolve(); } }, 'Begin turn')),
       );
       document.body.appendChild(veil);

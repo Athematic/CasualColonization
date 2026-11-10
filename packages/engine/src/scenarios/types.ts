@@ -15,6 +15,7 @@ import type { NationId, TribeId } from '../rules/nations.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { ScoreWeights } from '../rules/score.js';
 import type { GameState } from '../types.js';
+import type { Calendar } from './calendar.js';
 
 export type ScenarioId = string;
 
@@ -31,6 +32,8 @@ export interface Scenario {
   name: string;
   description: string;
 
+  /** How turns map to years, when the game ends and where head starts can jump to. */
+  calendar: Calendar;
   map: ScenarioMap;
   nations: ScenarioNations;
   peoples: ScenarioPeoples;

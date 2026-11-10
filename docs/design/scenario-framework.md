@@ -6,6 +6,7 @@ Simon was away when work started and said the open questions roll into 0.9. Step
 
 - **Q2 (nations per scenario or global):** global identities, per-scenario roles. `NationEntry` (scenarios/types.ts) holds the bonus text, colony names and home port with its character; name, adjective and colour stay in `NATIONS`.
 - **Q3 (saves across scenario versions):** a missing `config.scenario` means the Americas and a missing `scenarioVersion` means 1. Loading refuses an unknown scenario and a newer version with a clear message (`SaveVersionError`); an older version loads only through the scenario's `migrate`. The Americas stay at version 1.
+- **Q4 (calendar per scenario):** yes, as eras of 1, 2 or 4 turns a year with named seasons (`scenarios/calendar.ts`). The Americas: 1492–1600 one turn a year, then spring and autumn until autumn 1850 (turn 609). Every year and turn rule (the old `yearOf`, `formatDate`, `yearValue`, `turnAfterYears`, `LAST_YEAR` and the three `turnOfYear` copies) now reads the game's calendar. Scaling the computer players' turn thresholds by `ai.pace` is not done yet (see below).
 - **Q7 (files and mods later):** the `Scenario` is JSON-shaped except `migrate`.
 - **Q8 (no hidden global):** a registry of scenarios plus `scenarioOf(s)`, which reads `s.config.scenario`. There is no "current scenario" variable.
 - **Q9 (real rivals for the Americas):** yes, England, France, the Netherlands and Spain; alternative history (all eight) is the default. `config.rivals: 'real'` limits a new game to that set.
@@ -13,9 +14,15 @@ Simon was away when work started and said the open questions roll into 0.9. Step
 
 Implementation choices that differ from the sketch below:
 - The Americas list all four stored maps, the Australia map included: it is a preview played with the Americas' rules until the Australia scenario exists, and leaving it out would change what the New game screen offers.
-- Step 2 does not yet add `ai.pace`, `aiTurn` or the council's late-offer turn (120): the turn thresholds stay as they are and are listed in section 2.1, row 6, for a later step.
+- Step 2 does not yet add `ai.pace`, `aiTurn` or the council's late-offer turn: the turn thresholds stay as they are, for a later step. Found in step 2 (all compare `s.turn`, tuned for a 609-turn game from 1492):
+  - `ai/creative.ts`: `PLAN_FROM.turn` 160, explore before turn 30, independence focus with enough rebels after turn 100, liberty after turn 90, war 60 turns after the last, independence `minTurn` 140 (its profile).
+  - `ai/advanced.ts`: scout bought before turn 100, statesman after 30, artillery after 80, preacher before 160, raids on natives after 40, wars after turn 50 and 40 turns after the last, war weariness after 15 turns.
+  - `ai/foreign.ts`: wars after turn 50 and 40 turns after the last. `ai/fleet.ts`: privateers from turn 60. `ai/logistics.ts`: `FOREIGN_WAGON_FROM` 80.
+  - `ai/profiles.ts`: independence `minTurn` 200 (Competent) and 170 (Combative); `adopt.turn` 240, read by `ai/plan.ts`.
+  - `fathers.ts` `offerFathers`: political fathers likelier after turn 120.
+  - Durations in turns (cooldowns, `TRIANGLE_PATIENCE`, `INCITE_EVERY`, `WAR_WEARINESS`, `INTERVENTION.minTurns`) are lengths, not dates; whether they scale with the pace is for the same step to decide.
 
-Status: **design**, to be agreed with Simon before work starts; steps 0 and 1 of the plan are done (section 8). Builds on [scenarios.md](scenarios.md) (agreed in principle), [australia.md](australia.md), [events.md](events.md) and [favoured-nation.md](favoured-nation.md).
+Status: **design**, to be agreed with Simon before work starts; steps 0, 1 and 2 of the plan are done (section 8). Builds on [scenarios.md](scenarios.md) (agreed in principle), [australia.md](australia.md), [events.md](events.md) and [favoured-nation.md](favoured-nation.md).
 
 This note turns "the Americas become the first scenario" into a plan: what is hard-wired today, what a scenario looks like as code and data, how it is stored, how we keep games identical while we move things, and what to build first. The questions that need a decision are collected at the end.
 
@@ -580,7 +587,7 @@ Every step keeps the Americas games identical (bench hashes and the golden-hash 
 | --- | --- | --- | --- |
 | 0 | **Guard rails.** The golden-hash test in `npm test`; `bench -- --verify` documented as required for every 0.9 pull request | S | done: `packages/engine/test/golden.test.ts` (re-record with `npm run test:golden:write`); README, Performance |
 | 1 | **Skeleton.** `scenario/` with the `Scenario` type, the registry, `scenarioOf(s)`, and an Americas scenario that only points at today's tables; `config.scenario`, `scenarioVersion` and `rivals` (optional); loading checks; the conformance test | M | done: `packages/engine/src/scenarios/` (`types.ts`, `americas.ts`, registry in `index.ts`); checks in `createGame` and `migrate`; `test/scenarios.test.ts` |
-| 2 | **Calendar.** `yearOf`, `formatDate`, `yearValue`, `turnAfterYears`, `LAST_YEAR` and the three `turnOfYear` copies read the calendar; `ai.pace` with `aiTurn`; `offerFathers`' late turn | S–M | |
+| 2 | **Calendar.** `yearOf`, `formatDate`, `yearValue`, `turnAfterYears`, `LAST_YEAR` and the three `turnOfYear` copies read the calendar; `ai.pace` with `aiTurn`; `offerFathers`' late turn | S–M | done for the calendar: `packages/engine/src/scenarios/calendar.ts`, `Scenario.calendar`, `calendarOf(s)`; the engine, the web game (New game, Progress and every date shown) and the bench use it; `test/calendar.test.ts`. `ai.pace`, `aiTurn` and the late-offer turn moved to a later step (thresholds listed at the top) |
 | 3 | **Selections.** Goods (23 files), peoples order, nation sets (arena, web), terrain and units lists, buildings, council members, AI goods tags; nation entries with port name, colony names and starting kit; port character's data shape | M–L | |
 | 4 | **Effects as data.** The modifier hooks and their cache; 8 nation bonuses and 25 fathers' passive effects; `onJoin` effects; `unlockBuilding`. The step most likely to break identity, so it lands in two or three pull requests (production and Europe; combat and natives; the rest) | L | |
 | 5 | **Mechanics and victory.** Switches for the Crown, REF, independence, favoured nation, charter, custom house, missions; the victory registry with `time` and `independence-war`; score and difficulty overrides; rumour table | M | |

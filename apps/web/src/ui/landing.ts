@@ -1,4 +1,4 @@
-import { formatDate, type GameState } from '@cc/engine';
+import { calendarOf, formatDate, type GameState } from '@cc/engine';
 import colony from '../assets/cover-colony.webp';
 import colonySmall from '../assets/cover-colony-small.webp';
 import landfall from '../assets/cover-landfall.webp';
@@ -115,7 +115,7 @@ export function landingScreen(host: HTMLElement, actions: LandingActions): HTMLE
       h('p', { class: 'landing-pitch' },
         'Sail west, land your first colonists and build a nation: work the land, run the market, meet the native peoples, bring Founding Fathers into Congress, and decide when to break with the Crown. Play against up to seven nations, each led by a person or a computer.'),
       h('div', { class: 'landing-actions' },
-        saved ? h('button', { class: 'btn primary big', onclick: () => actions.resume(saved) }, `Continue (${formatDate(saved.turn)})`) : null,
+        saved ? h('button', { class: 'btn primary big', onclick: () => actions.resume(saved) }, `Continue (${formatDate(saved.turn, calendarOf(saved))})`) : null,
         loaded?.error ? h('p', { class: 'save-error', role: 'status' }, `Your autosaved game can't be continued: ${loaded.error}`) : null,
         h('button', { class: `btn big${saved ? '' : ' primary'}`, onclick: actions.quickGame, title: 'England against three Competent computer nations on a random map' }, 'Quick game'),
         h('button', { class: 'btn big', onclick: actions.newGame }, 'New game…'),

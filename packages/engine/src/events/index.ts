@@ -9,7 +9,8 @@
 import { fail } from '../errors.js';
 import { noteHistory } from '../history.js';
 import { random } from '../rng.js';
-import { formatDate, message, nationTitle, player, unitName, yearOf } from '../queries.js';
+import { message, nationTitle, player, unitName } from '../queries.js';
+import { calendarOf, formatDate, yearOf } from '../scenarios/index.js';
 import { buildingName } from '../rules/buildings.js';
 import { GOOD_DEFS } from '../rules/goods.js';
 import { NATIONS, TRIBES, type NationId } from '../rules/nations.js';
@@ -110,7 +111,7 @@ export function eventText(s: GameState, text: string, v: EventVars): string {
       case 'cost':
         return String(v.cost ?? 0);
       case 'year':
-        return String(yearOf(s.turn).year);
+        return String(yearOf(s.turn, calendarOf(s)).year);
       default:
         return all;
     }
@@ -260,7 +261,7 @@ export function fireEvent(s: GameState, def: EventDef, nation: NationId, given?:
   else if (ev.fired[def.id] !== s.turn) {
     // A world event: noted once in the public history, however many nations it touches.
     ev.fired[def.id] = s.turn;
-    noteHistory(s, 'event', [], `${eventText(s, def.title, v)} (${formatDate(s.turn)}).`);
+    noteHistory(s, 'event', [], `${eventText(s, def.title, v)} (${formatDate(s.turn, calendarOf(s))}).`);
   }
   track(nation, `event:${def.id}`);
   if (tracking() && def.effects?.length) track(nation, `eventvalue ${def.id}`, Math.round(valueEffects(s, def.effects, v)));
@@ -292,8 +293,9 @@ function fireWorld(s: GameState, def: EventDef): void {
 
 /** Historical events in their window: each fires once, at the latest in the window's last round. */
 function drawHistorical(s: GameState): void {
-  const year = yearOf(s.turn).year;
-  const nextYear = yearOf(s.turn + 1).year;
+  const cal = calendarOf(s);
+  const year = yearOf(s.turn, cal).year;
+  const nextYear = yearOf(s.turn + 1, cal).year;
   for (const def of eventDefs(s)) {
     if (def.kind !== 'historical' || def.hidden || !def.years) continue;
     if (s.events?.fired[def.id] !== undefined) continue;

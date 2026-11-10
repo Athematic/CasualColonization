@@ -266,17 +266,6 @@ export function newId(s: GameState, prefix: string): string {
   return `${prefix}${s.nextId++}`;
 }
 
-export function yearOf(turn: number): { year: number; season: 'spring' | 'autumn' | null } {
-  if (turn < 108) return { year: 1492 + turn, season: null };
-  const t = turn - 108;
-  return { year: 1600 + Math.floor(t / 2), season: t % 2 === 0 ? 'spring' : 'autumn' };
-}
-
-export function formatDate(turn: number): string {
-  const { year, season } = yearOf(turn);
-  return season ? `${season === 'spring' ? 'Spring' : 'Autumn'} ${year}` : `${year}`;
-}
-
 export function createUnit(s: GameState, owner: NationId, type: UnitTypeId, loc: UnitLocation): Unit {
   const u: Unit = { id: newId(s, 'u'), owner, type, role: 'none', tools: 0, loc, moves: 0, state: 'active' };
   s.units[u.id] = u;

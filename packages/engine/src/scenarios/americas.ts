@@ -12,6 +12,7 @@ import { NATION_ORDER, NATIONS, TRIBE_ORDER, type NationId } from '../rules/nati
 import { NATIVE_PRODUCE } from '../rules/natives.js';
 import { PORT_CHARACTER } from '../rules/ports.js';
 import { SCORE_WEIGHTS } from '../rules/score.js';
+import { AMERICAS_CALENDAR } from './calendar.js';
 import type { NationEntry, Scenario } from './types.js';
 
 function entry(id: NationId): NationEntry {
@@ -27,6 +28,7 @@ export const AMERICAS: Scenario = {
   version: 1,
   name: 'The Americas, 1492–1850',
   description: 'Found colonies in the New World, trade with Europe and the native peoples, and win independence from the Crown.',
+  calendar: AMERICAS_CALENDAR,
   map: {
     // The Australia map is a geography preview played with the Americas' rules until its scenario exists.
     stored: ['north-america', 'south-america', 'americas', 'australia'],

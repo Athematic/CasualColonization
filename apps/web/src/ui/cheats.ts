@@ -1,4 +1,4 @@
-import { CHEAT_IDS, CHEATS, formatDate, mapRevealed, nationTitle, yieldMultiplier, type CheatId, type NationId } from '@cc/engine';
+import { calendarOf, CHEAT_IDS, CHEATS, formatDate, mapRevealed, nationTitle, yieldMultiplier, type CheatId, type NationId } from '@cc/engine';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
 import { confirmDialog, layer, toast } from './dialogs.js';
@@ -39,7 +39,7 @@ export async function openCheats(app: App): Promise<void> {
     }
     list.append(h('button', { class: 'btn primary', onclick: close }, 'Close'));
     const c = s().cheated;
-    status.textContent = c ? `Cheats used since ${formatDate(c.turn)}: ${c.cheats.map((id) => CHEATS[id].name.toLowerCase()).join(', ')}.` : '';
+    status.textContent = c ? `Cheats used since ${formatDate(c.turn, calendarOf(s()))}: ${c.cheats.map((id) => CHEATS[id].name.toLowerCase()).join(', ')}.` : '';
   }
 
   const onKey = (e: KeyboardEvent) => {

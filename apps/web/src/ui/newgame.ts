@@ -10,8 +10,12 @@ import {
   NATIONS,
   STORED_MAPS,
   parseStoredMap,
+  calendarOf,
+  firstYear,
   formatDate,
   nationTitle,
+  scenarioOf,
+  turnOfYear,
   type AiLevel,
   decodeGameCode,
   looksLikeGameCode,
@@ -33,9 +37,8 @@ interface Slot {
   controller: 'human' | AiLevel;
 }
 
-/** Years a head start can jump to, as turns (one per year until 1600, then two). */
-const HEAD_START_YEARS = [1550, 1600, 1650, 1700, 1750, 1800];
-const turnOfYear = (year: number) => (year <= 1600 ? year - 1492 : 108 + (year - 1600) * 2);
+/** The calendar of new games: the default scenario's, until the Scenario select is real. */
+const CALENDAR = scenarioOf({ config: {} }).calendar;
 
 /** The line under the seed field: the number the text gives, and the phrase it came from. */
 function seedLine(text: string): string {
@@ -117,7 +120,7 @@ export function newGameScreen(
     historicalEvents = c.historicalEvents;
     randomEvents = c.randomEvents;
     colonyCharter = c.colonyCharter;
-    headYear = HEAD_START_YEARS.find((y) => turnOfYear(y) === c.headStartTurn) ?? 0;
+    headYear = CALENDAR.headStartYears.find((y) => turnOfYear(y, CALENDAR) === c.headStartTurn) ?? 0;
     seedText = c.seedPhrase ?? String(c.seed);
     fromCode = true;
     codeNote = r.versionWarning ?? `Game code applied (game version ${r.version}).`;
@@ -176,8 +179,8 @@ export function newGameScreen(
           h('div', null, h('h1', null, 'Casual Colonization'), h('p', { class: 'muted' }, 'Alpha 0.2: a clone of the classic game of colonising the New World.'))),
         auto || manual
           ? h('div', { class: 'row wrap' },
-              auto ? h('button', { class: 'btn primary', onclick: () => resume(auto) }, `Continue (${formatDate(auto.turn)})`) : null,
-              manual ? h('button', { class: 'btn', onclick: () => resume(manual) }, `Load saved game (${formatDate(manual.turn)})`) : null)
+              auto ? h('button', { class: 'btn primary', onclick: () => resume(auto) }, `Continue (${formatDate(auto.turn, calendarOf(auto))})`) : null,
+              manual ? h('button', { class: 'btn', onclick: () => resume(manual) }, `Load saved game (${formatDate(manual.turn, calendarOf(manual))})`) : null)
           : null,
         unreadable.map((text) => h('p', { class: 'save-error', role: 'status' }, text)),
         h('h2', null, 'New game'),
@@ -244,8 +247,8 @@ export function newGameScreen(
           humans > 0
             ? h('label', { class: 'field' }, h('span', null, 'Start'),
                 h('select', { 'aria-label': 'Start year', onchange: (e: Event) => { headYear = Number((e.target as HTMLSelectElement).value); render(); } },
-                  h('option', { value: 0, selected: !headYear || undefined }, 'At the beginning (1492)'),
-                  HEAD_START_YEARS.map((y) => h('option', { value: y, selected: headYear === y || undefined }, `Take over in ${y} (turn ${turnOfYear(y)})`))))
+                  h('option', { value: 0, selected: !headYear || undefined }, `At the beginning (${firstYear(CALENDAR)})`),
+                  CALENDAR.headStartYears.map((y) => h('option', { value: y, selected: headYear === y || undefined }, `Take over in ${y} (turn ${turnOfYear(y, CALENDAR)})`))))
             : null,
           humans > 0 && headYear
             ? h('label', { class: 'field' }, h('span', null, 'Until then'),
@@ -298,7 +301,7 @@ export function newGameScreen(
               historicalEvents,
               randomEvents,
               colonyCharter,
-            }, humans > 0 && headYear ? { turn: turnOfYear(headYear), watch: watchHeadStart } : undefined),
+            }, humans > 0 && headYear ? { turn: turnOfYear(headYear, CALENDAR), watch: watchHeadStart } : undefined),
           }, fromCode ? 'Start this game' : humans === 0 ? 'Watch the computers play' : 'Set sail'),
           h('button', {
             class: 'btn',

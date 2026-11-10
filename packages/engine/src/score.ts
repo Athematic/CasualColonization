@@ -1,6 +1,6 @@
 import { sellPrice } from './europe.js';
 import { sonsOfLiberty } from './production.js';
-import { yearOf } from './queries.js';
+import { AMERICAS_CALENDAR, calendarOf, lastTurn } from './scenarios/index.js';
 import { hasTradeAgreement, isFavoured } from './relations.js';
 import { BUILDINGS, type BuildingKind } from './rules/buildings.js';
 import { GOODS } from './rules/goods.js';
@@ -9,8 +9,8 @@ import { recentProduction } from './stats.js';
 import { SCORE_WEIGHTS, type ScoreWeights } from './rules/score.js';
 import type { GameState, Player } from './types.js';
 
-/** The game ends after the autumn turn of this year. */
-export const LAST_YEAR = 1850;
+/** The Americas end after the autumn turn of this year (other scenarios: their calendar's `end`). */
+export const LAST_YEAR = AMERICAS_CALENDAR.end.year;
 
 export { SCORE_WEIGHTS, type ScoreWeights } from './rules/score.js';
 
@@ -114,12 +114,12 @@ export function finalScores(s: GameState): Partial<Record<Player['id'], number>>
   return out;
 }
 
-/** Ends the game when time runs out. */
+/** Ends the game when time runs out: after the last turn of the scenario's calendar. */
 export function checkTimeLimit(s: GameState): void {
   if (s.gameOver) return;
-  const { year, season } = yearOf(s.turn);
-  if (year < LAST_YEAR || (year === LAST_YEAR && season !== 'autumn')) return;
+  const cal = calendarOf(s);
+  if (s.turn < lastTurn(cal)) return;
   const scores = finalScores(s);
   const winner = (Object.entries(scores) as [Player['id'], number][]).sort((a, b) => b[1] - a[1])[0]?.[0];
-  s.gameOver = { turn: s.turn, reason: `The year ${LAST_YEAR} has come and the age of colonization is over.`, winner, scores };
+  s.gameOver = { turn: s.turn, reason: `The year ${cal.end.year} has come and the age of colonization is over.`, winner, scores };
 }
