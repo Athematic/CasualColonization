@@ -29,6 +29,7 @@ import {
   type GameState,
   type NationId,
   type Player,
+  removeUnit,
 } from '../src/index.js';
 import { canBeatRef, expectedSupport, hireMercenaries, rebelPower, refPower } from '../src/ai/royal.js';
 import { AI_PROFILES } from '../src/ai/profiles.js';
@@ -249,7 +250,7 @@ describe('foreign intervention', () => {
 
     // The war is won: the force sails home.
     p.ref = { regulars: 0, dragoons: 0, artillery: 0, menOfWar: 0 };
-    for (const u of Object.values(s.units)) if (u.owner === 'crown') delete s.units[u.id];
+    for (const u of Object.values(s.units)) if (u.owner === 'crown') removeUnit(s, u.id);
     processIndependence(s);
     expect(p.independence).toBe('won');
     expect(allies(s)).toHaveLength(0);

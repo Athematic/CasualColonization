@@ -7,6 +7,7 @@ import type { Colony, GameState, Player, Settlement, Tile, Unit, UnitLocation } 
 import type { UnitTypeId } from './rules/units.js';
 import { goodsOf } from './scenarios/index.js';
 import { modifiers } from './scenarios/modifiers.js';
+import { addUnit, indexedColonyAt, indexedColonyPopulation, indexedColonyWorkers, indexedTileWorker, indexedUnitsAboard, indexedUnitsAt } from './unitindex.js';
 
 export const DIRECTIONS = [
   { id: 'n', dx: 0, dy: -1 },
@@ -134,24 +135,17 @@ export function unitPosition(s: GameState, u: Unit): { x: number; y: number } | 
   }
 }
 
-// The lookups below are hot paths for the computer players: plain loops visit the records in the
-// same order as Object.values would, without building an array of every unit first.
+// The lookups below are hot paths for the computer players. Units and colonies are looked up in
+// indexes (unitindex.ts) that return what a scan of the records would, in the same order (the
+// order Object.values gives); settlements are few and scanned with a plain loop.
 
+/** Units on a map tile, in record order. */
 export function unitsAt(s: GameState, x: number, y: number): Unit[] {
-  const out: Unit[] = [];
-  for (const id in s.units) {
-    const u = s.units[id];
-    if (u.loc.kind === 'map' && u.loc.x === x && u.loc.y === y) out.push(u);
-  }
-  return out;
+  return indexedUnitsAt(s, x, y);
 }
 
 export function colonyAt(s: GameState, x: number, y: number): Colony | undefined {
-  for (const id in s.colonies) {
-    const c = s.colonies[id];
-    if (c.x === x && c.y === y) return c;
-  }
-  return undefined;
+  return indexedColonyAt(s, x, y);
 }
 
 export function settlementAt(s: GameState, x: number, y: number): Settlement | undefined {
@@ -163,26 +157,15 @@ export function settlementAt(s: GameState, x: number, y: number): Settlement | u
 }
 
 export function unitsAboard(s: GameState, carrier: Unit): Unit[] {
-  const out: Unit[] = [];
-  for (const id in s.units) {
-    const u = s.units[id];
-    if (u.loc.kind === 'carrier' && u.loc.carrierId === carrier.id) out.push(u);
-  }
-  return out;
+  return indexedUnitsAboard(s, carrier.id);
 }
 
 export function colonyWorkers(s: GameState, colony: Colony): Unit[] {
-  // Hot path for the AI: a plain loop avoids building a full array of every unit.
-  const out: Unit[] = [];
-  for (const id in s.units) {
-    const u = s.units[id];
-    if (u.loc.kind === 'colony' && u.loc.colonyId === colony.id) out.push(u);
-  }
-  return out;
+  return indexedColonyWorkers(s, colony.id);
 }
 
 export function colonyPopulation(s: GameState, colony: Colony): number {
-  return colonyWorkers(s, colony).length;
+  return indexedColonyPopulation(s, colony.id);
 }
 
 export function cargoUsed(s: GameState, carrier: Unit): number {
@@ -236,11 +219,7 @@ export function reveal(s: GameState, nation: NationId, x: number, y: number, rad
 
 /** True if the tile is worked by any colony's colonist. */
 export function tileWorkedBy(s: GameState, x: number, y: number): Unit | undefined {
-  for (const id in s.units) {
-    const u = s.units[id];
-    if (u.loc.kind === 'colony' && u.loc.job.kind === 'tile' && u.loc.job.x === x && u.loc.job.y === y) return u;
-  }
-  return undefined;
+  return indexedTileWorker(s, x, y);
 }
 
 export function colonyOwningTile(s: GameState, x: number, y: number): Colony | undefined {
@@ -262,7 +241,7 @@ export function newId(s: GameState, prefix: string): string {
 
 export function createUnit(s: GameState, owner: NationId, type: UnitTypeId, loc: UnitLocation): Unit {
   const u: Unit = { id: newId(s, 'u'), owner, type, role: 'none', tools: 0, loc, moves: 0, state: 'active' };
-  s.units[u.id] = u;
+  addUnit(s, u);
   return u;
 }
 

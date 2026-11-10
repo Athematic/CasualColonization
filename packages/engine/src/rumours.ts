@@ -9,6 +9,7 @@ import { difficultyOf, nationOf, rumoursOf, term } from './scenarios/index.js';
 import { TRIBES } from './rules/nations.js';
 import { BURIAL_RADIUS } from './rules/natives.js';
 import type { GameState, Settlement, Unit } from './types.js';
+import { removeUnit } from './unitindex.js';
 
 type Outcome = RumourOutcome;
 
@@ -92,7 +93,7 @@ export function resolveRumour(s: GameState, u: Unit): void {
       noteHistory(s, 'treasure', [u.owner], term(s, 'rumour.fountain.history'), { secret: true, at: pos });
       break;
     case 'lost':
-      delete s.units[u.id];
+      removeUnit(s, u.id);
       message(s, term(s, 'rumour.lost'), u.owner, pos);
       break;
     case 'burial': {

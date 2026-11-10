@@ -22,6 +22,7 @@ import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
 import { difficultyOf, goodsOf, mechanicsOf, nationOf, nativeProduceOf, peopleOf } from './scenarios/index.js';
+import { removeUnit } from './unitindex.js';
 
 /**
  * The settlement next to a unit, checked for a visit. A wagon train or ship trading there may
@@ -58,7 +59,7 @@ export function speakToChief(s: GameState, unitId: string, settlementId: string)
   u.moves = 0;
   track(u.owner, 'cmd:speak');
   if (tensionOf(st, u.owner) > 500 && random(s) < 0.3) {
-    delete s.units[u.id];
+    removeUnit(s, u.id);
     const text = `The angry ${TRIBES[st.tribe].name} have killed your scout.`;
     message(s, text, u.owner, st);
     return text;
@@ -267,7 +268,7 @@ export function establishMission(s: GameState, unitId: string, settlementId: str
   if (u.role !== 'missionary') fail('Only missionaries can found missions.');
   if (!mechanicsOf(s).missions) fail('There are no missions in this scenario.');
   if (st.mission) fail(`There is already a ${nationOf(s, st.mission).adjective} mission here.`);
-  delete s.units[u.id];
+  removeUnit(s, u.id);
   track(u.owner, 'cmd:mission');
   let text: string;
   if (tensionOf(st, u.owner) > 600) {
@@ -377,7 +378,7 @@ export function denounceMission(s: GameState, unitId: string, settlementId: stri
     text = `Your missionary denounces the ${nationOf(s, rival).adjective} mission. The ${TRIBES[st.tribe].name} expel it.`;
     message(s, `The ${TRIBES[st.tribe].name} have expelled your mission at the ${settlementName(s, st)}, denounced by ${nationOf(s, u.owner).adjective} missionaries.`, rival, st);
   } else if (random(s) < DENOUNCE_FAIL_DEATH) {
-    delete s.units[u.id];
+    removeUnit(s, u.id);
     track(u.owner, 'natives:missionary killed');
     text = `The ${TRIBES[st.tribe].name} side with the ${nationOf(s, rival).adjective} mission and kill your missionary.`;
   } else {

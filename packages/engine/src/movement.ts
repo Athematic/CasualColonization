@@ -31,6 +31,7 @@ import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
 import type { TribeId } from './rules/nations.js';
 import type { GameState, ImprovementKind, Player, Unit } from './types.js';
 import { mechanicsOf, term } from './scenarios/index.js';
+import { setUnitLoc } from './unitindex.js';
 
 export type MoveOption =
   | { kind: 'move' }
@@ -152,7 +153,7 @@ export function canCarry(s: GameState, ship: Unit, u: Unit): boolean {
 }
 
 export function placeOnMap(s: GameState, u: Unit, x: number, y: number): void {
-  u.loc = { kind: 'map', x, y };
+  setUnitLoc(s, u, { kind: 'map', x, y });
   reveal(s, u.owner, x, y, sightRadius(u, s));
   for (const p of unitsAboard(s, u)) reveal(s, p.owner, x, y, sightRadius(p, s));
 }
@@ -175,7 +176,7 @@ export function moveUnit(s: GameState, unitId: string, dir: Direction): void {
     case 'settlement':
       fail('Choose what to do there first.');
     case 'board':
-      u.loc = { kind: 'carrier', carrierId: option.carrierId };
+      setUnitLoc(s, u, { kind: 'carrier', carrierId: option.carrierId });
       u.moves = 0;
       u.state = 'sentry';
       return;
@@ -214,7 +215,7 @@ export function boardShip(s: GameState, unitId: string, carrierId: string): void
   const sp = unitPosition(s, ship);
   if (!up || !sp || up.x !== sp.x || up.y !== sp.y || u.loc.kind !== 'map') fail('The unit must be next to the ship in port.');
   if (!canCarry(s, ship, u)) fail(u.type === 'treasure' ? 'Only an empty galleon can carry treasure.' : 'The ship is full.');
-  u.loc = { kind: 'carrier', carrierId };
+  setUnitLoc(s, u, { kind: 'carrier', carrierId });
   u.state = 'sentry';
   track(u.owner, 'cmd:board');
 }
@@ -225,7 +226,7 @@ export function leaveShip(s: GameState, unitId: string): void {
   if (u.loc.kind !== 'carrier') fail('The unit is not aboard a ship.');
   const ship = s.units[u.loc.carrierId];
   if (ship.loc.kind !== 'map' || !colonyAt(s, ship.loc.x, ship.loc.y)) fail('Units can only leave a ship in port; move onto land instead.');
-  u.loc = { kind: 'map', x: ship.loc.x, y: ship.loc.y };
+  setUnitLoc(s, u, { kind: 'map', x: ship.loc.x, y: ship.loc.y });
   u.state = 'active';
   track(u.owner, 'cmd:unboard');
 }

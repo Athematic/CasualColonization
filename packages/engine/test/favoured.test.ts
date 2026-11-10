@@ -34,6 +34,8 @@ import {
   type GameState,
   type NationId,
   type RouteStop,
+  setUnitLoc,
+  removeUnit,
 } from '../src/index.js';
 import { runAi } from '../src/ai/index.js';
 
@@ -72,7 +74,7 @@ function neighbours(s: GameState): [Colony, Colony] {
           if (Math.max(Math.abs(dx), Math.abs(dy)) < 3 || !ok(bx, by)) continue;
           const probe = createUnit(s, 'england', 'wagonTrain', { kind: 'map', x, y });
           const path = findPath(s, probe, bx, by);
-          delete s.units[probe.id];
+          removeUnit(s, probe.id);
           if (!path || path.length > 7) continue;
           return [found(s, 'england', x, y, 'Plymouth'), found(s, 'france', bx, by, 'Québec')];
         }
@@ -315,7 +317,7 @@ describe('Favoured Nation', () => {
     const s = game();
     const ship = Object.values(s.units).find((u) => u.owner === 'england' && u.type === 'caravel')!;
     const at = s.players[0].entry;
-    ship.loc = { kind: 'map', x: at.x, y: at.y };
+    setUnitLoc(s, ship, { kind: 'map', x: at.x, y: at.y });
     ship.moves = 12;
     expect(applyCommand(s, { type: 'sailToEurope', unitId: ship.id, port: 'france' }).ok).toBe(false);
     makeFavoured(s, 'england', 'france');

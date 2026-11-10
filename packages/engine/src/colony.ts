@@ -33,6 +33,7 @@ import { noteProduction } from './stats.js';
 import { nativeLandOwner, onColonyFounded } from './natives.js';
 import type { BuildTarget, Colony, GameState, Job, Unit } from './types.js';
 import { buildingsOf, difficultyOf, goodsOf, mechanicsOf, nationOf, unitsOf } from './scenarios/index.js';
+import { addColony, setUnitLoc, removeUnit } from './unitindex.js';
 
 export function canFoundColony(s: GameState, u: Unit): string | null {
   if (UNIT_TYPES[u.type].kind !== 'colonist') return 'Only colonists can found colonies.';
@@ -122,7 +123,7 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
     founded: s.turn,
     exports: {},
   };
-  s.colonies[colony.id] = colony;
+  addColony(s, colony);
   const tile = tileAt(s, x, y)!;
   tile.r = true;
   delete tile.lcr;
@@ -130,7 +131,7 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
   stripRole(colony, u);
   const job = bestJob(s, colony, u);
   if (!job) fail('There is no work for this colonist here.');
-  u.loc = { kind: 'colony', colonyId: colony.id, job };
+  setUnitLoc(s, u, { kind: 'colony', colonyId: colony.id, job });
   u.state = 'active';
   delete u.dest;
   delete u.roadTo;
@@ -324,7 +325,7 @@ export function assignJob(s: GameState, unitId: string, colonyId: string, job?: 
   const wasTeaching = u.loc.kind === 'colony' && u.loc.job.kind === 'building' && u.loc.job.building === 'schoolhouse';
   const willTeach = chosen.kind === 'building' && chosen.building === 'schoolhouse';
   if (wasTeaching !== willTeach || !willTeach) delete u.teach;
-  u.loc = { kind: 'colony', colonyId, job: chosen };
+  setUnitLoc(s, u, { kind: 'colony', colonyId, job: chosen });
   u.state = 'active';
   u.moves = 0;
   track(u.owner, 'cmd:assignJob');
@@ -338,7 +339,7 @@ export function leaveColony(s: GameState, unitId: string): void {
   if (u.loc.kind !== 'colony') fail('The unit is not working in a colony.');
   const colony = s.colonies[u.loc.colonyId];
   if (colonyPopulation(s, colony) <= 1) fail('The last colonist cannot leave the colony.');
-  u.loc = { kind: 'map', x: colony.x, y: colony.y };
+  setUnitLoc(s, u, { kind: 'map', x: colony.x, y: colony.y });
   u.moves = maxMoves(u, s);
   delete u.teach;
   track(u.owner, 'cmd:leaveColony');
@@ -473,7 +474,7 @@ export function processColony(s: GameState, colony: Colony): void {
     const workers = colonyWorkers(s, colony);
     if (workers.length > 1) {
       const victim = workers[workers.length - 1];
-      delete s.units[victim.id];
+      removeUnit(s, victim.id);
       track(colony.owner, 'colony:colonist starved');
       message(s, `${unitName(victim)} has starved to death in ${colony.name}.`, colony.owner, colony);
     } else {

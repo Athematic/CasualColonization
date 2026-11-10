@@ -21,6 +21,7 @@ import {
   tileAt,
   type Colony,
   type GameState,
+  setUnitLoc,
 } from '../src/index.js';
 
 function game(seed = 42): GameState {
@@ -166,7 +167,7 @@ describe('taxes and trade', () => {
     expect(p.boycotts.furs).toBe(true);
     expect(c.goods.furs).toBe(0);
     const ship = Object.values(s.units).find((u) => u.owner === 'england' && u.type === 'caravel')!;
-    ship.loc = { kind: 'europe' };
+    setUnitLoc(s, ship, { kind: 'europe' });
     ship.cargo = { furs: 100 };
     expect(applyCommand(s, { type: 'sellGoods', carrierId: ship.id, good: 'furs', amount: 100 }).ok).toBe(false);
     p.gold = 10_000;

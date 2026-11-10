@@ -15,6 +15,8 @@ import {
   unitsAboard,
   type GameState,
   type Unit,
+  setUnitLoc,
+  removeUnit,
 } from '../src/index.js';
 
 function game(nations = 2, seed = 42): GameState {
@@ -74,7 +76,7 @@ describe('colonies', () => {
     const s = game();
     const u = colonistOf(s);
     const at = landTile(s);
-    u.loc = { kind: 'map', ...at };
+    setUnitLoc(s, u, { kind: 'map', ...at });
     u.moves = 3;
     const colony = foundColony(s, u.id);
     expect(colony.owner).toBe('england');
@@ -88,11 +90,11 @@ describe('colonies', () => {
     const s = game();
     const u = colonistOf(s);
     const at = landTile(s);
-    u.loc = { kind: 'map', ...at };
+    setUnitLoc(s, u, { kind: 'map', ...at });
     u.moves = 3;
     foundColony(s, u.id);
     const other = Object.values(s.units).find((o) => o.owner === 'england' && o.type === 'hardyPioneer')!;
-    other.loc = { kind: 'map', x: at.x + 1, y: at.y };
+    setUnitLoc(s, other, { kind: 'map', x: at.x + 1, y: at.y });
     other.moves = 3;
     expect(() => foundColony(s, other.id)).toThrow(/Too close/);
   });
@@ -100,7 +102,7 @@ describe('colonies', () => {
   it('grows a new colonist from surplus food', () => {
     const s = game();
     const u = colonistOf(s);
-    u.loc = { kind: 'map', ...landTile(s) };
+    setUnitLoc(s, u, { kind: 'map', ...landTile(s) });
     u.moves = 3;
     const colony = foundColony(s, u.id);
     colony.goods.food = 199;
@@ -114,8 +116,8 @@ describe('europe', () => {
   it('lowers prices as goods are sold and applies tax', () => {
     const s = game();
     const ship = Object.values(s.units).find((u) => u.owner === 'england' && u.type === 'caravel')!;
-    for (const p of unitsAboard(s, ship)) delete s.units[p.id];
-    ship.loc = { kind: 'europe' };
+    for (const p of unitsAboard(s, ship)) removeUnit(s, p.id);
+    setUnitLoc(s, ship, { kind: 'europe' });
     ship.cargo = { furs: 200 };
     const p = s.players[0];
     p.tax = 10;
@@ -204,7 +206,7 @@ describe('europe round trip', () => {
     const ship = Object.values(s.units).find((u) => u.owner === 'england' && u.type === 'caravel')!;
     for (let x = 0; x < s.map.width; x++) {
       if (tileAt(s, x, 10)!.t === 'ocean') {
-        ship.loc = { kind: 'map', x, y: 10 };
+        setUnitLoc(s, ship, { kind: 'map', x, y: 10 });
         break;
       }
     }

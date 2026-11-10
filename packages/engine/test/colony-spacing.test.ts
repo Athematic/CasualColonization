@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { expansionCheck } from '../src/ai/advanced.js';
 import { bestColonySite, keenSiteScore } from '../src/ai/common.js';
-import { AI_PROFILES, applyCommand, assignJob, createGame, createUnit, distance, foundColony, siteScore, type GameState } from '../src/index.js';
+import { AI_PROFILES, applyCommand, assignJob, createGame, createUnit, distance, foundColony, siteScore, type GameState, removeUnit } from '../src/index.js';
 
 const ownedColonies = (s: GameState, nation: string) => Object.values(s.colonies).filter((c) => c.owner === nation);
 
 /** A one-nation computer game with a wide stretch of open, plowed plains in the middle and no natives. */
 function openPlains(level: 'competent' | 'creative' | 'combative' = 'competent') {
   const s = createGame({ seed: 11, mapSize: 'small', nations: ['england'], humans: [], ai: { england: level } });
-  for (const u of Object.values(s.units)) delete s.units[u.id];
+  for (const u of Object.values(s.units)) removeUnit(s, u.id);
   for (const st of Object.values(s.settlements)) delete s.settlements[st.id];
   const w = s.map.width;
   const cy = Math.floor(s.map.height / 2);
