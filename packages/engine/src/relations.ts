@@ -508,6 +508,7 @@ function seizeGoods(s: GameState, by: NationId, from: NationId): string {
 /** A vague description of how close two nations are, for the diplomacy screen. Never shows the hidden numbers. */
 export function relationsMood(s: GameState, a: NationId, b: NationId): string {
   if (!atPeace(s, a, b)) return 'At war';
+  if (s.treaties && isAllied(s, a, b)) return 'Allies';
   if (isFavoured(s, a, b)) return 'Favoured Nations';
   const human = bothHuman(s, a, b);
   if (!human && isHostile(s, a, b)) return 'Relations are hostile';
