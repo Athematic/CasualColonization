@@ -162,6 +162,16 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
   - Next: packs that use no hand-drawn graphics at all. A pack option (for example `fallback: 'placeholder'`) draws a plain placeholder (a flat tile colour, or a simple silhouette per category) instead of the procedural drawing for missing sprites. Packs can also supply sprite versions of the layers that are always procedural today: rivers (pieces per direction and size), coastline ink, fog edges, colony and unit flags, captions and badges. Plus a check that lists which ids a pack is missing.
 - A map editor in the game.
 - Network play (the deterministic engine already supports replays).
+- Converting all Scenarios to use haxagonal tiles
+
+## Generating Sprites locally
+
+Test free image generation running on the Mac to generate sprites.
+
+## More Hill Climbing
+
+Consider other candidates for Hill Climbing, such as:
+- **Using the concept of Deep Modules** to refactor code to be more easy to maintain, while repeated games ensures that nothing breaks.
 
 ## Agentic sprite pack generator
 
