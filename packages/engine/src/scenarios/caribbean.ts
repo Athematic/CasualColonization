@@ -6,7 +6,8 @@
  * and Scotland tried to found a colony at Darien.
  *
  * It uses every part of the framework with no new art: its own calendar (spring and autumn turns,
- * 1650–1750), a generated archipelago, its own nations with bonuses built from the existing hooks,
+ * 1650–1750), a stored map of the Caribbean drawn from real coordinates (maps/caribbean.ts) or a
+ * generated archipelago, its own nations with bonuses built from the existing hooks,
  * three peoples (one of them new to the catalogue, the Kalinago), the goods without furs and coats,
  * a council of the period with three new members, its own event set (events/caribbean.ts), the
  * Crown's taxes and demands without the REF or independence, the `time` victory alone, its own
@@ -22,6 +23,7 @@ import { SETTLEMENT_KINDS } from '../rules/natives.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { TerrainId } from '../rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
+import { CARIBBEAN_PEOPLES } from '../maps/caribbean.js';
 import { AMERICAS, AMERICAS_GENERATOR } from './americas.js';
 import type { Calendar } from './calendar.js';
 import type { GeneratorSettings, NationEntry, Scenario } from './types.js';
@@ -297,9 +299,10 @@ export const CARIBBEAN: Scenario = {
   description: 'The lesser powers: Courland, Brandenburg, Scotland and the Knights of Malta try their luck among the sugar islands beside England, France, the Netherlands, Spain and Denmark. A hundred years, no independence: the richest nation wins.',
   calendar: CARIBBEAN_CALENDAR,
   map: {
-    stored: [],
+    // The real map by default; the generated archipelago stays on offer as "Random (generated)".
+    stored: [{ id: 'caribbean', peoples: CARIBBEAN_PEOPLES }],
     generator: CARIBBEAN_GENERATOR,
-    default: 'generated',
+    default: 'caribbean',
     extras: { bonus: 0.05, coastalBonus: 0.08, rumours: 0.03, noRumours: [] },
     settlements: { avoid: ['mountains'], spacing: 3 },
     crown: 'entry',
@@ -371,7 +374,7 @@ export const CARIBBEAN: Scenario = {
     'landing.heading': 'Found colonies. Trade sugar and tobacco. Outlast the great powers.',
     'landing.pitch':
       'Sail to the West Indies for Courland, Brandenburg, Scotland or the Knights of Malta, or for one of the great powers: settle the islands, meet the Arawak, the Kalinago and the Tupi, bring the people of the age into your council, and grow the richest colonies in a hundred years.',
-    'landing.maps': 'Generated archipelagos of small islands in a warm sea',
+    'landing.maps': 'The real West Indies, or generated archipelagos of small islands in a warm sea',
     'newGame.tagline': 'The lesser powers in the age of the chartered companies.',
   },
   // The Americas' covers and council hall until the scenario has its own (BOX_ART_PROMPTS section L).
