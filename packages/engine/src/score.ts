@@ -1,9 +1,8 @@
 import { sellPrice } from './europe.js';
 import { sonsOfLiberty } from './production.js';
-import { AMERICAS_CALENDAR, calendarOf, lastTurn } from './scenarios/index.js';
+import { AMERICAS_CALENDAR, buildingsOf, calendarOf, goodsOf, lastTurn } from './scenarios/index.js';
 import { hasTradeAgreement, isFavoured } from './relations.js';
-import { BUILDINGS, type BuildingKind } from './rules/buildings.js';
-import { GOODS } from './rules/goods.js';
+import { BUILDINGS } from './rules/buildings.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { recentProduction } from './stats.js';
 import { SCORE_WEIGHTS, type ScoreWeights } from './rules/score.js';
@@ -65,13 +64,13 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = SCORE_
   let goods = 0;
   for (const c of Object.values(s.colonies)) {
     if (c.owner !== p.id) continue;
-    for (const kind of Object.keys(BUILDINGS) as BuildingKind[]) levels += Math.max(0, (c.buildings[kind] ?? 0) - BUILDINGS[kind].initialLevel);
+    for (const kind of buildingsOf(s)) levels += Math.max(0, (c.buildings[kind] ?? 0) - BUILDINGS[kind].initialLevel);
     const pop = workers.get(c.id) ?? 0;
     const sol = sonsOfLiberty(s, c, pop);
     rebels += Math.round((pop * sol) / 100);
     if (pop > 0 && sol >= 50) halfColonies++;
     if (pop > 0 && sol >= 100) fullColonies++;
-    for (const g of GOODS) if (g !== 'food') goods += (c.goods[g] ?? 0) * sellPrice(p, g);
+    for (const g of goodsOf(s)) if (g !== 'food') goods += (c.goods[g] ?? 0) * sellPrice(p, g);
   }
 
   let agreements = 0;

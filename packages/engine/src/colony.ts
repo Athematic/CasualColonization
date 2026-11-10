@@ -22,17 +22,18 @@ import {
   unitName,
   warehouseCapacity,
 } from './queries.js';
-import { BUILDINGS, BUILDING_ORDER, SCHOOL_TEACHERS, TEACH_TURNS, type BuildingKind } from './rules/buildings.js';
-import { GOOD_DEFS, GOODS, emptyGoods, type GoodId } from './rules/goods.js';
+import { BUILDINGS, SCHOOL_TEACHERS, TEACH_TURNS, type BuildingKind } from './rules/buildings.js';
+import { GOOD_DEFS, emptyGoods, type GoodId } from './rules/goods.js';
 import { COLONY_CHARTER, difficultyRules } from './rules/difficulty.js';
 import { NATIONS, TRIBES, type NationId } from './rules/nations.js';
-import { COLONY_BUILDS, PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
+import { COLONY_BUILDS, PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId } from './rules/units.js';
 import { runCustomHouse } from './europe.js';
 import { hasFather } from './fathers.js';
 import { noteMining } from './mines.js';
 import { noteProduction } from './stats.js';
 import { nativeLandOwner, onColonyFounded } from './natives.js';
 import type { BuildTarget, Colony, GameState, Job, Unit } from './types.js';
+import { buildingsOf, goodsOf, unitsOf } from './scenarios/index.js';
 
 export function canFoundColony(s: GameState, u: Unit): string | null {
   if (UNIT_TYPES[u.type].kind !== 'colonist') return 'Only colonists can found colonies.';
@@ -104,14 +105,14 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
   const { x, y } = u.loc;
   const charter = charterCost(s, u.owner);
   if (charter > 0) player(s, u.owner).gold -= charter;
-  const buildings = Object.fromEntries(BUILDING_ORDER.map((k) => [k, BUILDINGS[k].initialLevel])) as Record<BuildingKind, number>;
+  const buildings = Object.fromEntries(buildingsOf(s).map((k) => [k, BUILDINGS[k].initialLevel])) as Record<BuildingKind, number>;
   const colony: Colony = {
     id: newId(s, 'c'),
     owner: u.owner,
     name: name?.trim() || nextColonyName(s, u.owner),
     x,
     y,
-    goods: emptyGoods(),
+    goods: emptyGoods(goodsOf(s)),
     buildings,
     build: null,
     hammers: 0,
@@ -203,7 +204,7 @@ export function jobOptions(s: GameState, colony: Colony, u: Unit, occupancy = co
     const worker = worked.get(i);
     if (worker && worker.id !== u.id) continue;
     if (closed.has(i)) continue;
-    for (const g of GOODS) {
+    for (const g of goodsOf(s)) {
       const amount = tileYield(s, colony, p.x, p.y, g, u.type, bonus);
       if (amount > 0) out.push({ job: { kind: 'tile', x: p.x, y: p.y, good: g }, amount });
     }
@@ -211,7 +212,7 @@ export function jobOptions(s: GameState, colony: Colony, u: Unit, occupancy = co
   // The unit's own place does not count against a building's room.
   const own = u.loc.kind === 'colony' && u.loc.colonyId === colony.id && u.loc.job.kind === 'building' ? u.loc.job.building : null;
   const others = (kind: string) => (inBuilding.get(kind) ?? 0) - (own === kind ? 1 : 0);
-  for (const kind of BUILDING_ORDER) {
+  for (const kind of buildingsOf(s)) {
     const def = BUILDINGS[kind];
     if (def.workplaces === 0 || colony.buildings[kind] === 0 || !def.output) continue;
     if (others(kind) >= def.workplaces) continue;
@@ -392,7 +393,7 @@ export function canBuild(s: GameState, colony: Colony, target: BuildTarget): boo
   const pop = colonyPopulation(s, colony) || 1;
   if (target.kind === 'unit') {
     const build = COLONY_BUILDS[target.id];
-    if (!build) return false;
+    if (!build || !unitsOf(s).units.has(target.id)) return false;
     if (build.armory && colony.buildings.armory === 0) return false;
     return colony.buildings.docks >= (build.docks ?? 0);
   }
@@ -406,11 +407,11 @@ export function canBuild(s: GameState, colony: Colony, target: BuildTarget): boo
 
 export function buildOptions(s: GameState, colony: Colony): BuildTarget[] {
   const out: BuildTarget[] = [];
-  for (const kind of BUILDING_ORDER) {
+  for (const kind of buildingsOf(s)) {
     const t: BuildTarget = { kind: 'building', id: kind };
     if (canBuild(s, colony, t)) out.push(t);
   }
-  for (const id of Object.keys(COLONY_BUILDS) as UnitTypeId[]) {
+  for (const id of unitsOf(s).colonyBuilds) {
     const t: BuildTarget = { kind: 'unit', id };
     if (canBuild(s, colony, t)) out.push(t);
   }
@@ -451,7 +452,7 @@ export function hurryBuild(s: GameState, colonyId: string): void {
 export function processColony(s: GameState, colony: Colony): void {
   const report = colonyReport(s, colony);
   const p = player(s, colony.owner);
-  for (const g of GOODS) colony.goods[g] += report.net[g];
+  for (const g of goodsOf(s)) colony.goods[g] += report.net[g];
 
   // Horses breed when there is spare food.
   if (colony.goods.horses >= 2 && report.net.food > 0) {
@@ -515,7 +516,7 @@ export function processColony(s: GameState, colony: Colony): void {
   runCustomHouse(s, colony.id);
 
   const cap = warehouseCapacity(colony);
-  for (const g of GOODS) {
+  for (const g of goodsOf(s)) {
     if (g === 'food') continue;
     if (colony.goods[g] > cap) {
       track(colony.owner, 'colony:goods spoiled', colony.goods[g] - cap);

@@ -20,8 +20,9 @@ import { HOME_PORTS, NATIONS, type NationId } from './rules/nations.js';
 import { difficultyRules } from './rules/difficulty.js';
 import { portBasePrice, portCharacter, portDepth, portPriceBand } from './rules/ports.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
-import { IMMIGRANT_WEIGHTS, PIONEER_MAX_TOOLS, PURCHASABLE, ROLES, TRAINABLE, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
+import { PIONEER_MAX_TOOLS, PURCHASABLE, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
 import type { GameState, MarketEntry, Player, Unit } from './types.js';
+import { goodsOf, unitsOf } from './scenarios/index.js';
 
 export const SAIL_TURNS = 3;
 
@@ -40,8 +41,8 @@ function requireTrade(p: Player, good: GoodId): void {
 }
 
 /** A home port's market at the start of the game: its starting prices (rules/ports.ts), or the plain ones without `port`. */
-export function initialMarket(port?: NationId): Record<GoodId, MarketEntry> {
-  return Object.fromEntries(GOODS.map((g) => [g, { price: port ? portBasePrice(port, g) : GOOD_DEFS[g].price, volume: 0 }])) as Record<GoodId, MarketEntry>;
+export function initialMarket(port?: NationId, goods: readonly GoodId[] = GOODS): Record<GoodId, MarketEntry> {
+  return Object.fromEntries(goods.map((g) => [g, { price: port ? portBasePrice(port, g) : GOOD_DEFS[g].price, volume: 0 }])) as Record<GoodId, MarketEntry>;
 }
 
 export function sellPrice(p: Player, good: GoodId): number {
@@ -99,7 +100,8 @@ export function trainPrice(p: Player, type: UnitTypeId): number {
 
 export function randomImmigrant(s: GameState, nation?: Player['id']): UnitTypeId {
   const brewster = nation && hasFather(s, nation, 'williamBrewster');
-  return weightedPick(s, brewster ? IMMIGRANT_WEIGHTS.filter(([t]) => t !== 'pettyCriminal' && t !== 'indenturedServant') : IMMIGRANT_WEIGHTS);
+  const pool = unitsOf(s).immigrants;
+  return weightedPick(s, brewster ? pool.filter(([t]) => t !== 'pettyCriminal' && t !== 'indenturedServant') : pool);
 }
 
 function requireInEurope(u: Unit | undefined): asserts u is Unit {
@@ -219,7 +221,7 @@ export function runCustomHouse(s: GameState, colonyId: string): void {
   const p = player(s, colony.owner);
   if (p.independence === 'declared') return;
   let total = 0;
-  for (const g of GOODS) {
+  for (const g of goodsOf(s)) {
     if (!colony.exports[g] || p.boycotts[g]) continue;
     const amount = colony.goods[g] - 50;
     if (amount <= 0) continue;
@@ -311,7 +313,7 @@ export function train(s: GameState, nation: Player['id'], type: UnitTypeId, port
   if (port && port !== nation) {
     const problem = portProblem(s, nation, port);
     if (problem) fail(problem);
-    if (!buyableInPartnerPort(type)) fail(`Only merchant ships can be bought in ${portName(port)}. Warships, artillery and colonists come from your own port.`);
+    if (!buyableInPartnerPort(type) || !unitsOf(s).units.has(type)) fail(`Only merchant ships can be bought in ${portName(port)}. Warships, artillery and colonists come from your own port.`);
     if (!Object.values(s.units).some((u) => u.owner === nation && u.loc.kind === 'europe' && u.loc.port === port)) fail(`You need a ship in ${portName(port)} to buy there.`);
     const price = trainPrice(player(s, port), type);
     if (p.gold < price) fail(`${def.name} costs ${price} gold in ${portName(port)}.`);
@@ -321,7 +323,8 @@ export function train(s: GameState, nation: Player['id'], type: UnitTypeId, port
     track(nation, 'europe:partner port ship bought');
     return createUnit(s, nation, type, { kind: 'europe', port });
   }
-  if (!TRAINABLE.includes(type) && !PURCHASABLE.includes(type)) fail(`${def.name} cannot be bought in Europe.`);
+  const offer = unitsOf(s);
+  if (!offer.trainable.includes(type) && !offer.purchasable.includes(type)) fail(`${def.name} cannot be bought in Europe.`);
   const price = trainPrice(p, type);
   if (p.gold < price) fail(`${def.name} costs ${price} gold.`);
   p.gold -= price;
@@ -461,7 +464,7 @@ export function unboardInEurope(s: GameState, unitId: string): void {
 export function recoverMarkets(s: GameState): void {
   for (const p of s.players) {
     const chance = (p.id === 'netherlands' ? 0.2 : 0.1) * (hasFather(s, p.id, 'janDeWitt') ? 2 : 1) * difficultyRules(p).priceRecovery * (portCharacter(p.id).recovery ?? 1);
-    for (const g of GOODS) {
+    for (const g of goodsOf(s)) {
       if (random(s) >= chance) continue;
       const m = p.market[g];
       const base = portBasePrice(p.id, g);

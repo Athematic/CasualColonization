@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   AMERICAS,
+  BUILDING_ORDER,
+  BUILDINGS,
   checkSavedScenario,
   createGame,
   deserialize,
@@ -62,6 +64,11 @@ describe('the Americas scenario is today’s tables', () => {
     expect(AMERICAS.council.categories).toEqual(FATHER_CATEGORIES);
   });
 
+  it('units and buildings: all of them, in catalogue order', () => {
+    expect(AMERICAS.units).toEqual(Object.keys(UNIT_TYPES));
+    expect(AMERICAS.buildings).toEqual(BUILDING_ORDER);
+  });
+
   it('nations: all eight as alternative history (the default), the original four as real rivals', () => {
     const { sets, default: def, max } = AMERICAS.nations;
     expect(def).toBe('alternative');
@@ -94,6 +101,10 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
     unique(sc.goods);
     unique(sc.peoples.ids);
     unique(sc.council.members);
+    unique(sc.units);
+    unique(sc.buildings);
+    for (const u of sc.units) expect(UNIT_TYPES[u]).toBeDefined();
+    for (const b of sc.buildings) expect(BUILDINGS[b]).toBeDefined();
     for (const g of sc.goods) expect(GOODS).toContain(g);
     for (const t of sc.peoples.ids) expect(TRIBES[t]).toBeDefined();
     for (const f of sc.council.members) expect(FATHERS[f]).toBeDefined();
@@ -123,8 +134,19 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
     for (const g of sc.peoples.produce) expect(sc.goods).toContain(g);
     for (const t of sc.peoples.ids) {
       for (const g of TRIBES[t].wants) expect(sc.goods).toContain(g);
-      for (const u of TRIBES[t].skills) expect(UNIT_TYPES[u]).toBeDefined();
+      for (const u of TRIBES[t].skills) expect(sc.units).toContain(u);
     }
+    const isGood = (g: string) => (GOODS as readonly string[]).includes(g);
+    for (const b of sc.buildings) {
+      const { input, output } = BUILDINGS[b];
+      if (input) expect(sc.goods).toContain(input);
+      if (output && isGood(output)) expect(sc.goods).toContain(output);
+    }
+    for (const u of sc.units) {
+      const g = UNIT_TYPES[u].expertFor;
+      if (g && isGood(g)) expect(sc.goods).toContain(g);
+    }
+    for (const list of Object.values(sc.ai.goods)) for (const g of list) expect(sc.goods).toContain(g);
   });
 
   it('has a council with members in its categories', () => {

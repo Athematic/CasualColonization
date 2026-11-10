@@ -33,7 +33,7 @@ import { noteTrade } from './stats.js';
 import { track } from './telemetry.js';
 import { BUILDINGS, type BuildingKind } from './rules/buildings.js';
 import { difficultyRules } from './rules/difficulty.js';
-import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
+import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { TRIBES, type NationId } from './rules/nations.js';
 import {
@@ -51,7 +51,6 @@ import {
   DEMAND_REFUSED_TENSION,
   DEMAND_WAIT,
   MAX_BRAVES,
-  NATIVE_PRODUCE,
   PRODUCE_CAP,
   PRODUCE_RATE,
   TENSION,
@@ -62,6 +61,7 @@ import {
 } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from './types.js';
+import { goodsOf, nativeProduceOf } from './scenarios/index.js';
 
 export function settlementKind(st: Settlement): SettlementKind {
   return TRIBES[st.tribe].settlement;
@@ -136,14 +136,14 @@ export function settlementProduce(s: GameState, st: Settlement): Partial<Record<
       if (!tile || tile.claim || TERRAIN[tile.t].water) continue;
       const def = TERRAIN[tile.t];
       const yields = tile.f && def.forest ? def.forest.yields : def.yields;
-      for (const g of NATIVE_PRODUCE) {
+      for (const g of nativeProduceOf(s)) {
         const y = yields[g] ?? 0;
         if (y > 0) sums[g] = (sums[g] ?? 0) + y * (g === 'silver' && kind === 'city' ? CITY_SILVER : 1);
       }
     }
   }
   const out: Partial<Record<GoodId, number>> = {};
-  for (const g of NATIVE_PRODUCE) {
+  for (const g of nativeProduceOf(s)) {
     const n = Math.round((sums[g] ?? 0) * PRODUCE_RATE[kind]);
     if (n > 0) out[g] = n;
   }
@@ -153,7 +153,7 @@ export function settlementProduce(s: GameState, st: Settlement): Partial<Record<
 function gatherGoods(s: GameState, st: Settlement): void {
   const cap = PRODUCE_CAP[settlementKind(st)];
   const produce = settlementProduce(s, st);
-  for (const g of NATIVE_PRODUCE) {
+  for (const g of nativeProduceOf(s)) {
     const n = produce[g];
     if (!n) continue;
     const goods = (st.goods = st.goods ?? {});
@@ -162,8 +162,8 @@ function gatherGoods(s: GameState, st: Settlement): void {
 }
 
 /** Goods a settlement has for sale (its produce, not the muskets and horses it keeps). */
-export function settlementForSale(st: Settlement): { good: GoodId; amount: number }[] {
-  return NATIVE_PRODUCE.map((good) => ({ good, amount: st.goods?.[good] ?? 0 })).filter((r) => r.amount > 0);
+export function settlementForSale(s: GameState, st: Settlement): { good: GoodId; amount: number }[] {
+  return nativeProduceOf(s).map((good) => ({ good, amount: st.goods?.[good] ?? 0 })).filter((r) => r.amount > 0);
 }
 
 /** Price per unit a settlement asks a nation for one of its goods: dearer when tense, cheaper when it has plenty. */
@@ -441,7 +441,7 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
   const p = player(s, nation);
   delete b.task;
   if (purpose === 'gift') {
-    const goods = settlementForSale(st).filter((r) => r.amount >= 20).sort((x, y) => y.amount - x.amount);
+    const goods = settlementForSale(s, st).filter((r) => r.amount >= 20).sort((x, y) => y.amount - x.amount);
     if (goods.length && random(s) < 0.4) {
       const g = goods[0];
       const n = Math.min(g.amount, 20 + randInt(s, 40));
@@ -478,7 +478,7 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
     message(s, `${aBrave(tribe)} buys ${amount} ${GOOD_DEFS[g].name.toLowerCase()} in ${c.name} for ${gold} gold.`, nation, c);
     break;
   }
-  const offer = settlementForSale(st)
+  const offer = settlementForSale(s, st)
     .filter((r) => r.amount >= 30)
     .map((r) => ({ ...r, amount: Math.min(100, r.amount), unit: nativeUnitPrice(st, r.good, nation) }))
     .sort((x, y) => GOOD_DEFS[y.good].price * y.amount - GOOD_DEFS[x.good].price * x.amount)[0];
@@ -521,7 +521,7 @@ function addDemand(s: GameState, d: Omit<NativeDemand, 'id' | 'turn'>): NativeDe
 
 /** What a brave asks of a colony: its most plentiful goods, or some of the treasury. */
 function demandFor(s: GameState, c: Colony): { good?: GoodId; amount: number } | undefined {
-  const goods = GOODS.filter((g) => g !== 'food' && c.goods[g] >= 50).sort((a, b) => c.goods[b] - c.goods[a]);
+  const goods = goodsOf(s).filter((g) => g !== 'food' && c.goods[g] >= 50).sort((a, b) => c.goods[b] - c.goods[a]);
   if (goods.length) return { good: goods[0], amount: Math.min(100, Math.max(25, Math.round(c.goods[goods[0]] * 0.4))) };
   const gold = player(s, c.owner).gold;
   if (gold < 50) return undefined;
@@ -708,7 +708,7 @@ export function attackColony(s: GameState, b: Brave, c: Colony): void {
 /** What a successful raid on an undefended colony does, as in the original. */
 function pillage(s: GameState, b: Brave, c: Colony): void {
   const tribe = TRIBES[b.tribe].name;
-  const goods = GOODS.filter((g) => g !== 'food' && c.goods[g] >= 20).sort((x, y) => c.goods[y] - c.goods[x]);
+  const goods = goodsOf(s).filter((g) => g !== 'food' && c.goods[g] >= 20).sort((x, y) => c.goods[y] - c.goods[x]);
   const r = random(s);
   const workers = colonyWorkers(s, c);
   if (r < 0.4 && goods.length) {

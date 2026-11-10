@@ -1,4 +1,5 @@
-import { BUILDINGS, BUILDING_ORDER, BUILDING_SKILL_OUTPUT, PRINTING_BELL_BONUS, type BuildingKind } from './rules/buildings.js';
+import { BUILDINGS, BUILDING_SKILL_OUTPUT, PRINTING_BELL_BONUS, type BuildingKind } from './rules/buildings.js';
+import { buildingsOf } from './scenarios/index.js';
 import { GOODS, type GoodId, type ProductId } from './rules/goods.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
@@ -132,6 +133,8 @@ export interface ColonyReport {
   sonsOfLiberty: number;
 }
 
+// Reports have a zero for every catalogue good: a good a scenario leaves out stays 0 and is
+// never added to a warehouse (processColony adds only the goods in play).
 const ZERO = (() => {
   const out = Object.fromEntries(GOODS.map((g) => [g, 0])) as Record<ProductId, number>;
   out.hammers = 0;
@@ -164,7 +167,7 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
   consumed.food += units.length * FOOD_PER_COLONIST;
 
   // Buildings run in dependency order: tools are made before the armory uses them.
-  for (const kind of BUILDING_ORDER) {
+  for (const kind of buildingsOf(s)) {
     const def = BUILDINGS[kind];
     const level = colony.buildings[kind];
     if (!def.output || level === 0) continue;

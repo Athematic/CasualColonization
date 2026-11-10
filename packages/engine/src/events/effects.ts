@@ -7,12 +7,13 @@ import { placeOnMap } from '../movement.js';
 import { colonyReport } from '../production.js';
 import { BUILDINGS, BUILDING_ORDER, type BuildingKind } from '../rules/buildings.js';
 import { difficultyRules } from '../rules/difficulty.js';
-import { GOODS, type GoodId, type ProductId } from '../rules/goods.js';
+import type { GoodId, ProductId } from '../rules/goods.js';
 import { portPriceBand } from '../rules/ports.js';
 import { TERRAIN } from '../rules/terrain.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState } from '../types.js';
 import type { Effect, EventVars, EventsState, GoodRef, Num } from './types.js';
+import { goodsOf } from '../scenarios/index.js';
 
 /** What a point of tax is worth to a nation over the rest of a game, in gold (measured against 30-turn outcomes in docs/design/events.md). */
 export const TAX_POINT_VALUE = 150;
@@ -172,7 +173,7 @@ function productionValue(s: GameState, colony: Colony, products?: ProductId[]): 
   for (const [k, n] of Object.entries(report.produced) as [ProductId, number][]) {
     if (!n || (products && !products.includes(k))) continue;
     // Hammers, bells and crosses are worth about what a unit of trade goods is.
-    const price = (GOODS as readonly string[]).includes(k) ? p.market[k as GoodId].price : 2;
+    const price = (goodsOf(s) as readonly string[]).includes(k) ? p.market[k as GoodId].price : 2;
     value += n * price;
   }
   return value;
@@ -271,7 +272,7 @@ export function damageableBuilding(colony: Colony): BuildingKind | undefined {
   let best: BuildingKind | undefined;
   for (const b of BUILDING_ORDER) {
     if (b === 'stockade' || b === 'townHall') continue;
-    if (colony.buildings[b] <= Math.max(1, BUILDINGS[b].initialLevel)) continue;
+    if ((colony.buildings[b] ?? 0) <= Math.max(1, BUILDINGS[b].initialLevel)) continue;
     if (!best || colony.buildings[b] > colony.buildings[best]) best = b;
   }
   return best;

@@ -14,10 +14,11 @@ import { royalForce } from './independence.js';
 import { message, player } from './queries.js';
 import { hasTradeAgreement, isFavoured, pairRandom } from './relations.js';
 import { difficultyRules } from './rules/difficulty.js';
-import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
+import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, Player } from './types.js';
+import { goodsOf } from './scenarios/index.js';
 
 // ---------------------------------------------------------------------------
 // The Royal Expeditionary Force
@@ -123,7 +124,7 @@ export function seizureColony(s: GameState, nation: NationId): { colony: Colony;
   let best: { colony: Colony; value: number } | null = null;
   for (const c of Object.values(s.colonies)) {
     if (c.owner !== nation) continue;
-    const value = GOODS.reduce((n, g) => (g === 'food' ? n : n + c.goods[g] * p.market[g].price), 0);
+    const value = goodsOf(s).reduce((n, g) => (g === 'food' ? n : n + c.goods[g] * p.market[g].price), 0);
     if (!best || value > best.value) best = { colony: c, value };
   }
   return best;
@@ -147,7 +148,7 @@ export function demandPenalty(s: GameState, nation: NationId): { colony: Colony 
   const p = player(s, nation);
   const named = p.pendingDemand?.colony ? s.colonies[p.pendingDemand.colony] : undefined;
   if (named && named.owner === nation) {
-    const value = GOODS.reduce((n, g) => (g === 'food' ? n : n + named.goods[g] * p.market[g].price), 0);
+    const value = goodsOf(s).reduce((n, g) => (g === 'food' ? n : n + named.goods[g] * p.market[g].price), 0);
     return { colony: named, value };
   }
   const best = seizureColony(s, nation);
@@ -176,7 +177,7 @@ export function answerDemand(s: GameState, nation: NationId, pay: boolean): stri
   noteHistory(s, 'crown', [nation], `${NATIONS[nation].name} refuses the King's demand for ${demand.gold} gold${colony ? `; the goods in ${colony.name} are seized` : ''}.`, { secret: true, at: colony ?? undefined });
   const seized: string[] = [];
   if (colony) {
-    for (const g of GOODS) {
+    for (const g of goodsOf(s)) {
       if (g === 'food' || colony.goods[g] <= 0) continue;
       seized.push(`${colony.goods[g]} ${GOOD_DEFS[g as GoodId].name.toLowerCase()}`);
       colony.goods[g] = 0;

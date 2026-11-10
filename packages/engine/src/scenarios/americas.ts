@@ -5,6 +5,7 @@
  *
  * Imports only the leaf rule tables, so any engine module can import the registry.
  */
+import { BUILDING_ORDER } from '../rules/buildings.js';
 import { DIFFICULTY } from '../rules/difficulty.js';
 import { FATHER_CATEGORIES, FATHERS, type FatherId } from '../rules/fathers.js';
 import { GOODS } from '../rules/goods.js';
@@ -12,6 +13,7 @@ import { NATION_ORDER, NATIONS, TRIBE_ORDER, type NationId } from '../rules/nati
 import { NATIVE_PRODUCE } from '../rules/natives.js';
 import { PORT_CHARACTER } from '../rules/ports.js';
 import { SCORE_WEIGHTS } from '../rules/score.js';
+import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import { AMERICAS_CALENDAR } from './calendar.js';
 import type { NationEntry, Scenario } from './types.js';
 
@@ -42,8 +44,18 @@ export const AMERICAS: Scenario = {
   },
   peoples: { ids: [...TRIBE_ORDER], produce: [...NATIVE_PRODUCE] },
   goods: [...GOODS],
+  units: Object.keys(UNIT_TYPES) as UnitTypeId[],
+  buildings: [...BUILDING_ORDER],
   council: { categories: [...FATHER_CATEGORIES], members: Object.keys(FATHERS) as FatherId[] },
   events: 'americas',
+  ai: {
+    goods: {
+      trade: ['silver', 'furs', 'sugar', 'tobacco', 'cotton', 'ore', 'rum', 'cigars', 'cloth', 'coats', 'horses'],
+      export: ['sugar', 'tobacco', 'cotton', 'furs', 'ore', 'silver', 'rum', 'cigars', 'cloth', 'coats'],
+      road: ['lumber', 'ore', 'silver', 'furs'],
+      farm: ['food', 'sugar', 'tobacco', 'cotton'],
+    },
+  },
   // The engine's own tables: the Americas override nothing.
   difficulty: DIFFICULTY,
   score: SCORE_WEIGHTS,

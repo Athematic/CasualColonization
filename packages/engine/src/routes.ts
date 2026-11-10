@@ -15,11 +15,12 @@ import { boardInEurope, buyGoods, buyPrice, portName, portOf, portProblem, sailT
 import { continueOrders, findPath, pathHint } from './movement.js';
 import { cargoFree, cargoRoomFor, isCoastal, isShip, isWater, message, neighbours, newId, player, reveal, tileAt, unitName, unitPosition, unitsAboard, warehouseCapacity } from './queries.js';
 import { atPeace, besideColony, closedRoutePorts, hasTradeAgreement, inWaitingPeriod, tradeAtForeignColony } from './relations.js';
-import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
+import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { track } from './telemetry.js';
 import type { GameState, RouteCargo, RouteStop, TradeRoute, Unit } from './types.js';
+import { goodsOf } from './scenarios/index.js';
 
 export const EUROPE_STOP = 'europe';
 export const MAX_ROUTE_STOPS = 12;
@@ -69,10 +70,10 @@ export function canUseRoutes(u: Unit): boolean {
   return (kind === 'ship' || kind === 'wagon') && UNIT_TYPES[u.type].cargo > 0;
 }
 
-function cleanCargo(list: RouteCargo[] | undefined): RouteCargo[] {
+function cleanCargo(s: GameState, list: RouteCargo[] | undefined): RouteCargo[] {
   const out: RouteCargo[] = [];
   for (const r of list ?? []) {
-    if (!r || !GOODS.includes(r.good)) fail('Unknown good in the route.');
+    if (!r || !goodsOf(s).includes(r.good)) fail('Unknown good in the route.');
     if (out.some((o) => o.good === r.good)) continue;
     const entry: RouteCargo = { good: r.good };
     if (r.amount !== undefined && r.amount !== null) {
@@ -101,7 +102,7 @@ function cleanStops(s: GameState, nation: NationId, stops: RouteStop[] | undefin
         }
       }
     }
-    const clean: RouteStop = { at: stop.at, load: cleanCargo(stop.load), unload: cleanCargo(stop.unload) };
+    const clean: RouteStop = { at: stop.at, load: cleanCargo(s, stop.load), unload: cleanCargo(s, stop.unload) };
     if (stop.passengers && stop.at === EUROPE_STOP) clean.passengers = true;
     if (stop.at === EUROPE_STOP && stop.port && stop.port !== nation) {
       const problem = portProblem(s, nation, stop.port);
@@ -277,7 +278,7 @@ function serveStop(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop): v
     const n = Math.min(spare(r), cargoRoomFor(s, u, r.good));
     if (n > 0) move(colony.goods, u.cargo, r.good, n);
   }
-  for (const g of GOODS) if (u.cargo[g] === 0) delete u.cargo[g];
+  for (const g of goodsOf(s)) if (u.cargo[g] === 0) delete u.cargo[g];
 }
 
 /** Sells to, and buys from, a trade partner's colony, and reports to both nations. */
@@ -336,7 +337,7 @@ function serveEurope(s: GameState, u: Unit, route: TradeRoute, stop: RouteStop):
     buyGoods(s, u.id, r.good, n);
     spent += before - p.gold;
   }
-  for (const g of GOODS) if (u.cargo?.[g] === 0) delete u.cargo[g];
+  for (const g of goodsOf(s)) if (u.cargo?.[g] === 0) delete u.cargo[g];
   const parts = [
     earned ? `sold goods for ${earned} gold after tax` : '',
     spent ? `bought goods for ${spent} gold` : '',

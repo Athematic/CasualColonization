@@ -14,12 +14,13 @@ import { colonyAt, colonyWorkers, distance, isShip, player, unitName, unitPositi
 import { favouredPartners } from './relations.js';
 import { BUILDINGS } from './rules/buildings.js';
 import { FATHERS, type FatherId } from './rules/fathers.js';
-import { GOODS, type GoodId } from './rules/goods.js';
+import type { GoodId } from './rules/goods.js';
 import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { ledgerFor } from './history.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
+import { goodsOf } from './scenarios/index.js';
 
 // ---- Colonies ----
 
@@ -69,7 +70,7 @@ export function colonyOverview(s: GameState, colony: Colony): ColonyOverview {
   const report = colonyReport(s, colony);
   const population = report.population;
   const cap = warehouseCapacity(colony);
-  const warehouse: WarehouseLine[] = GOODS.filter((g) => g !== 'food' && (colony.goods[g] > 0 || report.net[g] > 0))
+  const warehouse: WarehouseLine[] = goodsOf(s).filter((g) => g !== 'food' && (colony.goods[g] > 0 || report.net[g] > 0))
     .map((g) => ({ good: g, amount: colony.goods[g], net: report.net[g], spoil: Math.max(0, colony.goods[g] + report.net[g] - cap) }))
     .sort((a, b) => b.amount - a.amount);
   // At risk: spoiling this turn, or full enough that one more turn of production spoils it.
@@ -144,7 +145,7 @@ export function tradeOverview(s: GameState, nation: NationId): TradeRow[] {
   const ports = [p, ...favouredPartners(s, nation).map((n) => player(s, n))];
   const ledger = ledgerFor(s, nation);
   const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
-  return GOODS.map((g) => ({
+  return goodsOf(s).map((g) => ({
     good: g,
     prices: ports.map((q) => ({ port: q.id, sell: sellPrice(q, g), buy: buyPrice(q, g), tax: q.tax })),
     boycotted: !!p.boycotts[g],
@@ -243,7 +244,7 @@ export function navalOverview(s: GameState, nation: NationId): ShipOverview[] {
     .filter((u) => u.owner === nation && isShip(u))
     .map((u) => {
       const passengers = unitsAboard(s, u);
-      const cargo = GOODS.filter((g) => (u.cargo?.[g] ?? 0) > 0).map((g) => ({ good: g, amount: u.cargo![g]! }));
+      const cargo = goodsOf(s).filter((g) => (u.cargo?.[g] ?? 0) > 0).map((g) => ({ good: g, amount: u.cargo![g]! }));
       const used = passengers.reduce((n, p) => n + (p.type === 'treasure' ? UNIT_TYPES[u.type].cargo : 1), 0) + cargo.reduce((n, c) => n + Math.ceil(c.amount / 100), 0);
       const route = u.route && s.routes?.[u.route.id];
       let orders = 'No orders';

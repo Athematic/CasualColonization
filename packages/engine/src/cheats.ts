@@ -4,10 +4,10 @@
  */
 import { fail } from './errors.js';
 import { message, player } from './queries.js';
-import { GOODS } from './rules/goods.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { onPeace } from './relations.js';
 import type { GameState } from './types.js';
+import { goodsOf } from './scenarios/index.js';
 
 export type CheatId = 'gold' | 'doublePrices' | 'peace' | 'doubleYields' | 'reveal';
 
@@ -80,7 +80,7 @@ export function applyCheat(s: GameState, cheat: CheatId, nation: NationId, on?: 
       text = `${NATIONS[nation].name} receives ${CHEAT_GOLD.toLocaleString('en')} gold.`;
       break;
     case 'doublePrices':
-      for (const g of GOODS) player(s, nation).market[g].price *= 2;
+      for (const g of goodsOf(s)) player(s, nation).market[g].price *= 2;
       text = `Prices in the ${NATIONS[nation].adjective} home port have doubled.`;
       break;
     case 'peace': {

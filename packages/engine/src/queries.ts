@@ -1,12 +1,13 @@
 import { BUILDINGS, WAREHOUSE_CAPACITY } from './rules/buildings.js';
 import { NATIONS } from './rules/nations.js';
-import { GOODS, type GoodId } from './rules/goods.js';
+import type { GoodId } from './rules/goods.js';
 import type { NationId } from './rules/nations.js';
 import { FOREST_DEFENCE, TERRAIN, type TerrainDef } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeDef } from './rules/units.js';
 import type { Colony, GameState, Player, Settlement, Tile, Unit, UnitLocation } from './types.js';
 import type { UnitTypeId } from './rules/units.js';
 import type { FatherId } from './rules/fathers.js';
+import { goodsOf } from './scenarios/index.js';
 
 export const DIRECTIONS = [
   { id: 'n', dx: 0, dy: -1 },
@@ -192,7 +193,7 @@ export function colonyPopulation(s: GameState, colony: Colony): number {
 
 export function cargoUsed(s: GameState, carrier: Unit): number {
   let used = unitsAboard(s, carrier).reduce((n, u) => n + (u.type === 'treasure' ? UNIT_TYPES[carrier.type].cargo : 1), 0);
-  for (const g of GOODS) {
+  for (const g of goodsOf(s)) {
     const amount = carrier.cargo?.[g] ?? 0;
     if (amount > 0) used += Math.ceil(amount / 100);
   }

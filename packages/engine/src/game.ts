@@ -2,7 +2,7 @@ import { applyCommand, type Command, type CommandResult } from './commands.js';
 import { initialMarket, randomImmigrant } from './europe.js';
 import { placeOnMap } from './movement.js';
 import { createUnit, message, reveal } from './queries.js';
-import { NATIONS, TRIBE_ORDER, type NationId } from './rules/nations.js';
+import { NATIONS, type NationId } from './rules/nations.js';
 import { DEFAULT_DIFFICULTY, DIFFICULTY, resolveDifficulty } from './rules/difficulty.js';
 import { beginPlayerTurn, runAiUntilHuman } from './turn.js';
 import type { GameConfig, GameState, Player } from './types.js';
@@ -11,7 +11,7 @@ import { createWorld } from './world.js';
 import { initRelations } from './relations.js';
 import { initCrown } from './crown.js';
 import { entryPoints } from './mapgen.js';
-import { checkSavedScenario, checkScenarioConfig } from './scenarios/index.js';
+import { checkSavedScenario, checkScenarioConfig, goodsOf, peoplesOf } from './scenarios/index.js';
 
 /** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
 export const SAVE_VERSION = 3;
@@ -41,7 +41,7 @@ export function createGame(config: GameConfig): GameState {
     players: [],
     units: {},
     colonies: {},
-    tribes: TRIBE_ORDER.map((id) => ({ id, stance: {} })),
+    tribes: peoplesOf({ config }).map((id) => ({ id, stance: {} })),
     settlements: Object.fromEntries(world.settlements.map((st) => [st.id, st])),
     messages: [],
     difficulty: resolveDifficulty(config.difficulty),
@@ -83,7 +83,7 @@ export function newPlayer(s: GameState, nation: NationId, human: boolean, entry:
     human,
     gold: 1000,
     tax: 0,
-    market: initialMarket(nation),
+    market: initialMarket(nation, goodsOf(s)),
     crosses: 0,
     crossesRequired: 30,
     recruitPool: [],

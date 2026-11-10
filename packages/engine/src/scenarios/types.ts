@@ -8,12 +8,14 @@
  * (rules/*); a scenario only selects which are in play, in what order, with its own game facts
  * (section 3.1). Everything here is JSON-shaped except `migrate`.
  */
+import type { BuildingKind } from '../rules/buildings.js';
 import type { DifficultyId, DifficultyRules } from '../rules/difficulty.js';
 import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
 import type { NationId, TribeId } from '../rules/nations.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { ScoreWeights } from '../rules/score.js';
+import type { UnitTypeId } from '../rules/units.js';
 import type { GameState } from '../types.js';
 import type { Calendar } from './calendar.js';
 
@@ -39,7 +41,20 @@ export interface Scenario {
   peoples: ScenarioPeoples;
   /** Goods in play; the order is the order of keys in markets and warehouses. */
   goods: readonly GoodId[];
+  /**
+   * Unit types in play, in catalogue order. Only units on this list are offered in Europe, built
+   * in colonies or arrive as immigrants; the engine's named slots (treasure, the REF's units, the
+   * starting ship) are expected to be on it.
+   */
+  units: readonly UnitTypeId[];
+  /**
+   * Buildings in play, in catalogue order (the order production runs in: tools are made before
+   * the armory uses them). Colonies only have these.
+   */
+  buildings: readonly BuildingKind[];
   council: Council;
+  /** What the computer players need to know about the scenario's content. */
+  ai: ScenarioAi;
   /** Id of a registered event set (events/index.ts). `config.eventSet` overrides it (tests). */
   events: string;
   /** Overrides merged over the engine's DIFFICULTY per level (step 5). */
@@ -95,4 +110,22 @@ export interface Council {
   categories: FatherCategory[];
   /** Ids in the global catalogue (FATHERS), in catalogue order. */
   members: FatherId[];
+}
+
+/**
+ * The computer players' hand-kept goods lists (docs/design/scenario-framework.md, row 38). Each
+ * list's order is the order the AI considers the goods in, which decides ties, so the Americas
+ * keep today's order. Only goods in play may be named.
+ */
+export interface ScenarioAi {
+  goods: {
+    /** Goods ships move between colonies and sell (ai/logistics.ts), most valuable first. */
+    trade: GoodId[];
+    /** Cash crops and finished goods worth shipping to a port (naive, advanced, fleet and foreign trade). */
+    export: GoodId[];
+    /** Goods whose worked tiles a pioneer gives a road (ai/roads.ts). */
+    road: GoodId[];
+    /** Goods whose tiles a pioneer ploughs or clears rather than gives a road (ai/advanced.ts). */
+    farm: GoodId[];
+  };
 }

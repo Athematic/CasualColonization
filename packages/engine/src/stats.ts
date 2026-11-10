@@ -4,12 +4,13 @@
  * computer-only games record too. Older saves have no history and start recording on load.
  */
 import { sonsOfLiberty } from './production.js';
-import { GOODS, type GoodId } from './rules/goods.js';
+import type { GoodId } from './rules/goods.js';
 import type { NationId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
 import { score } from './score.js';
 import type { GameState, StatsHistory } from './types.js';
+import { goodsOf } from './scenarios/index.js';
 
 /** What each snapshot holds, in order. Per-turn values are rates; the rest are levels. */
 export const STAT_KEYS = [
@@ -111,7 +112,7 @@ export function noteTrade(s: GameState, nation: NationId, gold: number): void {
 /** Notes a colony's production for the turn (goods except food, and crosses). */
 export function noteProduction(s: GameState, nation: NationId, produced: Partial<Record<GoodId | 'crosses', number>>): void {
   let goods = 0;
-  for (const g of GOODS) if (g !== 'food') goods += produced[g] ?? 0;
+  for (const g of goodsOf(s)) if (g !== 'food') goods += produced[g] ?? 0;
   note(s, nation, 'production', goods);
   note(s, nation, 'crosses', produced.crosses ?? 0);
 }

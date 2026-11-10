@@ -26,7 +26,7 @@ export const INCITE_EVERY = 40;
 export function buyFromNatives(s: GameState, p: Player, wagon: Unit, st: Settlement): boolean {
   if (p.independence !== 'none' || !ownColonies(s, p).some((c) => isCoastal(s, c.x, c.y))) return false;
   const net = (g: Parameters<typeof sellPrice>[1]) => sellPrice(p, g) * (1 - p.tax / 100);
-  const best = settlementForSale(st)
+  const best = settlementForSale(s, st)
     .filter((r) => r.amount >= 30 && !p.boycotts[r.good])
     .map((r) => {
       const n = Math.min(100, r.amount, cargoRoomFor(s, wagon, r.good));

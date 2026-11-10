@@ -90,9 +90,9 @@ function list(goods: GoodId[]): string {
 }
 
 /** A short description of a port's character, e.g. "tobacco and furs fetch more; sugar fetches less". Empty when it has none. */
-export function portCharacterText(port: NationId): string {
+export function portCharacterText(port: NationId, goods: readonly GoodId[] = GOODS): string {
   const c = portCharacter(port);
-  const prices = GOODS.map((g) => [g, portPriceShift(port, g)] as [GoodId, number]).filter(([, d]) => d !== 0);
+  const prices = goods.map((g) => [g, portPriceShift(port, g)] as [GoodId, number]).filter(([, d]) => d !== 0);
   const depth = Object.entries(c.depth ?? {}) as [GoodId, number][];
   const parts: string[] = [];
   const more = prices.filter(([g, d]) => d > 0 && !SUPPLIES.includes(g)).map(([g]) => g);
@@ -117,8 +117,8 @@ export function portCharacterText(port: NationId): string {
 }
 
 /** "Amsterdam: tobacco and furs fetch more; plenty of trade goods; sugar and cloth fetch less". */
-export function portSummary(port: NationId): string {
+export function portSummary(port: NationId, goods: readonly GoodId[] = GOODS): string {
   const name = PORT_CHARACTER[port]?.name ?? HOME_PORTS[port];
-  const text = portCharacterText(port);
+  const text = portCharacterText(port, goods);
   return text ? `${name}: ${text}` : name;
 }

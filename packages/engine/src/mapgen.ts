@@ -50,7 +50,8 @@ export interface GeneratedWorld {
 /** The map edge whose high seas European expeditions arrive at. */
 export type EntrySide = 'east' | 'west';
 
-export function generateMap(rng: { rng: number }, size: MapSize): GeneratedWorld {
+/** `peoples` are the scenario's peoples, north to south: each gets a band of the map. */
+export function generateMap(rng: { rng: number }, size: MapSize, peoples: readonly TribeId[] = TRIBE_ORDER): GeneratedWorld {
   const { width, height } = MAP_SIZES[size];
   const land = octaves(rng, width, height, [9, 4, 2]);
   const heat = octaves(rng, width, height, [7, 3]);
@@ -123,7 +124,7 @@ export function generateMap(rng: { rng: number }, size: MapSize): GeneratedWorld
   // the world (bonuses, rumours, settlements) stays what the seed has always made.
   generateRivers({ rng: (rng.rng ^ 0x2c1b3c6d) | 0 }, map, elev, wet);
   sprinkleExtras(rng, map);
-  const settlements = placeSettlements(rng, tiles, width, height);
+  const settlements = placeSettlements(rng, tiles, width, height, peoples);
   for (const st of settlements) {
     const tile = tiles[idx(st.x, st.y)];
     delete tile.lcr;
@@ -184,7 +185,7 @@ export function newSettlement(rng: { rng: number }, id: string, tribe: TribeId, 
   };
 }
 
-function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, height: number): Settlement[] {
+function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, height: number, peoples: readonly TribeId[]): Settlement[] {
   const candidates: { x: number; y: number }[] = [];
   for (let y = 2; y < height - 2; y++) {
     for (let x = 0; x < width; x++) {
@@ -203,8 +204,8 @@ function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, he
   for (const c of candidates) {
     if (placed.length >= target) break;
     if (placed.some((p) => Math.max(Math.abs(p.x - c.x), Math.abs(p.y - c.y)) < 4)) continue;
-    const band = Math.min(TRIBE_ORDER.length - 1, Math.floor(((c.y - 2) / (height - 4)) * TRIBE_ORDER.length));
-    const tribe = TRIBE_ORDER[band];
+    const band = Math.min(peoples.length - 1, Math.floor(((c.y - 2) / (height - 4)) * peoples.length));
+    const tribe = peoples[band];
     const capital = !capitals.has(tribe);
     capitals.add(tribe);
     placed.push(newSettlement(rng, `s${placed.length + 1}`, tribe, c.x, c.y, capital));

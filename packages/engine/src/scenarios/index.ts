@@ -5,11 +5,15 @@
  * are unchanged. There is no "current scenario": code that needs one reads `scenarioOf(s)` (Q8).
  */
 import { SaveVersionError } from '../errors.js';
-import type { NationId } from '../rules/nations.js';
+import type { BuildingKind } from '../rules/buildings.js';
+import type { FatherCategory, FatherId } from '../rules/fathers.js';
+import type { GoodId } from '../rules/goods.js';
+import type { NationId, TribeId } from '../rules/nations.js';
+import { COLONY_BUILDS, IMMIGRANT_WEIGHTS, PURCHASABLE, TRAINABLE, type UnitTypeId } from '../rules/units.js';
 import type { GameConfig, GameState } from '../types.js';
 import { AMERICAS } from './americas.js';
 import type { Calendar } from './calendar.js';
-import type { NationEntry, Rivals, Scenario } from './types.js';
+import type { NationEntry, Rivals, Scenario, ScenarioAi } from './types.js';
 
 export * from './types.js';
 export * from './calendar.js';
@@ -46,6 +50,75 @@ export function scenarioOf(s: { config: Pick<GameConfig, 'scenario'> }): Scenari
 /** The calendar a game is played by (scenarios/calendar.ts). */
 export function calendarOf(s: { config: Pick<GameConfig, 'scenario'> }): Calendar {
   return scenarioOf(s).calendar;
+}
+
+// ---- Selections: what is in play (step 3) ----
+// The engine iterates these instead of the catalogue's global lists. Each keeps the catalogue's
+// order where the scenario does not set one, so the Americas iterate exactly as before.
+
+type HasScenario = { config: Pick<GameConfig, 'scenario'> };
+
+/** Goods in play, in the order of keys in markets and warehouses. */
+export function goodsOf(s: HasScenario): readonly GoodId[] {
+  return scenarioOf(s).goods;
+}
+
+/** Peoples in play, north to south. */
+export function peoplesOf(s: HasScenario): readonly TribeId[] {
+  return scenarioOf(s).peoples.ids;
+}
+
+/** Goods native settlements produce for trade. */
+export function nativeProduceOf(s: HasScenario): readonly GoodId[] {
+  return scenarioOf(s).peoples.produce;
+}
+
+/** Buildings in play, in production order. */
+export function buildingsOf(s: HasScenario): readonly BuildingKind[] {
+  return scenarioOf(s).buildings;
+}
+
+/** The scenario's council categories and members (catalogue order). */
+export function councilOf(s: HasScenario): { categories: readonly FatherCategory[]; members: readonly FatherId[] } {
+  return scenarioOf(s).council;
+}
+
+/** The computer players' goods lists. */
+export function aiGoodsOf(s: HasScenario): ScenarioAi['goods'] {
+  return scenarioOf(s).ai.goods;
+}
+
+/** The catalogue's unit lists cut down to a scenario's units, worked out once per scenario. */
+interface UnitSelection {
+  units: ReadonlySet<UnitTypeId>;
+  /** Colonists that can be trained in Europe. */
+  trainable: readonly UnitTypeId[];
+  /** Ships and artillery that can be bought in Europe. */
+  purchasable: readonly UnitTypeId[];
+  /** Units a colony can build. */
+  colonyBuilds: readonly UnitTypeId[];
+  /** The weighted pool of immigrants. */
+  immigrants: readonly [UnitTypeId, number][];
+}
+
+const UNIT_SELECTIONS = new WeakMap<Scenario, UnitSelection>();
+
+/** Unit types in play and the offers made from them (Europe, colony builds, immigrants). */
+export function unitsOf(s: HasScenario): UnitSelection {
+  const scenario = scenarioOf(s);
+  let sel = UNIT_SELECTIONS.get(scenario);
+  if (!sel) {
+    const units = new Set(scenario.units);
+    sel = {
+      units,
+      trainable: TRAINABLE.filter((t) => units.has(t)),
+      purchasable: PURCHASABLE.filter((t) => units.has(t)),
+      colonyBuilds: (Object.keys(COLONY_BUILDS) as UnitTypeId[]).filter((t) => units.has(t)),
+      immigrants: IMMIGRANT_WEIGHTS.filter(([t]) => units.has(t)),
+    };
+    UNIT_SELECTIONS.set(scenario, sel);
+  }
+  return sel;
 }
 
 /** The nations a game's setup may choose from: the chosen set, or the scenario's default. */

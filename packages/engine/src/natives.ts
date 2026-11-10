@@ -8,7 +8,7 @@ import { noteGoods, noteHistory } from './history.js';
 import { cargoRoomFor, colonyWorkers, createUnit, distance, message, player, reveal, tileAt, unitName, unitPosition } from './queries.js';
 import { random, randInt } from './rng.js';
 import { noteTrade } from './stats.js';
-import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
+import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { NATIONS, TRIBES, type NationId, type TribeId } from './rules/nations.js';
 import { difficultyRules } from './rules/difficulty.js';
 import {
@@ -18,12 +18,12 @@ import {
   INCITE_PRICE,
   INCITE_TENSION,
   INCITE_TENSION_OTHERS,
-  NATIVE_PRODUCE,
   TENSION,
 } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES } from './rules/units.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
+import { goodsOf, nativeProduceOf } from './scenarios/index.js';
 
 /**
  * The settlement next to a unit, checked for a visit. A wagon train or ship trading there may
@@ -122,7 +122,7 @@ export function tradeWithSettlement(s: GameState, unitId: string, settlementId: 
   const u = s.units[unitId];
   const st = adjacentSettlement(s, u, settlementId, 'sold');
   const cargo = u.cargo ?? {};
-  const chosen = good ?? GOODS.filter((g) => (cargo[g] ?? 0) > 0).sort((a, b) => nativeOffer(st, b, cargo[b]!) - nativeOffer(st, a, cargo[a]!))[0];
+  const chosen = good ?? goodsOf(s).filter((g) => (cargo[g] ?? 0) > 0).sort((a, b) => nativeOffer(st, b, cargo[b]!) - nativeOffer(st, a, cargo[a]!))[0];
   if (!chosen || !(cargo[chosen] ?? 0)) fail('There is nothing to trade.');
   const amount = Math.min(100, cargo[chosen]!);
   const gold = nativeOffer(st, chosen, amount);
@@ -155,7 +155,7 @@ export function buyFromSettlement(s: GameState, unitId: string, settlementId: st
   const u = s.units[unitId];
   if (!u || !['wagon', 'ship'].includes(UNIT_TYPES[u.type].kind) || UNIT_TYPES[u.type].cargo <= 0) fail('Only wagon trains and ships can buy goods.');
   const st = adjacentSettlement(s, u, settlementId, 'bought');
-  if (!NATIVE_PRODUCE.includes(good)) fail(`The ${TRIBES[st.tribe].name} do not sell ${GOOD_DEFS[good].name.toLowerCase()}.`);
+  if (!nativeProduceOf(s).includes(good)) fail(`The ${TRIBES[st.tribe].name} do not sell ${GOOD_DEFS[good].name.toLowerCase()}.`);
   const stock = st.goods?.[good] ?? 0;
   const n = Math.min(amount, stock, cargoRoomFor(s, u, good));
   if (stock <= 0) fail(`The ${settlementName(st)} has no ${GOOD_DEFS[good].name.toLowerCase()} to sell.`);

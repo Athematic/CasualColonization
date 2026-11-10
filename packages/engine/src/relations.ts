@@ -13,8 +13,7 @@ import { buyPrice, sellPrice } from './europe.js';
 import { noteTrade } from './stats.js';
 import { cargoRoomFor, colonyAt, distance, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
 import { random } from './rng.js';
-import { calendarOf, turnAfterYears, yearValue } from './scenarios/index.js';
-import { GOODS } from './rules/goods.js';
+import { calendarOf, goodsOf, turnAfterYears, yearValue } from './scenarios/index.js';
 import { HOME_PORTS, NATIONS, type NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import type { GameState, ProposalKind, Relation, RouteCargo, Unit } from './types.js';
@@ -465,7 +464,7 @@ function seizeGoods(s: GameState, by: NationId, from: NationId): string {
     const colony = colonies.filter((c) => distance(c.x, c.y, x, y) <= 1).sort((p, q) => distance(p.x, p.y, x, y) - distance(q.x, q.y, x, y))[0];
     if (!colony) continue;
     let taken = 0;
-    for (const g of GOODS) {
+    for (const g of goodsOf(s)) {
       const n = u.cargo[g] ?? 0;
       if (n <= 0) continue;
       const room = g === 'food' ? n : Math.max(0, warehouseCapacity(colony) - colony.goods[g]);
@@ -575,7 +574,7 @@ export function tradeAtForeignColony(
     out.bought += n;
     out.spent += gold;
   }
-  for (const g of GOODS) if (u.cargo[g] === 0) delete u.cargo[g];
+  for (const g of goodsOf(s)) if (u.cargo[g] === 0) delete u.cargo[g];
   if (out.sold) track(me.id, 'trade:foreign stop sales', out.sold);
   if (out.bought) track(me.id, 'trade:foreign stop purchases', out.bought);
   return out;

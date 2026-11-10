@@ -74,6 +74,7 @@ export const PRODUCT_NAMES: Record<ProductId, string> = {
   crosses: 'Crosses',
 } as Record<ProductId, string>;
 
-export function emptyGoods(): Record<GoodId, number> {
-  return Object.fromEntries(GOODS.map((id) => [id, 0])) as Record<GoodId, number>;
+/** A warehouse with none of each good in play (the scenario's goods; all of them by default). */
+export function emptyGoods(goods: readonly GoodId[] = GOODS): Record<GoodId, number> {
+  return Object.fromEntries(goods.map((id) => [id, 0])) as Record<GoodId, number>;
 }
