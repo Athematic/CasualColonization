@@ -1,4 +1,4 @@
-import { calendarOf, createGame, term, deserialize, gameCodeFromSearch, searchWithoutGameCode, formatDate, Game, handOver, headStartConfig, playUntil, serialize, type GameConfig, type GameState } from '@cc/engine';
+import { calendarOf, term, deserialize, gameCodeFromSearch, searchWithoutGameCode, formatDate, Game, headStartConfig, serialize, type GameConfig, type GameState } from '@cc/engine';
 import { h } from './dom.js';
 import { App } from './app.js';
 import { savedStyle, setStyle } from './styles.js';
@@ -7,6 +7,7 @@ import { landingScreen } from './ui/landing.js';
 import { newGameScreen } from './ui/newgame.js';
 import { pickSaveFile } from './save.js';
 import { toast } from './ui/dialogs.js';
+import { JobCancelled, turnRunner } from './turns/runner.js';
 
 const host = document.getElementById('app')!;
 let app: App | null = null;
@@ -59,37 +60,54 @@ function startGame(config: GameConfig, head?: HeadStart): void {
     run(Game.create(auto));
     return;
   }
-  skipAhead(createGame(auto), head.turn);
+  skipAhead(auto, head.turn);
 }
 
-/** Plays the head start without drawing the map, a few rounds at a time so the page stays responsive. */
-function skipAhead(state: GameState, turn: number): void {
+/**
+ * Plays the head start without drawing the map: in the engine worker when there is one (the page
+ * stays responsive), otherwise on the page a slice at a time.
+ */
+function skipAhead(config: GameConfig, turn: number): void {
   let cancelled = false;
+  const cal = calendarOf({ config });
   const bar = h('span', { style: 'width:0%' });
-  const label = h('p', null, `Preparing ${term(state, 'colonyLand')}…`);
+  const meter = h('div', { class: 'bar', role: 'progressbar', 'aria-label': 'Head start progress', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': 0 }, bar);
+  const label = h('p', { 'aria-live': 'polite' }, `Preparing ${term({ config }, 'colonyLand')}…`);
+  const started = performance.now();
   host.replaceChildren(
     h('main', { class: 'menu-screen' },
       h('div', { class: 'menu-card' },
         h('h1', null, 'Head start'),
-        h('p', { class: 'muted' }, `The computer is playing your nation until ${formatDate(turn, calendarOf(state))}.`),
-        h('div', { class: 'bar', role: 'progressbar', 'aria-label': 'Head start progress' }, bar),
+        h('p', { class: 'muted' }, `The computer is playing your nation until ${formatDate(turn, cal)}.`),
+        meter,
         label,
-        h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => { cancelled = true; showLanding(); } }, 'Cancel')))),
+        h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => { cancelled = true; turnRunner.cancel(); showLanding(); } }, 'Cancel')))),
   );
-  const step = () => {
-    if (cancelled) return;
-    const done = playUntil(state, turn, 3);
-    bar.style.width = `${Math.min(100, Math.round((state.turn / turn) * 100))}%`;
-    label.textContent = `${formatDate(state.turn, calendarOf(state))} of ${formatDate(turn, calendarOf(state))}`;
-    if (!done) {
-      setTimeout(step, 0);
-      return;
-    }
-    handOver(state);
-    resumeGame(state);
-  };
-  setTimeout(step, 30);
+  let shown = -1;
+  turnRunner
+    .run({ type: 'headStart', config, turn }, (p) => {
+      if (cancelled || p.turn === shown) return;
+      shown = p.turn;
+      const pct = Math.min(100, Math.round((p.turn / turn) * 100));
+      bar.style.width = `${pct}%`;
+      meter.setAttribute('aria-valuenow', String(pct));
+      label.textContent = `${formatDate(p.turn, cal)} of ${formatDate(turn, cal)} · turn ${p.turn} of ${turn}`;
+    })
+    .then(({ state }) => {
+      if (cancelled) return;
+      lastHeadStartMs = performance.now() - started;
+      resumeGame(state);
+    })
+    .catch((err) => {
+      if (cancelled || err instanceof JobCancelled) return;
+      console.error(err);
+      toast('The head start failed. Please try again.', 'error');
+      showMenu();
+    });
 }
+
+/** How long the last skipped head start took (for play-tests and the debug handle). */
+let lastHeadStartMs = 0;
 
 function resumeGame(state: GameState): void {
   run(new Game(state));
@@ -101,7 +119,11 @@ function run(game: Game): void {
 }
 
 // Debug handle for the browser console and automated play-tests.
-(window as unknown as { cc: object }).cc = { get app() { return app; } };
+(window as unknown as { cc: object }).cc = {
+  get app() { return app; },
+  /** Whether computer turns run in the engine worker, and how long the last skipped head start took. */
+  get turns() { return { worker: turnRunner.usesWorker, lastHeadStartMs }; },
+};
 
 interface HotHook {
   data?: { save?: string | null };

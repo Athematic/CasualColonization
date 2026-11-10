@@ -123,7 +123,7 @@ export class Sidebar {
         onclick: () => void app.endTurn(),
         disabled: !myTurn,
         title: 'End turn (Enter)',
-      }, 'End turn'),
+      }, app.busy ? 'Computer players moving…' : 'End turn'),
     );
 
     this.body.append(this.reports(), this.menu());
@@ -162,11 +162,11 @@ export class Sidebar {
       head ? h('div', null,
         h('p', { class: 'small' }, `The computer plays ${head.humans.map((n) => nationTitle(app.state, n)).join(' and ')} for you until ${formatDate(head.turn, calendarOf(s))}.`),
         h('div', { class: 'bar', role: 'progressbar', 'aria-valuenow': progress, 'aria-valuemin': 0, 'aria-valuemax': 100 }, h('span', { style: `width:${progress}%` })),
-        h('button', { class: 'btn small', onclick: () => app.takeOver() }, 'Take over now')) : null,
+        h('button', { class: 'btn small', onclick: () => void app.takeOver() }, 'Take over now')) : null,
       h('div', { class: 'row' },
         h('button', { class: 'btn primary', disabled: !!over, onclick: () => app.setAutoplay(!app.autoplay), title: 'Space' }, app.autoplay ? 'Pause' : 'Play'),
-        h('button', { class: 'btn', disabled: !!over || app.autoplay, onclick: () => app.observeTurns(1), title: 'Enter' }, '+1 turn'),
-        h('button', { class: 'btn', disabled: !!over || app.autoplay, onclick: () => app.observeTurns(10) }, '+10'),
+        h('button', { class: 'btn', disabled: !!over || app.autoplay || app.busy, onclick: () => void app.observeTurns(1), title: 'Enter' }, '+1 turn'),
+        h('button', { class: 'btn', disabled: !!over || app.autoplay || app.busy, onclick: () => void app.observeTurns(10) }, '+10'),
         h('button', { class: 'btn', onclick: () => app.openProgress(), title: 'Progress graphs (H)' }, 'Graphs'),
         h('button', { class: 'btn', onclick: () => app.openReports(), title: 'Advisor reports (A, or F1–F8)' }, 'Reports')),
       h('div', { class: 'row' }, h('label', { class: 'field' }, h('span', null, 'Speed'), speed), h('label', { class: 'field' }, h('span', null, 'Show'), watch)),
