@@ -30,7 +30,15 @@ pwsh ./tools/image-gen/Generate-Images.ps1 -Only 'units/free-colonist*' -Quality
 [CmdletBinding()]
 param(
     # Which prompt document(s) to use.
-    [ValidateSet('sprites', 'boxart', 'all')][string]$Doc = 'all',
+    # all = sprites + boxart (comics are never part of it unless you add -IncludeComics).
+    [ValidateSet('sprites', 'boxart', 'comics', 'all')][string]$Doc = 'all',
+    # Comics (-Doc comics): slug patterns, e.g. 'a-landfall' or 'n-*' (no wildcard = matches anywhere in the slug).
+    [string[]]$Comic,
+    # page: one 1024x1536 album page per script page (default). panel: one image per panel (about 900 in all).
+    # cast: one 1536x1024 character model sheet per comic.
+    [ValidateSet('page', 'panel', 'cast')][string]$ComicUnit = 'page',
+    # Add the comics to -Doc all.
+    [switch]$IncludeComics,
     # Wildcard patterns matched against the job id ("units/caravel__none") or key ("sprites/units/caravel__none").
     # A pattern without * or ? matches as a substring. Comma-separate or repeat for several.
     [string[]]$Only,
@@ -84,6 +92,9 @@ param(
     # Override the prompt documents (mainly for tests).
     [string]$SpriteDoc,
     [string]$BoxArtDoc,
+    # docs/COMIC_PROMPTS.md (style, page, panel and cast blocks) and the folder of scripts, docs/comics.
+    [string]$ComicPromptDoc,
+    [string]$ComicsDir,
     # The thumbnail prompt blocks (only read for -Variant thumb or both). Default: tools/image-gen/thumb-prompts.md
     [string]$ThumbPromptFile
 )
@@ -94,6 +105,8 @@ Import-Module (Join-Path $PSScriptRoot 'ImageGen.psm1') -Force
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if (-not $SpriteDoc) { $SpriteDoc = Join-Path $repoRoot 'docs/SPRITE_PROMPTS.md' }
 if (-not $BoxArtDoc) { $BoxArtDoc = Join-Path $repoRoot 'docs/BOX_ART_PROMPTS.md' }
+if (-not $ComicPromptDoc) { $ComicPromptDoc = Join-Path $repoRoot 'docs/COMIC_PROMPTS.md' }
+if (-not $ComicsDir) { $ComicsDir = Join-Path $repoRoot 'docs/comics' }
 if (-not $ThumbPromptFile) { $ThumbPromptFile = Join-Path $PSScriptRoot 'thumb-prompts.md' }
 if (-not $OutDir) { $OutDir = Join-Path $PSScriptRoot 'output' }
 $OutDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutDir)
@@ -116,16 +129,29 @@ if ($Variant -ne 'full') {
     }
 }
 $jobs = Get-ImageJobs -SpriteDoc $SpriteDoc -BoxArtDoc $BoxArtDoc -Doc $Doc -Only $Only -Variants $Variants -IncludeTitle:$IncludeTitle `
-    -Variant $Variant -ThumbPrompts $thumbPrompts -DocumentOrder:$DocumentOrder
-$byDoc = foreach ($d in 'sprites', 'boxart', 'thumbs') {
+    -Variant $Variant -ThumbPrompts $thumbPrompts -DocumentOrder:$DocumentOrder `
+    -ComicPromptDoc $ComicPromptDoc -ComicsDir $ComicsDir -Comic $Comic -ComicUnit $ComicUnit -IncludeComics:$IncludeComics
+$byDoc = foreach ($d in 'sprites', 'boxart', 'thumbs', 'comics') {
     $n = @($jobs | Where-Object Doc -eq $d).Count
     if ($n) { "${d}: $n" }
 }
 $countText = if ($byDoc) { ($byDoc -join ', ') } else { 'none' }
+$comicJobs = @($jobs | Where-Object Doc -eq 'comics')
+$comicNote = $null
+if ($comicJobs.Count -gt 0) {
+    $nCast = @($comicJobs | Where-Object Category -eq 'comic-cast').Count
+    $nPage = @($comicJobs | Where-Object Category -eq 'comic-page').Count
+    $nPanel = @($comicJobs | Where-Object Category -eq 'comic-panel').Count
+    $totalPanels = 0
+    foreach ($sp in (Get-ComicScriptPaths -ComicsDir $ComicsDir)) { foreach ($pg in (Read-ComicScript -Path $sp).Pages) { $totalPanels += @($pg.Panels).Count } }
+    $comicNote = "COMICS: $nCast cast sheets, $nPage pages, $nPanel panels selected. A full comic set is 15 cast sheets + 180 pages (195 images); " +
+        "-ComicUnit panel draws one image per panel, $totalPanels images for all 15 comics, about 5 times the cost of pages."
+}
 
 if ($List) {
     $jobs | Select-Object Key, Size, Background, Section | Format-Table -AutoSize -Wrap | Out-String -Width 240 | Write-Output
     Write-Output "Jobs: $($jobs.Count) ($countText)"
+    if ($comicNote) { Write-Output $comicNote }
     exit 0
 }
 
@@ -164,6 +190,7 @@ if ($DryRun) {
     }
     Write-Output ('=' * 100)
     Write-Output "Dry run: $($jobs.Count) jobs ($countText); $($toRun.Count) would call the API. No request was sent."
+    if ($comicNote) { Write-Output $comicNote }
     exit 0
 }
 
@@ -191,6 +218,7 @@ if ($transparentCount -gt 0 -and $Model -match '^gpt-image-2(-\d{4}-\d{2}-\d{2})
     Write-Warning "$Model only had transparent backgrounds in preview; if requests fail or come back opaque, use -Model gpt-image-2.5-flare or gpt-image-1.5."
 }
 $estimate = Get-CostEstimate -Jobs ($toRun | ForEach-Object Job) -Quality $Quality
+if ($comicNote) { Write-Host $comicNote -ForegroundColor Yellow }
 Write-Host ("This run will make {0} image generation calls (one image each; retries for rate limits and server errors come on top)." -f $toRun.Count) -ForegroundColor Cyan
 Write-Host ("Model {0}, quality {1}. Rough cost estimate: about `${2:0.00} (check current OpenAI pricing)." -f $Model, $Quality, $estimate)
 if (-not $Yes) {
