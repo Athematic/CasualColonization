@@ -94,8 +94,14 @@ const isCargoShip = (u: Unit) => isShip(u) && UNIT_TYPES[u.type].offence === 0 &
 /** Inland colonies a wagon train route already serves. */
 function wagonServed(s: GameState, p: Player): Set<string> {
   const out = new Set<string>();
+  // The routes a wagon train follows, in one pass over the units (as routeUnits per route would find).
+  const carted = new Set<string>();
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (u.route && isWagon(u)) carted.add(u.route.id);
+  }
   for (const r of routesOf(s, p.id)) {
-    if (!routeUnits(s, r.id).some(isWagon)) continue;
+    if (!carted.has(r.id)) continue;
     for (const st of r.stops) {
       const c = s.colonies[st.at];
       if (c && !isCoastal(s, c.x, c.y)) out.add(c.id);
@@ -105,8 +111,10 @@ function wagonServed(s: GameState, p: Player): Set<string> {
 }
 
 /** Inland colonies with goods to carry away. */
-function needsCarting(s: GameState, c: Colony, report: ColonyReport = colonyReport(s, c)): boolean {
+function needsCarting(s: GameState, c: Colony, given?: ColonyReport): boolean {
   if (isCoastal(s, c.x, c.y)) return false;
+  // The report only for an inland colony: most are on the coast.
+  const report = given ?? colonyReport(s, c);
   const surplus = tradeGoods(s).reduce((n, g) => n + Math.max(0, report.net[g]), 0);
   return surplus >= 3 || overflowSoon(s, c, 8, report) > 0;
 }
@@ -149,6 +157,19 @@ function cartingNeeds(s: GameState, p: Player): { served: Set<string>; waiting: 
   return entry;
 }
 
+/** The units following each route (as routeUnits gives them, in the units' order). */
+function unitsByRoute(s: GameState): Map<string, Unit[]> {
+  const out = new Map<string, Unit[]>();
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (!u.route) continue;
+    const list = out.get(u.route.id);
+    if (list) list.push(u);
+    else out.set(u.route.id, [u]);
+  }
+  return out;
+}
+
 /** Plays the nation's logistics for one turn. */
 export function manageLogistics(s: GameState, p: Player): void {
   const review = s.turn % REVIEW_EVERY === 0;
@@ -156,8 +177,11 @@ export function manageLogistics(s: GameState, p: Player): void {
   if (p.independence !== 'none') {
     for (const r of routesOf(s, p.id)) if (r.stops.some((st) => st.at === EUROPE_STOP)) deleteRoute(s, p.id, r.id);
   }
+  // Outside a review, each route's units come from one pass over the units: deleting a route
+  // without units changes no other route's. A review can reassign units, so it asks per route.
+  const following = review ? undefined : unitsByRoute(s);
   for (const r of routesOf(s, p.id)) {
-    const users = routeUnits(s, r.id);
+    const users = following ? (following.get(r.id) ?? []) : routeUnits(s, r.id);
     if (!users.length) {
       deleteRoute(s, p.id, r.id);
       continue;
