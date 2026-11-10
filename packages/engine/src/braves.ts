@@ -56,6 +56,7 @@ import { TERRAIN } from './rules/terrain.js';
 import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from './types.js';
 import { difficultyOf, goodsOf, nativeProduceOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
+import { removeUnit } from './unitindex.js';
 
 /** The kind of a settlement in its game's scenario (camp, village, city…), with its numbers. */
 export function settlementKind(s: GameState, st: Settlement): SettlementKindDef {
@@ -74,7 +75,13 @@ export function maxBraves(s: GameState, st: Settlement): number {
 /** The braves standing on a tile. */
 export function bravesAt(s: GameState, x: number, y: number): Brave[] {
   const out: Brave[] = [];
-  for (const b of Object.values(s.braves ?? {})) if (b.x === x && b.y === y) out.push(b);
+  const braves = s.braves;
+  if (!braves) return out;
+  // A plain loop visits them in Object.values order without building the array.
+  for (const id in braves) {
+    const b = braves[id];
+    if (b.x === x && b.y === y) out.push(b);
+  }
   return out;
 }
 
@@ -668,7 +675,7 @@ function hurtArtillery(s: GameState, u: Unit): string {
     u.type = 'damagedArtillery';
     return `${name} is damaged`;
   }
-  delete s.units[u.id];
+  removeUnit(s, u.id);
   return `${name} is destroyed`;
 }
 
@@ -733,7 +740,7 @@ function pillage(s: GameState, b: Brave, c: Colony): void {
   }
   if (r >= 0.9 && workers.length > 1) {
     const victim = workers[workers.length - 1];
-    delete s.units[victim.id];
+    removeUnit(s, victim.id);
     track(c.owner, 'natives:colonist killed');
     message(s, `The ${tribe} raid ${c.name} and kill a ${unitName(victim)}.`, c.owner, c);
     return;
@@ -769,8 +776,8 @@ function attackUnit(s: GameState, b: Brave, target: Unit): void {
     return;
   }
   const name = unitName(defender);
-  for (const o of Object.values(s.units)) if (o.loc.kind === 'carrier' && o.loc.carrierId === defender.id) delete s.units[o.id];
-  delete s.units[defender.id];
+  for (const o of Object.values(s.units)) if (o.loc.kind === 'carrier' && o.loc.carrierId === defender.id) removeUnit(s, o.id);
+  removeUnit(s, defender.id);
   track(defender.owner, 'natives:unit killed');
   message(s, `The ${tribe} attack and kill your ${name}.`, defender.owner, at);
 }

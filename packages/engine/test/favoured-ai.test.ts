@@ -30,6 +30,8 @@ import {
   type GameState,
   type GoodId,
   type NationId,
+  setUnitLoc,
+  removeUnit,
 } from '../src/index.js';
 import { runAi } from '../src/ai/index.js';
 import { choosePort, exportShare, foreignAffairs, refusesTax, sellHere, triangleBuy, WAR_AFTER_CANCEL } from '../src/ai/foreign.js';
@@ -72,7 +74,7 @@ function neighbours(s: GameState, skip: Colony[] = []): [Colony, Colony] {
           if (Math.max(Math.abs(dx), Math.abs(dy)) < 3 || !ok(bx, by)) continue;
           const probe = createUnit(s, 'england', 'wagonTrain', { kind: 'map', x, y });
           const path = findPath(s, probe, bx, by);
-          delete s.units[probe.id];
+          removeUnit(s, probe.id);
           if (!path || path.length > 7) continue;
           return [found(s, 'england', x, y, 'Plymouth'), found(s, 'france', bx, by, 'Québec')];
         }
@@ -310,10 +312,10 @@ describe('triangle trading', () => {
     expect(fr.aiMemory?.triangle?.[ship.id]).toMatchObject({ good: 'cigars', port: 'england' });
     // It keeps them in the port it bought them in, and heads for the dearer one.
     expect(sellHere(s, fr, ship, 'cigars')).toBe(false);
-    ship.loc = { kind: 'map', x: 0, y: 0 };
+    setUnitLoc(s, ship, { kind: 'map', x: 0, y: 0 });
     expect(choosePort(s, fr, ship)).toBe('england');
     // There it sells them.
-    ship.loc = { kind: 'europe', port: 'england' };
+    setUnitLoc(s, ship, { kind: 'europe', port: 'england' });
     const gold = fr.gold;
     const seen = counting(() => runAi(s, fr));
     expect(seen['trade:triangle trade']).toBe(1);

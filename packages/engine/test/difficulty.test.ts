@@ -26,6 +26,7 @@ import {
   type GameConfig,
   type GameState,
   type Player,
+  removeUnit,
 } from '../src/index.js';
 import { resolveRumour } from '../src/rumours.js';
 
@@ -207,7 +208,7 @@ describe('difficulty levels', () => {
         const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', ...at });
         resolveRumour(s, u);
         if (!s.units[u.id]) n++;
-        else delete s.units[u.id];
+        else removeUnit(s, u.id);
       }
       return n;
     };

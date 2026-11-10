@@ -91,6 +91,8 @@ Measure commit `origin/claude/0.10-faster-turns` as it is when the job starts. U
 
 Simon or the cloud session names a commit, usually the head of `claude/0.10-faster-turns` after a speed-up. Do job 0 on that commit, then repeat job 1's steps 1–4 on it. Add a column comparing it with the baseline (seconds and percentage).
 
+Since the first round of 0.10, `npm run tournament` plays its games in parallel (the cores less one); add `--jobs 1` to time it serially as in job 1, and report both when a tournament is timed.
+
 A speed-up that changes game outcomes re-records the hashes on the branch. Its commit message says so, and `bench --verify` then has to be "same" against the new hashes. If the job says the change alters outcomes, also run step 5's tournaments and set their tables side by side with the baseline's.
 
 ## Job 3: release check (at the end of 0.10)

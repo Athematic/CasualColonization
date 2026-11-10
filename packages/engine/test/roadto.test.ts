@@ -10,6 +10,7 @@ import {
   unitPosition,
   type GameState,
   type Unit,
+  removeUnit,
 } from '../src/index.js';
 import { unitsAwaitingOrders } from '../src/turn.js';
 
@@ -26,7 +27,7 @@ function strip(len = 5, seed = 7): { s: GameState; u: Unit } {
       s.map.tiles[i] = y === Y && x >= X0 && x < X0 + len ? { t: 'plains' } : { t: 'ocean' };
     }
   }
-  for (const k of Object.keys(s.units)) delete s.units[k];
+  for (const k of Object.keys(s.units)) removeUnit(s, k);
   const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', x: X0, y: Y });
   u.role = 'pioneer';
   u.tools = 100;

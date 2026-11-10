@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COLONY_NAMES, createGame, createUnit, foundColony, nextColonyName, NATION_ORDER, NATIONS } from '../src/index.js';
+import { COLONY_NAMES, createGame, createUnit, foundColony, nextColonyName, NATION_ORDER, NATIONS, removeUnit } from '../src/index.js';
 
 describe('colony names', () => {
   it('gives every nation at least 100 distinct names', () => {
@@ -31,7 +31,7 @@ describe('colony names', () => {
           seen.add(c.name);
           founded++;
         } catch {
-          delete s.units[u.id];
+          removeUnit(s, u.id);
         }
       }
     }

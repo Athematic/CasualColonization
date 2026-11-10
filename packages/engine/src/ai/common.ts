@@ -157,7 +157,22 @@ export function nearestColony(s: GameState, p: Player, x: number, y: number, coa
 }
 
 export function ownColonies(s: GameState, p: Player): Colony[] {
-  return Object.values(s.colonies).filter((c) => c.owner === p.id);
+  const out: Colony[] = [];
+  for (const id in s.colonies) {
+    const c = s.colonies[id];
+    if (c.owner === p.id) out.push(c);
+  }
+  return out;
+}
+
+/** How many of the player's units pass the test (a plain loop, in record order). */
+export function countUnits(s: GameState, p: Player, test: (u: Unit) => boolean): number {
+  let n = 0;
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (u.owner === p.id && test(u)) n++;
+  }
+  return n;
 }
 
 export function guardColony(s: GameState, p: Player, u: Unit): void {

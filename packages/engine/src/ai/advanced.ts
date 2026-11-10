@@ -49,7 +49,7 @@ import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
 import type { GoodId, ProductId } from '../rules/goods.js';
 import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import type { BuildTarget, Colony, GameState, Job, Player, Unit } from '../types.js';
-import { aiFight, bestColonySite, boardRescue, disembarkAll, fetchStranded, keenSiteScore, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
+import { aiFight, bestColonySite, boardRescue, countUnits, disembarkAll, fetchStranded, keenSiteScore, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
 import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
@@ -1144,7 +1144,7 @@ function privateer(s: GameState, p: Player, ship: Unit): boolean {
 // Europe
 
 function countOwned(s: GameState, p: Player, test: (u: Unit) => boolean): number {
-  return Object.values(s.units).filter((u) => u.owner === p.id && test(u)).length;
+  return countUnits(s, p, test);
 }
 
 /** Muskets a colony stocks while arming for independence, before veterans and artillery are bought. */

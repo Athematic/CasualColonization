@@ -35,6 +35,7 @@ import { SURRENDER_CHANCE, SURRENDER_TRIBUTE } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
 import type { Colony, GameState, Unit } from './types.js';
+import { setUnitLoc, removeUnit } from './unitindex.js';
 
 function isArmed(u: Unit): boolean {
   return u.role === 'soldier' || u.role === 'dragoon';
@@ -142,7 +143,7 @@ export function declareWar(s: GameState, a: string, b: string): void {
 /** Sends a beaten ship to the nearest drydock, or home to Europe, for repairs. Cargo and passengers are lost. */
 function damageShip(s: GameState, ship: Unit): string {
   const name = unitName(ship);
-  for (const p of unitsAboard(s, ship)) delete s.units[p.id];
+  for (const p of unitsAboard(s, ship)) removeUnit(s, p.id);
   ship.cargo = {};
   delete ship.dest;
   const pos = unitPosition(s, ship);
@@ -150,16 +151,16 @@ function damageShip(s: GameState, ship: Unit): string {
     .filter((c) => c.owner === ship.owner && c.buildings.docks >= 2)
     .sort((a, b) => (pos ? distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y) : 0))[0];
   if (drydock) {
-    ship.loc = { kind: 'map', x: drydock.x, y: drydock.y };
+    setUnitLoc(s, ship, { kind: 'map', x: drydock.x, y: drydock.y });
     ship.repair = 4;
     return `${name} is damaged and limps to ${drydock.name} for repairs`;
   }
   if (player(s, ship.owner).independence === 'none' && ship.owner !== 'crown') {
-    ship.loc = { kind: 'europe' };
+    setUnitLoc(s, ship, { kind: 'europe' });
     ship.repair = 6;
     return `${name} is damaged and returns to ${term(s, 'homeland')} for repairs`;
   }
-  delete s.units[ship.id];
+  removeUnit(s, ship.id);
   return `${name} is sunk`;
 }
 
@@ -188,7 +189,7 @@ function demote(s: GameState, u: Unit, winner: Unit): string {
     if (u.role === 'soldier') {
       u.role = 'none';
       if (u.type === 'kingsRegular') {
-        delete s.units[u.id];
+        removeUnit(s, u.id);
         return `${name} is destroyed`;
       }
       return `${name} is disarmed`;
@@ -202,7 +203,7 @@ function demote(s: GameState, u: Unit, winner: Unit): string {
     delete u.roadTo;
     delete u.work;
     const pos = unitPosition(s, winner);
-    if (pos && u.loc.kind === 'map') u.loc = { kind: 'map', x: pos.x, y: pos.y };
+    if (pos && u.loc.kind === 'map') setUnitLoc(s, u, { kind: 'map', x: pos.x, y: pos.y });
     return `${name} is captured`;
   }
   if (def.kind === 'treasure' || def.kind === 'wagon') {
@@ -215,7 +216,7 @@ function demote(s: GameState, u: Unit, winner: Unit): string {
     u.state = 'active';
     return `${name} is damaged`;
   }
-  delete s.units[u.id];
+  removeUnit(s, u.id);
   return `${name} is destroyed`;
 }
 
@@ -373,7 +374,7 @@ function captureColony(s: GameState, attacker: Unit, colony: Colony): string {
     if (isShip(o)) damageShip(s, o);
     else o.owner = attacker.owner;
   }
-  if (attacker.loc.kind === 'map') attacker.loc = { kind: 'map', x: colony.x, y: colony.y };
+  if (attacker.loc.kind === 'map') setUnitLoc(s, attacker, { kind: 'map', x: colony.x, y: colony.y });
   const by = attacker.owner === 'crown' ? `${Term(s, 'royalTroops')}` : nationTitle(s, attacker.owner);
   noteHistory(s, 'captured', [attacker.owner, previous], `${by} capture${attacker.owner === 'crown' ? '' : 's'} ${colony.name} from ${nationOf(s, previous).name}.`, { secret: true, at: colony });
   return `${nationOf(s, attacker.owner).name} captures ${colony.name}!`;
@@ -526,7 +527,7 @@ export function cashTreasure(s: GameState, unitId: string): string {
   const afterFee = gross - fee;
   const net = afterFee - Math.floor((afterFee * p.tax) / 100);
   p.gold += net;
-  delete s.units[u.id];
+  removeUnit(s, u.id);
   track(u.owner, 'cmd:cashTreasure');
   const text = `${Term(s, 'crown')} carries the treasure to ${term(s, 'homeland')}${fee ? ` for half its value` : ''}: ${net} gold after tax.`;
   message(s, text, u.owner, colony);

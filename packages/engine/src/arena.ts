@@ -305,22 +305,45 @@ function royalStanding(s: GameState, p: Player, colonies: number): Pick<ArenaEnt
 /** Plays a series of games, rotating nations and seats so no level keeps the same advantage. */
 export function runArena(opts: ArenaOptions, onGame?: (entries: ArenaEntry[], game: number) => void): { entries: ArenaEntry[]; summary: ArenaSummary[] } {
   const entries: ArenaEntry[] = [];
+  for (const game of arenaGames(opts)) {
+    const rows = playArenaRound(opts, game);
+    entries.push(...rows);
+    onGame?.(rows, game.game);
+  }
+  return { entries, summary: summarise(entries) };
+}
+
+/** One game of an arena run: its number, seed and nations with their levels. */
+export interface ArenaGame {
+  game: number;
+  seed: number;
+  line: { nation: NationId; level: AiLevel }[];
+}
+
+/**
+ * The games an arena run plays, in order. Each can be played on its own (`playArenaRound`), so a
+ * tournament can play them in parallel and gather the rows in this order, as `runArena` does.
+ */
+export function arenaGames(opts: ArenaOptions): ArenaGame[] {
   const n = opts.levels.length;
   const set = nationSet(scenarioOf({ config: { scenario: opts.scenario } }), opts.rivals).map((e) => e.id);
   if (n < 1 || n > set.length) throw new Error(`An arena game needs between 1 and ${set.length} nations.`);
-  const setup = { scenario: opts.scenario, rivals: opts.rivals, playOn: opts.playOn };
+  const out: ArenaGame[] = [];
   for (let g = 0; g < opts.games; g++) {
     const seed = (opts.firstSeed ?? 1000) + g;
     const k = g % set.length;
     const nations = [...set.slice(k), ...set.slice(0, k)].slice(0, n);
-    const line = nations.map((nation, i) => ({ nation, level: opts.levels[(i + g) % n] }));
-    const { entries: game } = playArenaGame(seed, line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured, opts.events, !opts.noCharter, setup);
-    const best = Math.max(...game.map((e) => e.score));
-    const rows = game.map((e) => ({ ...e, game: g, won: e.score === best }));
-    entries.push(...rows);
-    onGame?.(rows, g);
+    out.push({ game: g, seed, line: nations.map((nation, i) => ({ nation, level: opts.levels[(i + g) % n] })) });
   }
-  return { entries, summary: summarise(entries) };
+  return out;
+}
+
+/** Plays one game of an arena run and gives its rows, the winners marked. */
+export function playArenaRound(opts: ArenaOptions, game: ArenaGame): ArenaEntry[] {
+  const setup = { scenario: opts.scenario, rivals: opts.rivals, playOn: opts.playOn };
+  const { entries } = playArenaGame(game.seed, game.line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured, opts.events, !opts.noCharter, setup);
+  const best = Math.max(...entries.map((e) => e.score));
+  return entries.map((e) => ({ ...e, game: game.game, won: e.score === best }));
 }
 
 export function summarise(entries: ArenaEntry[]): ArenaSummary[] {

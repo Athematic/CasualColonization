@@ -13,12 +13,15 @@ import {
   foundColony,
   player,
   type GameState,
+  setUnitLoc,
+  removeUnit,
+  addColony,
 } from '../src/index.js';
 
 /** A one-nation game on open plains, with or without the colony charter. */
 function game(charter: boolean | undefined, ai: 'naive' | 'competent' = 'competent') {
   const s = createGame({ seed: 11, mapSize: 'small', nations: ['england'], humans: [], ai: { england: ai }, ...(charter === undefined ? {} : { colonyCharter: charter }) });
-  for (const u of Object.values(s.units)) delete s.units[u.id];
+  for (const u of Object.values(s.units)) removeUnit(s, u.id);
   for (const st of Object.values(s.settlements)) delete s.settlements[st.id];
   const w = s.map.width;
   const cy = Math.floor(s.map.height / 2);
@@ -36,7 +39,7 @@ function settler(s: GameState, x: number, y: number) {
 /** Pretends the nation holds `n` colonies (only the count matters for the price). */
 function holdColonies(s: GameState, n: number) {
   const first = Object.values(s.colonies)[0];
-  for (let i = Object.keys(s.colonies).length; i < n; i++) s.colonies[`fake${i}`] = { ...first, id: `fake${i}`, x: 1, y: i };
+  for (let i = Object.keys(s.colonies).length; i < n; i++) addColony(s, { ...first, id: `fake${i}`, x: 1, y: i });
 }
 
 describe('colony charter', () => {
@@ -123,7 +126,7 @@ describe('colony charter', () => {
       const c = foundColony(s, settler(s, x, cy).id);
       for (let i = 0; i < 3; i++) {
         const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', x: c.x, y: c.y });
-        u.loc = { kind: 'colony', colonyId: c.id, job: { kind: 'building', building: 'townHall' } };
+        setUnitLoc(s, u, { kind: 'colony', colonyId: c.id, job: { kind: 'building', building: 'townHall' } });
       }
       c.founded = 0;
     }

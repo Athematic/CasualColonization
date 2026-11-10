@@ -20,8 +20,9 @@ import type { NationId } from './rules/nations.js';
 import { portBasePrice, portCharacter, portDepth, portPriceBand, type PortRef } from './rules/ports.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import { PIONEER_MAX_TOOLS, PURCHASABLE, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
-import type { GameState, MarketEntry, Player, Unit } from './types.js';
+import type { GameState, MarketEntry, Player, Unit, UnitLocation } from './types.js';
 import { difficultyOf, goodsOf, mechanicsOf, nationOf, portMarketOf, term, Term, unitsOf, type ScenarioLike } from './scenarios/index.js';
+import { setUnitLoc, removeUnit } from './unitindex.js';
 
 export const SAIL_TURNS = 3;
 
@@ -385,7 +386,7 @@ export function boardInEurope(s: GameState, unitId: string, carrierId: string): 
   if (portOf(u) !== portOf(ship)) fail(`${unitName(ship)} is in another port.`);
   if (cargoFree(s, ship) <= 0) fail('The ship is full.');
   if (ship.repair) fail(`${unitName(ship)} is under repair.`);
-  u.loc = { kind: 'carrier', carrierId };
+  setUnitLoc(s, u, { kind: 'carrier', carrierId });
   u.state = 'sentry';
   track(u.owner, 'cmd:board');
 }
@@ -395,7 +396,7 @@ export function sailToAmerica(s: GameState, carrierId: string): void {
   requireInEurope(s, ship);
   if (!isShip(ship)) fail('Only ships can sail.');
   if (ship.repair) fail(`${unitName(ship)} is under repair for ${ship.repair} more turns.`);
-  ship.loc = { kind: 'sailing', to: 'america', turnsLeft: sailTurns(s, ship.owner) };
+  setUnitLoc(s, ship, { kind: 'sailing', to: 'america', turnsLeft: sailTurns(s, ship.owner) });
   ship.moves = 0;
   track(ship.owner, 'cmd:sailToAmerica');
 }
@@ -413,11 +414,12 @@ export function sailToEurope(s: GameState, carrierId: string, port?: NationId): 
   const problem = portProblem(s, ship.owner, target);
   if (problem) fail(problem);
   player(s, ship.owner).entry = { x: ship.loc.x, y: ship.loc.y };
-  ship.loc = { kind: 'sailing', to: 'europe', turnsLeft: sailTurns(s, ship.owner) };
+  const sailing: UnitLocation = { kind: 'sailing', to: 'europe', turnsLeft: sailTurns(s, ship.owner) };
   if (target !== ship.owner) {
-    ship.loc.port = target;
+    sailing.port = target;
     track(ship.owner, 'europe:sailed to a partner port');
   }
+  setUnitLoc(s, ship, sailing);
   ship.moves = 0;
   delete ship.dest;
   track(ship.owner, 'cmd:sailToEurope');
@@ -432,7 +434,7 @@ export function advanceSailing(s: GameState, ship: Unit): void {
   if (ship.loc.to === 'europe') {
     // A partner's port that has closed meanwhile sends the ship on to its own.
     const port = ship.loc.port && !portProblem(s, ship.owner, ship.loc.port) ? ship.loc.port : undefined;
-    ship.loc = port ? { kind: 'europe', port } : { kind: 'europe' };
+    setUnitLoc(s, ship, port ? { kind: 'europe', port } : { kind: 'europe' });
     message(s, port ? `${unitName(ship)} has arrived in ${term(s, 'homeland')} at the ${nationOf(s, port).adjective} port of ${portName(s, port)}.` : `${unitName(ship)} has arrived in ${term(s, 'homeland')}.`, ship.owner);
     const host = port ? player(s, port) : p;
     for (const u of unitsAboard(s, ship)) {
@@ -441,13 +443,13 @@ export function advanceSailing(s: GameState, ship: Unit): void {
         const gross = u.treasure ?? 0;
         const net = gross - Math.floor((gross * host.tax) / 100);
         p.gold += net;
-        delete s.units[u.id];
+        removeUnit(s, u.id);
         track(p.id, 'treasure:shipped by galleon');
         message(s, `The treasure reaches ${term(s, 'homeland')} safely: ${net} gold after tax.`, ship.owner);
       }
     }
   } else {
-    ship.loc = { kind: 'map', x: p.entry.x, y: p.entry.y };
+    setUnitLoc(s, ship, { kind: 'map', x: p.entry.x, y: p.entry.y });
     message(s, `${unitName(ship)} has arrived in ${term(s, 'colonyLand')}.`, ship.owner, p.entry);
   }
 }
@@ -458,7 +460,7 @@ export function unboardInEurope(s: GameState, unitId: string): void {
   const ship = s.units[u.loc.carrierId];
   requireInEurope(s, ship);
   if (portOf(ship) !== u.owner) fail('Colonists can only go ashore in your own home port.');
-  u.loc = { kind: 'europe' };
+  setUnitLoc(s, u, { kind: 'europe' });
   u.state = 'active';
   track(u.owner, 'cmd:unboard');
 }
