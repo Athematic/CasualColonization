@@ -20,7 +20,7 @@ import {
   unitsAt,
   type Direction,
 } from '../queries.js';
-import type { Brave, Colony, GameState, Player, Unit } from '../types.js';
+import type { Brave, Colony, GameState, Player, Tile, Unit } from '../types.js';
 import { goodsOf } from '../scenarios/index.js';
 
 /** Runs an AI action, ignoring moves the rules turn down. */
@@ -39,16 +39,32 @@ export function safely(fn: () => void): void {
  */
 export const SHARED_TILE_VALUE = 0.25;
 
+/**
+ * While bestColonySite searches (scoring sites changes nothing): the colonies that can be near a
+ * site in its square, and the land values (landValue) worked out so far, by tile index. Each tile
+ * belongs to up to nine sites.
+ */
+let search: { x: number; y: number; radius: number; colonies: Colony[]; land: Map<number, number> } | null = null;
+
 /** Colonies close enough to share a work tile with a colony at x, y. */
 function neighbourColonies(s: GameState, x: number, y: number): Colony[] {
-  return Object.values(s.colonies).filter((c) => distance(c.x, c.y, x, y) <= 2);
+  // Within the search's square, only the colonies within two tiles of it can be (in the same order).
+  const pool = search && distance(search.x, search.y, x, y) <= search.radius ? search.colonies : Object.values(s.colonies);
+  return pool.filter((c) => distance(c.x, c.y, x, y) <= 2);
 }
 
 const shared = (near: Colony[], x: number, y: number) => near.some((c) => distance(c.x, c.y, x, y) <= 1);
 
 export function siteScore(s: GameState, x: number, y: number): number {
   if (colonySiteProblem(s, x, y)) return -Infinity;
-  const near = neighbourColonies(s, x, y);
+  return plainSiteScore(s, x, y, neighbourColonies(s, x, y));
+}
+
+/**
+ * siteScore of a site that passed colonySiteProblem, with its neighbouring colonies. That check
+ * leaves no colony on the site or next to it, so none of its tiles is a colony's.
+ */
+function plainSiteScore(s: GameState, x: number, y: number, near: Colony[]): number {
   let score = 0;
   let water = 0;
   for (const p of [{ x, y }, ...neighbours(s, x, y)]) {
@@ -59,10 +75,7 @@ export function siteScore(s: GameState, x: number, y: number): number {
       score += 1.5 * weight;
       continue;
     }
-    if (colonyAt(s, p.x, p.y)) continue;
-    let best = 0;
-    for (const g of goodsOf(s)) if (g !== 'food') best = Math.max(best, baseTileYield(tile, g));
-    score += (baseTileYield(tile, 'food') * 1.2 + best * 0.6) * weight;
+    score += landValue(s, p.y * s.map.width + p.x, tile) * weight;
   }
   // A river through the centre: road-speed travel inland, and its yield bonus counted above.
   const centre = tileAt(s, x, y)!;
@@ -72,15 +85,26 @@ export function siteScore(s: GameState, x: number, y: number): number {
   return score;
 }
 
+/** A land tile's worth to a site: its food and its best other good. */
+function landValue(s: GameState, i: number, tile: Tile): number {
+  const known = search?.land.get(i);
+  if (known !== undefined) return known;
+  let best = 0;
+  for (const g of goodsOf(s)) if (g !== 'food') best = Math.max(best, baseTileYield(tile, g));
+  const value = baseTileYield(tile, 'food') * 1.2 + best * 0.6;
+  search?.land.set(i, value);
+  return value;
+}
+
 /**
  * The advanced levels' view of a site: siteScore plus a clear premium for what makes a colony
  * worth the investment (bonus resources, rivers, rich food tiles, sea access), on the tiles no
  * other colony works. Chasing these spreads colonies out irregularly instead of in a grid.
  */
 export function keenSiteScore(s: GameState, x: number, y: number): number {
-  const base = siteScore(s, x, y);
-  if (base === -Infinity) return base;
+  if (colonySiteProblem(s, x, y)) return -Infinity;
   const near = neighbourColonies(s, x, y);
+  const base = plainSiteScore(s, x, y, near);
   let extra = 0;
   let water = 0;
   for (const p of [{ x, y }, ...neighbours(s, x, y)]) {
@@ -110,19 +134,25 @@ export function bestColonySite(
   y: number,
   opts: { radius: number; score: (x: number, y: number) => number; perTile: number; stay: boolean; penalty?: (x: number, y: number) => number; overLand?: boolean },
 ): { x: number; y: number; score: number } {
-  let best = { x, y, score: opts.stay ? opts.score(x, y) : -Infinity };
-  const reach = opts.overLand ? landReach(s, x, y, opts.radius) : undefined;
-  for (let dy = -opts.radius; dy <= opts.radius; dy++) {
-    for (let dx = -opts.radius; dx <= opts.radius; dx++) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (!tileAt(s, nx, ny)) continue;
-      if (reach && !reach.has(ny * s.map.width + nx)) continue;
-      const score = opts.score(nx, ny) - distance(x, y, nx, ny) * opts.perTile - (opts.penalty?.(nx, ny) ?? 0);
-      if (score > best.score) best = { x: nx, y: ny, score };
+  const outer = search;
+  search = { x, y, radius: opts.radius, colonies: Object.values(s.colonies).filter((c) => distance(c.x, c.y, x, y) <= opts.radius + 2), land: new Map() };
+  try {
+    let best = { x, y, score: opts.stay ? opts.score(x, y) : -Infinity };
+    const reach = opts.overLand ? landReach(s, x, y, opts.radius) : undefined;
+    for (let dy = -opts.radius; dy <= opts.radius; dy++) {
+      for (let dx = -opts.radius; dx <= opts.radius; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!tileAt(s, nx, ny)) continue;
+        if (reach && !reach.has(ny * s.map.width + nx)) continue;
+        const score = opts.score(nx, ny) - distance(x, y, nx, ny) * opts.perTile - (opts.penalty?.(nx, ny) ?? 0);
+        if (score > best.score) best = { x: nx, y: ny, score };
+      }
     }
+    return best;
+  } finally {
+    search = outer;
   }
-  return best;
 }
 
 /** Land tiles (as y × width + x) a colonist at x, y can walk to without leaving the square of the given radius. */
