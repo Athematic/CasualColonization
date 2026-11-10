@@ -37,6 +37,8 @@ import {
   type GameState,
   type NationId,
   type Unit,
+  colonyOpenTo,
+  FOREIGN_KEEP,
 } from '@cc/engine';
 import { riverCourse, traceStrand } from '@cc/render-api';
 import type { App } from '../app.js';
@@ -225,6 +227,15 @@ export class Sidebar {
       if (colony && colony.owner === app.viewer) btn('Open colony', '', () => app.openColony(colony.id));
       btn('Disband', '', () => app.unitCommand('disband'));
     }
+    // A carrier in an ally's colony trades with it (open colonies, the engine's alliances).
+    const allied = mine && u.loc.kind === 'map' && pos ? colonyAt(s, pos.x, pos.y) : undefined;
+    const trade = allied && allied.owner !== app.viewer && colonyOpenTo(s, allied.owner, u.owner) && def.cargo > 0
+      ? h('div', { class: 'allied-trade' },
+          h('div', { class: 'muted small' }, `Trade with ${allied.name} (${nationOf(s, allied.owner).adjective} ally)`),
+          h('div', { class: 'actions' },
+            cargo.map((g) => h('button', { class: 'btn small', disabled: !app.isMyTurn(), onclick: () => app.dispatch({ type: 'sellInColony', carrierId: u.id, good: g, amount: u.cargo![g]! }) }, `Sell ${GOOD_DEFS[g].name}`)),
+            goodsOf(s).filter((g) => allied.goods[g] > FOREIGN_KEEP).map((g) => h('button', { class: 'btn small', disabled: !app.isMyTurn(), onclick: () => app.dispatch({ type: 'buyInColony', carrierId: u.id, good: g, amount: 100 }) }, `Buy ${GOOD_DEFS[g].name}`))))
+      : null;
     if (mine && u.loc.kind === 'carrier') {
       btn('Wake up', '', () => app.unitCommand('activate'));
     }
@@ -244,6 +255,7 @@ export class Sidebar {
             cargo.map((g) => h('span', { class: 'chip' }, icon({ kind: 'product', product: g }, 22), `${u.cargo![g]} ${GOOD_DEFS[g].name}`)))
         : null,
       actions.length ? h('div', { class: 'actions' }, actions) : null,
+      trade,
     );
   }
 

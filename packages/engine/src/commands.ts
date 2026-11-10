@@ -21,7 +21,8 @@ import { answerNativeDemand } from './braves.js';
 import { buyFromSettlement, buyLand, denounceMission, establishMission, giftToTribe, inciteTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
 import { chooseFather } from './fathers.js';
 import { proposePeace, startWar } from './diplomacy.js';
-import { answerProposal, cancelFavoured, cancelTrade, proposeFavoured, proposeTrade } from './relations.js';
+import { answerProposal, cancelFavoured, cancelTrade, proposeAlliance, proposeFavoured, proposeTrade } from './relations.js';
+import { leaveAlliance, tradeInColony } from './alliances.js';
 import { abandonColony, retire } from './leaving.js';
 import { declareIndependence } from './independence.js';
 import { answerDemand } from './crown.js';
@@ -104,6 +105,12 @@ export type Command =
   | { type: 'answerProposal'; nation: NationId; accept: boolean }
   | { type: 'cancelTrade'; nation: NationId }
   | { type: 'cancelFavoured'; nation: NationId }
+  /** Proposes an alliance to `nation`, or invites it to join yours (alliances.ts). */
+  | { type: 'proposeAlliance'; nation: NationId }
+  | { type: 'leaveAlliance' }
+  /** A ship or wagon train in an ally's colony sells goods to it, or buys goods from it (alliances.ts). */
+  | { type: 'sellInColony'; carrierId: string; good: GoodId; amount: number }
+  | { type: 'buyInColony'; carrierId: string; good: GoodId; amount: number }
   | { type: 'giftTribe'; tribe: TribeId; gold: number }
   | { type: 'declareIndependence' }
   /** Abandons a small colony without a stockade (leaving.ts). */
@@ -395,6 +402,17 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'cancelFavoured':
         text = cancelFavoured(s, nation, cmd.nation);
+        break;
+      case 'proposeAlliance':
+        text = proposeAlliance(s, nation, cmd.nation);
+        break;
+      case 'leaveAlliance':
+        text = leaveAlliance(s, nation);
+        break;
+      case 'sellInColony':
+      case 'buyInColony':
+        ownUnit(s, nation, cmd.carrierId);
+        text = tradeInColony(s, nation, cmd.carrierId, cmd.good, cmd.amount, cmd.type === 'buyInColony');
         break;
       case 'giftTribe':
         text = giftToTribe(s, nation, cmd.tribe, cmd.gold);

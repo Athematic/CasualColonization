@@ -396,7 +396,7 @@ export interface GameMessage {
   at?: { x: number; y: number };
 }
 
-export type ProposalKind = 'trade' | 'favoured';
+export type ProposalKind = 'trade' | 'favoured' | 'alliance';
 
 /**
  * Relations between two European nations (see relations.ts and docs/design/favoured-nation.md).
@@ -430,13 +430,16 @@ export interface Relation {
  * agreement, Favoured Nation status and, from Beta 1, an alliance. Beta 2's treaties with native
  * peoples are meant to reuse the record.
  */
-export type TreatyKind = 'trade' | 'favoured';
+export type TreatyKind = 'trade' | 'favoured' | 'alliance';
 
 /** How a treaty ended. */
 export interface TreatyEnd {
   turn: number;
-  /** cancelled by one side, ended by a war, lapsed (independence), or left by a member. */
-  why: 'cancelled' | 'war' | 'lapsed';
+  /**
+   * Cancelled by one side, ended by a war between the parties, lapsed (Favoured Nation at a
+   * declaration of independence), or left: an alliance's last members but one left it.
+   */
+  why: 'cancelled' | 'war' | 'lapsed' | 'left';
   /** The nation that ended it, when one did. */
   by?: NationId;
 }
@@ -461,6 +464,26 @@ export interface Treaty {
   start: number;
   /** Missing while it is in force. */
   end?: TreatyEnd;
+  /** What the parties agreed beyond the kind's rules; missing for trade agreements and Favoured Nation. */
+  terms?: TreatyTerms;
+  /** Members that left an alliance (`parties` holds the members now), with the turn. Missing means none. */
+  left?: { party: TreatyParty; turn: number }[];
+}
+
+/**
+ * The terms of a treaty, by kind. A union, so other kinds of treaty can bring their own terms.
+ */
+export type TreatyTerms = AllianceTerms;
+
+/** What an alliance binds its members to (alliances.ts reads them; ALLIANCE_TERMS are the standard ones). */
+export interface AllianceTerms {
+  kind: 'alliance';
+  /** An attack on one member is war with all of them. */
+  defensive: boolean;
+  /** Members' units may enter, garrison and trade in each other's colonies. */
+  openColonies: boolean;
+  /** Members see what each other's units and colonies see. */
+  sharedSight: boolean;
 }
 
 export interface GameState {
@@ -522,6 +545,8 @@ export type HistoryKind =
   | 'peace'
   | 'trade'
   | 'favoured'
+  /** Alliances made, joined and left (alliances.ts). */
+  | 'alliance'
   | 'cancel'
   | 'treasure'
   | 'burned'

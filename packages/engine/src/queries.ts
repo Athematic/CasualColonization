@@ -7,6 +7,7 @@ import type { Colony, GameState, Player, Settlement, Tile, Unit, UnitLocation } 
 import type { UnitTypeId } from './rules/units.js';
 import { goodsOf } from './scenarios/index.js';
 import { modifiers } from './scenarios/modifiers.js';
+import { sightSharers } from './alliances.js';
 import { addUnit, indexedColonyAt, indexedColonyPopulation, indexedColonyWorkers, indexedTileWorker, indexedUnitsAboard, indexedUnitsAt } from './unitindex.js';
 
 export const DIRECTIONS = [
@@ -207,12 +208,17 @@ export function sightRadius(u: Unit, s: GameState): number {
 }
 
 export function reveal(s: GameState, nation: NationId, x: number, y: number, radius: number): void {
-  const p = player(s, nation);
+  revealTo(s, player(s, nation).explored, x, y, radius);
+  // Allies share their sight (alliances.ts).
+  if (s.treaties) for (const ally of sightSharers(s, nation)) revealTo(s, player(s, ally).explored, x, y, radius);
+}
+
+function revealTo(s: GameState, explored: number[], x: number, y: number, radius: number): void {
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       const nx = x + dx;
       const ny = y + dy;
-      if (inBounds(s, nx, ny)) p.explored[ny * s.map.width + nx] = 1;
+      if (inBounds(s, nx, ny)) explored[ny * s.map.width + nx] = 1;
     }
   }
 }

@@ -73,6 +73,11 @@ export interface Scenario {
   /** Which of the engine's systems are in play (step 5). */
   mechanics: Mechanics;
   /**
+   * Alliance rules merged over the engine's ALLIANCE_RULES (alliances.ts): the hidden thresholds
+   * that unlock an alliance and the penalties for leaving one. Absent fields keep the engine's values.
+   */
+  alliances?: Partial<AllianceRules>;
+  /**
    * How the game can end, checked in this order (victory.ts registers the kinds). The first rule
    * that ends the game decides the reason and the winner.
    */
@@ -131,6 +136,43 @@ export interface Mechanics {
   customHouse: boolean;
   /** Missionaries found missions among the natives and denounce rivals' missions (natives.ts). */
   missions: boolean;
+  /**
+   * Alliances between European nations (alliances.ts, docs/design/cooperation.md): the rung after
+   * Favoured Nation, with a defensive pact, open colonies and shared sight. Absent means off.
+   */
+  alliances?: boolean;
+}
+
+/** A whole number of years from `base − spread` to `base + spread`, drawn from the game seed. */
+export interface YearsAround {
+  base: number;
+  spread: number;
+}
+
+/** The rules for alliances that a scenario can change (alliances.ts ALLIANCE_RULES has the engine's). */
+export interface AllianceRules {
+  /** Hidden: years of continuous peace two Favoured Nations need before they can ally, drawn per pair. */
+  peaceYears: YearsAround;
+  /** Hidden: gold that must have changed hands at each other's colonies, drawn per pair from `min` to `max`. */
+  volume: { min: number; max: number };
+  /** After leaving: no new agreements between the leaver and each former ally for these years. */
+  waitingYears: YearsAround;
+  /** After leaving: computer players on both sides treat the other as a target for these years. */
+  hostilityYears: YearsAround;
+}
+
+/**
+ * How readily the computer players cooperate (alliances.ts COOPERATION has the engine's values,
+ * tuned for the targets in docs/design/cooperation.md, C11). Each is a chance per review (every
+ * five turns) for the most cooperative level; the other levels take a share of it.
+ */
+export interface Cooperation {
+  /** Chance that a nation proposes an alliance to a Favoured Nation partner once the alliance is unlocked. */
+  proposeAlliance: number;
+  /** Chance that a nation accepts an alliance proposed to it. */
+  acceptAlliance: number;
+  /** How good a target an ally's enemy must be before a computer ally joins the war (1: as good as one it would attack alone). */
+  joinWar: number;
 }
 
 /** One way the game can end: a registered victory kind (victory.ts) and its data. */
@@ -382,6 +424,8 @@ export interface ScenarioAi {
    * walk, as on the Americas' continents.
    */
   islands?: boolean;
+  /** How readily the computer players cooperate; absent fields keep the engine's values (alliances.ts COOPERATION). */
+  cooperation?: Partial<Cooperation>;
   goods: {
     /** Goods ships move between colonies and sell (ai/logistics.ts), most valuable first. */
     trade: GoodId[];

@@ -32,6 +32,7 @@ import type { TribeId } from './rules/nations.js';
 import type { Colony, GameState, ImprovementKind, Player, Unit } from './types.js';
 import { mechanicsOf, term } from './scenarios/index.js';
 import { colonyTiles, setUnitLoc, unitTiles } from './unitindex.js';
+import { alliesOf, colonyOpenTo, isAllied } from './alliances.js';
 
 export type MoveOption =
   | { kind: 'move' }
@@ -83,11 +84,13 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
   const tile = tileAt(s, x, y)!;
   const colony = colonyAt(s, x, y);
   const settlement = settlementAt(s, x, y);
-  const foreign = unitsAt(s, x, y).filter((o) => o.owner !== u.owner);
+  // Allies' units do not block, and their colonies are open (alliances.ts).
+  const foreign = unitsAt(s, x, y).filter((o) => o.owner !== u.owner && !(s.treaties && isAllied(s, u.owner, o.owner)));
+  const open = !!colony && colony.owner !== u.owner && !!s.treaties && colonyOpenTo(s, colony.owner, u.owner);
 
   if (isShip(u)) {
     if (colony) {
-      if (colony.owner === u.owner) return { kind: 'move' };
+      if (colony.owner === u.owner || open) return { kind: 'move' };
       return canAttack(u) ? { kind: 'blocked', reason: 'Ships cannot attack colonies yet.' } : { kind: 'blocked', reason: `${colony.name} belongs to another nation.` };
     }
     if (settlement) {
@@ -126,7 +129,7 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
     if (!actions.length) return { kind: 'blocked', reason: 'Only scouts, colonists, missionaries, wagon trains and soldiers can visit natives.' };
     return { kind: 'settlement', settlementId: settlement.id, actions };
   }
-  if (colony && colony.owner !== u.owner) {
+  if (colony && colony.owner !== u.owner && !open) {
     return canAttack(u) ? { kind: 'attack', colonyId: colony.id } : { kind: 'blocked', reason: `${colony.name} belongs to another nation.` };
   }
   // Braves of a tribe at peace step aside; hostile ones must be fought.
@@ -348,6 +351,8 @@ interface SearchContext {
   player: Player | undefined;
   /** Tribes at war with the owner. */
   war: Set<TribeId>;
+  /** Allies whose colonies are open to the owner and whose units do not block it (alliances.ts); null without any. */
+  allies: Set<string> | null;
 }
 
 function searchContext(s: GameState, u: Unit): SearchContext {
@@ -359,7 +364,8 @@ function searchContext(s: GameState, u: Unit): SearchContext {
     seen.add(t.id);
     if (t.stance[u.owner] === 'war') war.add(t.id);
   }
-  return { owner: u.owner, ship: isShip(u), player: s.players.find((p) => p.id === u.owner), war };
+  const allies = s.treaties ? alliesOf(s, u.owner).filter((a) => colonyOpenTo(s, a, u.owner)) : [];
+  return { owner: u.owner, ship: isShip(u), player: s.players.find((p) => p.id === u.owner), war, allies: allies.length ? new Set(allies) : null };
 }
 
 /** Whether the unit can stand on the tile with map index `i` (on the map) while pathing. */
@@ -369,11 +375,13 @@ function passableAt(s: GameState, ctx: SearchContext, i: number, isGoal: boolean
   let colonyOwner: string | undefined;
   if (index.occupied[i] === index.gen) {
     colonyOwner = index.colonies.get(i)?.owner;
+    // An ally's colony is open, as one's own.
+    if (colonyOwner && ctx.allies?.has(colonyOwner)) colonyOwner = ctx.owner;
     if (colonyOwner && colonyOwner !== ctx.owner) return false;
     if (index.settlements.has(i)) return false;
-    // Any other nation's unit on the tile blocks it.
+    // Any other nation's unit on the tile blocks it, but an ally's.
     const here = index.units.get(i);
-    if (here) for (const v of here) if (v.owner !== ctx.owner) return false;
+    if (here) for (const v of here) if (v.owner !== ctx.owner && !ctx.allies?.has(v.owner)) return false;
     const tribes = isGoal ? undefined : index.braves.get(i);
     if (tribes) for (const t of tribes) if (ctx.war.has(t)) return false;
   }

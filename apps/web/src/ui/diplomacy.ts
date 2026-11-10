@@ -1,5 +1,8 @@
 import {
   AI_LEVEL_INFO,
+  allianceOf,
+  allianceProblem,
+  alliesOf,
   allTreaties,
   bound,
   canDeclareIndependence,
@@ -9,6 +12,7 @@ import {
   FATHERS,
   favouredProblem,
   hasTradeAgreement,
+  isAllied,
   isFavoured,
   mechanicsOf,
   nationOf,
@@ -56,7 +60,7 @@ export class DiplomacyScreen implements Screen {
       nations.length
         ? h('ul', { class: 'nation-relations' }, nations.map((p) => this.nationRow(p)))
         : h('p', { class: 'muted small' }, `You are the only ${term(app.state, 'homelandAdjective')} nation in ${term(app.state, 'colonyLand')}.`),
-      nations.length ? h('p', { class: 'muted small' }, 'A trade agreement lets your trade routes call at each other’s colonies. After years of peace and enough trade routes between you, Favoured Nations may trade, and buy merchant ships, in each other’s home ports. Cancelling it costs both sides dearly.') : null);
+      nations.length ? h('p', { class: 'muted small' }, 'A trade agreement lets your trade routes call at each other’s colonies. After years of peace and enough trade routes between you, Favoured Nations may trade, and buy merchant ships, in each other’s home ports. Cancelling it costs both sides dearly.', mechanicsOf(s).alliances ? ' Favoured Nations at peace for many more years, with more trade between them, may ally: an attack on one ally is war with all, allied units may enter each other’s colonies, and allies share what they see.' : '') : null);
 
     const treaties = this.treatyCard();
 
@@ -150,7 +154,9 @@ export class DiplomacyScreen implements Screen {
     const moodClass = war || /hostile/.test(mood) ? 'bad' : /rebuilt|cool/.test(mood) ? 'warn' : 'good';
     const pending = rel.proposal;
     const theirs = pending && pending.from === p.id;
-    const kindName = (k: string) => (k === 'trade' ? 'a trade agreement' : 'Favoured Nation status');
+    const kindName = (k: string) => (k === 'trade' ? 'a trade agreement' : k === 'alliance' ? 'an alliance' : 'Favoured Nation status');
+    const allied = isAllied(s, me.id, p.id);
+    const theirAllies = alliesOf(s, p.id).filter((n) => n !== me.id);
     const buttons: (HTMLElement | null)[] = [];
     if (war) buttons.push(h('button', { class: 'btn tiny', onclick: () => app.dispatch({ type: 'proposePeace', nation: p.id }) }, 'Propose peace'));
     else {
@@ -164,7 +170,13 @@ export class DiplomacyScreen implements Screen {
         const why = favouredProblem(s, me.id, p.id);
         buttons.push(h('button', { class: 'btn tiny primary', disabled: !!why, title: why ?? `Offer ${nationOf(app.state, p.id).name} Favoured Nation status`, onclick: () => app.dispatch({ type: 'proposeFavoured', nation: p.id }) }, 'Propose Favoured Nation'));
       }
-      if (favoured) buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.cancelFavoured(p) }, 'Cancel Favoured Nation'));
+      if (mechanicsOf(s).alliances && !allied && (favoured || (p.human && me.human))) {
+        const why = allianceProblem(s, me.id, p.id);
+        const invite = !!allianceOf(s, me.id);
+        buttons.push(h('button', { class: 'btn tiny primary', 'data-action': 'propose-alliance', disabled: !!why, title: why ?? `Offer ${nationOf(s, p.id).name} ${invite ? 'a place in your alliance' : 'an alliance'}`, onclick: () => app.dispatch({ type: 'proposeAlliance', nation: p.id }) }, invite ? 'Invite to alliance' : 'Propose alliance'));
+      }
+      if (allied) buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.leaveAlliance(p) }, 'Leave alliance'));
+      else if (favoured) buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.cancelFavoured(p) }, 'Cancel Favoured Nation'));
       buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.war(p.id) }, 'Declare war'));
     }
     return h('li', { class: 'nation-relation' },
@@ -172,14 +184,17 @@ export class DiplomacyScreen implements Screen {
         h('strong', null, h('span', { class: 'flag', style: `background:${nationOf(app.state, p.id).color}` }), ' ', nationTitle(app.state, p.id)),
         h('span', { class: 'muted small' }, p.human ? 'player' : AI_LEVEL_INFO[p.ai ?? 'naive'].name),
         h('span', { class: `pill ${war ? 'bad' : 'good'}` }, war ? 'At war' : 'At peace'),
-        favoured ? h('span', { class: 'pill good favoured' }, '★ Favoured Nation') : null),
+        favoured ? h('span', { class: 'pill good favoured' }, '★ Favoured Nation') : null,
+        allied ? h('span', { class: 'pill good allied' }, '⛨ Ally') : null),
       h('div', { class: 'muted small' }, `${colonies.length} ${colonies.length === 1 ? 'colony' : 'colonies'} · ${pop} colonists`),
       h('div', { class: 'relation-facts small' },
         h('span', { class: `pill ${moodClass}` }, mood),
         h('span', null, trade ? 'Trade agreement' : 'No trade agreement'),
         h('span', null, `${routes} trade route${routes === 1 ? '' : 's'} between you`),
         trade ? h('span', { class: 'muted' }, tradeTies(s, me.id, p.id)) : null,
-        favoured ? h('span', { class: 'muted' }, `Your ships may use ${portName(this.app.state, p.id)}`) : null),
+        favoured ? h('span', { class: 'muted' }, `Your ships may use ${portName(this.app.state, p.id)}`) : null,
+        allied ? h('span', { class: 'muted' }, 'Your units may enter their colonies; you share what you see') : null,
+        theirAllies.length ? h('span', { class: 'muted' }, `Allied with ${theirAllies.map((n) => nationOf(s, n).name).join(' and ')}`) : null),
       pending && !theirs ? h('p', { class: 'muted small' }, `Your proposal of ${kindName(pending.kind)} is waiting for an answer.`) : null,
       theirs ? h('div', { class: 'proposal row wrap' },
         h('span', { class: 'small' }, `${nationTitle(app.state, p.id)} proposes ${kindName(pending!.kind)}.`),
@@ -222,9 +237,19 @@ export class DiplomacyScreen implements Screen {
     if (await confirmDialog('Cancel Favoured Nation status?', text, 'Cancel it', 'Keep it')) this.app.dispatch({ type: 'cancelFavoured', nation: p.id });
   }
 
+  private async leaveAlliance(p: Player): Promise<void> {
+    const s = this.app.state;
+    const people = p.human && this.app.me.human;
+    const text = `Leaving the alliance cancels your Favoured Nation status with every ally: trade agreements and trade routes end, and goods next to each other's colonies are seized. Your units in allied colonies must leave.${people ? ' Between two players there is no waiting period.' : ' Relations will stay hostile for longer than after cancelling Favoured Nation, and no new agreement will be possible for many years.'}`;
+    if (await confirmDialog(`Leave the alliance with ${nationOf(s, p.id).name}?`, text, 'Leave it', 'Stay allied')) this.app.dispatch({ type: 'leaveAlliance' });
+  }
+
   private async war(nation: NationId): Promise<void> {
+    const s = this.app.state;
     const favoured = isFavoured(this.app.state, this.app.me.id, nation);
-    const extra = favoured ? ' This also cancels your Favoured Nation status, with all its consequences.' : hasTradeAgreement(this.app.state, this.app.me.id, nation) ? ' Your trade agreement ends.' : '';
+    const allies = alliesOf(s, nation).filter((n) => n !== this.app.me.id);
+    const extra = (isAllied(s, this.app.me.id, nation) ? ' This is war on an ally: you leave the alliance, with all its consequences.' : favoured ? ' This also cancels your Favoured Nation status, with all its consequences.' : hasTradeAgreement(this.app.state, this.app.me.id, nation) ? ' Your trade agreement ends.' : '')
+      + (allies.length ? ` Its allies ${allies.map((n) => nationOf(s, n).name).join(' and ')} will be at war with you too.` : '');
     if (await confirmDialog('Declare war?', `Declare war on ${nationOf(this.app.state, nation).name}? Their colonies and ships become fair game, and yours too.${extra}`, 'Declare war', 'Stay at peace')) {
       this.app.dispatch({ type: 'declareWar', nation });
     }

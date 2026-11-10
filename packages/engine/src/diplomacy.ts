@@ -6,6 +6,7 @@ import { hasModifier } from './scenarios/modifiers.js';
 import { message, player } from './queries.js';
 import { type NationId } from './rules/nations.js';
 import { isFavoured, onPeace } from './relations.js';
+import { warOnFriend } from './alliances.js';
 import type { GameState } from './types.js';
 import { nationOf, nationTitle, term, Term } from './scenarios/index.js';
 
@@ -18,6 +19,7 @@ export function startWar(s: GameState, nation: NationId, other: NationId): strin
   const p = player(s, nation);
   if (p.stance[other] === 'war') fail(`You are already at war with ${nationOf(s, other).name}.`);
   if (!p.human && isFavoured(s, nation, other)) fail('Computer players never declare war on a Favoured Nation.');
+  if (!p.human && warOnFriend(s, nation, other)) fail('Computer players never go to war with an ally, or with the ally of a friend.');
   track(nation, 'cmd:declareWar');
   declareWar(s, nation, other);
   return `You are now at war with ${nationOf(s, other).name}.`;

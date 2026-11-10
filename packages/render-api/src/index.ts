@@ -11,6 +11,7 @@ import {
   isShip,
   nationOf,
   sightRadius,
+  sightSharers,
   TRIBES,
   unitPosition,
   type BuildingKind,
@@ -255,12 +256,14 @@ export function computeVisibility(s: Readonly<GameState>, viewer: NationId): Uin
     for (let dy = -r; dy <= r; dy++)
       for (let dx = -r; dx <= r; dx++) if (inBounds(s as GameState, x + dx, y + dy)) out[(y + dy) * w + x + dx] = 1;
   };
+  // Allies share their sight (the engine's alliances).
+  const sharers = new Set<string>([viewer, ...sightSharers(s as GameState, viewer)]);
   for (const u of Object.values(s.units)) {
-    if (u.owner !== viewer) continue;
+    if (!sharers.has(u.owner)) continue;
     const p = unitPosition(s as GameState, u);
     if (p && u.loc.kind !== 'colony') mark(p.x, p.y, sightRadius(u, s as GameState));
   }
-  for (const c of Object.values(s.colonies)) if (c.owner === viewer) mark(c.x, c.y, 2);
+  for (const c of Object.values(s.colonies)) if (sharers.has(c.owner)) mark(c.x, c.y, 2);
   return out;
 }
 

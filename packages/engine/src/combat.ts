@@ -28,6 +28,7 @@ import {
 import { random, randInt } from './rng.js';
 import { riverLinked } from './rivers.js';
 import { isFavoured, onWar } from './relations.js';
+import { pactAllies, sendOut, warOnFriend } from './alliances.js';
 import { STOCKADE_DEFENCE } from './rules/buildings.js';
 import { AMBUSH_BONUS, BOMBARD_CHANCE, CAPTURE_CHANCE, REPAIR_COST, RIVER_DEFENCE } from './rules/combat.js';
 import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
@@ -120,8 +121,13 @@ export function chooseDefender(s: GameState, units: Unit[], attackFrom?: { x: nu
   return [...units].sort((a, b) => defencePower(s, b, attackFrom) - defencePower(s, a, attackFrom))[0];
 }
 
-function colonyDefender(s: GameState, colony: Colony): Unit | undefined {
-  const outside = unitsAt(s, colony.x, colony.y).filter((u) => !isShip(u) && u.owner === colony.owner);
+/**
+ * The unit that defends a colony against `attacker`: the strongest land unit on its tile, the
+ * owner's or, under a defensive pact, an ally's garrison (alliances.ts); otherwise a colonist.
+ */
+function colonyDefender(s: GameState, colony: Colony, attacker: NationId): Unit | undefined {
+  const allies = s.treaties ? pactAllies(s, colony.owner, attacker) : [];
+  const outside = unitsAt(s, colony.x, colony.y).filter((u) => !isShip(u) && (u.owner === colony.owner || allies.includes(u.owner)));
   return chooseDefender(s, outside) ?? colonyWorkers(s, colony)[0];
 }
 
@@ -129,7 +135,8 @@ export function declareWar(s: GameState, a: string, b: string): void {
   const pa = s.players.find((p) => p.id === a);
   const pb = s.players.find((p) => p.id === b);
   if (!pa || !pb || pa.stance[b] === 'war') return;
-  // A trade agreement ends; Favoured Nation status is cancelled by the nation that declares war.
+  // A trade agreement ends; Favoured Nation status is cancelled by the nation that declares war,
+  // and war on an ally is leaving the alliance (alliances.ts).
   onWar(s, pa.id, pb.id);
   pa.stance[b] = 'war';
   pb.stance[a] = 'war';
@@ -138,6 +145,15 @@ export function declareWar(s: GameState, a: string, b: string): void {
   if (b !== 'crown') track(a, 'diplomacy:war started');
   if (a !== 'crown' && b !== 'crown') message(s, `${nationOf(s, pa.id).name} has declared war on ${nationOf(s, pb.id).name}!`);
   if (a !== 'crown' && b !== 'crown') noteHistory(s, 'war', [pa.id, pb.id], `${nationTitle(s, pa.id)} declares war on ${nationOf(s, pb.id).name}.`);
+  // The defensive pact: war on a member of an alliance is war with all its members.
+  if (s.treaties) {
+    for (const ally of pactAllies(s, pb.id, pa.id)) {
+      if (pa.stance[ally] === 'war') continue;
+      track(ally, 'diplomacy:ally defended');
+      message(s, `${nationOf(s, ally).name} stands by its ally ${nationOf(s, pb.id).name}.`);
+      declareWar(s, pa.id, ally);
+    }
+  }
 }
 
 /** Sends a beaten ship to the nearest drydock, or home to Europe, for repairs. Cargo and passengers are lost. */
@@ -319,7 +335,7 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
   if (target.colonyId) {
     colony = s.colonies[target.colonyId];
     if (!colony || distance(colony.x, colony.y, pos.x, pos.y) !== 1) fail('The colony is not next to the unit.');
-    defender = colonyDefender(s, colony);
+    defender = colonyDefender(s, colony, u.owner);
   } else if (target.unitId) {
     const t = s.units[target.unitId];
     const tp = t && unitPosition(s, t);
@@ -327,9 +343,11 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
     defender = chooseDefender(s, unitsAt(s, tp.x, tp.y).filter((o) => o.owner === t.owner), pos);
   }
   if (!defender) fail('There is nothing to attack.');
-  if (!player(s, u.owner).human && isFavoured(s, u.owner, defender.owner)) fail('Computer players never attack a Favoured Nation.');
+  // The nation attacked: a colony's owner (its allies' garrison defends it), else the defender's.
+  const enemy = colony ? colony.owner : defender.owner;
+  if (!player(s, u.owner).human && (isFavoured(s, u.owner, enemy) || (s.treaties && warOnFriend(s, u.owner, enemy)))) fail('Computer players never attack a Favoured Nation or an ally.');
   // Privateers sail under no flag, so their attacks do not start wars.
-  if (u.type !== 'privateer') declareWar(s, u.owner, defender.owner);
+  if (u.type !== 'privateer') declareWar(s, u.owner, enemy);
 
   const off = offencePower(s, u, defender);
   const def = defencePower(s, defender, target.colonyId ? undefined : pos);
@@ -370,7 +388,12 @@ function captureColony(s: GameState, attacker: Unit, colony: Colony): string {
     delete w.teach;
   }
   for (const o of unitsAt(s, colony.x, colony.y)) {
-    if (o.owner !== previous) continue;
+    if (o.owner === attacker.owner) continue;
+    // Allies' units in the colony are taken with it when at war with the attacker, else sent out.
+    if (o.owner !== previous && player(s, o.owner).stance[attacker.owner] !== 'war') {
+      sendOut(s, o, colony);
+      continue;
+    }
     if (isShip(o)) damageShip(s, o);
     else o.owner = attacker.owner;
   }
