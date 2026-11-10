@@ -4,7 +4,7 @@
 // Prints the total time, a breakdown per phase of the turn pipeline (packages/engine/src/perf.ts)
 // and a hash of the final saved state, which must not change when the engine only gets faster.
 //
-// Usage: npm run bench -- [--seed 2024] [--year 1700] [--scenario id] [--quiet]
+// Usage: npm run bench -- [--seed 2024] [--year 1700] [--scenario id] [--no-independence] [--quiet]
 //        npm run bench -- --verify [--write] [--scenario id]
 // npm test runs a shorter golden-hash test (packages/engine/test/golden.test.ts) in CI.
 // --verify plays 150 rounds on three more seeds and compares the state hashes with
@@ -17,7 +17,7 @@
 // For a CPU profile: node --cpu-prof scripts/.bench.mjs (after one `npm run bench`).
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { createGame, DEFAULT_SCENARIO, getScenario, handOver, headStartConfig, listScenarios, nationSet, newGameOptions, perfReport, playUntil, serialize, setPerf, turnOfYear as calendarTurn, type GameConfig, type GameState } from '../packages/engine/src/index.ts';
+import { createGame, DEFAULT_SCENARIO, getScenario, handOver, headStartConfig, listScenarios, nationSet, newGameOptions, perfReport, playUntil, registerScenario, serialize, setPerf, turnOfYear as calendarTurn, type GameConfig, type GameState } from '../packages/engine/src/index.ts';
 
 const args = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
@@ -26,8 +26,15 @@ const opt = (name: string, fallback: string) => {
 };
 
 const scenarioId = opt('scenario', DEFAULT_SCENARIO);
-const scenario = getScenario(scenarioId);
-if (!scenario) throw new Error(`Unknown scenario "${scenarioId}". Use ${listScenarios().map((sc) => sc.id).join(', ')}.`);
+const chosen = getScenario(scenarioId);
+if (!chosen) throw new Error(`Unknown scenario "${scenarioId}". Use ${listScenarios().map((sc) => sc.id).join(', ')}.`);
+// --no-independence (timing only): the same scenario with independence switched off, so no War of
+// Independence ends a timing game early and every game runs to its year. It plays other games than
+// the recorded ones, so it can't be combined with --verify.
+const noIndependence = args.includes('--no-independence');
+if (noIndependence && args.includes('--verify')) throw new Error('--no-independence is for timing; --verify checks the recorded games.');
+if (noIndependence) registerScenario({ ...chosen, id: `${chosen.id}-no-independence`, name: `${chosen.name} (no independence)`, hidden: true, mechanics: { ...chosen.mechanics, independence: false } });
+const scenario = noIndependence ? getScenario(`${chosen.id}-no-independence`)! : chosen;
 const americas = scenario.id === DEFAULT_SCENARIO;
 
 /** The first turn of a year in the scenario's calendar (packages/engine/src/scenarios/calendar.ts). */
