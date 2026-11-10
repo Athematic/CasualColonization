@@ -88,6 +88,18 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
   };
 
   if (!off.has('land')) {
+    // Where a band is drawn the terrain no longer changes at the straight tile edge: no grey line there.
+    if (blend) {
+      hooks.hideBorder = (ax, ay, bx, by, z, s) => {
+        const a = landTerrainAt(s, ax, ay);
+        const b = landTerrainAt(s, bx, by);
+        if (!a || !b) return false;
+        const ra = order.indexOf(a);
+        const rb = order.indexOf(b);
+        if (ra < 0 || rb < 0 || ra === rb) return false;
+        return !!hasPieces(z)(ra > rb ? a : b);
+      };
+    }
     hooks.land = (ctx, t, z, shape, s) => {
       const list = ids.terrain(t.tile);
       const pick = painter.pick(list, z, dpr, true);

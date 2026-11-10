@@ -38,15 +38,19 @@ Best looking, but 47 images per terrain over a lower terrain, 11 x 47 = 517 imag
 
 ### (c) Edge and corner overlays, per bleeding terrain (recommended)
 
-The same scheme as the coast bands. For every terrain X, 3 transparent pieces: an **edge** (a band along the top), an **inner** corner (a band along the top and the left) and an **outer** corner (a patch in the top-left corner), rotated in quarter turns. The piece is a flat band of X's exact base colour with a thin wavy stroke on its inner boundary. A terrain ranks above or below another; the higher one bleeds onto the lower one, so each pair of neighbouring tiles is handled by exactly one tile (the lower one) and no piece contains two grounds. The base tiles are untouched.
+The same scheme as the coast bands. For every terrain X, 3 transparent pieces: an **edge** (a band along the top), an **inner** corner (a band along the top and the left) and an **outer** corner (a patch in the top-left corner), rotated in quarter turns. The piece is a flat band of X's exact base colour, with no outline. A terrain ranks above or below another; the higher one bleeds onto the lower one, so each pair of neighbouring tiles is handled by exactly one tile (the lower one) and no piece contains two grounds. The base tiles are untouched.
 
 Selection is `coastPieces()` on "which neighbours are a higher-ranked terrain X", one pass per distinct X, lower-ranked X first.
 
 Image count: 3 per bleeding terrain. All 8 ranked land terrains: 24 images, about $0.96 at $0.04. The trial set is 4 terrains: 12 images, about $0.48. With one variant each (`__v2`, for less repetition) and re-rolls for the odd bad piece, plan on twice that: under $2 for the whole terrain set.
 
-Weaknesses: only 3 pieces, so no concave/convex variety beyond the corner rules; the ends of an edge band meet the neighbouring bands at the tile corners, which can leave small notches (visible in the demo, where a band ends at a corner next to a tile of the same terrain). Drawing the band's ends slightly tapered would hide most of it; check once real art exists. Hills, mountains and arctic are left out on purpose: they carry their own relief art.
+Weaknesses: only 3 pieces, so no concave/convex variety beyond the corner rules. Hills, mountains and arctic are left out on purpose: they carry their own relief art.
 
-**Generic variant** (not built): 3 white pieces tinted to the neighbour's colour with the pack's `tinted` painter, 3 images in total, at the cost of the stroke colour and any texture.
+**Known weakness, fixed (corner artifacts).** The first demo showed triangular wedges, arrow-like "ears" and a grey line that did not follow the terrain at corners. Causes, all in the geometry rather than the selection (which already gave one inner piece for two adjacent sides, an outer piece for a lone diagonal, and the right turns): (1) the outer corner was a quarter disc of radius 28% against bands 20% deep, so at every convex corner the disc stuck out past the neighbouring bands, leaving a step and a pointed ear; (2) the inner piece's fill (wavy bands plus a circle) did not match its straight, separately drawn stroke, and each piece's stroke ended square at the tile corner, so strokes crossed the neighbouring piece's fill; (3) the wave of the band boundary had a different phase and amplitude at the ends of different pieces, so the boundary did not continue from edge to corner to edge; (4) the Ligne claire renderer still drew its faint straight terrain border on edges where the ground no longer changes. The rounded-corner clip is not involved: ground and bands are clipped by the same path, so the clip only trims both together (the demo has no coast corners; coasts keep their own ink line).
+
+The geometry is now fixed, as an offset of the bleeding terrain's tile by 20% of the tile with rounded convex corners: the band boundary is exactly 20% deep and straight for the first and last 30% of every edge and wanders (within 17-23%, mirror-symmetric, zero slope where it leaves the straight part) only in the middle 40%; the outer corner is a quarter disc of radius exactly 20% centred on the tile corner; the inner corner is the two bands joined by a quarter-round fillet of radius 10% tangent to both straight stretches. The pieces have no outline: a drawn line cannot be matched between independently generated images, and the colour change alone is enough. `test/fixtures/synthetic-geometry.ts` holds these as pure functions and `test/transition-geometry.test.ts` checks, on random maps and in all four rotations, that the covered area agrees across every shared tile edge and that every side facing the bleeder is covered up to the corners. The land hook also reports `hideBorder` (new in `MapLayerHooks`), so the base renderer skips its faint straight border on edges that have a band.
+
+**Generic variant** (not built): 3 white pieces tinted to the neighbour's colour with the pack's `tinted` painter, 3 images in total, at the cost of any texture.
 
 ## Recommendation
 
@@ -57,8 +61,9 @@ Weaknesses: only 3 pieces, so no concave/convex variety beyond the corner rules;
 SPRITE_PROMPTS.md section 4.8a, a trial set under the `terrain-blend` category block: for each of savannah, plains, prairie and grassland, `terrain/blend__<terrain>__edge|inner|outer`. Geometry that lets the pieces line up:
 
 - Transparent background, flat fill in exactly the terrain's base colour (so the band merges into a full tile of that terrain on the other side of the edge).
-- The band is 20% deep where it meets an image edge, the same at both ends, so neighbouring pieces join without steps; in between the inner boundary wanders within 16 to 25%.
-- One thin stroke on the inner boundary in the terrain's motif colour; no ink outline, no motifs.
+- The band is exactly 20% deep and straight for the first and last 30% of each edge, the same at both ends, so neighbouring pieces join without steps; only the middle 40% may wander (17 to 23%, symmetric, zero slope at the ends).
+- Outer corner: a quarter circle of radius exactly 20% centred on the corner. Inner corner: two bands plus a fillet of radius 10%.
+- No outline or stroke of any kind, no motifs.
 - Edge points north, inner points north and west, outer is the north-west corner, exactly as the coast pieces.
 
 ## Pipeline and pack
@@ -70,7 +75,7 @@ SPRITE_PROMPTS.md section 4.8a, a trial set under the `terrain-blend` category b
   - `transitions.ts`: `transitionPieces(order, own, neighbours, has)`, the pure selection. `coast.ts` now holds `coastPieces` (shared).
   - `layers.ts`: the `land` hook draws the pieces over the ground, inside the same rounded-corner clip. A terrain without an edge piece in the manifest bleeds nothing; missing inner pieces become two edges; missing outer pieces are skipped. So a half-finished art set degrades gracefully.
 - To try it with a pack: `extendPack(ligneClairePaintedPack, { rules: { transitions: 'overlay' } })`.
-- `packages/style-sprites/test/fixtures/synthetic-blend.ts` draws stand-in pieces with canvas 2D for demos. The demo image is `docs/design/tessellated-tiles-demo.png` (left: none, right: overlay).
+- `packages/style-sprites/test/fixtures/synthetic-blend.ts` draws stand-in pieces with canvas 2D for demos. The demo image is `docs/design/tessellated-tiles-demo.png` (top left: none, top right: overlay, below: the joins at larger zoom: L corner, U inlet, hole, diagonals, island).
 
 ## Left
 
