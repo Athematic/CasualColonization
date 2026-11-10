@@ -2,7 +2,7 @@
  * Game state -> sprite id candidates, through a pack's mapping. Every function returns the ids to
  * try in order (empty: nothing to try, draw procedurally).
  */
-import { TERRAIN, UNIT_TYPES, type BuildingKind, type ProductId, type RoleId, type TerrainId, type Tile, type TribeId, type UnitTypeId } from '@cc/engine';
+import { TERRAIN, UNIT_TYPES, type BuildingKind, type FatherId, type ProductId, type RoleId, type TerrainId, type Tile, type TribeId, type UnitTypeId } from '@cc/engine';
 import type { IdSlot, SpriteMapping } from './pack.js';
 
 /** `expertFurTrapper` -> `expert-fur-trapper`. */
@@ -103,6 +103,11 @@ export class SpriteIds {
   good(product: ProductId): string[] {
     const own = this.mapping.products;
     return fill(own && product in own ? own[product] : this.mapping.goods, { product });
+  }
+
+  /** A Founding Father's portrait. */
+  father(id: FatherId): string[] {
+    return fill(this.mapping.fathers, { father: id });
   }
 
   road(): { hub: string[]; spoke: string[]; diagonal: string[] } {

@@ -114,11 +114,11 @@ export function isGroundOverlay(id) {
 }
 
 /**
- * Enclosures generated whole (the colony stockade and fort) are drawn in two parts, the back wall
+ * Enclosures generated whole (the colony stockade, fort and fortress) are drawn in two parts, the back wall
  * behind the houses and the front wall in front. They split at this share of the master's height
  * (docs/SPRITE_PROMPTS.md, section 4.10).
  */
-export const SPLIT_SPRITES = { 'colonies/stockade': 0.58, 'colonies/fort': 0.58 };
+export const SPLIT_SPRITES = { 'colonies/stockade': 0.58, 'colonies/fort': 0.58, 'colonies/fortress': 0.58 };
 
 /**
  * Compute the master -> unit-canvas transform for a layout.

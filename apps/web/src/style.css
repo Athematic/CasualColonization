@@ -864,10 +864,27 @@ button.good:not(:disabled):hover {
 }
 
 .btn.father {
-  flex-direction: column;
-  align-items: flex-start;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
   text-align: left;
+  gap: 0.75rem;
+}
+
+.btn.father .father-text {
+  display: flex;
+  flex-direction: column;
   gap: 0.1rem;
+}
+
+.btn.father .icon {
+  flex: none;
+}
+
+.congress-sought {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
 }
 
 .father-effect {
@@ -1741,6 +1758,7 @@ button.good:not(:disabled):hover {
 .reports-screen .screen-head .report-nation {
   margin: 0;
   flex-direction: row;
+  justify-content: flex-start;
   align-items: center;
   gap: 0.4rem;
 }
@@ -1977,10 +1995,21 @@ button.report-chip {
 
 .report-fathers {
   margin: 0;
-  padding-left: 1.1rem;
+  padding: 0;
+  list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  gap: 0.35rem 1.2rem;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.5rem 1.2rem;
+}
+
+.report-fathers li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.report-fathers .icon {
+  flex: none;
 }
 
 .report-filters {

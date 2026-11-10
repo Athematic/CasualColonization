@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { StylePlugin } from '@cc/render-api';
+import { FATHERS, type FatherId } from '@cc/engine';
+import { fatherInitials, type StylePlugin } from '@cc/render-api';
 import { fill, kebab, SpriteIds } from '../src/ids.js';
 import { coastPieces, roadTurns } from '../src/layers.js';
 import { createSpriteStyle, packCssUrls } from '../src/style.js';
@@ -408,6 +409,41 @@ describe('createSpriteStyle', () => {
     await flush();
     style.drawIcon(ctx, { kind: 'product', product: 'furs' }, 20);
     expect(calls.icons).toBe(2);
+  });
+
+  it('maps all 25 Founding Fathers to fathers/<kebab-id> and falls back without the sprite', async () => {
+    const expected = [
+      'adam-smith', 'jakob-fugger', 'peter-minuit', 'peter-stuyvesant', 'jan-de-witt', 'ferdinand-magellan', 'francisco-de-coronado', 'hernando-de-soto', 'henry-hudson',
+      'la-salle', 'hernan-cortes', 'george-washington', 'paul-revere', 'francis-drake', 'john-paul-jones', 'thomas-jefferson', 'pocahontas', 'thomas-paine', 'simon-bolivar',
+      'benjamin-franklin', 'william-brewster', 'william-penn', 'jean-de-brebeuf', 'juan-de-sepulveda', 'bartolome-de-las-casas',
+    ];
+    const ids = new SpriteIds(DEFAULT_MAPPING);
+    const all = Object.keys(FATHERS) as FatherId[];
+    expect(all).toHaveLength(25);
+    expect(all.map((id) => ids.father(id)[0]).sort()).toEqual(expected.map((e) => `fathers/${e}`).sort());
+    expect(ids.father('bartolomeDeLasCasas')).toEqual(['fathers/bartolome-de-las-casas']);
+    expect(ids.father('laSalle')).toEqual(['fathers/la-salle']);
+    // No sprite in the manifest: the fallback style draws the cameo.
+    const { plugin, calls } = fallbackStyle();
+    const { env, flush } = fakeEnv({ manifest: MANIFEST });
+    const style = createSpriteStyle(completePack({ id: 'p', name: 'P', description: 'd', source: { base: 'x/' } }), plugin, { env, base: 'x/' });
+    const ctx = { getTransform: () => ({ a: 1, b: 0 }) } as unknown as CanvasRenderingContext2D;
+    style.drawIcon(ctx, { kind: 'father', id: 'laSalle', category: 'exploration' }, 96);
+    await flush();
+    style.drawIcon(ctx, { kind: 'father', id: 'laSalle', category: 'exploration' }, 96);
+    expect(calls.icons).toBe(2);
+  });
+
+  it('names the new enclosure, brave and artillery sprites exactly', () => {
+    const ids = new SpriteIds(DEFAULT_MAPPING);
+    expect(ids.unit('damagedArtillery', 'none')[0]).toBe('units/damaged-artillery__none');
+    expect(ids.brave(true, true)[0]).toBe('units/brave__armed-mounted');
+    expect(ids.defence(3)[0]).toBe('colonies/fortress');
+    expect(ids.building('stockade', 3)[0]).toBe('buildings/stockade__3');
+  });
+
+  it('derives father initials', () => {
+    expect(['bartolomeDeLasCasas', 'laSalle', 'pocahontas', 'jeanDeBrebeuf', 'adamSmith'].map((i) => fatherInitials(i as FatherId))).toEqual(['BC', 'LS', 'P', 'JB', 'AS']);
   });
 
   it('draws the map with the fallback renderer and the pack layers as hooks', () => {

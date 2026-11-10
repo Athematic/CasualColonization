@@ -12,7 +12,7 @@ export const myStyle: StylePlugin = {
   theme: { '--paper': '#fff', '--ink': '#000', /* … all StyleTheme keys … */ },
   stylesheets: [], // optional, e.g. a web font
   createMapRenderer: (canvas) => new MyMapRenderer(canvas),
-  drawIcon: (ctx, icon, size) => { /* unit, product, building or tile icon */ },
+  drawIcon: (ctx, icon, size) => { /* unit, product, building, tile or father icon */ },
   tileColor: (tile) => '#7ab', // minimap colour
 };
 ```
@@ -49,6 +49,8 @@ The shell does all hit-testing with `screenToTile`. A renderer must therefore us
 `drawIcon(ctx, icon, size)` draws into a `size × size` box at the origin. The shell caches each icon as an image. Icons appear in the side panel, the colony screen and Europe.
 
 The `theme` values become CSS custom properties on the page while the style is active, so panels and buttons match the map.
+
+The `father` icon kind, `{ kind: 'father', id: FatherId, category }`, is a Founding Father's portrait (shown at 96 px in the Congress choice and 48 px in the Congress report). A style without art draws a simple oval cameo in the category colour with the initials; `@cc/render-api` exports `drawFatherCameo`, `FATHER_COLORS` and `fatherInitials` for that. A sprite pack maps it through `mapping.fathers` (default `fathers/{father}`, so `bartolomeDeLasCasas` becomes `fathers/bartolome-de-las-casas`) and falls back to the cameo when the sprite is missing.
 
 A style that loads images in the background can implement the optional `onAssetsChanged(listener)`: the shell then drops its cached icons and redraws whenever more assets have arrived.
 
@@ -90,7 +92,7 @@ A `SpritePack` is data (`packages/style-sprites/src/pack.ts`):
 | `rules` | How each kind of sprite sits on a tile: its size relative to the tile, where its anchor (the ground point from the manifest) goes, the bonus marker box, the walls, the colony flag, the mission marker and the unit icon pennant. |
 | `procedural` | Layers to leave to the fallback even when sprites exist (`water`, `land`, `shore`, `roads`, `relief`, `bonus`, `rumour`, `settlements`, `colonies`, `units`, `icons`). Rivers, the coastline's ink, fog, captions and markers always come from the fallback. |
 
-Ids are templates. `{type}`, `{role}`, `{terrain}`, `{tribe}`, `{building}`, `{level}` and `{product}` become the engine ids in kebab-case (`expertFurTrapper` becomes `expert-fur-trapper`). A slot holds one template, a list tried in order, or `null` (always procedural). `DEFAULT_MAPPING` is the scheme of [SPRITE_PROMPTS.md](SPRITE_PROMPTS.md) section 5:
+Ids are templates. `{type}`, `{role}`, `{terrain}`, `{tribe}`, `{building}`, `{level}`, `{product}` and `{father}` become the engine ids in kebab-case (`expertFurTrapper` becomes `expert-fur-trapper`). A slot holds one template, a list tried in order, or `null` (always procedural). `DEFAULT_MAPPING` is the scheme of [SPRITE_PROMPTS.md](SPRITE_PROMPTS.md) section 5:
 
 | Game state | Sprite ids tried |
 | --- | --- |
@@ -108,6 +110,7 @@ Ids are templates. `{type}`, `{role}`, `{terrain}`, `{tribe}`, `{building}`, `{l
 | Settlement | `settlements/{tribe}`; a capital tries `settlements/{tribe}__capital` first |
 | Building icon | `buildings/{building}__{level}`, then the lower levels |
 | Goods icon | `goods/{product}` |
+| Founding Father portrait | `fathers/{father}` |
 
 Sprites are nation-neutral. Ownership stays visible through the fallback's pennant and stack badge on units, a flag in the owner's colour on colonies, the tinted `overlays/mission` on settlements with a mission, and the tinted `overlays/pennant` on the icons of ships, soldiers and artillery.
 

@@ -485,7 +485,9 @@ function congressTab(ctx: ReportContext): Child[] {
     card('Next Founding Father',
       cur
         ? h('div', null,
-            h('p', null, h('strong', null, cur.name), h('span', { class: 'muted small' }, ` (${cur.category})`), ` — ${cur.effect}`),
+            h('div', { class: 'congress-sought' },
+              icon({ kind: 'father', id: c.current!, category: cur.category }, 96, cur.name),
+              h('p', null, h('strong', null, cur.name), h('span', { class: 'muted small' }, ` (${cur.category})`), ` — ${cur.effect}`)),
             bar(c.fatherBells, c.fatherCost, 'Bells towards the next Founding Father'),
             h('p', { class: 'small' }, `${c.fatherBells} of ${c.fatherCost} bells · ${c.turnsToFather ? `joins in about ${turns(c.turnsToFather)}` : 'no bells are being rung'}`))
         : h('p', null, `No candidate chosen (${c.fatherBells} bells collected). `, mine ? h('button', { class: 'btn small', onclick: () => { app.closeScreen(); void app.chooseFather(); } }, 'Choose one') : null)),
@@ -501,7 +503,9 @@ function congressTab(ctx: ReportContext): Child[] {
         ], c.colonies, ctx.rerender)
       : empty('No colonies.')),
     card('Members of the Congress', c.fathers.length
-      ? h('ul', { class: 'report-fathers' }, c.fathers.map((id) => h('li', null, h('strong', null, FATHERS[id].name), h('span', { class: 'muted small' }, ` ${FATHERS[id].category}`), h('div', { class: 'small' }, FATHERS[id].effect))))
+      ? h('ul', { class: 'report-fathers' }, c.fathers.map((id) => h('li', null,
+          icon({ kind: 'father', id, category: FATHERS[id].category }, 48, FATHERS[id].name),
+          h('div', null, h('strong', null, FATHERS[id].name), h('span', { class: 'muted small' }, ` ${FATHERS[id].category}`), h('div', { class: 'small' }, FATHERS[id].effect)))))
       : empty('No Founding Fathers have joined yet.')),
   ];
 }

@@ -6,7 +6,7 @@
  *
  * Mapped ids are templates. Placeholders are replaced with engine ids in kebab-case:
  * `{type}` unit type, `{role}` role, `{terrain}` terrain, `{tribe}` tribe, `{building}` building
- * kind, `{level}` building level, `{product}` good or product. A slot may hold one template, a
+ * kind, `{level}` building level, `{product}` good or product, `{father}` Founding Father. A slot may hold one template, a
  * list (tried in order, the first sprite that exists wins) or null (always procedural). Anything
  * that resolves to no sprite in the manifest falls back, per sprite, to the fallback style.
  */
@@ -68,6 +68,8 @@ export interface SpriteMapping {
   };
   buildings: IdSlot;
   goods: IdSlot;
+  /** Founding Father portraits: `{father}` is the kebab-case FatherId. Missing ones are drawn procedurally. */
+  fathers?: IdSlot;
   /** White-cloth markers tinted to a nation's colour. */
   overlays: { pennant: IdSlot; flag: IdSlot; mission: IdSlot };
   /** Ids per building kind or product, replacing the templates. */
@@ -216,6 +218,7 @@ export const DEFAULT_MAPPING: SpriteMapping = {
   },
   buildings: 'buildings/{building}__{level}',
   goods: 'goods/{product}',
+  fathers: 'fathers/{father}',
   overlays: { pennant: 'overlays/pennant', flag: 'overlays/flag', mission: 'overlays/mission' },
 };
 

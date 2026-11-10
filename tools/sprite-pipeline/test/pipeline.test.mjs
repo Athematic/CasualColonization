@@ -94,6 +94,7 @@ test('ground overlays and enclosure splits are recognised by id', () => {
   assert.ok(!isGroundOverlay('terrain/plains'));
   assert.ok(!isGroundOverlay('decor/forest__plains'));
   assert.equal(SPLIT_SPRITES['colonies/stockade'], 0.58);
+  assert.equal(SPLIT_SPRITES['colonies/fortress'], 0.58);
 });
 
 test('classify picks the layout from the id', () => {

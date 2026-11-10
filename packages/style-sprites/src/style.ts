@@ -127,6 +127,8 @@ export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts
         return p.square(ctx, ids.good(icon.product), 0, 0, size, dpr);
       case 'building':
         return p.square(ctx, ids.building(icon.building, icon.level), 0, 0, size, dpr);
+      case 'father':
+        return p.square(ctx, ids.father(icon.id), 0, 0, size, dpr);
       case 'tile': {
         if (!p.square(ctx, ids.terrain(icon.tile), 0, 0, size, dpr, { fill: true })) return false;
         const lw = Math.max(1.1, size * 0.035);

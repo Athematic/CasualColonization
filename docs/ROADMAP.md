@@ -96,8 +96,8 @@ Closes the smaller items left from earlier releases while the classic game is co
 | Port character: each home port gets its own starting prices, demand and ship prices (for example cheap trade goods in Amsterdam, furs dear in La Rochelle, silver in Seville, cheap ships in Lisbon), so Favoured Nation access and triangle trading pay off. Scenario data per nation | M | P2 | planned |
 | Find why Creative scores about 14 points less with Favoured Nation on | S | P2 | planned |
 | Trade routes may call at a favoured partner's port, not only the home port | S | P3 | planned |
-| Founding Father portraits in the Continental Congress screen and the father choices (once generated) | S | P2 | planned |
-| Wire in the new brave, damaged artillery and fortress sprites (once generated) | S | P2 | planned |
+| Founding Father portraits in the Continental Congress screen and the father choices (once generated) | S | P2 | done (sprites appear once uploaded) |
+| Wire in the new brave, damaged artillery and fortress sprites (once generated) | S | P2 | done (sprites appear once uploaded) |
 | Tune event rates and the computer players' event choices (one tournament with `--events`) | S | P2 | planned |
 | Tessellated terrain tiles: edge and corner pieces that blend neighbouring terrains, as a sprite-pack feature (Simon's idea, see CHANGE_SUGGESTIONS.md) | M | P2 | idea |
 | Speed-ups that change outcomes (each 10–20%: follow a found route for the whole turn, sharper path estimate, re-plan colony workers less often, keep colony reports per computer turn); renderer performance pass | M | P3 | idea |

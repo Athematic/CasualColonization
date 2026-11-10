@@ -15,6 +15,8 @@ import {
   unitPosition,
   type BuildingKind,
   type Colony,
+  type FatherCategory,
+  type FatherId,
   type GameState,
   type GoodId,
   type NationId,
@@ -127,7 +129,9 @@ export type IconRequest =
   | { kind: 'unit'; type: UnitTypeId; role: RoleId; nation: NationId }
   | { kind: 'product'; product: ProductId }
   | { kind: 'building'; building: BuildingKind; level: number }
-  | { kind: 'tile'; tile: Tile };
+  | { kind: 'tile'; tile: Tile }
+  /** A Founding Father's portrait (an oval cameo); `category` colours the fallback and the sprite's background. */
+  | { kind: 'father'; id: FatherId; category: FatherCategory };
 
 /** CSS custom properties the shell applies while a style is active. */
 export interface StyleTheme {
@@ -344,3 +348,61 @@ export function hash2(x: number, y: number, salt = 0): number {
 export type { GoodId };
 
 export * from './meander.js';
+
+/** Cameo colours of the Founding Father categories (also the sprite portraits' backgrounds). */
+export const FATHER_COLORS: Record<FatherCategory, string> = {
+  trade: '#c8955a',
+  exploration: '#8ed0ec',
+  military: '#93ad5e',
+  political: '#b9b2a6',
+  religious: '#3a6fb0',
+};
+
+/** Initials of a father's name from his id: `bartolomeDeLasCasas` -> `BC`, `laSalle` -> `LS`, `pocahontas` -> `P`. */
+export function fatherInitials(id: FatherId): string {
+  const words = id.replace(/([A-Z])/g, ' $1').trim().split(' ');
+  const keep = id === 'laSalle' ? words : words.filter((w) => !['de', 'las', 'la'].includes(w));
+  const letters = keep.map((w) => w[0]!.toUpperCase());
+  return letters.length > 1 ? letters[0]! + letters[letters.length - 1]! : letters[0]!;
+}
+
+/**
+ * A simple procedural father portrait: an oval cameo in the category colour with a bust silhouette
+ * and the initials, in the given heading font. Styles use it as their fallback.
+ */
+export function drawFatherCameo(ctx: CanvasRenderingContext2D, id: FatherId, category: FatherCategory, size: number, ink: string, font: string): void {
+  const cx = size / 2;
+  const cy = size / 2;
+  const rx = size * 0.4;
+  const ry = size * 0.47;
+  const lw = Math.max(1.2, size * 0.035);
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fillStyle = FATHER_COLORS[category];
+  ctx.fill();
+  ctx.clip();
+  ctx.fillStyle = 'rgba(0,0,0,0.16)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + ry * 0.95, rx * 0.8, ry * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy - ry * 0.12, rx * 0.42, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = lw;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  const text = fatherInitials(id);
+  ctx.font = `700 ${Math.round(size * (text.length > 1 ? 0.3 : 0.38))}px ${font}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(2, size * 0.06);
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.strokeText(text, cx, cy + size * 0.02);
+  ctx.fillStyle = '#1b1b1b';
+  ctx.fillText(text, cx, cy + size * 0.02);
+}
