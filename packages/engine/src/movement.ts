@@ -15,7 +15,6 @@ import {
   maxMoves,
   message,
   neighbours,
-  player,
   reveal,
   settlementAt,
   sightRadius,
@@ -30,7 +29,7 @@ import { FOREST_MOVE_COST, RIVER_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './ru
 import { riverLinked } from './rivers.js';
 import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
 import type { TribeId } from './rules/nations.js';
-import type { GameState, ImprovementKind, Unit } from './types.js';
+import type { GameState, ImprovementKind, Player, Unit } from './types.js';
 
 export type MoveOption =
   | { kind: 'move' }
@@ -270,21 +269,64 @@ export function buildMapIndex(s: GameState): MapIndex {
 }
 
 function passable(s: GameState, u: Unit, x: number, y: number, isGoal: boolean, index: MapIndex): boolean {
-  const tile = tileAt(s, x, y);
+  if (!inBounds(s, x, y)) return false;
+  return passableAt(s, searchContext(s, u), y * s.map.width + x, isGoal, index);
+}
+
+/** What a path search needs to know about the unit, worked out once per search. */
+interface SearchContext {
+  owner: Unit['owner'];
+  ship: boolean;
+  /** The owner's player record (looked up as `player` would, failing only when needed). */
+  player: Player | undefined;
+  /** Tribes at war with the owner. */
+  war: Set<TribeId>;
+}
+
+function searchContext(s: GameState, u: Unit): SearchContext {
+  const war = new Set<TribeId>();
+  const seen = new Set<TribeId>();
+  // The first tribe of each id counts, as with s.tribes.find.
+  for (const t of s.tribes) {
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    if (t.stance[u.owner] === 'war') war.add(t.id);
+  }
+  return { owner: u.owner, ship: isShip(u), player: s.players.find((p) => p.id === u.owner), war };
+}
+
+/** Whether the unit can stand on the tile with map index `i` (on the map) while pathing. */
+function passableAt(s: GameState, ctx: SearchContext, i: number, isGoal: boolean, index: MapIndex): boolean {
+  const tile = s.map.tiles[i];
   if (!tile) return false;
-  const i = y * s.map.width + x;
   const colonyOwner = index.colonies.get(i);
-  if (colonyOwner && colonyOwner !== u.owner) return false;
+  if (colonyOwner && colonyOwner !== ctx.owner) return false;
   if (index.settlements.has(i)) return false;
   const owners = index.units.get(i);
-  if (owners && (owners.size > 1 || !owners.has(u.owner))) return false;
+  if (owners && (owners.size > 1 || !owners.has(ctx.owner))) return false;
   const tribes = isGoal ? undefined : index.braves?.get(i);
-  if (tribes && tribes.some((t) => s.tribes.find((o) => o.id === t)?.stance[u.owner] === 'war')) return false;
+  if (tribes) for (const t of tribes) if (ctx.war.has(t)) return false;
   // People can only route through land they have seen; the AI knows the map.
-  const owner = player(s, u.owner);
+  const owner = ctx.player;
+  if (!owner) throw new Error(`No player ${ctx.owner}`);
   if (owner.human && !owner.explored[i] && !isGoal) return false;
-  if (isShip(u)) return isWater(tile) || colonyOwner === u.owner;
-  return !isWater(tile);
+  const water = TERRAIN[tile.t].water;
+  if (ctx.ship) return water || colonyOwner === ctx.owner;
+  return !water;
+}
+
+/** moveCost for a search: from tile `fi` to the neighbouring tile `ti`, both on the map. */
+function stepCost(s: GameState, ctx: SearchContext, fi: number, ti: number, fx: number, fy: number, tx: number, ty: number, index: MapIndex): number {
+  if (ctx.ship) return 3;
+  const from = s.map.tiles[fi];
+  const to = s.map.tiles[ti];
+  const roadFrom = from.r || index.colonies.has(fi);
+  const roadTo = to.r || index.colonies.has(ti);
+  if (roadFrom && roadTo) return ROAD_MOVE_COST;
+  // Along a river: as cheap as a road, and the two do not add up.
+  if (to.rv && from.rv && riverLinked(s.map, fx, fy, tx, ty)) return RIVER_MOVE_COST;
+  if (to.f) return FOREST_MOVE_COST;
+  return TERRAIN[to.t].moveCost;
 }
 
 // Search buffers, reused between path searches: a tile's cost and previous tile count only when
@@ -319,6 +361,7 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
   if (start.x === tx && start.y === ty) return [];
   const index = buildMapIndex(s);
   if (!passable(s, u, tx, ty, true, index)) return null;
+  const ctx = searchContext(s, u);
   const w = s.map.width;
   const h = s.map.height;
   const gen = searchBuffers(w * h);
@@ -388,8 +431,8 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
       if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
       const nIdx = ny * w + nx;
       if (done[nIdx] === gen) continue;
-      if (!passable(s, u, nx, ny, nIdx === goalIdx, index)) continue;
-      const c = cost[idx] + moveCost(s, u, cx, cy, nx, ny, index);
+      if (!passableAt(s, ctx, nIdx, nIdx === goalIdx, index)) continue;
+      const c = cost[idx] + stepCost(s, ctx, idx, nIdx, cx, cy, nx, ny, index);
       if (seen[nIdx] !== gen || c < cost[nIdx]) {
         seen[nIdx] = gen;
         cost[nIdx] = c;
