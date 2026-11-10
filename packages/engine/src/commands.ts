@@ -1,7 +1,7 @@
 import { assignJob, equipInColony, foundColony, hurryBuild, leaveColony, setBuild } from './colony.js';
 import { applyCheat, type CheatId } from './cheats.js';
 import { track } from './telemetry.js';
-import { attack, cashTreasure } from './combat.js';
+import { attack, cashTreasure, repairArtillery } from './combat.js';
 import { fail, RuleError } from './errors.js';
 import {
   answerTax,
@@ -55,6 +55,7 @@ export type Command =
   /** Pays (or refuses) a brave's demand for tribute, or buys (or declines) goods a brave offers. */
   | { type: 'answerNativeDemand'; demandId: string; accept: boolean }
   | { type: 'fortify'; unitId: string }
+  | { type: 'repairArtillery'; unitId: string }
   | { type: 'sentry'; unitId: string }
   | { type: 'activate'; unitId: string }
   | { type: 'skip'; unitId: string }
@@ -226,6 +227,9 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         delete u.roadTo;
         break;
       }
+      case 'repairArtillery':
+        text = repairArtillery(s, nation, cmd.unitId);
+        break;
       case 'sentry': {
         const u = ownUnit(s, nation, cmd.unitId);
         u.state = 'sentry';

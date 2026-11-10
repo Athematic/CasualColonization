@@ -1,6 +1,7 @@
 import { colonySiteProblem } from '../colony.js';
 import { braveDefence, hostileBraveAt } from '../braves.js';
 import { attack, defencePower, offencePower } from '../combat.js';
+import { UNIT_TYPES } from '../rules/units.js';
 import { RuleError } from '../errors.js';
 import { describeMove, findPath, leaveShip, moveUnit, setDestination } from '../movement.js';
 import { baseTileYield } from '../production.js';
@@ -174,24 +175,26 @@ export function aiFight(s: GameState, p: Player, u: Unit): boolean {
   const pos = unitPosition(s, u);
   if (!pos || u.moves <= 0) return false;
   const atWar = (owner: string) => p.stance[owner] === 'war';
+  // Artillery is costly to lose: it only fights with a clear edge, damaged artillery with a larger one.
+  const margin = u.type === 'damagedArtillery' ? 1.5 : UNIT_TYPES[u.type].kind === 'artillery' ? 1.25 : 1;
   for (const n of neighbours(s, pos.x, pos.y)) {
     const colony = colonyAt(s, n.x, n.y);
     if (colony && atWar(colony.owner)) {
       const defenders = unitsAt(s, n.x, n.y).filter((o) => o.owner === colony.owner && !isShip(o));
       const best = Math.max(0, ...defenders.map((d) => defencePower(s, d)));
-      if (offencePower(s, u) >= best) {
+      if (offencePower(s, u) >= best * margin) {
         attack(s, u.id, { colonyId: colony.id });
         return true;
       }
     }
     const enemy = unitsAt(s, n.x, n.y).find((o) => atWar(o.owner) && isShip(o) === isShip(u));
-    if (enemy && offencePower(s, u) >= defencePower(s, enemy)) {
+    if (enemy && offencePower(s, u, enemy) >= defencePower(s, enemy) * margin) {
       attack(s, u.id, { unitId: enemy.id });
       return true;
     }
     // Hostile braves next to the unit, when the odds are good.
     const brave = !isShip(u) ? hostileBraveAt(s, p.id, n.x, n.y) : undefined;
-    if (brave && offencePower(s, u) >= braveDefence(s, brave) * 2.5) {
+    if (brave && offencePower(s, u) >= braveDefence(s, brave) * 2.5 * margin) {
       attack(s, u.id, { braveId: brave.id });
       return true;
     }
