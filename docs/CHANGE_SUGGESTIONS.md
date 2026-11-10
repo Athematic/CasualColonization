@@ -5,10 +5,15 @@ This file is the inbox for new ideas. Once we have discussed an idea, it moves t
 ## Tweaks
 
 - Update tiles with tessellation (https://www.sandromaglione.com/articles/how-to-create-a-pixel-art-tileset-complete-guide + https://www.sandromaglione.com/articles/pixel-art-game-tileset-made-easier)
+- Consider adding one ore two branches for UI redesigns using Anthopics frontend-design skills
+- Consider adding more sprites to the UI
+- Terrain tesselation
+- Terrain variants (generate several sprite variants and either randomize or random+prevent-same-neighbors)
 
 ### AI intelligence too low
 
 - I started a game where the computer played for me for almost the maximum amount of turns. The computer mostly seemed to make good calls, but when i took over 9 of the last 12 reports where about wares spoiling in various colonies. A smart agent (really anyone above naive) should be able to buy more ships or set up trading with other nations or indigineous peoples to prevent spoiled wares.
+- Computer controlled nations tends to build colonies with only on terrain tile between them, often they almost make a grid. Agents should prefer at least 2 tiles between cities (tiles should not be shared between colonies, so if one colony harvests a tile, other cities cannot). The smarter the computer is, the more it should consider yield and terrain bonuses to optimize colony locations (one colony that can grow to max size is much better that many small colonies in the endgame (but many small colonies might be advantagious early on - a few tournaments might get some data to work from).
 
 ## Missing features
 
