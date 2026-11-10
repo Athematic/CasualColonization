@@ -94,8 +94,14 @@ const isCargoShip = (u: Unit) => isShip(u) && UNIT_TYPES[u.type].offence === 0 &
 /** Inland colonies a wagon train route already serves. */
 function wagonServed(s: GameState, p: Player): Set<string> {
   const out = new Set<string>();
+  // The routes a wagon train follows, in one pass over the units (as routeUnits per route would find).
+  const carted = new Set<string>();
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (u.route && isWagon(u)) carted.add(u.route.id);
+  }
   for (const r of routesOf(s, p.id)) {
-    if (!routeUnits(s, r.id).some(isWagon)) continue;
+    if (!carted.has(r.id)) continue;
     for (const st of r.stops) {
       const c = s.colonies[st.at];
       if (c && !isCoastal(s, c.x, c.y)) out.add(c.id);
@@ -105,8 +111,10 @@ function wagonServed(s: GameState, p: Player): Set<string> {
 }
 
 /** Inland colonies with goods to carry away. */
-function needsCarting(s: GameState, c: Colony, report: ColonyReport = colonyReport(s, c)): boolean {
+function needsCarting(s: GameState, c: Colony, given?: ColonyReport): boolean {
   if (isCoastal(s, c.x, c.y)) return false;
+  // The report only for an inland colony: most are on the coast.
+  const report = given ?? colonyReport(s, c);
   const surplus = tradeGoods(s).reduce((n, g) => n + Math.max(0, report.net[g]), 0);
   return surplus >= 3 || overflowSoon(s, c, 8, report) > 0;
 }

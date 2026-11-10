@@ -392,7 +392,6 @@ export function buildTargetCost(target: BuildTarget, colony: Colony): { hammers:
 }
 
 export function canBuild(s: GameState, colony: Colony, target: BuildTarget): boolean {
-  const pop = colonyPopulation(s, colony) || 1;
   if (target.kind === 'unit') {
     const build = COLONY_BUILDS[target.id];
     if (!build || !unitsOf(s).units.has(target.id)) return false;
@@ -405,6 +404,8 @@ export function canBuild(s: GameState, colony: Colony, target: BuildTarget): boo
   if (def.locked && !modifiers(s, colony.owner, 'unlockBuilding').some((m) => m.building === target.id)) return false;
   if (target.id === 'customHouse' && !mechanicsOf(s).customHouse) return false;
   if (def.coastalOnly && !isCoastal(s, colony.x, colony.y)) return false;
+  // The population last: counting it takes a look at every unit.
+  const pop = colonyPopulation(s, colony) || 1;
   return pop >= next.minPop;
 }
 
