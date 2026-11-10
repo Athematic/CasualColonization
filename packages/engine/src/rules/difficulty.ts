@@ -36,6 +36,8 @@ export interface DifficultyRules {
   recruitCost: number;
   /** Multiplier on the price of training experts and buying ships and artillery in Europe. */
   trainCost: number;
+  /** Multiplier on the gold price of hurrying a colony's build (hammers at 20 gold, missing tools at 1.5 times the market price). */
+  hurryCost: number;
   /** Multiplier on the crosses needed for each immigrant (the first and every later one). */
   crosses: number;
   /** Multiplier on the chance that a sale makes the Crown raise taxes. */
@@ -93,6 +95,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     priceRecovery: 2,
     recruitCost: 0.7,
     trainCost: 0.7,
+    hurryCost: 0.7,
     crosses: 0.7,
     taxChance: 0.5,
     taxRaise: 0.6,
@@ -120,6 +123,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     priceRecovery: 1.5,
     recruitCost: 0.85,
     trainCost: 0.85,
+    hurryCost: 0.85,
     crosses: 0.85,
     taxChance: 0.75,
     taxRaise: 0.8,
@@ -147,6 +151,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     priceRecovery: 1,
     recruitCost: 1,
     trainCost: 1,
+    hurryCost: 1,
     crosses: 1,
     taxChance: 1,
     taxRaise: 1,
@@ -174,6 +179,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     priceRecovery: 0.75,
     recruitCost: 1.15,
     trainCost: 1.15,
+    hurryCost: 1.15,
     crosses: 1.15,
     taxChance: 1.25,
     taxRaise: 1.25,
@@ -201,6 +207,7 @@ export const DIFFICULTY: Record<DifficultyId, DifficultyRules> = {
     priceRecovery: 0.5,
     recruitCost: 1.3,
     trainCost: 1.3,
+    hurryCost: 1.3,
     crosses: 1.3,
     taxChance: 1.5,
     taxRaise: 1.5,

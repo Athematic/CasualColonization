@@ -430,7 +430,7 @@ export function hurryPrice(s: GameState, colony: Colony): number {
   const hammers = Math.max(0, cost.hammers - colony.hammers);
   const tools = Math.max(0, cost.tools - colony.goods.tools);
   const toolPrice = player(s, colony.owner).market.tools.price + GOOD_DEFS.tools.spread;
-  return hammers * 20 + Math.ceil(tools * toolPrice * 1.5);
+  return Math.round((hammers * 20 + Math.ceil(tools * toolPrice * 1.5)) * difficultyRules(player(s, colony.owner)).hurryCost);
 }
 
 /** Pays gold so the current build completes at the end of the turn. */
