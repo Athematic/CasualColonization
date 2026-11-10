@@ -7,11 +7,12 @@
  * and a counter, never from `GameState.rng`. So the same seed always gives the same values, and
  * drawing them does not shift any other random outcome of the game.
  */
+import { gridOf } from './grid.js';
 import { fail } from './errors.js';
 import { noteGoods, noteHistory } from './history.js';
 import { buyPrice, portName, sellPrice } from './europe.js';
 import { noteTrade } from './stats.js';
-import { cargoRoomFor, colonyAt, distance, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
+import { cargoRoomFor, colonyAt, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
 import { random } from './rng.js';
 import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, term, turnAfterYears, yearValue } from './scenarios/index.js';
 import type { NationId } from './rules/nations.js';
@@ -451,13 +452,14 @@ function sendShipsHome(s: GameState, a: NationId, b: NationId): void {
  * Returns a report, or '' when nothing was seized.
  */
 function seizeGoods(s: GameState, by: NationId, from: NationId): string {
+  const grid = gridOf(s);
   const colonies = Object.values(s.colonies).filter((c) => c.owner === by);
   if (!colonies.length) return '';
   let total = 0;
   for (const u of Object.values(s.units)) {
     if (u.owner !== from || u.loc.kind !== 'map' || !u.cargo) continue;
     const { x, y } = u.loc;
-    const colony = colonies.filter((c) => distance(c.x, c.y, x, y) <= 1).sort((p, q) => distance(p.x, p.y, x, y) - distance(q.x, q.y, x, y))[0];
+    const colony = colonies.filter((c) => grid.distance(c.x, c.y, x, y) <= 1).sort((p, q) => grid.distance(p.x, p.y, x, y) - grid.distance(q.x, q.y, x, y))[0];
     if (!colony) continue;
     let taken = 0;
     for (const g of goodsOf(s)) {
@@ -578,8 +580,9 @@ export function tradeAtForeignColony(
 
 /** Whether a unit is at a foreign colony's stop: on the map, next to it (ships on water, wagons on land). */
 export function besideColony(s: GameState, u: Unit, colonyId: string): boolean {
+  const grid = gridOf(s);
   const c = s.colonies[colonyId];
   if (!c || u.loc.kind !== 'map') return false;
   const { x, y } = u.loc;
-  return distance(c.x, c.y, x, y) === 1 && !colonyAt(s, x, y);
+  return grid.distance(c.x, c.y, x, y) === 1 && !colonyAt(s, x, y);
 }

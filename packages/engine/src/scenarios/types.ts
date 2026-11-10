@@ -20,6 +20,7 @@ import type { PortEntry } from '../rules/ports.js';
 import type { ScoreWeights } from '../rules/score.js';
 import type { UnitTypeId } from '../rules/units.js';
 import type { EntrySide } from '../mapgen.js';
+import type { GridKind } from '../grid.js';
 import type { TerrainId } from '../rules/terrain.js';
 import type { GameState, MapSize } from '../types.js';
 import type { Calendar } from './calendar.js';
@@ -159,6 +160,11 @@ export interface RumourEntry {
 }
 
 export interface ScenarioMap {
+  /**
+   * The tiles' shape (grid.ts): which tiles are next to which, distances and the colony's work
+   * area. Squares when absent, and the only grid so far.
+   */
+  grid?: GridKind;
   /** The stored maps this scenario offers (maps/index.ts), each with the scenario's peoples on it. */
   stored: StoredMapEntry[];
   /** How a generated map is made; absent when the scenario has stored maps only. */

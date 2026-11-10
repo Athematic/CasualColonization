@@ -24,7 +24,7 @@ import {
   tileDefence,
   neighbours,
   TORY_LANDING,
-  distance,
+  SQUARE,
   type Colony,
   type GameState,
   type NationId,
@@ -47,7 +47,7 @@ function colony(s: GameState, owner: NationId, opts: { workers?: number; liberty
   for (let y = 3; y < s.map.height - 3; y++) {
     for (let x = 2; x < s.map.width - 2; x++) {
       if (colonySiteProblem(s, x, y) || !isCoastal(s, x, y)) continue;
-      if (opts.avoid && distance(x, y, opts.avoid.x, opts.avoid.y) < 6) continue;
+      if (opts.avoid && SQUARE.distance(x, y, opts.avoid.x, opts.avoid.y) < 6) continue;
       const t = tileAt(s, x, y)!;
       if (t.t === 'hills' || t.t === 'mountains') continue;
       const u = createUnit(s, owner, 'freeColonist', { kind: 'map', x, y });
@@ -311,7 +311,7 @@ describe('Tories after the declaration', () => {
     const { s, tory } = torySetup(1);
     nation(s, 'england').ref = { regulars: 20, dragoons: 10, artillery: 5, menOfWar: 2 };
     processIndependence(s);
-    const near = Object.values(s.units).filter((u) => u.owner === 'crown' && !u.type.startsWith('man') && u.loc.kind === 'map' && distance(u.loc.x, u.loc.y, tory.x, tory.y) <= 2);
+    const near = Object.values(s.units).filter((u) => u.owner === 'crown' && !u.type.startsWith('man') && u.loc.kind === 'map' && SQUARE.distance(u.loc.x, u.loc.y, tory.x, tory.y) <= 2);
     expect(near).toHaveLength(TORY_LANDING);
   });
 

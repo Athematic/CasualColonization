@@ -5,9 +5,10 @@
  * colonies to the nearest port, so troops, colonists and wagon trains move faster. Stretches a
  * river already makes fast are left without a road.
  */
+import { gridOf } from '../grid.js';
 import { buildTargetCost, equipInColony, leaveColony } from '../colony.js';
 import { canImprove, findPath, setDestination, startImprovement } from '../movement.js';
-import { colonyAt, colonyWorkers, distance, isCoastal, isWater, neighbours, settlementAt, tileAt, unitPosition } from '../queries.js';
+import { colonyAt, colonyWorkers, isCoastal, isWater, neighbours, settlementAt, tileAt, unitPosition } from '../queries.js';
 import { riverLinked } from '../rivers.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
@@ -24,6 +25,7 @@ const planCache = new WeakMap<GameState, Map<string, Spot[]>>();
 
 /** Tiles the nation wants a road on, most useful first. Worked out once per turn. */
 export function roadTargets(s: GameState, p: Player): Spot[] {
+  const grid = gridOf(s);
   let byNation = planCache.get(s);
   if (!byNation) planCache.set(s, (byNation = new Map()));
   const key = `${p.id}:${s.turn}`;
@@ -49,11 +51,11 @@ export function roadTargets(s: GameState, p: Player): Spot[] {
   // Links between colonies, and from inland colonies to the coast.
   const links = new Set<string>();
   for (const c of colonies) {
-    const others = colonies.filter((o) => o !== c).sort((a, b) => distance(a.x, a.y, c.x, c.y) - distance(b.x, b.y, c.x, c.y));
+    const others = colonies.filter((o) => o !== c).sort((a, b) => grid.distance(a.x, a.y, c.x, c.y) - grid.distance(b.x, b.y, c.x, c.y));
     const partners: Colony[] = [];
-    if (others[0] && distance(others[0].x, others[0].y, c.x, c.y) <= LINK_RANGE) partners.push(others[0]);
+    if (others[0] && grid.distance(others[0].x, others[0].y, c.x, c.y) <= LINK_RANGE) partners.push(others[0]);
     if (!isCoastal(s, c.x, c.y)) {
-      const port = others.find((o) => isCoastal(s, o.x, o.y) && distance(o.x, o.y, c.x, c.y) <= LINK_RANGE + 2);
+      const port = others.find((o) => isCoastal(s, o.x, o.y) && grid.distance(o.x, o.y, c.x, c.y) <= LINK_RANGE + 2);
       if (port && !partners.includes(port)) partners.push(port);
     }
     for (const o of partners) {
@@ -74,8 +76,9 @@ export function roadTargets(s: GameState, p: Player): Spot[] {
 
 /** Cheapest land route between two colonies, preferring existing roads; the tiles in between. */
 export function roadRoute(s: GameState, p: Player, from: Spot, to: Spot): Spot[] | null {
+  const grid = gridOf(s);
   const w = s.map.width;
-  const limit = distance(from.x, from.y, to.x, to.y) + 3;
+  const limit = grid.distance(from.x, from.y, to.x, to.y) + 3;
   const start = from.y * w + from.x;
   const goal = to.y * w + to.x;
   const cost = new Map<number, number>([[start, 0]]);
@@ -93,7 +96,7 @@ export function roadRoute(s: GameState, p: Player, from: Spot, to: Spot): Spot[]
     const y = (i - x) / w;
     for (const n of neighbours(s, x, y)) {
       const j = n.y * w + n.x;
-      if (done.has(j) || distance(n.x, n.y, from.x, from.y) > limit || distance(n.x, n.y, to.x, to.y) > limit) continue;
+      if (done.has(j) || grid.distance(n.x, n.y, from.x, from.y) > limit || grid.distance(n.x, n.y, to.x, to.y) > limit) continue;
       const tile = tileAt(s, n.x, n.y)!;
       if (isWater(tile) || settlementAt(s, n.x, n.y)) continue;
       const colony = colonyAt(s, n.x, n.y);
@@ -103,7 +106,7 @@ export function roadRoute(s: GameState, p: Player, from: Spot, to: Spot): Spot[]
       if (c < (cost.get(j) ?? Infinity)) {
         cost.set(j, c);
         prev.set(j, i);
-        open.push({ i: j, f: c + distance(n.x, n.y, to.x, to.y) * 0.25 });
+        open.push({ i: j, f: c + grid.distance(n.x, n.y, to.x, to.y) * 0.25 });
       }
     }
   }
@@ -115,6 +118,7 @@ export function roadRoute(s: GameState, p: Player, from: Spot, to: Spot): Spot[]
 
 /** Sends an idle pioneer to lay the most useful road. Returns false when there is none to lay. */
 export function buildRoads(s: GameState, p: Player, u: Unit): boolean {
+  const grid = gridOf(s);
   const pos = unitPosition(s, u);
   if (!pos || u.role !== 'pioneer') return false;
   const here = tileAt(s, pos.x, pos.y)!;
@@ -133,7 +137,7 @@ export function buildRoads(s: GameState, p: Player, u: Unit): boolean {
     return true;
   }
   // The first few in order of usefulness, the nearest of those first.
-  const shortlist = open.slice(0, 6).sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y));
+  const shortlist = open.slice(0, 6).sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y));
   for (const t of shortlist.slice(0, 3)) {
     if (!findPath(s, u, t.x, t.y)) continue;
     setDestination(s, u.id, t);

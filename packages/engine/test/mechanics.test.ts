@@ -18,7 +18,7 @@ import {
   createUnit,
   DEMAND,
   describeMove,
-  DIRECTIONS,
+  gridOf,
   favouredProblem,
   foundColony,
   isWater,
@@ -278,7 +278,7 @@ describe('missions', () => {
     const actions = (scenario?: string) => {
       const s = game(scenario);
       const st = Object.values(s.settlements)[0];
-      for (const d of DIRECTIONS) {
+      for (const d of gridOf(s).directions) {
         const x = st.x - d.dx;
         const y = st.y - d.dy;
         const t = tileAt(s, x, y);

@@ -3,6 +3,7 @@
  * behaviours, steered by an AiProfile: how far to expand, how much to value liberty,
  * how big a garrison to keep, whether to start wars, and so on.
  */
+import { gridOf } from '../grid.js';
 import {
   assignJob,
   buildTargetCost,
@@ -34,11 +35,11 @@ import {
   cargoRoomFor,
   colonyAt,
   colonyWorkers,
-  distance,
   isCoastal,
   isShip,
   isWater,
   neighbours,
+  workArea,
   settlementAt,
   tileAt,
   unitPosition,
@@ -230,8 +231,9 @@ export const expansionReady = (s: GameState, p: Player, prof: AiProfile, colonie
 
 /** A site's penalty for native villages within two tiles: colonies there raise tension. */
 const nativeCrowding = (s: GameState) => {
+  const grid = gridOf(s);
   const villages = Object.values(s.settlements);
-  return (x: number, y: number) => villages.filter((st) => distance(st.x, st.y, x, y) <= 2).length * 4;
+  return (x: number, y: number) => villages.filter((st) => grid.distance(st.x, st.y, x, y) <= 2).length * 4;
 };
 
 /** The colonists sent out to found colonies, while they are on their way (forgetting the others). */
@@ -317,6 +319,7 @@ function sendSeaSettler(s: GameState, p: Player, colonies: Colony[], keep: numbe
  * (colonistTurn). Returns whether the ship is on that errand this turn.
  */
 function carrySeaSettler(s: GameState, p: Player, ship: Unit, here: Colony | undefined): boolean {
+  const grid = gridOf(s);
   const sea = p.aiMemory?.seaSettlers;
   if (!sea) return false;
   const passengers = unitsAboard(s, ship);
@@ -337,7 +340,7 @@ function carrySeaSettler(s: GameState, p: Player, ship: Unit, here: Colony | und
   const target = sea[settler.id];
   const pos = unitPosition(s, ship)!;
   // Next to the site (and not in a colony): the usual landing puts the settler ashore.
-  if (distance(pos.x, pos.y, target.x, target.y) <= 1 && !colonyAt(s, pos.x, pos.y)) return false;
+  if (grid.distance(pos.x, pos.y, target.x, target.y) <= 1 && !colonyAt(s, pos.x, pos.y)) return false;
   let found: { x: number; y: number }[] | null = null;
   const spot = neighbours(s, target.x, target.y).find((n) => isWater(tileAt(s, n.x, n.y)!) && (found = findPath(s, ship, n.x, n.y)));
   if (!spot) {
@@ -478,7 +481,8 @@ function optimiseWorkers(s: GameState, p: Player, c: Colony, prof: AiProfile): v
 }
 
 function buildPlan(s: GameState, p: Player, c: Colony, prof: AiProfile): BuildTarget | null {
-  const threatened = Object.values(p.stance).includes('war') || Object.values(s.settlements).some((st) => distance(st.x, st.y, c.x, c.y) <= 5 && tensionOf(st, p.id) > 500);
+  const grid = gridOf(s);
+  const threatened = Object.values(p.stance).includes('war') || Object.values(s.settlements).some((st) => grid.distance(st.x, st.y, c.x, c.y) <= 5 && tensionOf(st, p.id) > 500);
   // Following an independence plan (ai/plan.ts), or at war with the Crown.
   const planning = turnPlan.adopted || p.independence === 'declared';
   const preparing = planning || (!!prof.independence && turnShare >= prof.independence.minShare - 20);
@@ -631,8 +635,8 @@ function mountTroops(s: GameState, p: Player, c: Colony): void {
 function acquireLand(s: GameState, p: Player, c: Colony, prof: AiProfile): void {
   if (prof.land === 'avoid') return;
   // Native land next to the colony before its people: most colonies have none left to acquire.
-  if (!neighbours(s, c.x, c.y).some((n) => nativeLandOwner(s, n.x, n.y)) || colonyWorkers(s, c).length < 3) return;
-  for (const n of neighbours(s, c.x, c.y)) {
+  if (!workArea(s, c.x, c.y).some((n) => nativeLandOwner(s, n.x, n.y)) || colonyWorkers(s, c).length < 3) return;
+  for (const n of workArea(s, c.x, c.y)) {
     const st = nativeLandOwner(s, n.x, n.y);
     if (!st) continue;
     const tile = tileAt(s, n.x, n.y)!;
@@ -683,6 +687,7 @@ function treasureTurn(s: GameState, p: Player, u: Unit): void {
 }
 
 function soldierTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
+  const grid = gridOf(s);
   // Damaged artillery is mended where it can be, before it goes anywhere.
   if (u.type === 'damagedArtillery') safely(() => repairArtillery(s, p.id, u.id));
   if (p.independence === 'declared') return warTurn(s, p, u);
@@ -698,8 +703,8 @@ function soldierTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
     const surplus = (c: Colony) => rebelColonyDefence(s, p, c) - need;
     const thin = surplus(here) >= REBEL_DEFENCE
       ? colonies
-          .filter((c) => c.id !== here.id && distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE && colonyWorkers(s, c).length > 0 && surplus(c) < 0)
-          .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0]
+          .filter((c) => c.id !== here.id && grid.distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE && colonyWorkers(s, c).length > 0 && surplus(c) < 0)
+          .sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0]
       : undefined;
     if (thin && goTo(s, u, thin.x, thin.y)) {
       return;
@@ -713,11 +718,11 @@ function soldierTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   }
   const short = colonies
     .filter((c) => armedAt(s, p, c.x, c.y).length < need)
-    .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];
+    .sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0];
   // Spare troops march on a war target when there is one.
   const target = p.aiMemory?.warTarget ? s.colonies[p.aiMemory.warTarget] : undefined;
   if (target && target.owner !== p.id && p.stance[target.owner] === 'war' && !short) {
-    if (distance(target.x, target.y, pos.x, pos.y) === 1) {
+    if (grid.distance(target.x, target.y, pos.x, pos.y) === 1) {
       attack(s, u.id, { colonyId: target.id });
       return;
     }
@@ -769,8 +774,9 @@ function warTurn(s: GameState, p: Player, u: Unit): void {
 
 /** Royal land units within `range` tiles of a colony (the War of Independence). */
 function royalsNear(s: GameState, p: Player, c: Colony, range = 2): number {
+  const grid = gridOf(s);
   let n = 0;
-  for (const o of Object.values(s.units)) if (o.owner === 'crown' && o.against === p.id && o.loc.kind === 'map' && !isShip(o) && distance(o.loc.x, o.loc.y, c.x, c.y) <= range) n++;
+  for (const o of Object.values(s.units)) if (o.owner === 'crown' && o.against === p.id && o.loc.kind === 'map' && !isShip(o) && grid.distance(o.loc.x, o.loc.y, c.x, c.y) <= range) n++;
   return n;
 }
 
@@ -815,6 +821,7 @@ const SORTIE_ODDS = 0.8;
  * land next to the weakest colony, which one stripped of its garrison would become).
  */
 function reinforce(s: GameState, p: Player, u: Unit): boolean {
+  const grid = gridOf(s);
   const pos = unitPosition(s, u);
   if (!pos || u.moves <= 0) return false;
   const here = colonyAt(s, pos.x, pos.y);
@@ -823,10 +830,10 @@ function reinforce(s: GameState, p: Player, u: Unit): boolean {
   const keep = powerNeeded(s, p) * (isCoastal(s, here.x, here.y) ? 2 : 1);
   if (defence - keep < REBEL_DEFENCE || armedAt(s, p, here.x, here.y).length <= 1) return false;
   const target = ownColonies(s, p)
-    .filter((c) => c.id !== here.id && distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE)
+    .filter((c) => c.id !== here.id && grid.distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE)
     .map((c) => ({ c, threat: royalsNear(s, p, c) - armedAt(s, p, c.x, c.y).length }))
     .filter((e) => e.threat > 0)
-    .sort((a, b) => b.threat - a.threat || distance(a.c.x, a.c.y, pos.x, pos.y) - distance(b.c.x, b.c.y, pos.x, pos.y))[0];
+    .sort((a, b) => b.threat - a.threat || grid.distance(a.c.x, a.c.y, pos.x, pos.y) - grid.distance(b.c.x, b.c.y, pos.x, pos.y))[0];
   return !!target && goTo(s, u, target.c.x, target.c.y);
 }
 
@@ -835,6 +842,7 @@ const REINFORCE_RANGE = 12;
 
 /** Scouts chase rumours, then chiefs, then the edge of the known world. */
 function scoutTurn(s: GameState, p: Player, u: Unit): void {
+  const grid = gridOf(s);
   const pos = unitPosition(s, u)!;
   const w = s.map.width;
   const known = (x: number, y: number) => p.explored[y * w + x] === 1;
@@ -850,11 +858,11 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
     for (let x = 0; x < w; x++) {
       if (!known(x, y)) continue;
       const t = s.map.tiles[y * w + x];
-      if (t.lcr) targets.push({ x, y, d: distance(x, y, pos.x, pos.y) });
+      if (t.lcr) targets.push({ x, y, d: grid.distance(x, y, pos.x, pos.y) });
     }
   }
   for (const st of Object.values(s.settlements)) {
-    if (known(st.x, st.y) && !st.visited.includes(p.id) && tensionOf(st, p.id) < 500) targets.push({ x: st.x, y: st.y, d: distance(st.x, st.y, pos.x, pos.y) + 2 });
+    if (known(st.x, st.y) && !st.visited.includes(p.id) && tensionOf(st, p.id) < 500) targets.push({ x: st.x, y: st.y, d: grid.distance(st.x, st.y, pos.x, pos.y) + 2 });
   }
   targets.sort((a, b) => a.d - b.d);
   for (const t of targets.slice(0, 6)) {
@@ -871,7 +879,7 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
     for (let x = 1; x < w - 1; x++) {
       if (!known(x, y) || isWater(s.map.tiles[y * w + x])) continue;
       if (!neighbours(s, x, y).some((n) => !known(n.x, n.y))) continue;
-      const d = distance(x, y, pos.x, pos.y);
+      const d = grid.distance(x, y, pos.x, pos.y);
       if (d > 0 && (!frontier || d < frontier.d)) frontier = { x, y, d };
     }
   }
@@ -885,8 +893,9 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
 }
 
 function pioneerTurn(s: GameState, p: Player, u: Unit): void {
+  const grid = gridOf(s);
   const pos = unitPosition(s, u)!;
-  const colonies = ownColonies(s, p).sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y));
+  const colonies = ownColonies(s, p).sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y));
   for (const c of colonies.slice(0, 4)) {
     const spots = [{ x: c.x, y: c.y, good: 'food' as GoodId }, ...colonyWorkers(s, c).flatMap((w) => (w.loc.kind === 'colony' && w.loc.job.kind === 'tile' ? [w.loc.job] : []))];
     for (const t of spots) {
@@ -917,6 +926,7 @@ function pioneerTurn(s: GameState, p: Player, u: Unit): void {
 }
 
 function missionaryTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
+  const grid = gridOf(s);
   const pos = unitPosition(s, u)!;
   // Combative first stirs a nearby tribe against an enemy, now and then (ai/natives.ts).
   for (const n of neighbours(s, pos.x, pos.y)) {
@@ -925,9 +935,9 @@ function missionaryTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void
   }
   const st = Object.values(s.settlements)
     .filter((o) => !o.mission && tensionOf(o, p.id) < 500 && s.tribes.find((t) => t.id === o.tribe)?.stance[p.id] !== 'war')
-    .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];
+    .sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0];
   if (!st || !prof.missions) return;
-  if (distance(st.x, st.y, pos.x, pos.y) === 1) {
+  if (grid.distance(st.x, st.y, pos.x, pos.y) === 1) {
     establishMission(s, u.id, st.id);
     return;
   }
@@ -936,6 +946,7 @@ function missionaryTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void
 }
 
 function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
+  const grid = gridOf(s);
   const pos = unitPosition(s, u)!;
   const here = colonyAt(s, pos.x, pos.y);
   // A settler waiting on the quay for a ship to another island (sendSeaSettler); once ashore, it founds as any settler.
@@ -948,10 +959,10 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   // Unskilled colonists learn a trade from the natives first.
   if (prof.learnFromNatives && UNIT_TYPES[u.type].skill <= 0 && u.type !== 'pettyCriminal' && u.type !== 'nativeConvert') {
     const teacher = Object.values(s.settlements)
-      .filter((st) => st.skill && tensionOf(st, p.id) < 400 && distance(st.x, st.y, pos.x, pos.y) <= 8 && p.explored[st.y * s.map.width + st.x])
-      .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];
+      .filter((st) => st.skill && tensionOf(st, p.id) < 400 && grid.distance(st.x, st.y, pos.x, pos.y) <= 8 && p.explored[st.y * s.map.width + st.x])
+      .sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0];
     if (teacher) {
-      if (distance(teacher.x, teacher.y, pos.x, pos.y) === 1 && u.moves > 0) {
+      if (grid.distance(teacher.x, teacher.y, pos.x, pos.y) === 1 && u.moves > 0) {
         learnSkill(s, u.id, teacher.id);
         return;
       }
@@ -965,7 +976,7 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   // A missionary for an unconverted village, if a church can bless one.
   if (prof.missions && here && here.owner === p.id && here.buildings.church >= 2 && u.type !== 'nativeConvert') {
     const busy = Object.values(s.units).some((o) => o.owner === p.id && o.role === 'missionary');
-    const open = Object.values(s.settlements).some((st) => !st.mission && distance(st.x, st.y, here.x, here.y) <= 10);
+    const open = Object.values(s.settlements).some((st) => !st.mission && grid.distance(st.x, st.y, here.x, here.y) <= 10);
     if (!busy && open && (u.type === 'pettyCriminal' || u.type === 'indenturedServant' || u.type === 'firebrandPreacher')) {
       equipInColony(s, u.id, 'missionary');
       return;
@@ -1019,7 +1030,7 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   // The nearest reachable colony, counting food to spare as nearness. Ranked first (each colony's
   // report once), so that only the colonies up to the first reachable one need a path.
   const ranked = (reachable ?? colonies)
-    .map((c) => ({ c, near: distance(c.x, c.y, pos.x, pos.y) - aiColonyReport(s, c).net.food / 2 }))
+    .map((c) => ({ c, near: grid.distance(c.x, c.y, pos.x, pos.y) - aiColonyReport(s, c).net.food / 2 }))
     .sort((a, b) => a.near - b.near);
   let found: { x: number; y: number }[] | null | undefined;
   const home = reachable ? ranked[0]?.c : ranked.find((e) => (found = findPath(s, u, e.c.x, e.c.y)))?.c;
@@ -1036,6 +1047,7 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
 // Ships and trade
 
 function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
+  const grid = gridOf(s);
   const def = UNIT_TYPES[ship.type];
   if (def.offence > 0 && aiFight(s, p, ship)) return;
   if (ship.type === 'privateer' && prof.piracy && !unitsAboard(s, ship).length && privateer(s, p, ship)) return;
@@ -1093,7 +1105,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
     const weak = turnArming ? new Set(weakColonies(s, p).map((c) => c.id)) : new Set<string>();
     const port = ownColonies(s, p)
       .filter((c) => c.id !== mine?.id && isCoastal(s, c.x, c.y) && room(c))
-      .sort((a, b) => Number(weak.has(b.id)) - Number(weak.has(a.id)) || distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];
+      .sort((a, b) => Number(weak.has(b.id)) - Number(weak.has(a.id)) || grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0];
     if (port) {
       setDestination(s, ship.id, { x: port.x, y: port.y });
       return;
@@ -1126,6 +1138,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
 
 /** Privateers hunt foreign merchant ships; their attacks start no wars. */
 function privateer(s: GameState, p: Player, ship: Unit): boolean {
+  const grid = gridOf(s);
   const pos = unitPosition(s, ship)!;
   // Never a Favoured Nation's ships, nor a trade partner's.
   const prey = (o: Unit) => o.owner !== p.id && isShip(o) && UNIT_TYPES[o.type].offence === 0 && o.owner !== 'crown' && !hasTradeAgreement(s, p.id, o.owner);
@@ -1137,8 +1150,8 @@ function privateer(s: GameState, p: Player, ship: Unit): boolean {
     }
   }
   const near = Object.values(s.units)
-    .filter((o) => prey(o) && o.loc.kind === 'map' && distance(o.loc.x, o.loc.y, pos.x, pos.y) <= 8)
-    .sort((a, b) => distance((a.loc as { x: number }).x, (a.loc as { y: number }).y, pos.x, pos.y) - distance((b.loc as { x: number }).x, (b.loc as { y: number }).y, pos.x, pos.y))[0];
+    .filter((o) => prey(o) && o.loc.kind === 'map' && grid.distance(o.loc.x, o.loc.y, pos.x, pos.y) <= 8)
+    .sort((a, b) => grid.distance((a.loc as { x: number }).x, (a.loc as { y: number }).y, pos.x, pos.y) - grid.distance((b.loc as { x: number }).x, (b.loc as { y: number }).y, pos.x, pos.y))[0];
   if (near && near.loc.kind === 'map') {
     const step = adjacentTileTowards(s, ship, near.loc.x, near.loc.y);
     if (step) {
@@ -1259,11 +1272,12 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
 // Diplomacy and war
 
 function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
+  const grid = gridOf(s);
   const colonies = ownColonies(s, p);
   // Calm angry neighbours with gifts.
   if (prof.gifts) {
     for (const t of s.tribes) {
-      const near = Object.values(s.settlements).filter((st) => st.tribe === t.id && colonies.some((c) => distance(c.x, c.y, st.x, st.y) <= 6));
+      const near = Object.values(s.settlements).filter((st) => st.tribe === t.id && colonies.some((c) => grid.distance(c.x, c.y, st.x, st.y) <= 6));
       if (!near.length) continue;
       const worst = Math.max(...near.map((st) => tensionOf(st, p.id)));
       if ((worst > 450 || t.stance[p.id] === 'war') && p.gold > prof.reserve + 200) {
@@ -1278,12 +1292,12 @@ function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
   // Raid nearby native settlements for treasure.
   if (prof.raidNatives && army.length >= 2 && s.turn > aiTurn(s, 40)) {
     const st = Object.values(s.settlements)
-      .filter((o) => colonies.some((c) => distance(c.x, c.y, o.x, o.y) <= 6))
+      .filter((o) => colonies.some((c) => grid.distance(c.x, c.y, o.x, o.y) <= 6))
       .sort((a, b) => a.defenders - b.defenders)[0];
     if (st) {
       for (const u of army) {
         const pos = unitPosition(s, u)!;
-        if (distance(st.x, st.y, pos.x, pos.y) === 1 && u.moves > 0) safely(() => attack(s, u.id, { settlementId: st.id }));
+        if (grid.distance(st.x, st.y, pos.x, pos.y) === 1 && u.moves > 0) safely(() => attack(s, u.id, { settlementId: st.id }));
         else {
           const step = adjacentTileTowards(s, u, st.x, st.y);
           if (step) safely(() => setDestination(s, u.id, step));
