@@ -413,6 +413,9 @@ let searchGen = 0;
 let heapKey = new Float64Array(1024);
 let heapTile = new Int32Array(1024);
 const SEQ = 4294967296;
+// DIRECTIONS as plain numbers, in the same order.
+const DIR_DX = DIRECTIONS.map((d) => d.dx);
+const DIR_DY = DIRECTIONS.map((d) => d.dy);
 
 function searchBuffers(size: number): number {
   if (size !== searchSize || searchGen >= 0xfffffff0) {
@@ -485,15 +488,17 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
     done[idx] = gen;
     const cx = idx % w;
     const cy = (idx - cx) / w;
-    for (const d of DIRECTIONS) {
-      const nx = cx + d.dx;
-      const ny = cy + d.dy;
+    for (let d = 0; d < 8; d++) {
+      const nx = cx + DIR_DX[d];
+      const ny = cy + DIR_DY[d];
       if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
       const nIdx = ny * w + nx;
       if (done[nIdx] === gen) continue;
-      if (!passableAt(s, ctx, nIdx, nIdx === goalIdx, index)) continue;
+      // Both tests only read the state, so the cheaper cost test goes first.
       const c = cost[idx] + stepCost(s, ctx, idx, nIdx, cx, cy, nx, ny, index);
-      if (seen[nIdx] !== gen || c < cost[nIdx]) {
+      if (seen[nIdx] === gen && c >= cost[nIdx]) continue;
+      if (!passableAt(s, ctx, nIdx, nIdx === goalIdx, index)) continue;
+      {
         seen[nIdx] = gen;
         cost[nIdx] = c;
         prev[nIdx] = idx;
