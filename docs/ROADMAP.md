@@ -181,6 +181,7 @@ Consider other candidates for Hill Climbing, such as:
 
 ## Long-term ambition
 
+- **3D modelled game world:** Add a new way to render the games besides the existing graphical styles - a full 3D map, 3D units, etc. use Fable 5.2 for this.
 - **Play on past 1850 in the Civilization II style:** tech trees, new diplomacy, new units. This is a project in itself and only starts when the list above runs dry.
 
 ## Parked
