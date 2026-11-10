@@ -7,7 +7,7 @@ import { yieldMultiplier } from './cheats.js';
 import { modifiers, setOr } from './scenarios/modifiers.js';
 import { applyEventModifiers } from './events/modifiers.js';
 import { colonyWorkers, isWater, tileAt } from './queries.js';
-import type { Colony, GameState, Tile } from './types.js';
+import type { Colony, GameState, Tile, Unit } from './types.js';
 
 export const FOOD_PER_COLONIST = 2;
 
@@ -172,10 +172,20 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
 
   for (const [g, n] of Object.entries(centreProduction(s, colony)) as [GoodId, number][]) produced[g] += n;
 
+  // Workers in buildings, by building, each list in the workers' order.
+  let inBuilding: Map<BuildingKind, Unit[]> | undefined;
   for (const u of units) {
-    if (u.loc.kind !== 'colony' || u.loc.job.kind !== 'tile') continue;
-    const n = tileYield(s, colony, u.loc.job.x, u.loc.job.y, u.loc.job.good, u.type, bonus);
-    produced[u.loc.job.good] += n;
+    if (u.loc.kind !== 'colony') continue;
+    const job = u.loc.job;
+    if (job.kind === 'building') {
+      inBuilding ??= new Map();
+      const list = inBuilding.get(job.building);
+      if (list) list.push(u);
+      else inBuilding.set(job.building, [u]);
+      continue;
+    }
+    const n = tileYield(s, colony, job.x, job.y, job.good, u.type, bonus);
+    produced[job.good] += n;
     workers[u.id] = n;
   }
 
@@ -187,8 +197,9 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
     const level = colony.buildings[kind];
     if (!def.output || level === 0) continue;
     let capacity = def.baseOutput?.[level - 1] ?? 0;
-    for (const u of units) {
-      if (u.loc.kind === 'colony' && u.loc.job.kind === 'building' && u.loc.job.building === kind) {
+    const here = inBuilding?.get(kind);
+    if (here) {
+      for (const u of here) {
         const n = buildingCapacityPerWorker(s, colony, kind, u.type, bonus);
         capacity += n;
         workers[u.id] = n;
