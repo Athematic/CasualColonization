@@ -1,6 +1,6 @@
 # Design note: Cooperation between Europeans (Beta 1)
 
-Status: **draft, to discuss with Simon** (November 2026). This note builds on [favoured-nation.md](favoured-nation.md), the first step towards cooperation, and on the 0.9 scenario framework ([scenario-framework.md](scenario-framework.md)): every new rule here is scenario data or a mechanics switch from the start. Beta 2, native peoples as partners, gets its own note but should reuse the shapes chosen here (question C9).
+Status: **agreed in outline** (November 2026). Simon confirmed the structural decisions C1–C3 on 10 November 2026; C4–C11 are provisional on the recommendations below and can still change. This note builds on [favoured-nation.md](favoured-nation.md), the first step towards cooperation, and on the 0.9 scenario framework ([scenario-framework.md](scenario-framework.md)): every new rule here is scenario data or a mechanics switch from the start. Beta 2, native peoples as partners, gets its own note but should reuse the shapes chosen here (question C9).
 
 ## 1. Goal
 
@@ -60,13 +60,13 @@ So the ladder today is **peace → trade agreement → Favoured Nation**. Beta 1
 
 ## 4. Decisions needed (with recommendations)
 
-The ones marked **(structural)** shape the engine's data model: getting them wrong later means a large rewrite, so they need Simon's answer before building.
+The ones marked **(structural)** shape the engine's data model; getting them wrong later means a large rewrite. Simon decided all three on the recommendations: shared colonies through a company (a third party), a company is a `Player` with `kind: 'company'`, and `gameOver.winners`. The rest are provisional.
 
 | # | Question | Recommendation |
 | --- | --- | --- |
-| C1 **(structural)** | **Shared colonies: two owners, or a third party?** A colony with two owners touches everything keyed on `colony.owner`: production, taxes, bells, sight, combat, AI, rendering and score, in more than 100 places. A company that owns the colony keeps one owner per colony. The company is a new kind of player-like entity, played by simple rules, and its shareholders get dividends and a say. | **Company (third party).** Shared access within an alliance covers the rest: allies' units can work and garrison each other's colonies without owning them. |
-| C2 **(structural)** | **What is a company in the engine?** A full `Player` (with markets, units, colonies, and AI driven by a "company" profile), or a lighter record that owns colonies and ships but is moved by its majority shareholder? | **A `Player` with `kind: 'company'`.** It has no Crown, no taxes and no independence; it is driven by its own simple AI profile; and it has shareholders. It reuses everything that already works for nations, which is less new code than a second kind of owner. |
-| C3 **(structural)** | **More than one winner.** `gameOver.winner` is one nation. `concord` needs a list. | **`winners: NationId[]`** next to `winner`, which stays as the first winner for old code. All screens and the arena read `winners`. |
+| C1 **(structural, decided)** | **Shared colonies: two owners, or a third party?** A colony with two owners touches everything keyed on `colony.owner`: production, taxes, bells, sight, combat, AI, rendering and score, in more than 100 places. A company that owns the colony keeps one owner per colony. The company is a new kind of player-like entity, played by simple rules, and its shareholders get dividends and a say. | **Company (third party).** Shared access within an alliance covers the rest: allies' units can work and garrison each other's colonies without owning them. |
+| C2 **(structural, decided)** | **What is a company in the engine?** A full `Player` (with markets, units, colonies, and AI driven by a "company" profile), or a lighter record that owns colonies and ships but is moved by its majority shareholder? | **A `Player` with `kind: 'company'`.** It has no Crown, no taxes and no independence; it is driven by its own simple AI profile; and it has shareholders. It reuses everything that already works for nations, which is less new code than a second kind of owner. |
+| C3 **(structural, decided)** | **More than one winner.** `gameOver.winner` is one nation. `concord` needs a list. | **`winners: NationId[]`** next to `winner`, which stays as the first winner for old code. All screens and the arena read `winners`. |
 | C4 | **What does an alliance oblige?** A defensive pact only, or also joining offensive wars? | **Defensive only.** An ally may join an offensive war but doesn't have to. Computer allies join when they gain. |
 | C5 | **Shared bells and Founding Fathers.** Should allies help each other's Congress? | **Yes, a small share (for example 10%) of each ally's bells,** to make alliances visible in the mid game. Fathers stay per nation. |
 | C6 | **Who can win together?** Only formal alliances, or any group of Favoured Nations? | **Alliances only.** They are explicit and visible, and computer players can plan for them. |
