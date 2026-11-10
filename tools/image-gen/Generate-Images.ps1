@@ -19,6 +19,8 @@ The API key is asked for at startup with hidden input, or taken from OPENAI_API_
 confirm. It is held only as a SecureString in memory and is never written anywhere.
 
 .EXAMPLE
+pwsh ./tools/image-gen/Generate-Images.ps1 -OutputPrompts -Only 'fathers/*'
+.EXAMPLE
 pwsh ./tools/image-gen/Generate-Images.ps1 -List
 .EXAMPLE
 pwsh ./tools/image-gen/Generate-Images.ps1 -Variant thumb -Only 'units/expert-lumberjack*' -Quality medium
@@ -30,7 +32,15 @@ pwsh ./tools/image-gen/Generate-Images.ps1 -Only 'units/free-colonist*' -Quality
 [CmdletBinding()]
 param(
     # Which prompt document(s) to use.
-    [ValidateSet('sprites', 'boxart', 'all')][string]$Doc = 'all',
+    # all = sprites + boxart (comics are never part of it unless you add -IncludeComics).
+    [ValidateSet('sprites', 'boxart', 'comics', 'all')][string]$Doc = 'all',
+    # Comics (-Doc comics): slug patterns, e.g. 'a-landfall' or 'n-*' (no wildcard = matches anywhere in the slug).
+    [string[]]$Comic,
+    # page: one 1024x1536 album page per script page (default). panel: one image per panel (about 900 in all).
+    # cast: one 1536x1024 character model sheet per comic.
+    [ValidateSet('page', 'panel', 'cast')][string]$ComicUnit = 'page',
+    # Add the comics to -Doc all.
+    [switch]$IncludeComics,
     # Wildcard patterns matched against the job id ("units/caravel__none") or key ("sprites/units/caravel__none").
     # A pattern without * or ? matches as a substring. Comma-separate or repeat for several.
     [string[]]$Only,
@@ -45,6 +55,11 @@ param(
     [switch]$List,
     # Print the assembled prompts and request parameters without calling the API.
     [switch]$DryRun,
+    # Write the fully assembled prompts as Markdown files (one per job, plus index.md) for pasting into an image
+    # chat, and exit. Never calls the API: no key, no manifest, no cost confirmation. Works with every selection option.
+    [switch]$OutputPrompts,
+    # Folder for -OutputPrompts. Default: tools/image-gen/output/prompts
+    [string]$PromptsDir,
     # Output folder for PNGs, manifest.json and index.html. Default: tools/image-gen/output
     [string]$OutDir,
     # Image model. Must be a GPT image model that supports background=transparent for the sprites.
@@ -84,6 +99,9 @@ param(
     # Override the prompt documents (mainly for tests).
     [string]$SpriteDoc,
     [string]$BoxArtDoc,
+    # docs/COMIC_PROMPTS.md (style, page, panel and cast blocks) and the folder of scripts, docs/comics.
+    [string]$ComicPromptDoc,
+    [string]$ComicsDir,
     # The thumbnail prompt blocks (only read for -Variant thumb or both). Default: tools/image-gen/thumb-prompts.md
     [string]$ThumbPromptFile
 )
@@ -94,10 +112,14 @@ Import-Module (Join-Path $PSScriptRoot 'ImageGen.psm1') -Force
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if (-not $SpriteDoc) { $SpriteDoc = Join-Path $repoRoot 'docs/SPRITE_PROMPTS.md' }
 if (-not $BoxArtDoc) { $BoxArtDoc = Join-Path $repoRoot 'docs/BOX_ART_PROMPTS.md' }
+if (-not $ComicPromptDoc) { $ComicPromptDoc = Join-Path $repoRoot 'docs/COMIC_PROMPTS.md' }
+if (-not $ComicsDir) { $ComicsDir = Join-Path $repoRoot 'docs/comics' }
 if (-not $ThumbPromptFile) { $ThumbPromptFile = Join-Path $PSScriptRoot 'thumb-prompts.md' }
 if (-not $OutDir) { $OutDir = Join-Path $PSScriptRoot 'output' }
 $OutDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutDir)
 $manifestPath = Join-Path $OutDir 'manifest.json'
+if (-not $PromptsDir) { $PromptsDir = Join-Path $OutDir 'prompts' }
+$PromptsDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PromptsDir)
 
 if ($Model -match '^dall-e') {
     Write-Host "Model '$Model' was retired and has no transparent backgrounds. Use a GPT image model such as gpt-image-2.5-flare." -ForegroundColor Red
@@ -116,22 +138,49 @@ if ($Variant -ne 'full') {
     }
 }
 $jobs = Get-ImageJobs -SpriteDoc $SpriteDoc -BoxArtDoc $BoxArtDoc -Doc $Doc -Only $Only -Variants $Variants -IncludeTitle:$IncludeTitle `
-    -Variant $Variant -ThumbPrompts $thumbPrompts -DocumentOrder:$DocumentOrder
-$byDoc = foreach ($d in 'sprites', 'boxart', 'thumbs') {
+    -Variant $Variant -ThumbPrompts $thumbPrompts -DocumentOrder:$DocumentOrder `
+    -ComicPromptDoc $ComicPromptDoc -ComicsDir $ComicsDir -Comic $Comic -ComicUnit $ComicUnit -IncludeComics:$IncludeComics
+$byDoc = foreach ($d in 'sprites', 'boxart', 'thumbs', 'comics') {
     $n = @($jobs | Where-Object Doc -eq $d).Count
     if ($n) { "${d}: $n" }
 }
 $countText = if ($byDoc) { ($byDoc -join ', ') } else { 'none' }
+$comicJobs = @($jobs | Where-Object Doc -eq 'comics')
+$comicNote = $null
+if ($comicJobs.Count -gt 0) {
+    $nCast = @($comicJobs | Where-Object Category -eq 'comic-cast').Count
+    $nPage = @($comicJobs | Where-Object Category -eq 'comic-page').Count
+    $nPanel = @($comicJobs | Where-Object Category -eq 'comic-panel').Count
+    $totalPanels = 0
+    foreach ($sp in (Get-ComicScriptPaths -ComicsDir $ComicsDir)) { foreach ($pg in (Read-ComicScript -Path $sp).Pages) { $totalPanels += @($pg.Panels).Count } }
+    $comicNote = "COMICS: $nCast cast sheets, $nPage pages, $nPanel panels selected. A full comic set is 15 cast sheets + 180 pages (195 images); " +
+        "-ComicUnit panel draws one image per panel, $totalPanels images for all 15 comics, about 5 times the cost of pages."
+}
 
 if ($List) {
     $jobs | Select-Object Key, Size, Background, Section | Format-Table -AutoSize -Wrap | Out-String -Width 240 | Write-Output
     Write-Output "Jobs: $($jobs.Count) ($countText)"
+    if ($comicNote) { Write-Output $comicNote }
     exit 0
 }
 
 if ($jobs.Count -eq 0) {
     Write-Warning 'No jobs match the selection.'
     if ($thumbPrompts) { Write-Host "Thumbnails are never made for box art, nor for these categories (settings block of $ThumbPromptFile): $(@($thumbPrompts.Skip) -join ', ')." }
+    exit 0
+}
+
+if ($OutputPrompts) {
+    $selNames = 'Doc', 'Only', 'Variant', 'Variants', 'IncludeTitle', 'Comic', 'ComicUnit', 'IncludeComics', 'DocumentOrder', 'Model', 'Quality'
+    $selParts = foreach ($n in $selNames) {
+        if (-not $PSBoundParameters.ContainsKey($n)) { continue }
+        $v = $PSBoundParameters[$n]
+        if ($v -is [System.Management.Automation.SwitchParameter]) { "-$n" } else { "-$n " + ((@($v) | ForEach-Object { "'$_'" }) -join ',') }
+    }
+    $selText = '`' + ((@("-Doc $Doc") + @($selParts | Where-Object { $_ -notlike '-Doc *' })) -join ' ') + '`'
+    $pset = [pscustomobject]@{ Model = $Model; Quality = $Quality }
+    $pr = Write-PromptFiles -Jobs $jobs -PromptsDir $PromptsDir -Settings $pset -SelectionText $selText
+    Write-Host "Wrote $($pr.Count) prompt files and index.md to $PromptsDir. No request was sent; the manifest was not touched." -ForegroundColor Green
     exit 0
 }
 
@@ -164,6 +213,7 @@ if ($DryRun) {
     }
     Write-Output ('=' * 100)
     Write-Output "Dry run: $($jobs.Count) jobs ($countText); $($toRun.Count) would call the API. No request was sent."
+    if ($comicNote) { Write-Output $comicNote }
     exit 0
 }
 
@@ -191,6 +241,7 @@ if ($transparentCount -gt 0 -and $Model -match '^gpt-image-2(-\d{4}-\d{2}-\d{2})
     Write-Warning "$Model only had transparent backgrounds in preview; if requests fail or come back opaque, use -Model gpt-image-2.5-flare or gpt-image-1.5."
 }
 $estimate = Get-CostEstimate -Jobs ($toRun | ForEach-Object Job) -Quality $Quality
+if ($comicNote) { Write-Host $comicNote -ForegroundColor Yellow }
 Write-Host ("This run will make {0} image generation calls (one image each; retries for rate limits and server errors come on top)." -f $toRun.Count) -ForegroundColor Cyan
 Write-Host ("Model {0}, quality {1}. Rough cost estimate: about `${2:0.00} (check current OpenAI pricing)." -f $Model, $Quality, $estimate)
 if (-not $Yes) {

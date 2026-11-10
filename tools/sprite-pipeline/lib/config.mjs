@@ -4,6 +4,13 @@
 export const DEFAULT_SIZES = [16, 24, 32, 48, 64, 96, 128];
 export const DEFAULT_PIXEL_MAX = 32;
 
+/**
+ * Founding Father full figures (`fathers/*`, 2:3): heights of the smooth sizes made, on canvases
+ * 96 x 144 ... 256 x 384. They stand together in the Continental Congress hall at roughly a fifth to a
+ * quarter of its height. Small portraits use the head crop (`fathers/<id>__head`) at the normal sizes.
+ */
+export const FIGURE_SIZES = [144, 192, 288, 384];
+
 export const DEFAULTS = {
   // Master clean-up and normalising.
   alphaLo: 0.16, // alpha below this is the model's faint glow: dropped

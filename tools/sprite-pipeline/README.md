@@ -147,11 +147,16 @@ tools/sprite-pipeline/out/
   units/expert-lumberjack__none@96.png
   units/expert-lumberjack__none@128.png
   ...
+  fathers/benjamin-franklin@144.png     full figure, 96 x 144 (also @192, @288, @384: by height, 2:3)
+  fathers/benjamin-franklin__head@16.png  head crop, square, at every size (pixel and smooth)
+  ...
+  ui/congress-hall.png                  the UI master, copied as is (plus the square sizes)
+  ...
   index.html                            contact sheet  } not runtime files,
   _sheet/                               its images     } do not upload
 ```
 
-Every file is a square RGBA PNG. Pixel files contain only palette colours and alpha 0 or 255. The style bible (`bible/style-bible.png`) is a reference sheet, not a sprite, and is skipped.
+Every file is a square RGBA PNG, except the Founding Father figures (2:3) and the UI masters copied as is. Pixel files contain only palette colours and alpha 0 or 255. The style bible (`bible/style-bible.png`) is a reference sheet, not a sprite, and is skipped.
 
 ### Uploading to the game server
 
@@ -209,6 +214,34 @@ IIS (`web.config` in `assets/runtime/`):
         "48":  { "file": "units/expert-lumberjack__none@48.png",  "mode": "smooth" }
         // ... one entry per size
       }
+    },
+    "fathers/benjamin-franklin": {
+      "category": "fathers",
+      "layout": "figure",
+      "source": { "file": "fathers/benjamin-franklin.png", "sha256": "…" },
+      "aspect": 0.6667,                           // width / height of every file
+      "anchor": { "x": 0.5, "y": 0.92 },          // feet, as shares of the width and the height
+      "head": "fathers/benjamin-franklin__head",
+      "files": {
+        "144": { "file": "fathers/benjamin-franklin@144.png", "mode": "smooth", "width": 96, "height": 144 }
+        // ... 192, 288, 384 (keys are heights)
+      }
+    },
+    "fathers/benjamin-franklin__head": {
+      "category": "fathers",
+      "layout": "head",
+      "from": "fathers/benjamin-franklin",
+      "source": { "file": "fathers/benjamin-franklin.png", "sha256": "…" },
+      "crop": { "x0": 380.2, "y0": 128.4, "x1": 749.8, "y1": 498.0 }, // in master pixels
+      "anchor": { "x": 0.5, "y": 0.5 },
+      "pixelColors": [],
+      "files": { "16": { "file": "fathers/benjamin-franklin__head@16.png", "mode": "pixel" } /* ... every size */ }
+    },
+    "ui/congress-hall": {
+      "category": "ui",
+      "layout": "fullbleed",
+      "full": { "file": "ui/congress-hall.png", "width": 1536, "height": 1024 },
+      "files": { /* the square sizes, letterboxed */ }
     }
   }
 }
@@ -260,12 +293,16 @@ Each master is trimmed to its alpha bounding box (after removing the faint dark 
 | `good`, `overlay` | goods, pennant, flag, mission | whole subject fits 0.84 × 0.84 | centred |
 | `building` | buildings, colonies, settlements | core fits 0.86 × 0.84 | bottom at 0.93 |
 | `decor` | forests, hills, mountains, ruins, bonuses | core fits 0.88 × 0.84 | bottom at 0.93 |
+| `figure` | Founding Father full figures (`fathers/*`, 2:3 masters) | on a **2:3 canvas** (coordinates are shares of its height): the master's own scale is kept, since the prompt draws all 25 at one scale and a hat should add height, not shrink the person; only a figure outside 0.74 to 0.86 of the frame height is rescaled to that range | bottom at 0.92 (feet), centred on the body |
+| `head` | the head crop of each Founding Father (`fathers/<id>__head`), made from the figure, not from a master of its own | a square of 0.30 × the figure's height, from 0.02 of it above the crown, centred on the head (mean x of the top 14% of the figure); the shoulders run out at the bottom edge | fills the square |
 | `fullbleed` | terrain tiles, coast bands, road overlays, UI | none: a square master fills the square as is (tiles and overlays keep their tile geometry); a non-square one (UI) is fitted and centred | |
 
 Category rules on top of the layouts:
 
 - **Terrain** (`terrain/*`, base tiles and coast bands) gets no redrawn pixel outline: a coast band's wavy edge is a thin blue stroke that the outline would turn into a heavy black line.
 - **Ground overlays** (`terrain/coast__*`, `decor/road__*`) must be transparent. An opaque master (the image model sometimes returns one) is reported and skipped, so the game falls back to its procedural drawing instead of covering the tile.
+- **Founding Fathers** (`fathers/*`) are full standing figures that the game places side by side in the Continental Congress hall, so they are not made at the square sizes. Each master gives two manifest entries: `fathers/<id>`, smooth only, at the heights in `FIGURE_SIZES` (`lib/config.mjs`: 144, 192, 288 and 384 px, on canvases 96 × 144 to 256 × 384; each file records `width` and `height`), with `aspect` and `head`; and `fathers/<id>__head`, the head-and-shoulders crop at the normal sizes (pixel and smooth, square, `from` names the figure and `crop` gives the box in master pixels), for the small portraits in lists and dialogs. `--sizes` and `--pixel-max` apply to the head crop only. Thumbnails do not exist for this category.
+- **UI pieces** (`ui/*`) are full-bleed and often not square (the 1536 × 1024 `ui/congress-hall`): the master is also copied unchanged to `ui/<id>.png` and recorded as `full: { file, width, height }`, for the game to scale. The square sizes letterbox it and are only good for previews.
 - **Enclosures** (`colonies/stockade`, `colonies/fort`) get a `split` value in the manifest: the line, as a share of the square from the top, where the master splits into the back wall (drawn behind the houses) and the front wall (drawn in front), at 58% of the master's height as in `docs/SPRITE_PROMPTS.md` section 4.10. (A sprite that comes only from a `--grid-in` folder has no master geometry and gets no `split`.)
 
 The **core** is the bounding box without thin protrusions: a row or column belongs to it when it holds at least 18% as many opaque pixels as the widest row or tallest column. So a soldier with a shouldered musket, a missionary with a tall cross and a colonist with nothing above his head all get the same body size, and a raised sabre does not shrink a dragoon. If a protrusion would then cross the 0.065 margin (one pixel at 16 px, room for the outline), the whole subject is shrunk until it fits. Standing and mounted figures end up about the same height, so a rider is drawn smaller than a standing colonist, the usual strategy-game compromise that keeps both readable. Change `LAYOUTS` to rebalance.
@@ -301,7 +338,7 @@ cd tools/sprite-pipeline
 npm test
 ```
 
-`node:test`, on synthetic images (no generated art needed). Grid snapping is tested on a perfect grid (exact N×N recovery, fidelity 1) at 16, 24 (on 1008 px) and 32 cells, and on a noisy grid with soft block edges (still exact, fidelity above 0.97). Other cases: mode beats mean, alpha by majority, a grid offset by 12 px (found by the phase search), a grid drawn with 29 cells (low fidelity, flagged, 29 detected), and a blurred non-pixel image (flagged). Placement, upscales, `--grid` and `--grid-in` runs with `--compare-in`, and the refusal of the `edited/` root are tested as well. `--thumbs-in` is tested with a local folder and a local HTTP server: the sizes up to `--thumb-max` are byte-identical to the thumbnail run through the pipeline alone, the larger ones and every size of a sprite without a thumbnail byte-identical to the full master's, `--thumb-max` defaults to `--pixel-max`, a 404 falls back, the download is cached under `_thumbs/` and re-checked with a conditional request, the manifest records `from: "thumb"`, the contact sheet has the full-vs-thumbnail comparison, and the `output/` root is refused. The other tests cover normalising (bounding box, core box, baseline and scale, centring, margins), palette quantisation, alpha binarisation, the outline and orphan passes, thin-line detection, byte-identical output across runs, the `--pixel-max` boundary, and the remote source against a local HTTP server (download, conditional re-checks with ETag, Last-Modified or size, the 455 User-Agent fallback, id lists from the image-gen manifest, the docs and `--ids`). The real server was also tested by hand: a first run downloads, a second gets `304 Not Modified` for every file.
+`node:test`, on synthetic images (no generated art needed). Grid snapping is tested on a perfect grid (exact N×N recovery, fidelity 1) at 16, 24 (on 1008 px) and 32 cells, and on a noisy grid with soft block edges (still exact, fidelity above 0.97). Other cases: mode beats mean, alpha by majority, a grid offset by 12 px (found by the phase search), a grid drawn with 29 cells (low fidelity, flagged, 29 detected), and a blurred non-pixel image (flagged). Placement, upscales, `--grid` and `--grid-in` runs with `--compare-in`, and the refusal of the `edited/` root are tested as well. `--thumbs-in` is tested with a local folder and a local HTTP server: the sizes up to `--thumb-max` are byte-identical to the thumbnail run through the pipeline alone, the larger ones and every size of a sprite without a thumbnail byte-identical to the full master's, `--thumb-max` defaults to `--pixel-max`, a 404 falls back, the download is cached under `_thumbs/` and re-checked with a conditional request, the manifest records `from: "thumb"`, the contact sheet has the full-vs-thumbnail comparison, and the `output/` root is refused. The Founding Father tests check the `figure` layout (2:3 canvas, feet on 0.92, the master's scale kept so a hat adds height, a figure drawn far too small rescaled and centred), the head crop (a square of the top 30%, centred on the head) and a build run (figure files by height at 2:3, head files square at every size, both manifest entries, the UI master copied unchanged and removed again on the next run). The other tests cover normalising (bounding box, core box, baseline and scale, centring, margins), palette quantisation, alpha binarisation, the outline and orphan passes, thin-line detection, byte-identical output across runs, the `--pixel-max` boundary, and the remote source against a local HTTP server (download, conditional re-checks with ETag, Last-Modified or size, the 455 User-Agent fallback, id lists from the image-gen manifest, the docs and `--ids`). The real server was also tested by hand: a first run downloads, a second gets `304 Not Modified` for every file.
 
 ## Files
 

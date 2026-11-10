@@ -12,11 +12,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import sharp from 'sharp';
-import { DEFAULTS, DEFAULT_PIXEL_MAX, DEFAULT_SIZES, TUNING_SPRITES, TUNING_VARIANTS, mergeSettings } from './lib/config.mjs';
+import { DEFAULTS, DEFAULT_PIXEL_MAX, DEFAULT_SIZES, FIGURE_SIZES, TUNING_SPRITES, TUNING_VARIANTS, mergeSettings } from './lib/config.mjs';
 import { GRID_DEFAULTS, gridSizeFromDir, placeGrid, snapGrid, spriteColors, upscale } from './lib/grid.mjs';
 import { encodePng } from './lib/image.mjs';
 import { LAYOUTS, SPLIT_SPRITES, classify, isGroundOverlay } from './lib/normalise.mjs';
-import { basePalette, prepare, renderPng, spritePalette } from './lib/process.mjs';
+import { basePalette, headSprite, prepare, renderFigurePng, renderPng, spritePalette } from './lib/process.mjs';
 import { contactSheet } from './lib/sheet.mjs';
 import { DEFAULT_USER_AGENT, hasProxyEnv, isUrl, listLocalIds, resolveIds, syncRemote } from './lib/source.mjs';
 import { spawnSync } from 'node:child_process';
@@ -232,6 +232,7 @@ async function main() {
   if (oldManifest?.sprites) {
     for (const sp of Object.values(oldManifest.sprites)) {
       for (const f of Object.values(sp.files ?? {})) await fs.rm(path.join(outDir, f.file), { force: true });
+      if (sp.full) await fs.rm(path.join(outDir, sp.full.file), { force: true });
       for (const g of Object.values(sp.grid ?? {})) for (const f of Object.values(g.upscales ?? {})) await fs.rm(path.join(outDir, f), { force: true });
     }
   }
@@ -283,6 +284,43 @@ async function main() {
       continue;
     }
     const bytes = inMain ? await fs.readFile(file) : null;
+
+    // Founding Fathers: the full figure (2:3, smooth sizes FIGURE_SIZES by height) and its head crop
+    // (fathers/<id>__head, square, the normal pixel and smooth sizes) as a second manifest entry.
+    if (sp && layout === 'figure') {
+      const source = { file: `${id}.png`, sha256: sha256(bytes) };
+      const headId = `${id}__head`;
+      const fig = { category, layout, source, aspect: +L.aspect.toFixed(4), anchor: { x: 0.5, y: L.base }, head: headId, files: {} };
+      const figList = [];
+      for (const h of FIGURE_SIZES) {
+        const rel = `${id}@${h}.png`;
+        const r = await renderFigurePng(sp, h, settings);
+        await write(rel, r.png);
+        fig.files[h] = { file: rel, mode: 'smooth', width: r.width, height: r.height };
+        figList.push({ n: h, w: r.width, mode: 'smooth', file: rel });
+      }
+      const hsp = headSprite(sp);
+      const { extras: hx } = pixelSizes.length ? spritePalette(hsp, settings.pixel, refSize) : { extras: [] };
+      const head = { category, layout: 'head', from: id, source, crop: hsp.place.crop, anchor: { x: 0.5, y: 0.5 }, pixelColors: hx, files: {} };
+      const headList = [];
+      for (const n of sizes) {
+        const mode = n <= pixelMax ? 'pixel' : 'smooth';
+        const rel = `${headId}@${n}.png`;
+        await write(rel, await renderPng(hsp, n, mode, settings, refSize));
+        head.files[n] = { file: rel, mode };
+        headList.push({ n, mode, file: rel });
+      }
+      manifest.sprites[id] = fig;
+      manifest.sprites[headId] = head;
+      if (sheetOn) {
+        const orig = `_sheet/orig/${id}.png`;
+        await write(orig, await sharp(bytes).resize(256, 256, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer());
+        sheet.push({ id, layout, extras: [], list: figList, compare: {}, orig });
+        sheet.push({ id: headId, layout: 'head', extras: hx, list: headList, compare: {}, orig });
+      }
+      console.log(`- ${id} (figure ${FIGURE_SIZES.join('/')} px high, head crop ${sizes.join('/')}) ${Date.now() - t1} ms`);
+      continue;
+    }
     // the thumbnail master, when there is one: sizes up to thumbMax are made from it, the rest from the full master
     let tsp = null;
     const thumbNotes = [];
@@ -314,6 +352,12 @@ async function main() {
       entry.thumb = { file: `${id}.png`, sha256: sha256(tbytes), maxSize: thumbMax };
       // the thumbnail is a separate drawing: its enclosure split line can sit a little elsewhere
       if (SPLIT_SPRITES[id] !== undefined) entry.thumb.split = +(SPLIT_SPRITES[id] * tsp.master.h * tsp.place.scale + tsp.place.oy).toFixed(4);
+    }
+    // UI pieces (full-bleed, often not square, e.g. the 1536 x 1024 Continental Congress hall): the master
+    // is also copied as is, for the game to scale; the square sizes below letterbox it.
+    if (sp && category === 'ui') {
+      await write(`${id}.png`, bytes);
+      entry.full = { file: `${id}.png`, width: sp.master.w, height: sp.master.h };
     }
     const row = { id, layout, extras, list: [], compare: {} };
     const grids = gridSources.filter((g) => g.ids.has(id));
