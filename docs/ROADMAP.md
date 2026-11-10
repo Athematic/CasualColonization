@@ -83,7 +83,7 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
 | Mercenaries; foreign intervention force; Tories after the declaration | M | P2 | in progress |
-| Damaged artillery, ambush bonus, fortresses and coastal forts, capturing equipment | M | P2 | in progress |
+| Damaged artillery, ambush bonus, fortresses and coastal forts, capturing equipment | M | P2 | done |
 | Mines running out | S | P3 | done |
 | Abandoning a colony; retiring early | S | P2 | done |
 | Computer players build more buildings (the scoring review found 0–3.5 building points per nation at turn 200): build plans favour docks, schoolhouses, level-2 workshops and warehouses earlier | S | P2 | idea |

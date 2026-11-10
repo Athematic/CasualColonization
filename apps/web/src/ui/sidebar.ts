@@ -209,6 +209,7 @@ export class Sidebar {
       if (canUseRoutes(u)) btn(u.route ? 'Change route…' : 'Trade route…', 'T', () => app.openRoutes(u.id));
       if (isShip(u)) btn('Sail to Europe', '', () => app.unitCommand('gotoEurope'));
       if (u.type === 'treasure') btn('Ship treasure home', '', () => { if (app.dispatch({ type: 'cashTreasure', unitId: u.id })) app.afterUnitAction(); });
+      if (u.type === 'damagedArtillery') btn('Repair (colony armory)', '', () => { if (app.dispatch({ type: 'repairArtillery', unitId: u.id })) app.afterUnitAction(); });
       btn('Fortify', 'F', () => app.unitCommand('fortify'), !isShip(u));
       btn('Sentry', 'S', () => app.unitCommand('sentry'));
       btn('Skip', 'Space', () => app.unitCommand('skip'));

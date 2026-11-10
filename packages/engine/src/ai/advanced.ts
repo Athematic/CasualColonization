@@ -17,7 +17,7 @@ import {
   leaveColony,
   setBuild,
 } from '../colony.js';
-import { attack, cashTreasure, defencePower, offencePower } from '../combat.js';
+import { attack, cashTreasure, defencePower, offencePower, repairArtillery } from '../combat.js';
 import { proposePeace, startWar } from '../diplomacy.js';
 import { favouredPartners, hasTradeAgreement, isHostile } from '../relations.js';
 import { boardInEurope, buyGoods, buyPrice, inHomePort, portOf, recruit, recruitPrice, sailToAmerica, sellGoods, train, trainPrice } from '../europe.js';
@@ -342,7 +342,9 @@ function buildPlan(s: GameState, p: Player, c: Colony, prof: AiProfile): BuildTa
   const b = (id: BuildingKind) => plan.push({ kind: 'building', id });
   // An outpost without soldiers holds up expansion until it has a stockade (expansionCheck).
   const outpost = !armedAt(s, p, c.x, c.y).length && outposts(ownColonies(s, p), prof).includes(c);
-  if (threatened || preparing || prof.garrison > 1 || outpost) b('stockade');
+  const walls = c.buildings.stockade;
+  // The fortress (third level) is for colonies of eight under threat; the first two levels as before.
+  if (walls < 2 ? threatened || preparing || prof.garrison > 1 || outpost : walls === 2 && pop >= 8 && (threatened || preparing)) b('stockade');
   // Goods about to rot: more storage, and a wagon train to carry them to a port.
   const overflow = overflowSoon(s, c, 6);
   if (wantsWagon(s, p, c)) plan.push({ kind: 'unit', id: 'wagonTrain' });
@@ -359,7 +361,7 @@ function buildPlan(s: GameState, p: Player, c: Colony, prof: AiProfile): BuildTa
   b('church');
   b('customHouse');
   b('printingPress');
-  b('stockade');
+  if (walls < 2) b('stockade');
   b('warehouse');
   const ship = shipToBuild(s, p, c, prof);
   if (ship) plan.push(ship);
@@ -483,6 +485,8 @@ function treasureTurn(s: GameState, p: Player, u: Unit): void {
 }
 
 function soldierTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
+  // Damaged artillery is mended where it can be, before it goes anywhere.
+  if (u.type === 'damagedArtillery') safely(() => repairArtillery(s, p.id, u.id));
   if (aiFight(s, p, u)) return;
   const pos = unitPosition(s, u)!;
   const colonies = ownColonies(s, p);

@@ -3,6 +3,7 @@ export * from './rules/goods.js';
 export * from './rules/terrain.js';
 export * from './rules/units.js';
 export * from './rules/buildings.js';
+export * from './rules/combat.js';
 export * from './rules/nations.js';
 export * from './rules/fathers.js';
 export * from './rules/colonyNames.js';

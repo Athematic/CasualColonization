@@ -1,4 +1,5 @@
 import { runAi } from './ai/index.js';
+import { bombardShips } from './combat.js';
 import { track } from './telemetry.js';
 import { processColony } from './colony.js';
 import { advanceSailing, processImmigration, recoverMarkets } from './europe.js';
@@ -16,6 +17,7 @@ import type { GameState, Player, Unit } from './types.js';
 
 /** Resets a player's units and carries out standing orders at the start of their turn. */
 export function beginPlayerTurn(s: GameState, p: Player): void {
+  bombardShips(s, p.id);
   for (const u of Object.values(s.units)) {
     if (u.owner !== p.id) continue;
     if (u.loc.kind === 'sailing') {

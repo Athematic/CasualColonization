@@ -34,6 +34,7 @@ import { track } from './telemetry.js';
 import { BUILDINGS, type BuildingKind } from './rules/buildings.js';
 import { difficultyRules } from './rules/difficulty.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
+import { UNIT_TYPES } from './rules/units.js';
 import { TRIBES, type NationId } from './rules/nations.js';
 import {
   BRAVE_CHANCES,
@@ -665,6 +666,17 @@ function strip(b: Brave, u: Unit, store?: Colony['goods']): string | null {
   return null;
 }
 
+/** Beaten artillery is damaged; damaged artillery is destroyed. */
+function hurtArtillery(s: GameState, u: Unit): string {
+  const name = unitName(u);
+  if (u.type === 'artillery') {
+    u.type = 'damagedArtillery';
+    return `${name} is damaged`;
+  }
+  delete s.units[u.id];
+  return `${name} is destroyed`;
+}
+
 /** A brave attacks a colony with the ordinary combat rules. Winning against an unarmed colony pillages it. */
 export function attackColony(s: GameState, b: Brave, c: Colony): void {
   const defenders = unitsAt(s, c.x, c.y).filter((u) => u.owner === c.owner && !isShip(u));
@@ -684,6 +696,10 @@ export function attackColony(s: GameState, b: Brave, c: Colony): void {
   }
   if (isArmed(defender) && defender.loc.kind === 'map') {
     message(s, `The ${tribe} attack ${c.name}: ${strip(b, defender, c.goods)}.`, c.owner, c);
+    return;
+  }
+  if (UNIT_TYPES[defender.type].kind === 'artillery') {
+    message(s, `The ${tribe} attack ${c.name}: ${hurtArtillery(s, defender)}.`, c.owner, c);
     return;
   }
   pillage(s, b, c);
@@ -752,7 +768,7 @@ function attackUnit(s: GameState, b: Brave, target: Unit): void {
     message(s, `${unitName(defender)} beats off an attack by the ${tribe}.${promote(s, defender)}`, defender.owner, at);
     return;
   }
-  const stripped = strip(b, defender);
+  const stripped = strip(b, defender) ?? (UNIT_TYPES[defender.type].kind === 'artillery' ? hurtArtillery(s, defender) : null);
   if (stripped) {
     message(s, `The ${tribe} attack: ${stripped}.`, defender.owner, at);
     return;

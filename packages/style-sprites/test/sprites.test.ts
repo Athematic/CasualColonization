@@ -62,6 +62,7 @@ describe('sprite ids from game state (default mapping)', () => {
     expect(ids.unit('manOfWar', 'none')).toEqual(['units/man-of-war__none']);
     expect(ids.unit('wagonTrain', 'none')).toEqual(['units/wagon-train__none']);
     expect(ids.unit('artillery', 'none')).toEqual(['units/artillery__none']);
+    expect(ids.unit('damagedArtillery', 'none')).toEqual(['units/damaged-artillery__none', 'units/artillery__none']);
     expect(ids.unit('treasure', 'none')).toEqual(['units/treasure__none']);
   });
 
@@ -98,7 +99,7 @@ describe('sprite ids from game state (default mapping)', () => {
       'colonies/colony__large',
       'colonies/colony__large',
     ]);
-    expect([0, 1, 2].map((n) => ids.defence(n))).toEqual([[], ['colonies/stockade'], ['colonies/fort']]);
+    expect([0, 1, 2, 3].map((n) => ids.defence(n))).toEqual([[], ['colonies/stockade'], ['colonies/fort'], ['colonies/fortress', 'colonies/fort']]);
     expect(ids.settlement('inca', true)).toEqual(['settlements/inca__capital', 'settlements/inca']);
     expect(ids.settlement('sioux', false)).toEqual(['settlements/sioux']);
     expect(ids.good('tradeGoods')).toEqual(['goods/trade-goods']);
