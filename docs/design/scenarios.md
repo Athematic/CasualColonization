@@ -1,6 +1,6 @@
 # Design note: Scenario framework
 
-Status: **idea, agreed in principle**. To be designed in detail before work starts.
+Status: **idea, agreed in principle**. To be designed in detail before work starts. The detailed design for 0.9 is [scenario-framework.md](scenario-framework.md) (status: design).
 
 ## Goal
 Every setting the game can be played in is a **scenario**: a data package the engine loads. The engine provides the mechanics (colonies, production, markets, movement, diplomacy). The scenario provides the world they run in. Today's game becomes the first scenario, *The Americas, 1492–1850*.
