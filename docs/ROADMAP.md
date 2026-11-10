@@ -82,7 +82,7 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Mercenaries; foreign intervention force; Tories after the declaration | M | P2 | in progress |
+| Mercenaries; foreign intervention force; Tories after the declaration | M | P2 | done |
 | Damaged artillery, ambush bonus, fortresses and coastal forts, capturing equipment | M | P2 | in progress |
 | Mines running out | S | P3 | in progress |
 | Abandoning a colony; retiring early | S | P2 | in progress |
