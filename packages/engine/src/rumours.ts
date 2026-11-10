@@ -1,4 +1,5 @@
-import { createUnit, distance, message, player, reveal, tileAt, unitPosition } from './queries.js';
+import { gridOf } from './grid.js';
+import { createUnit, message, player, reveal, tileAt, unitPosition } from './queries.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { randInt, weightedPick } from './rng.js';
@@ -15,11 +16,12 @@ type Outcome = RumourOutcome;
 
 /** The settlement whose tribal land a tile is (within BURIAL_RADIUS, not bought or taken), if any. */
 export function tribalLandOwner(s: GameState, x: number, y: number): Settlement | undefined {
+  const grid = gridOf(s);
   if (tileAt(s, x, y)?.claim) return undefined;
   let best: Settlement | undefined;
   for (const st of Object.values(s.settlements)) {
-    const d = distance(st.x, st.y, x, y);
-    if (d <= BURIAL_RADIUS && (!best || d < distance(best.x, best.y, x, y))) best = st;
+    const d = grid.distance(st.x, st.y, x, y);
+    if (d <= BURIAL_RADIUS && (!best || d < grid.distance(best.x, best.y, x, y))) best = st;
   }
   return best;
 }

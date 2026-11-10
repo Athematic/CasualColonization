@@ -1,3 +1,4 @@
+import { gridOf } from './grid.js';
 import { fail } from './errors.js';
 import { track } from './telemetry.js';
 import { describeMove } from './movement.js';
@@ -5,7 +6,7 @@ import { perfEnd, perfStart } from './perf.js';
 import { hasSubmitted, nativeUnitPrice, processBraves, settlementKind } from './braves.js';
 import { addOf, modifiers, mulOf } from './scenarios/modifiers.js';
 import { noteGoods, noteHistory } from './history.js';
-import { cargoRoomFor, colonyWorkers, createUnit, distance, message, player, reveal, tileAt, unitName, unitPosition } from './queries.js';
+import { cargoRoomFor, colonyWorkers, createUnit, message, player, reveal, tileAt, unitName, unitPosition } from './queries.js';
 import { random, randInt } from './rng.js';
 import { noteTrade } from './stats.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
@@ -29,9 +30,10 @@ import { removeUnit } from './unitindex.js';
  * make one sale and one purchase in the same turn: `deal` names the one it is about to make.
  */
 function adjacentSettlement(s: GameState, u: Unit, settlementId: string, deal?: 'sold' | 'bought'): Settlement {
+  const grid = gridOf(s);
   const st = s.settlements[settlementId];
   const pos = unitPosition(s, u);
-  if (!st || !pos || distance(pos.x, pos.y, st.x, st.y) !== 1) fail('The unit must be next to the settlement.');
+  if (!st || !pos || grid.distance(pos.x, pos.y, st.x, st.y) !== 1) fail('The unit must be next to the settlement.');
   const visit = u.trade && u.trade.at === st.id && u.trade.turn === s.turn ? u.trade : undefined;
   if (deal && visit?.[deal]) fail(deal === 'sold' ? 'You have already sold goods here this turn.' : 'You have already bought goods here this turn.');
   if (u.moves <= 0 && !(deal && visit)) fail(`${unitName(u)} has no moves left.`);
@@ -195,9 +197,10 @@ function tribeOf(s: GameState, st: Settlement) {
 
 /** The settlement whose land this tile is, unless a European has bought or taken it. */
 export function nativeLandOwner(s: GameState, x: number, y: number): Settlement | undefined {
+  const grid = gridOf(s);
   const tile = tileAt(s, x, y);
   if (!tile || tile.claim || TERRAIN[tile.t].water) return undefined;
-  return Object.values(s.settlements).find((st) => distance(st.x, st.y, x, y) === 1);
+  return Object.values(s.settlements).find((st) => grid.distance(st.x, st.y, x, y) === 1);
 }
 
 export function landPrice(s: GameState, nation: NationId, x: number, y: number): number {
@@ -239,9 +242,10 @@ export function takeLand(s: GameState, nation: NationId, x: number, y: number): 
 
 /** New colonies unsettle the natives nearby. */
 export function onColonyFounded(s: GameState, colony: { owner: NationId; x: number; y: number }): void {
+  const grid = gridOf(s);
   const anger = colony.owner === 'crown' ? 1 : difficultyOf(s, player(s, colony.owner)).nativeTension;
   for (const st of Object.values(s.settlements)) {
-    const d = distance(st.x, st.y, colony.x, colony.y);
+    const d = grid.distance(st.x, st.y, colony.x, colony.y);
     if (d <= 3) addTension(st, colony.owner, Math.round((d <= 2 ? 150 : 80) * anger));
   }
 }
@@ -286,11 +290,12 @@ export function establishMission(s: GameState, unitId: string, settlementId: str
 }
 
 function nearestColony(s: GameState, nation: NationId, x: number, y: number, within: number) {
+  const grid = gridOf(s);
   let best: Colony | undefined;
   for (const c of Object.values(s.colonies)) {
     if (c.owner !== nation) continue;
-    const d = distance(c.x, c.y, x, y);
-    if (d <= within && (!best || d < distance(best.x, best.y, x, y))) best = c;
+    const d = grid.distance(c.x, c.y, x, y);
+    if (d <= within && (!best || d < grid.distance(best.x, best.y, x, y))) best = c;
   }
   return best;
 }
@@ -310,6 +315,7 @@ export function convertType(s: GameState, nation: NationId): UnitTypeId {
 }
 
 export function processNatives(s: GameState): void {
+  const grid = gridOf(s);
   const nations = s.players.filter((p) => p.id !== 'crown').map((p) => p.id);
   const rules = new Map(s.players.map((p) => [p.id, difficultyOf(s, p)]));
   for (const st of Object.values(s.settlements)) {
@@ -318,7 +324,7 @@ export function processNatives(s: GameState): void {
     for (const nation of nations) {
       // Nearby colonies press on native land, more so as they grow.
       const pressure = Object.values(s.colonies)
-        .filter((c) => c.owner === nation && distance(c.x, c.y, st.x, st.y) <= 3)
+        .filter((c) => c.owner === nation && grid.distance(c.x, c.y, st.x, st.y) <= 3)
         .reduce((sum, c) => sum + 3 + Math.floor(colonyWorkers(s, c).length / 2), 0);
       const mission = st.mission === nation;
       const r = rules.get(nation)!;

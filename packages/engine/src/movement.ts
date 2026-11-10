@@ -1,3 +1,4 @@
+import { gridOf, type Direction } from './grid.js';
 import { fail } from './errors.js';
 import { track } from './telemetry.js';
 import { portProblem, sailToEurope } from './europe.js';
@@ -6,9 +7,6 @@ import { resolveRumour } from './rumours.js';
 import {
   cargoFree,
   colonyAt,
-  DIRECTIONS,
-  dirOffset,
-  distance,
   inBounds,
   isShip,
   isWater,
@@ -23,7 +21,6 @@ import {
   unitPosition,
   unitsAboard,
   unitsAt,
-  type Direction,
 } from './queries.js';
 import { FOREST_MOVE_COST, RIVER_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './rules/terrain.js';
 import { riverLinked } from './rivers.js';
@@ -76,9 +73,7 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
   if (u.moves <= 0) return { kind: 'blocked', reason: `${unitName(u)} has no moves left.` };
   if (u.work) return { kind: 'blocked', reason: `${unitName(u)} is busy working.` };
   if (u.repair) return { kind: 'blocked', reason: `${unitName(u)} is under repair for ${u.repair} more turns.` };
-  const { dx, dy } = dirOffset(dir);
-  const x = pos.x + dx;
-  const y = pos.y + dy;
+  const { x, y } = gridOf(s).step(pos.x, pos.y, dir);
   if (!inBounds(s, x, y)) return { kind: 'blocked', reason: 'The edge of the world.' };
   const tile = tileAt(s, x, y)!;
   const colony = colonyAt(s, x, y);
@@ -166,9 +161,7 @@ export function moveUnit(s: GameState, unitId: string, dir: Direction): void {
     if (UNIT_TYPES[u.type].kind === 'wagon') track(u.owner, 'wagon:moves');
   }
   const pos = unitPosition(s, u)!;
-  const { dx, dy } = dirOffset(dir);
-  const x = pos.x + dx;
-  const y = pos.y + dy;
+  const { x, y } = gridOf(s).step(pos.x, pos.y, dir);
   switch (option.kind) {
     case 'blocked':
       fail(option.reason);
@@ -409,9 +402,10 @@ function stepCost(s: GameState, ctx: SearchContext, fi: number, ti: number, fx: 
 function approachable(s: GameState, ctx: SearchContext, startIdx: number, tx: number, ty: number, index: PathIndex): boolean {
   const w = s.map.width;
   const h = s.map.height;
-  for (let d = 0; d < 8; d++) {
-    const nx = tx + DIR_DX[d];
-    const ny = ty + DIR_DY[d];
+  const near = gridOf(s).neighbourOffsets(tx, ty);
+  for (let k = 0; k < near.length; k += 2) {
+    const nx = tx + near[k];
+    const ny = ty + near[k + 1];
     if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
     const i = ny * w + nx;
     if (i === startIdx) return true;
@@ -436,9 +430,6 @@ let searchGen = 0;
 let heapKey = new Float64Array(1024);
 let heapTile = new Int32Array(1024);
 const SEQ = 4294967296;
-// DIRECTIONS as plain numbers, in the same order.
-const DIR_DX = DIRECTIONS.map((d) => d.dx);
-const DIR_DY = DIRECTIONS.map((d) => d.dy);
 
 function searchBuffers(size: number): number {
   if (size !== searchSize || searchGen >= 0xfffffff0) {
@@ -466,6 +457,7 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
   if (!passable(s, ctx, tx, ty, true, index)) return null;
   const w = s.map.width;
   const h = s.map.height;
+  const grid = gridOf(s);
   if (!approachable(s, ctx, start.y * w + start.x, tx, ty, index)) return null;
   const gen = searchBuffers(w * h);
   const cost = searchCost;
@@ -512,9 +504,10 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
     done[idx] = gen;
     const cx = idx % w;
     const cy = (idx - cx) / w;
-    for (let d = 0; d < 8; d++) {
-      const nx = cx + DIR_DX[d];
-      const ny = cy + DIR_DY[d];
+    const near = grid.neighbourOffsets(cx, cy);
+    for (let d = 0; d < near.length; d += 2) {
+      const nx = cx + near[d];
+      const ny = cy + near[d + 1];
       if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
       const nIdx = ny * w + nx;
       if (done[nIdx] === gen) continue;
@@ -536,7 +529,7 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
           keys = heapKey = k2;
           tiles = heapTile = t2;
         }
-        const key = (c + distance(nx, ny, tx, ty)) * SEQ + seq++;
+        const key = (c + grid.distance(nx, ny, tx, ty)) * SEQ + seq++;
         let i = size++;
         while (i > 0) {
           const parent = (i - 1) >> 1;
@@ -580,13 +573,6 @@ export function nearestHighSeas(s: GameState, ship: Unit): { x: number; y: numbe
     }
   }
   return null;
-}
-
-function directionTo(fx: number, fy: number, tx: number, ty: number): Direction {
-  const dx = Math.sign(tx - fx);
-  const dy = Math.sign(ty - fy);
-  const table: Record<string, Direction> = { '0,-1': 'n', '1,-1': 'ne', '1,0': 'e', '1,1': 'se', '0,1': 's', '-1,1': 'sw', '-1,0': 'w', '-1,-1': 'nw' };
-  return table[`${dx},${dy}`];
 }
 
 /**
@@ -688,8 +674,9 @@ export function continueOrders(s: GameState, u: Unit, hint?: PathHint): void {
       }
     }
     const next = path[step];
-    const dir = directionTo(u.loc.x, u.loc.y, next.x, next.y);
-    const option = Math.max(Math.abs(next.x - u.loc.x), Math.abs(next.y - u.loc.y)) === 1 ? describeMove(s, u.id, dir) : null;
+    const grid = gridOf(s);
+    const dir = grid.directionTowards(u.loc.x, u.loc.y, next.x, next.y)!;
+    const option = grid.distance(u.loc.x, u.loc.y, next.x, next.y) === 1 ? describeMove(s, u.id, dir) : null;
     if (option?.kind !== 'move') {
       // Something got in the way of a route found earlier: search again from here. A route found
       // just now that is blocked waits for next turn.
@@ -757,7 +744,7 @@ export function continueRoadTo(s: GameState, u: Unit): void {
     }
     const path = findPath(s, u, tx, ty);
     if (!path || !path.length) return stop('the target cannot be reached.');
-    const dir = directionTo(here.x, here.y, path[0].x, path[0].y);
+    const dir = gridOf(s).directionTowards(here.x, here.y, path[0].x, path[0].y)!;
     if (describeMove(s, u.id, dir).kind !== 'move') return stop('the way is blocked.');
     moveUnit(s, u.id, dir);
   }
@@ -807,7 +794,8 @@ export function advanceWork(s: GameState, u: Unit): void {
   track(u.owner, kind === 'plow' ? 'land:plowed' : kind === 'road' ? 'land:road built' : 'land:forest cleared');
   if (kind === 'clear') {
     delete tile.f;
-    const colony = Object.values(s.colonies).find((c) => c.owner === u.owner && distance(c.x, c.y, at.x, at.y) <= 1);
+    const grid = gridOf(s);
+    const colony = Object.values(s.colonies).find((c) => c.owner === u.owner && grid.distance(c.x, c.y, at.x, at.y) <= grid.workRadius);
     if (colony) {
       colony.goods.lumber += 20;
       message(s, `Clearing the forest brought 20 lumber to ${colony.name}.`, u.owner, colony);

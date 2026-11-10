@@ -2,7 +2,7 @@
  * What events do: applying effects, and valuing them in gold for the computer players.
  */
 import { addTension } from '../natives.js';
-import { colonyWorkers, createUnit, isWater, neighbours, player, reveal, tileAt } from '../queries.js';
+import { colonyWorkers, createUnit, isWater, player, reveal, tileAt, workArea } from '../queries.js';
 import { placeOnMap } from '../movement.js';
 import { colonyReport } from '../production.js';
 import { BUILDINGS, BUILDING_ORDER, type BuildingKind } from '../rules/buildings.js';
@@ -145,7 +145,7 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
     }
     case 'bonusResource': {
       if (!colony) return;
-      const spots = neighbours(s, colony.x, colony.y).filter(({ x, y }) => {
+      const spots = workArea(s, colony.x, colony.y).filter(({ x, y }) => {
         const t = tileAt(s, x, y);
         return t && !isWater(t) && !t.b && !t.f && TERRAIN[t.t].bonusGood;
       });

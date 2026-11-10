@@ -3,7 +3,8 @@
  * ship, a neighbouring tribe…), or return null when the nation has nothing to target. Every
  * random pick uses the event stream `r`, never `GameState.rng`.
  */
-import { colonyAt, colonyWorkers, distance, isCoastal, isShip, isWater, player, tileAt } from '../queries.js';
+import { gridOf } from '../grid.js';
+import { colonyAt, colonyWorkers, isCoastal, isShip, isWater, player, tileAt } from '../queries.js';
 import type { GoodId } from '../rules/goods.js';
 import type { NationId } from '../rules/nations.js';
 import type { Colony, GameState } from '../types.js';
@@ -52,13 +53,14 @@ export const shipAtSea: TargetSelector = (s, nation, r) => {
  */
 export function tribeNear(range = 6): TargetSelector {
   return (s, nation, r) => {
+    const grid = gridOf(s);
     const options: EventVars[] = [];
     for (const c of coloniesOf(s, nation)) {
       let best: { id: string; d: number } | undefined;
       for (const st of Object.values(s.settlements)) {
         const tribe = s.tribes.find((t) => t.id === st.tribe);
         if (tribe?.stance[nation] === 'war') continue;
-        const d = distance(c.x, c.y, st.x, st.y);
+        const d = grid.distance(c.x, c.y, st.x, st.y);
         if (d <= range && (!best || d < best.d)) best = { id: st.id, d };
       }
       if (best) options.push({ nation, colony: c.id, settlement: best.id, tribe: s.settlements[best.id].tribe });

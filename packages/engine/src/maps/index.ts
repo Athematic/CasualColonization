@@ -27,6 +27,7 @@
 import type { TribeId } from '../rules/nations.js';
 import { TERRAIN, type TerrainId } from '../rules/terrain.js';
 import { randInt } from '../rng.js';
+import { gridIn } from '../grid.js';
 import { parseRivers } from '../rivers.js';
 import { entryPoints, newSettlement, settlementGround, sprinkleExtras, type EntrySide, type GeneratedWorld } from '../mapgen.js';
 import type { GameMap, Settlement, Tile } from '../types.js';
@@ -106,7 +107,7 @@ export function storedWorld(rng: { rng: number }, id: string, scenario: Scenario
   const def = storedMap(id);
   const { peoples } = storedMapEntry(scenario, id);
   const map = parseStoredMap(def);
-  sprinkleExtras(rng, map, scenario.map.extras);
+  sprinkleExtras(rng, map, scenario.map.extras, gridIn(scenario));
   const entryRows = def.entryRows ?? [0, map.height - 1];
   // Keep clear of every arrival point any number of nations could use.
   const arrivals = Array.from({ length: 8 }, (_, i) => entryPoints(map, i + 1, entryRows, def.entrySide)).flat();
@@ -114,8 +115,6 @@ export function storedWorld(rng: { rng: number }, id: string, scenario: Scenario
   for (const st of settlements) delete map.tiles[st.y * map.width + st.x].lcr;
   return def.entrySide ? { map, settlements, entryRows, entrySide: def.entrySide } : { map, settlements, entryRows };
 }
-
-const distance = (ax: number, ay: number, bx: number, by: number) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 
 /**
  * Places settlements tribe by tribe in turn, so every tribe gets its capital before any
@@ -125,6 +124,7 @@ const distance = (ax: number, ay: number, bx: number, by: number) => Math.max(Ma
 function placeRegionSettlements(rng: { rng: number }, map: GameMap, regions: TribeRegion[], avoid: { x: number; y: number }[], scenario: Scenario): Settlement[] {
   const { width, height, tiles } = map;
   const { spacing } = scenario.map.settlements;
+  const grid = gridIn(scenario);
   const lists = regions.map(({ region: [x0, y0, x1, y1] }) => {
     const list: { x: number; y: number }[] = [];
     for (let y = Math.max(1, y0); y <= Math.min(height - 2, y1); y++) {
@@ -148,8 +148,8 @@ function placeRegionSettlements(rng: { rng: number }, map: GameMap, regions: Tri
       const list = lists[i];
       while (list.length) {
         const c = list.pop()!;
-        if (placed.some((p) => distance(p.x, p.y, c.x, c.y) < spacing)) continue;
-        if (avoid.some((a) => distance(a.x, a.y, c.x, c.y) < 2)) continue;
+        if (placed.some((p) => grid.distance(p.x, p.y, c.x, c.y) < spacing)) continue;
+        if (avoid.some((a) => grid.distance(a.x, a.y, c.x, c.y) < 2)) continue;
         const capital = !capitals.has(r.tribe);
         capitals.add(r.tribe);
         placed.push(newSettlement(rng, `s${placed.length + 1}`, r.tribe, c.x, c.y, capital, settlementKindIn(scenario, r.tribe), peopleIn(scenario, r.tribe).skills));

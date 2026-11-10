@@ -14,6 +14,7 @@
 //
 // setIndexChecks(true), or CC_INDEX_CHECKS=1 in the environment, makes every lookup also run the
 // old linear scan and throw if the two differ; test/unitindex.test.ts plays games with it on.
+import { gridOf } from './grid.js';
 import type { Colony, GameState, Unit, UnitLocation } from './types.js';
 
 type Units = GameState['units'];
@@ -258,23 +259,22 @@ export function indexedTileWorker(s: GameState, x: number, y: number): Unit | un
 }
 
 /**
- * Calls `fn` for each unit on the map within `range` tiles (the larger of the two axis distances,
- * as `distance` counts) of x, y: tile by tile, rows top to bottom and each row left to right, each
- * tile's units in key order. For counts and other order-free tests near a tile, instead of a scan
- * over every unit. Units off the map's bounds are not visited.
+ * Calls `fn` for each unit on the map within `range` tiles (the grid's distance) of x, y: tile by
+ * tile in the grid's `withinOffsets` order (row by row), each tile's units in key order. For
+ * counts and other order-free tests near a tile, instead of a scan over every unit. Units off the
+ * map's bounds are not visited.
  */
 export function forEachUnitNear(s: GameState, x: number, y: number, range: number, fn: (u: Unit) => void): void {
   const tiles = unitTiles(s);
   const w = s.map.width;
-  const x0 = Math.max(0, x - range);
-  const x1 = Math.min(w - 1, x + range);
-  const y0 = Math.max(0, y - range);
-  const y1 = Math.min(s.map.height - 1, y + range);
-  for (let ty = y0; ty <= y1; ty++) {
-    for (let tx = x0; tx <= x1; tx++) {
-      const list = tiles.get(ty * w + tx);
-      if (list) for (let i = 0; i < list.length; i++) fn(list[i]);
-    }
+  const h = s.map.height;
+  const within = gridOf(s).withinOffsets(x, y, range);
+  for (let k = 0; k < within.length; k += 2) {
+    const tx = x + within[k];
+    const ty = y + within[k + 1];
+    if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+    const list = tiles.get(ty * w + tx);
+    if (list) for (let i = 0; i < list.length; i++) fn(list[i]);
   }
 }
 

@@ -4,6 +4,7 @@
  * the Crown has built up when deciding on independence. The rules are in crown.ts; the numbers
  * here are tuned with tournaments (docs/AI_FEATURE_AUDIT.md, "The Crown").
  */
+import { gridOf } from '../grid.js';
 import { defencePower } from '../combat.js';
 import { answerDemand, demandPenalty, REF_ON_REFUSAL } from '../crown.js';
 import { WAVE } from '../independence.js';
@@ -11,7 +12,7 @@ import { sonsOfLiberty, TORY_COLONY_BELOW } from '../production.js';
 import { aiColonyReport } from './reports.js';
 import { answerMercenaries, INTERVENTION, interventionBells, interventionForce, mercenaryCompany, TORY_LANDING } from '../rebellion.js';
 import { proposePeace, WAR_WEARINESS } from '../diplomacy.js';
-import { colonyWorkers, distance, isCoastal, isShip, unitsAt } from '../queries.js';
+import { colonyWorkers, isCoastal, isShip, unitsAt } from '../queries.js';
 import { STOCKADE_DEFENCE } from '../rules/buildings.js';
 import { ROLES, UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
@@ -250,6 +251,7 @@ export function crownAffairs(s: GameState, p: Player, prof: AiProfile | null, pl
  * (WAR_WEARINESS turns), unless it already has a war target there.
  */
 function royalWarTurn(s: GameState, p: Player, prof: AiProfile, strength: number): void {
+  const grid = gridOf(s);
   const enemy = p.royal?.warOn;
   if (!enemy || p.stance[enemy] !== 'war' || (p.royal?.lastWar ?? -1) < (p.warSince[enemy] ?? Infinity)) return;
   const memory = (p.aiMemory = p.aiMemory ?? {});
@@ -258,7 +260,7 @@ function royalWarTurn(s: GameState, p: Player, prof: AiProfile, strength: number
   if (prof.aggression >= 0.5) {
     const ours = ownColonies(s, p);
     const prey = Object.values(s.colonies)
-      .filter((c) => c.owner === enemy && ours.some((o) => distance(o.x, o.y, c.x, c.y) <= 10))
+      .filter((c) => c.owner === enemy && ours.some((o) => grid.distance(o.x, o.y, c.x, c.y) <= 10))
       .map((c) => ({ c, score: strength / (unitsAt(s, c.x, c.y).filter((u) => u.owner === enemy && !isShip(u)).reduce((n, u) => n + defencePower(s, u), 0) + 1) }))
       .sort((a, b) => b.score - a.score)[0];
     if (prey && prey.score >= 2.5 / prof.aggression) {
