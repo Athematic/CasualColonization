@@ -5,7 +5,7 @@
  * wagon trains with no port to go to sell surplus to native settlements instead.
  */
 import { buyPrice, portsFor, sellPrice } from '../europe.js';
-import { findPath, setDestination } from '../movement.js';
+import { findPath, goTo, setDestination } from '../movement.js';
 import { nativeOffer, tensionOf, tradeWithSettlement } from '../natives.js';
 import { colonyReport, type ColonyReport } from '../production.js';
 import { cargoRoomFor, colonyAt, distance, isCoastal, isShip, player, unitPosition, unitsAboard, warehouseCapacity } from '../queries.js';
@@ -604,7 +604,7 @@ function nativeTrade(s: GameState, p: Player, wagon: Unit): void {
     .map((c) => ({ c, n: tradeGoods(s).reduce((m, g) => m + Math.max(0, c.goods[g] - 50), 0) }))
     .filter((r) => r.n >= 80)
     .sort((a, b) => b.n - a.n)[0];
-  if (fullest && findPath(s, wagon, fullest.c.x, fullest.c.y)) setDestination(s, wagon.id, { x: fullest.c.x, y: fullest.c.y });
+  if (fullest) goTo(s, wagon, fullest.c.x, fullest.c.y);
 }
 
 function besideSettlement(s: GameState, u: Unit, x: number, y: number): { x: number; y: number } | null {

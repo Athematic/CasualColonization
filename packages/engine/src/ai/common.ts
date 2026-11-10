@@ -3,7 +3,7 @@ import { braveDefence } from '../braves.js';
 import { attack, defencePower, offencePower } from '../combat.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import { RuleError } from '../errors.js';
-import { describeMove, findPath, leaveShip, moveUnit, setDestination } from '../movement.js';
+import { describeMove, findPath, goTo, leaveShip, moveUnit, setDestination } from '../movement.js';
 import { baseTileYield } from '../production.js';
 import {
   cargoFree,
@@ -344,8 +344,7 @@ export function fetchStranded(s: GameState, p: Player, ship: Unit): boolean {
     const { x, y } = u.loc;
     if (distance(ship.loc.x, ship.loc.y, x, y) <= 1) return true;
     const spot = neighbours(s, x, y).find((n) => isWater(tileAt(s, n.x, n.y)!) && !unitsAt(s, n.x, n.y).some((o) => o.owner !== p.id));
-    if (spot && findPath(s, ship, spot.x, spot.y)) {
-      setDestination(s, ship.id, spot);
+    if (spot && goTo(s, ship, spot.x, spot.y)) {
       return true;
     }
   }

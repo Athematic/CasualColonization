@@ -565,7 +565,12 @@ function directionTo(fx: number, fy: number, tx: number, ty: number): Direction 
   return table[`${dx},${dy}`];
 }
 
-export function setDestination(s: GameState, unitId: string, dest: Unit['dest']): void {
+/**
+ * Gives a unit on the map a destination and moves it along. `found` is a route to the destination
+ * tile that the caller has just found with findPath, with nothing changed since: it saves a
+ * second search.
+ */
+export function setDestination(s: GameState, unitId: string, dest: Unit['dest'], found?: { x: number; y: number }[]): void {
   const u = s.units[unitId];
   if (u.loc.kind !== 'map') fail('Only units on the map can be given orders.');
   if (dest && 'europe' in dest && !isShip(u)) fail(`Only ships can sail to ${term(s, 'homeland')}.`);
@@ -576,13 +581,21 @@ export function setDestination(s: GameState, unitId: string, dest: Unit['dest'])
       if (problem) fail(problem);
     }
   }
-  const path = dest && 'x' in dest ? findPath(s, u, dest.x, dest.y) : null;
+  const path = dest && 'x' in dest ? found ?? findPath(s, u, dest.x, dest.y) : null;
   if (dest && 'x' in dest && !path) fail('There is no known route there.');
   delete u.roadTo;
   u.dest = dest;
   u.state = 'active';
   track(u.owner, dest && 'europe' in dest ? 'cmd:gotoEurope' : 'cmd:goto');
   continueOrders(s, u, path && dest && 'x' in dest ? pathHint(u, dest, path) : undefined);
+}
+
+/** Sends a unit on the map to a tile if it can find a route there; false when it cannot. One search. */
+export function goTo(s: GameState, u: Unit, x: number, y: number): boolean {
+  const path = findPath(s, u, x, y);
+  if (!path) return false;
+  setDestination(s, u.id, { x, y }, path);
+  return true;
 }
 
 /**
