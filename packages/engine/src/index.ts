@@ -47,3 +47,4 @@ export * from './arena.js';
 export * from './headstart.js';
 export * from './features.js';
 export { setFeatureSink, track, type FeatureSink } from './telemetry.js';
+export { perfEnd, perfReport, perfStart, setPerf, type PerfPhase } from './perf.js';

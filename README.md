@@ -132,6 +132,8 @@ With those options, the current results (0.5, with the natives' braves and the C
 | Competent | 3 | 416 | 20.0 | 128 | 9,983 |
 | Naive | 0 | 217 | 20.4 | 81 | 16,440 |
 
+A shorter check on 10 November 2026 (0.7, after the performance pass: `npm run tournament -- --games 2 --turns 330 --size medium`, 22 seconds) gave Creative 345.5, Competent 291, Combative 268 and Naive 169.5 on average, with one win each for Creative and Competent; no nation declared independence. Two games are few: the table above stays the reference until a longer run replaces it.
+
 Add `--difficulty <level>` (`discoverer`, `explorer`, `conquistador`, `governor`, `viceroy`) to play every arena nation at that level's economics, as if each were a person; without it, games use the standard rules (Conquistador), and `--difficulty conquistador` gives exactly the same results. Arena games use the colony charter, as new games do; add `--no-charter` to play without it (this changes the numbers: tournaments from before 0.6 ran without it).
 
 Every run also prints relations and trade between the European nations: proposals, trade agreements and Favoured Nation statuses made and held, cancellations, gold traded at each other's colonies, goods sold at partners' colonies and in partners' ports, triangle trades, wars declared (and how many on trade partners or Favoured Nations) and tax raises refused, per level and per game, and a table of the Crown: independence declared, won and lost, the Royal Expeditionary Force at the declaration (or at the end) against the old formula sized by colonies, royal demands made, paid and refused, royal wars and the units the King added. Add `--no-favoured` to stop the computer players proposing trade agreements and Favoured Nation, to measure what the feature brings (see the Favoured Nation section of [docs/AI_FEATURE_AUDIT.md](docs/AI_FEATURE_AUDIT.md)).
@@ -141,6 +143,12 @@ Add `--features` to also count how often each level uses each game feature (comm
 Simplifications in this alpha:
 - An independent nation cannot trade with Europe.
 - Braves cannot destroy or capture a colony, and they do not cross water.
+
+### Performance
+
+`npm run bench` plays the web game's head start to 1700 without a browser (seed 2024, a medium generated map, four nations: the Creative computer for the player and three Competent ones, events and the colony charter on) and prints the total time, the time spent in each phase of the turn (each computer level, trade routes, natives and braves, the Crown, events, stats, colony production) and a hash of the final state. `npm run bench -- --verify` replays three more seeds for 150 rounds, and the benchmark game, and compares their hashes with `scripts/bench-hashes.json`: a speed-up must leave them unchanged. For a CPU profile, run `node --cpu-prof scripts/.bench.mjs` after one `npm run bench`.
+
+The 0.7 performance pass brought that head start from 43–46 seconds to 12–14 seconds in Node, and from 40 to 14 seconds in Chromium, with identical games. Further speed-ups that would change games (and so are not made): following a found route for the whole turn instead of searching again after each step (about 10%), a stronger path-search estimate (5–10%), optimising colony workers every other turn or only after a change (about 10%), and caching colony reports for a whole computer turn (15–20%).
 
 ## Architecture
 
