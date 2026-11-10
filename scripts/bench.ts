@@ -6,6 +6,7 @@
 //
 // Usage: npm run bench -- [--seed 2024] [--year 1700] [--quiet]
 //        npm run bench -- --verify [--write]
+// npm test runs a shorter golden-hash test (packages/engine/test/golden.test.ts) in CI.
 // --verify plays 150 rounds on three more seeds and compares the state hashes with
 // scripts/bench-hashes.json (the benchmark game's hash too); --write stores them instead.
 // For a CPU profile: node --cpu-prof scripts/.bench.mjs (after one `npm run bench`).

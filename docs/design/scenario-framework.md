@@ -561,18 +561,18 @@ With the framework in place, each later scenario is a module with content, plus 
 
 Every step keeps the Americas games identical (bench hashes and the golden-hash test unchanged) and all tests green, and can be merged on its own into the 0.9 branch.
 
-| Step | What | Size |
-| --- | --- | --- |
-| 0 | **Guard rails.** The golden-hash test in `npm test`; `bench -- --verify` documented as required for every 0.9 pull request | S |
-| 1 | **Skeleton.** `scenario/` with the `Scenario` type, the registry, `scenarioOf(s)`, and an Americas scenario that only points at today's tables; `config.scenario`, `scenarioVersion` and `rivals` (optional); loading checks; the conformance test | M |
-| 2 | **Calendar.** `yearOf`, `formatDate`, `yearValue`, `turnAfterYears`, `LAST_YEAR` and the three `turnOfYear` copies read the calendar; `ai.pace` with `aiTurn`; `offerFathers`' late turn | S–M |
-| 3 | **Selections.** Goods (23 files), peoples order, nation sets (arena, web), terrain and units lists, buildings, council members, AI goods tags; nation entries with port name, colony names and starting kit; port character's data shape | M–L |
-| 4 | **Effects as data.** The modifier hooks and their cache; 8 nation bonuses and 25 fathers' passive effects; `onJoin` effects; `unlockBuilding`. The step most likely to break identity, so it lands in two or three pull requests (production and Europe; combat and natives; the rest) | L |
-| 5 | **Mechanics and victory.** Switches for the Crown, REF, independence, favoured nation, charter, custom house, missions; the victory registry with `time` and `independence-war`; score and difficulty overrides; rumour table | M |
-| 6 | **Map and peoples.** Generator settings; stored maps per scenario; arrival side for the Crown; settlement-kind table; `PeopleDef` with `lifeway` | M |
-| 7 | **Terms and UI.** The text table and `term()`; the New game screen's Scenario and Rivals selects; landing and covers per scenario; Congress hall per scenario; `--scenario` for the arena, tournament and bench | M |
-| 8 | **Proof scenario.** Content of section 7.1, its tests, a tournament reference and bench hashes; a short design-note update | M |
-| 9 | **Docs.** README (scenarios), STYLE_PLUGINS (scenario packs), events.md and scenarios.md updated; ROADMAP status | S |
+| Step | What | Size | Status |
+| --- | --- | --- | --- |
+| 0 | **Guard rails.** The golden-hash test in `npm test`; `bench -- --verify` documented as required for every 0.9 pull request | S | done: `packages/engine/test/golden.test.ts` (re-record with `npm run test:golden:write`); README, Performance |
+| 1 | **Skeleton.** `scenario/` with the `Scenario` type, the registry, `scenarioOf(s)`, and an Americas scenario that only points at today's tables; `config.scenario`, `scenarioVersion` and `rivals` (optional); loading checks; the conformance test | M | |
+| 2 | **Calendar.** `yearOf`, `formatDate`, `yearValue`, `turnAfterYears`, `LAST_YEAR` and the three `turnOfYear` copies read the calendar; `ai.pace` with `aiTurn`; `offerFathers`' late turn | S–M | |
+| 3 | **Selections.** Goods (23 files), peoples order, nation sets (arena, web), terrain and units lists, buildings, council members, AI goods tags; nation entries with port name, colony names and starting kit; port character's data shape | M–L | |
+| 4 | **Effects as data.** The modifier hooks and their cache; 8 nation bonuses and 25 fathers' passive effects; `onJoin` effects; `unlockBuilding`. The step most likely to break identity, so it lands in two or three pull requests (production and Europe; combat and natives; the rest) | L | |
+| 5 | **Mechanics and victory.** Switches for the Crown, REF, independence, favoured nation, charter, custom house, missions; the victory registry with `time` and `independence-war`; score and difficulty overrides; rumour table | M | |
+| 6 | **Map and peoples.** Generator settings; stored maps per scenario; arrival side for the Crown; settlement-kind table; `PeopleDef` with `lifeway` | M | |
+| 7 | **Terms and UI.** The text table and `term()`; the New game screen's Scenario and Rivals selects; landing and covers per scenario; Congress hall per scenario; `--scenario` for the arena, tournament and bench | M | |
+| 8 | **Proof scenario.** Content of section 7.1, its tests, a tournament reference and bench hashes; a short design-note update | M | |
+| 9 | **Docs.** README (scenarios), STYLE_PLUGINS (scenario packs), events.md and scenarios.md updated; ROADMAP status | S | |
 
 Total: about **XL** (roughly two weeks of agent work in the project's sizes: one L, five M, three S, plus the proof content). The roadmap's current L for the framework is too low; Q11.
 
