@@ -106,6 +106,41 @@ test('classify picks the layout from the id', () => {
   assert.equal(classify('bible/style-bible').layout, null);
 });
 
+test('Founding Father portraits: the whole oval cameo, centred, one scale for every portrait', () => {
+  assert.deepEqual(classify('fathers/adam-smith'), { category: 'fathers', layout: 'portrait' });
+  assert.equal(classify('fathers/bartolome-de-las-casas').layout, 'portrait');
+  const N = 100;
+  // an upright ink-rimmed oval with a small object poking out of its lower edge and a thin ink line at
+  // the top (a thin part would be a "protrusion" for the core box): the whole cameo must be kept
+  const cameo = (cx, cy, rx, ry) => {
+    const img = new FImage(256, 256);
+    for (let y = 0; y < 256; y++) {
+      for (let x = 0; x < 256; x++) {
+        const d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
+        const tip = Math.abs(x - cx) < 2 && y >= cy - ry - 6 && y < cy - ry + 2; // thin ink tip on top
+        const obj = Math.abs(x - cx) < 8 && y >= cy + ry - 4 && y < cy + ry + 4; // object at the lower edge
+        if (d > 1 && !tip && !obj) continue;
+        const i = (y * 256 + x) * 4;
+        const ink = d > 0.85 || tip || obj;
+        img.data.set(ink ? [0.1, 0.1, 0.09, 1] : [0.79, 0.58, 0.35, 1], i);
+      }
+    }
+    return img;
+  };
+  // a big centred cameo and a small off-centre one end up the same size and in the same place
+  const boxes = [cameo(128, 128, 100, 120), cameo(90, 140, 50, 60)].map((img) => {
+    const p = placement(img, 'portrait');
+    assert.deepEqual(p.core, p.bbox, 'scaled by the whole cameo, not a core');
+    return alphaBBox(resample(img, N, N, { ...transformFor(p, N), kernel: 'box' }));
+  });
+  for (const bb of boxes) {
+    assert.ok(Math.abs(bb.y1 - bb.y0 - 86) <= 1, `cameo height ${bb.y1 - bb.y0} is 0.86 of the canvas`);
+    assert.ok(Math.abs((bb.y0 + bb.y1) / 2 - 50) <= 1, 'centred vertically');
+    assert.ok(Math.abs((bb.x0 + bb.x1) / 2 - 50) <= 1, 'centred horizontally');
+    assert.ok(bb.y0 >= 6 && bb.y1 <= 94 && bb.x0 >= 6 && bb.x1 <= 94, 'inside the margin, nothing cut off');
+  }
+});
+
 // ------------------------------------------------------------------ palette
 
 test('palette quantisation picks the nearest palette colour', () => {

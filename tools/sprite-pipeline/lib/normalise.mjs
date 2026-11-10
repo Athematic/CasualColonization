@@ -60,6 +60,7 @@ export function coreBBox(img, t = 0.5, frac = 0.18) {
  *  base:    baseline (feet, wheels, waterline) for bottom-anchored layouts.
  *  margin:  minimum free border; the subject is shrunk if a protrusion would cross it.
  *           It is at least 1/16 so the 1-px pixel-art outline still fits at 16 px.
+ *  whole:   scale by the full bounding box instead of the core (nothing counts as a protrusion).
  * Horizontally, bottom-anchored subjects are centred on their core (so a
  * musket or sabre sticking out does not push the body off-centre).
  */
@@ -72,6 +73,9 @@ export const LAYOUTS = {
   overlay: { fit: 'contain', w: 0.84, h: 0.84, anchor: 'center', margin: 0.065 },
   building: { fit: 'contain', w: 0.86, h: 0.84, anchor: 'bottom', base: 0.93, margin: 0.065 },
   decor: { fit: 'contain', w: 0.88, h: 0.84, anchor: 'bottom', base: 0.93, margin: 0.065 },
+  // Founding Father portraits: an oval cameo, kept whole (the bust is cut by the oval, so there is no
+  // body box to normalise by). The oval's bounding box fits 0.86 x 0.86, centred, so all 25 share one scale.
+  portrait: { fit: 'contain', w: 0.86, h: 0.86, anchor: 'center', margin: 0.065, whole: true },
   // Full-bleed or edge-aligned art: scaled to the canvas as is.
   fullbleed: { fit: 'none' },
 };
@@ -96,6 +100,7 @@ export function classify(id) {
     case 'buildings':
     case 'colonies':
     case 'settlements': layout = 'building'; break;
+    case 'fathers': layout = 'portrait'; break;
     case 'decor': layout = name.startsWith('road__') ? 'fullbleed' : 'decor'; break;
     case 'terrain':
     case 'ui': layout = 'fullbleed'; break;
@@ -136,7 +141,7 @@ export function placement(img, layoutName, opts = {}) {
   }
   const bbox = alphaBBox(img, t);
   if (!bbox) throw new Error('empty image (nothing above the alpha threshold)');
-  const core = coreBBox(img, t, opts.coreFrac ?? 0.18) ?? bbox;
+  const core = L.whole ? bbox : (coreBBox(img, t, opts.coreFrac ?? 0.18) ?? bbox);
   const cw = core.x1 - core.x0, ch = core.y1 - core.y0;
   let s;
   if (L.fit === 'height') s = L.h / ch;

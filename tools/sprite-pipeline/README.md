@@ -260,6 +260,7 @@ Each master is trimmed to its alpha bounding box (after removing the faint dark 
 | `good`, `overlay` | goods, pennant, flag, mission | whole subject fits 0.84 × 0.84 | centred |
 | `building` | buildings, colonies, settlements | core fits 0.86 × 0.84 | bottom at 0.93 |
 | `decor` | forests, hills, mountains, ruins, bonuses | core fits 0.88 × 0.84 | bottom at 0.93 |
+| `portrait` | Founding Father portraits (`fathers/*`), oval cameos | the whole bounding box (no core: the cameo is kept whole) fits 0.86 × 0.86 | centred |
 | `fullbleed` | terrain tiles, coast bands, road overlays, UI | none: a square master fills the square as is (tiles and overlays keep their tile geometry); a non-square one (UI) is fitted and centred | |
 
 Category rules on top of the layouts:
