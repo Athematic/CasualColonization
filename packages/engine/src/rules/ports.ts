@@ -9,7 +9,7 @@
  * scenario's nation entries as it is. Today's table is the Americas'.
  */
 import { GOOD_DEFS, GOODS, type GoodId } from './goods.js';
-import { HOME_PORTS, type NationId } from './nations.js';
+import { HOME_PORTS, type AmericasNationId, type NationId } from './nations.js';
 
 export interface PortCharacter {
   /**
@@ -127,7 +127,7 @@ export function portCharacterText(port: PortRef, goods: readonly GoodId[] = GOOD
  * nation id means the Americas' port; the web game passes the game's (`nationOf(s, id).port`).
  */
 export function portSummary(port: NationId | PortEntry, goods: readonly GoodId[] = GOODS): string {
-  const entry: PortEntry = typeof port === 'string' ? (PORT_CHARACTER[port] ?? { name: HOME_PORTS[port] }) : port;
+  const entry: PortEntry = typeof port === 'string' ? (PORT_CHARACTER[port] ?? { name: HOME_PORTS[port as AmericasNationId] ?? port }) : port;
   const name = entry.name;
   const text = portCharacterText(entry.market ?? NONE, goods);
   return text ? `${name}: ${text}` : name;

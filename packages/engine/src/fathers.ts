@@ -5,7 +5,7 @@ import { applyEffects } from './events/effects.js';
 import { message, player } from './queries.js';
 import { random, weightedPick } from './rng.js';
 import { FATHERS, fatherCost, type FatherCategory, type FatherId } from './rules/fathers.js';
-import { councilOf, nationOf, scenarioOf, term } from './scenarios/index.js';
+import { aiTurn, councilOf, nationOf, scenarioOf, term } from './scenarios/index.js';
 import { memberEffects } from './scenarios/modifiers.js';
 import type { GameState, Player } from './types.js';
 
@@ -20,7 +20,8 @@ export function nextFatherCost(s: GameState, p: Player): number {
 /** Draws one candidate per category of the scenario's council from the members who have not joined yet. */
 export function offerFathers(s: GameState, p: Player): void {
   const offer: Partial<Record<FatherCategory, FatherId>> = {};
-  const lateGame = s.turn > 120;
+  // Political members grow likelier late in the game (turn 120 of the Americas, scaled by the pace).
+  const lateGame = s.turn > aiTurn(s, 120);
   const council = councilOf(s);
   for (const cat of council.categories) {
     const pool = council.members.map((id) => FATHERS[id]).filter((f) => f.category === cat && !p.fathers.includes(f.id));

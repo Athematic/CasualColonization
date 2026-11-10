@@ -15,7 +15,7 @@ import type { NationId } from '../rules/nations.js';
 import { track } from '../telemetry.js';
 import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
 import type { GoodId } from '../rules/goods.js';
-import { aiGoodsOf, goodsOf, mechanicsOf, term } from '../scenarios/index.js';
+import { aiGoodsOf, aiTurn, goodsOf, mechanicsOf, term } from '../scenarios/index.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, RouteCargo, RouteStop, TradeRoute, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
@@ -445,7 +445,7 @@ function wagonForeignStops(s: GameState, p: Player): Set<string> {
  */
 function routeWagonForeign(s: GameState, p: Player, wagon: Unit): boolean {
   // Early on, a spare wagon train trades with the natives, which pays better and costs no ties.
-  if (s.turn < FOREIGN_WAGON_FROM) return false;
+  if (s.turn < aiTurn(s, FOREIGN_WAGON_FROM)) return false;
   const pos = unitPosition(s, wagon)!;
   const partners = partnerColonies(s, p);
   if (!partners.length) return false;
@@ -550,7 +550,7 @@ function nativeTrade(s: GameState, p: Player, wagon: Unit): void {
   const carrying = tradeGoods(s).filter((g) => (cargo[g] ?? 0) > 0);
   const buyers = nativeBuyers(s, p, pos).sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y));
   if (carrying.length) {
-    const st = buyers.find((o) => carrying.some((g) => nativeOffer(o, g, Math.min(100, cargo[g]!)) >= 40));
+    const st = buyers.find((o) => carrying.some((g) => nativeOffer(s, o, g, Math.min(100, cargo[g]!)) >= 40));
     if (!st) return;
     if (distance(st.x, st.y, pos.x, pos.y) === 1) {
       if (wagon.moves > 0) tradeWithSettlement(s, wagon.id, st.id);

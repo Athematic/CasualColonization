@@ -69,7 +69,7 @@ describe('port character', () => {
 
   it('keeps the differences moderate, in the shape of the scenario nation entry', () => {
     for (const [nation, entry] of Object.entries(PORT_CHARACTER) as [NationId, PortEntry][]) {
-      expect(entry.name).toBe(HOME_PORTS[nation]);
+      expect(entry.name).toBe(HOME_PORTS[nation as keyof typeof HOME_PORTS]);
       const c = entry.market ?? {};
       for (const [g, f] of Object.entries(c.prices ?? {}) as [GoodId, number][]) {
         // Factors within 30%; at most about 30% of the price in gold, and never more than 1 gold on the cheap goods.

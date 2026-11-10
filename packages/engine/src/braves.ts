@@ -54,7 +54,7 @@ import {
 } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from './types.js';
-import { difficultyOf, goodsOf, nativeProduceOf, settlementKindOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, nativeProduceOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
 
 /** The kind of a settlement in its game's scenario (camp, village, city…), with its numbers. */
@@ -457,10 +457,10 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
     return;
   }
   // Trade: the brave buys goods the tribe wants, then offers the settlement's own goods.
-  for (const g of TRIBES[st.tribe].wants) {
+  for (const g of peopleOf(s, st.tribe).wants) {
     if (NOT_FOR_SALE.has(g) || c.goods[g] < 50) continue;
     const amount = Math.min(100, Math.floor(c.goods[g] / 2));
-    const gold = nativeOffer(st, g, amount);
+    const gold = nativeOffer(s, st, g, amount);
     if (gold < 10) continue;
     c.goods[g] -= amount;
     st.gold -= gold;

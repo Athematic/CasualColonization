@@ -33,6 +33,9 @@ import {
   TRIBE_ORDER,
   TRIBES,
   UNIT_TYPES,
+  NATION_IDS,
+  peopleIn,
+  type AmericasNationId,
   type GameConfig,
   type Scenario,
 } from '../src/index.js';
@@ -62,9 +65,11 @@ describe('the Americas scenario is today’s tables', () => {
   it('goods, peoples and council', () => {
     expect(AMERICAS.goods).toEqual([...GOODS]);
     expect(AMERICAS.peoples.ids).toEqual(TRIBE_ORDER);
-    expect(AMERICAS.peoples.ids).toEqual(Object.keys(TRIBES));
+    // The catalogue's first eight peoples; the Kalinago belong to the Caribbean.
+    expect(AMERICAS.peoples.ids).toEqual(Object.keys(TRIBES).slice(0, 8));
+    expect(AMERICAS.peoples.overrides).toBeUndefined();
     expect(AMERICAS.peoples.produce).toEqual(NATIVE_PRODUCE);
-    expect(AMERICAS.council.members).toEqual(Object.keys(FATHERS));
+    expect(AMERICAS.council.members).toEqual(Object.keys(FATHERS).slice(0, 25));
     expect(AMERICAS.council.members).toHaveLength(25);
     expect(AMERICAS.council.categories).toEqual(FATHER_CATEGORIES);
   });
@@ -82,11 +87,12 @@ describe('the Americas scenario is today’s tables', () => {
     expect(sets.real?.map((e) => e.id)).toEqual(['england', 'france', 'netherlands', 'spain']);
     for (const e of [...sets.alternative, ...(sets.real ?? []), AMERICAS.nations.crown]) {
       // Q2: nations are per scenario; the Americas' are the catalogue's values.
-      expect([e.name, e.adjective, e.color]).toEqual([NATIONS[e.id].name, NATIONS[e.id].adjective, NATIONS[e.id].color]);
-      expect(e.bonus.text).toBe(NATIONS[e.id].bonus);
-      expect(e.colonyNames).toEqual(NATIONS[e.id].colonyNames);
-      expect(e.port).toEqual(PORT_CHARACTER[e.id] ?? { name: HOME_PORTS[e.id] });
-      expect(e.port.name).toBe(HOME_PORTS[e.id]);
+      const id = e.id as AmericasNationId | 'crown';
+      expect([e.name, e.adjective, e.color]).toEqual([NATIONS[id].name, NATIONS[id].adjective, NATIONS[id].color]);
+      expect(e.bonus.text).toBe(NATIONS[id].bonus);
+      expect(e.colonyNames).toEqual(NATIONS[id].colonyNames);
+      expect(e.port).toEqual(PORT_CHARACTER[e.id] ?? { name: HOME_PORTS[id] });
+      expect(e.port.name).toBe(HOME_PORTS[id]);
     }
   });
 
@@ -161,7 +167,7 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
       expect(set.length).toBeLessThanOrEqual(max);
       expect(new Set(set.map((e) => e.id)).size).toBe(set.length);
       for (const e of set) {
-        expect(NATIONS[e.id]).toBeDefined();
+        expect(NATION_IDS).toContain(e.id);
         expect(e.id).not.toBe('crown');
         expect(e.name && e.adjective && e.color).toBeTruthy();
         expect(e.port.name).toBeTruthy();
@@ -174,9 +180,12 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
   it('goods references are closed', () => {
     for (const g of sc.peoples.produce) expect(sc.goods).toContain(g);
     for (const t of sc.peoples.ids) {
-      for (const g of TRIBES[t].wants) expect(sc.goods).toContain(g);
-      for (const u of TRIBES[t].skills) expect(sc.units).toContain(u);
+      // As the scenario has the people (its overrides of the catalogue's skills and wants).
+      const people = peopleIn(sc, t);
+      for (const g of people.wants) expect(sc.goods, `${t} want ${g}`).toContain(g);
+      for (const u of people.skills) expect(sc.units, `${t} teach ${u}`).toContain(u);
     }
+    for (const t of Object.keys(sc.peoples.overrides ?? {})) expect(sc.peoples.ids).toContain(t);
     const isGood = (g: string) => (GOODS as readonly string[]).includes(g);
     for (const b of sc.buildings) {
       const { input, output } = BUILDINGS[b];

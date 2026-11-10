@@ -8,7 +8,7 @@ import type { BuildingKind } from '../rules/buildings.js';
 import type { GoodId } from '../rules/goods.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
-import { aiFight, disembarkAll, guardColony, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
+import { aiFight, boardRescue, disembarkAll, fetchStranded, guardColony, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
 import { crownAffairs } from './royal.js';
 import { aiGoodsOf, goodsOf } from '../scenarios/index.js';
 
@@ -46,6 +46,8 @@ function aiUnit(s: GameState, p: Player, u: Unit): void {
 
 function aiColonist(s: GameState, p: Player, u: Unit): void {
   if (u.loc.kind !== 'map') return;
+  // Stranded before the first colony (ai/common.ts): board the ship that came for them.
+  if (boardRescue(s, p, u)) return;
   const { x, y } = u.loc;
   if ((u.role === 'soldier' || u.role === 'dragoon') && aiFight(s, p, u)) return;
   if (u.role === 'soldier' || u.role === 'dragoon') {
@@ -143,6 +145,7 @@ function aiShip(s: GameState, p: Player, ship: Unit): void {
     disembarkAll(s, ship);
     return;
   }
+  if (fetchStranded(s, p, ship)) return;
   const here = colonyAt(s, ship.loc.x, ship.loc.y);
   if (here && here.owner === p.id) {
     // Full loads, or anything about to spill out of the warehouse.

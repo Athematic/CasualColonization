@@ -45,7 +45,7 @@ import { track } from '../telemetry.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
-import { aiGoodsOf } from '../scenarios/index.js';
+import { aiGoodsOf, aiTurn } from '../scenarios/index.js';
 
 /** Goods the computer players export, and so weigh in tax decisions and port choice (the scenario's `ai.goods.export`). */
 export const exportGoods = (s: GameState): readonly GoodId[] => aiGoodsOf(s).export;
@@ -252,7 +252,7 @@ function reconsiderFavoured(s: GameState, p: Player, prof: AiProfile, strength: 
       return;
     }
   }
-  if (prof.aggression < 1 || army < 2 || s.turn <= 50 || s.turn - (memory.lastWar ?? -100) <= 40 || memory.warPlan) return;
+  if (prof.aggression < 1 || army < 2 || s.turn <= aiTurn(s, 50) || s.turn - (memory.lastWar ?? -100) <= 40 || memory.warPlan) return;
   if (bestWarTarget(s, p, prof, strength)?.ready) return;
   const target = bestWarTarget(s, p, prof, strength, true);
   if (!target || !isFavoured(s, p.id, target.c.owner) || target.score < 1.5 * (2.5 / target.aggression)) return;
