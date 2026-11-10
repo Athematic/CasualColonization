@@ -126,6 +126,7 @@ Before Beta 1 (Simon, November 2026): the computer players' turns are slow, and 
 | Speed-ups that change outcomes (each 10–20%: follow a found route for the whole turn, sharper path estimate, re-plan colony workers less often, keep colony reports per computer turn), hashes re-recorded once, tournament before and after | M | P1 | idea (moved from Later) |
 | Faster tests and tournaments: the slowest test files and the tournament runner (parallel games where the machine allows) | S | P2 | idea |
 | Renderer performance pass (frame time on large maps, sprite pack drawing) | S–M | P2 | idea |
+| Grid as an engine abstraction: directions, neighbours, distance, "tiles within N" and the colony work area behind one grid definition, squares the default, games bit-identical (golden test and `bench --verify`); the hand-written square loops (about 10 engine files and the colony screen) use it. Step 1 of hex maps (see Later); the Mac benchmark shows it costs no speed | M | P2 | idea (Simon, November 2026) |
 
 ## Beta 1–2: Cooperation
 
@@ -161,6 +162,14 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
   - Done: packs and styles can bring their own interface CSS (`css`, `cssFiles`, `fallbackCss: false`).
   - Next: packs that use no hand-drawn graphics at all. A pack option (for example `fallback: 'placeholder'`) draws a plain placeholder (a flat tile colour, or a simple silhouette per category) instead of the procedural drawing for missing sprites. Packs can also supply sprite versions of the layers that are always procedural today: rivers (pieces per direction and size), coastline ink, fog edges, colony and unit flags, captions and badges. Plus a check that lists which ids a pack is missing.
 - A map editor in the game.
+- Hex maps as a scenario option (Simon's idea, November 2026): a scenario chooses square or hexagon tiles; the Americas stay square. Not a rewrite: most rules go through one grid definition, so the work is mostly in drawing and balance. Roughly XL in all, comparable to 0.9:
+  1. Grid as an engine abstraction, squares unchanged (M; in 0.10).
+  2. Hexagon rules and a test scenario on hexes: 6 directions, a colony works 6 tiles instead of 8, no diagonal shortcuts, 6 movement keys (M).
+  3. The schematic style draws hexagons (clicking, camera, terrain, coasts, rivers and roads along hex edges), so a hex scenario is playable (M).
+  4. Computer players retuned on hexagons, with tournaments (M).
+  5. The sprite style on hexagons; terrain sprites regenerated as hexagons (unit, colony and building sprites carry over). Waits for cheaper image generation (L).
+  6. Ligne claire on hexagons, or it stays square-only (L).
+  Stored maps can be read as offset hexagon rows (alternate rows shifted half a tile) with a review pass per map. A first candidate is a new scenario without square-tuned history, such as Vinland, rather than converting the Americas.
 - Network play (the deterministic engine already supports replays).
 
 ## Agentic sprite pack generator
