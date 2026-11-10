@@ -491,18 +491,40 @@ export function setDestination(s: GameState, unitId: string, dest: Unit['dest'])
       if (problem) fail(problem);
     }
   }
-  if (dest && 'x' in dest && !findPath(s, u, dest.x, dest.y)) fail('There is no known route there.');
+  const path = dest && 'x' in dest ? findPath(s, u, dest.x, dest.y) : null;
+  if (dest && 'x' in dest && !path) fail('There is no known route there.');
   delete u.roadTo;
   u.dest = dest;
   u.state = 'active';
   track(u.owner, dest && 'europe' in dest ? 'cmd:gotoEurope' : 'cmd:goto');
-  continueOrders(s, u);
+  continueOrders(s, u, path && dest && 'x' in dest ? pathHint(u, dest, path) : undefined);
 }
 
-/** Moves a unit along its standing orders as far as its moves allow. */
-export function continueOrders(s: GameState, u: Unit): void {
+/**
+ * A route a caller has just searched for, handed to continueOrders so that its first step does
+ * not search again. Only valid while nothing has changed since the search.
+ */
+export interface PathHint {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  path: { x: number; y: number }[];
+}
+
+/** A hint for the path a unit on the map has just found to a tile. */
+export function pathHint(u: Unit, to: { x: number; y: number }, path: { x: number; y: number }[]): PathHint | undefined {
+  return u.loc.kind === 'map' ? { from: { x: u.loc.x, y: u.loc.y }, to: { x: to.x, y: to.y }, path } : undefined;
+}
+
+/**
+ * Moves a unit along its standing orders as far as its moves allow. `hint` is a route the caller
+ * has just found, from where the unit stands to its destination, with nothing changed since.
+ */
+export function continueOrders(s: GameState, u: Unit, hint?: PathHint): void {
   let guard = 64;
+  let first = true;
   while (u.dest && u.moves > 0 && u.loc.kind === 'map' && guard-- > 0) {
+    const useHint = first && hint;
+    first = false;
     let target: { x: number; y: number } | null;
     if ('europe' in u.dest) {
       const tile = tileAt(s, u.loc.x, u.loc.y)!;
@@ -523,7 +545,10 @@ export function continueOrders(s: GameState, u: Unit): void {
       if (!('europe' in u.dest)) delete u.dest;
       continue;
     }
-    const path = findPath(s, u, target.x, target.y);
+    const path =
+      useHint && hint.from.x === u.loc.x && hint.from.y === u.loc.y && hint.to.x === target.x && hint.to.y === target.y
+        ? hint.path
+        : findPath(s, u, target.x, target.y);
     if (!path || !path.length) {
       delete u.dest;
       return;
