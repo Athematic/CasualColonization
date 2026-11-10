@@ -148,8 +148,8 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
 }
 
 /**
- * Who works around and inside a colony, gathered in one pass over the units (a hot path for the
- * computer players). Valid until a unit changes jobs or moves, or the land around changes.
+ * Who works around and inside a colony, from the unit indexes (a hot path for the computer
+ * players). Valid until a unit changes jobs or moves, or the land around changes.
  */
 export interface ColonyOccupancy {
   /** The tiles around the colony, in `neighbours` order. */
@@ -168,29 +168,20 @@ export interface ColonyOccupancy {
 export function colonyOccupancy(s: GameState, colony: Colony): ColonyOccupancy {
   const tiles = neighbours(s, colony.x, colony.y);
   const w = s.map.width;
-  const near = new Set<number>();
   const closed = new Set<number>();
+  const worked = new Map<number, Unit>();
   for (const p of tiles) {
     const i = p.y * w + p.x;
-    near.add(i);
     if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y) || nativeLandOwner(s, p.x, p.y)) closed.add(i);
+    const v = tileWorkedBy(s, p.x, p.y);
+    if (v) worked.set(i, v);
   }
-  const worked = new Map<number, Unit>();
   const inBuilding = new Map<string, number>();
-  let pop = 0;
-  for (const id in s.units) {
-    const v = s.units[id];
-    if (v.loc.kind !== 'colony') continue;
-    const job = v.loc.job;
-    if (v.loc.colonyId === colony.id) {
-      pop++;
-      if (job.kind === 'building') inBuilding.set(job.building, (inBuilding.get(job.building) ?? 0) + 1);
-    }
-    if (job.kind === 'tile') {
-      const i = job.y * w + job.x;
-      if (near.has(i) && !worked.has(i)) worked.set(i, v);
-    }
+  const workers = colonyWorkers(s, colony);
+  for (const v of workers) {
+    if (v.loc.kind === 'colony' && v.loc.job.kind === 'building') inBuilding.set(v.loc.job.building, (inBuilding.get(v.loc.job.building) ?? 0) + 1);
   }
+  const pop = workers.length;
   return { tiles, worked, closed, inBuilding, pop, bonus: libertyBonus(s, colony, pop) };
 }
 
