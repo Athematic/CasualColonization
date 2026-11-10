@@ -158,5 +158,8 @@ function boot(data: HotHook['data']): void {
   showLanding();
 }
 
+// Load the engine worker while the person looks at the menus.
+setTimeout(() => turnRunner.warm(), 500);
+
 if (hot?.ready) hot.ready(boot);
 else boot(hot?.data ?? {});

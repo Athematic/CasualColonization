@@ -90,6 +90,11 @@ export class TurnRunner {
     p.reject(new JobCancelled());
   }
 
+  /** Starts the worker ahead of the first job, so that job does not wait for it to load. */
+  warm(): void {
+    if (!this.noWorker) this.spawn();
+  }
+
   dispose(): void {
     this.cancel();
     this.worker?.terminate();
