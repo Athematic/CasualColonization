@@ -1,6 +1,6 @@
 // The 0.10 hill-climbing gate: is a candidate both correct and faster?
 //
-// Usage: node scripts/perf-gate.mjs [--runs 5] [--years 1700,1750,1850:noind] [--save base.json] [--baseline base.json]
+// Usage: node scripts/perf-gate.mjs [--runs 5] [--years 1700,1750,1850:keep] [--save base.json] [--baseline base.json]
 //
 // 1. Verification (must pass, or the candidate is rejected): `npm run bench -- --verify` for the
 //    Americas and for the Caribbean print "same" on every line, so games are bit-identical to the
@@ -26,9 +26,9 @@ const opt = (name, fallback) => {
 };
 const runs = Number(opt('runs', '5'));
 // A year plays the game as recorded (a War of Independence can end it early, as in the 1750 game,
-// which keeps the war's work in the measurement); "<year>:noind" plays it with independence switched
-// off, so it runs to its year (1850: a full game).
-const years = opt('years', '1700,1750,1850:noind').split(',');
+// which keeps the war's work in the measurement); "<year>:keep" plays it to its year with the same rules:
+// wars of independence are fought, but only the calendar ends the game (1850: a full game).
+const years = opt('years', '1700,1750,1850:keep').split(',');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 function verify(scenarioArgs) {
@@ -38,7 +38,7 @@ function verify(scenarioArgs) {
 }
 
 function timeOnce(year) {
-  const out = execFileSync('node', ['scripts/.bench.mjs', '--year', year.split(':')[0], ...(year.endsWith(':noind') ? ['--no-independence'] : []), '--quiet'], { encoding: 'utf8' });
+  const out = execFileSync('node', ['scripts/.bench.mjs', '--year', year.split(':')[0], ...(year.endsWith(':keep') ? ['--keep-playing'] : []), '--quiet'], { encoding: 'utf8' });
   const sec = Number(/: ([\d.]+)s \(new game/.exec(out)?.[1]);
   const hash = /hash ([0-9a-f]+)/.exec(out)?.[1];
   return { sec, hash };
