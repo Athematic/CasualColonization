@@ -21,7 +21,7 @@ import {
   sellPrice,
 } from '../europe.js';
 import { findPath } from '../movement.js';
-import { colonyReport } from '../production.js';
+import { aiColonyReport } from './reports.js';
 import { cargoFree, colonyAt, distance, isCoastal, isShip, isWater, neighbours, player, tileAt, unitsAt } from '../queries.js';
 import {
   atPeace,
@@ -269,7 +269,7 @@ export function exportShare(s: GameState, p: Player, good: GoodId): number {
   let total = 0;
   let mine = 0;
   for (const c of ownColonies(s, p)) {
-    const report = colonyReport(s, c);
+    const report = aiColonyReport(s, c);
     for (const g of exportGoods(s)) {
       const v = (c.goods[g] + Math.max(0, report.net[g]) * 8) * Math.max(1, sellPrice(p, g));
       total += v;

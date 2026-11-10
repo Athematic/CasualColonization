@@ -2,7 +2,7 @@ import { assignJob, bestJob, canBuild, charterCost, foundColony, jobOptions, set
 import { aiPeace } from '../diplomacy.js';
 import { boardInEurope, recruit, recruitPrice, sailToAmerica, sellGoods } from '../europe.js';
 import { canImprove, goTo, setDestination, startImprovement } from '../movement.js';
-import { colonyReport } from '../production.js';
+import { aiColonyReport } from './reports.js';
 import { cargoFree, cargoRoomFor, colonyAt, colonyWorkers, distance, isCoastal, isShip, isWater, tileAt, unitsAboard, warehouseCapacity } from '../queries.js';
 import type { BuildingKind } from '../rules/buildings.js';
 import type { GoodId } from '../rules/goods.js';
@@ -200,7 +200,7 @@ function aiColony(s: GameState, c: Colony): void {
   }
   // Move workers onto food until the colony stops starving.
   for (const worker of colonyWorkers(s, c)) {
-    if (colonyReport(s, c).net.food >= 0) break;
+    if (aiColonyReport(s, c).net.food >= 0) break;
     if (worker.loc.kind === 'colony' && worker.loc.job.kind === 'tile' && worker.loc.job.good === 'food') continue;
     const food = jobOptions(s, c, worker)
       .filter((o) => o.job.kind === 'tile' && o.job.good === 'food')

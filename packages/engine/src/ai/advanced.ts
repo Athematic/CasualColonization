@@ -27,7 +27,8 @@ import { canDeclareIndependence, declareIndependence, rebelShare } from '../inde
 import { abandonColony } from '../leaving.js';
 import { boardShip, canImprove, findPath, goTo, setDestination, startImprovement } from '../movement.js';
 import { buyLand, establishMission, giftToTribe, landPrice, learnSkill, nativeLandOwner, speakToChief, takeLand, tensionOf } from '../natives.js';
-import { colonyReport, type ColonyReport } from '../production.js';
+import { type ColonyReport } from '../production.js';
+import { aiColonyReport } from './reports.js';
 import {
   cargoFree,
   cargoRoomFor,
@@ -450,7 +451,7 @@ function optimiseWorkers(s: GameState, p: Player, c: Colony, prof: AiProfile): v
   const workers = colonyWorkers(s, c).sort((a, b) => UNIT_TYPES[b.type].skill - UNIT_TYPES[a.type].skill);
   // The report, the Sons of Liberty share (the report's) and who works where only change when
   // someone changes jobs.
-  let report = colonyReport(s, c);
+  let report = aiColonyReport(s, c);
   let occupancy = colonyOccupancy(s, c);
   for (const u of workers) {
     if (changes >= 3) break;
@@ -459,7 +460,7 @@ function optimiseWorkers(s: GameState, p: Player, c: Colony, prof: AiProfile): v
     if (best && best.value > now * 1.15 + 0.5) {
       assignJob(s, u.id, c.id, best.job);
       changes++;
-      report = colonyReport(s, c);
+      report = aiColonyReport(s, c);
       occupancy = colonyOccupancy(s, c);
     }
   }
@@ -470,7 +471,7 @@ function optimiseWorkers(s: GameState, p: Player, c: Colony, prof: AiProfile): v
     const food = jobOptions(s, c, u, occupancy).filter((o) => o.job.kind === 'tile' && o.job.good === 'food').sort((a, b) => b.amount - a.amount)[0];
     if (food && food.amount > 2) {
       assignJob(s, u.id, c.id, food.job);
-      report = colonyReport(s, c);
+      report = aiColonyReport(s, c);
       occupancy = colonyOccupancy(s, c);
     }
   }
@@ -545,7 +546,7 @@ function manageColony(s: GameState, p: Player, c: Colony, prof: AiProfile): void
     // Walls, wanted for independence, are bought outright with the gold above the reserve.
     const defence = c.build.kind === 'building' ? c.build.id === 'stockade' || c.build.id === 'armory' : c.build.id === 'artillery';
     const spare = p.gold - prof.reserve - turnSaving - (turnArming && !defence ? 2500 : 0);
-    const started = colonyReport(s, c).produced.hammers > 0 && c.hammers >= cost.hammers / 3;
+    const started = aiColonyReport(s, c).produced.hammers > 0 && c.hammers >= cost.hammers / 3;
     const walls = turnArming && c.build.kind === 'building' && c.build.id === 'stockade';
     const outright = c.build.kind === 'building' && colonyWorkers(s, c).length >= BUILDER_POP && spare > price * 3;
     if (price > 0 && price < 1500 && (started || walls ? spare > price * 1.5 : outright)) {
@@ -1018,7 +1019,7 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   // The nearest reachable colony, counting food to spare as nearness. Ranked first (each colony's
   // report once), so that only the colonies up to the first reachable one need a path.
   const ranked = (reachable ?? colonies)
-    .map((c) => ({ c, near: distance(c.x, c.y, pos.x, pos.y) - colonyReport(s, c).net.food / 2 }))
+    .map((c) => ({ c, near: distance(c.x, c.y, pos.x, pos.y) - aiColonyReport(s, c).net.food / 2 }))
     .sort((a, b) => a.near - b.near);
   let found: { x: number; y: number }[] | null | undefined;
   const home = reachable ? ranked[0]?.c : ranked.find((e) => (found = findPath(s, u, e.c.x, e.c.y)))?.c;

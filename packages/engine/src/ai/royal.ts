@@ -7,7 +7,8 @@
 import { defencePower } from '../combat.js';
 import { answerDemand, demandPenalty, REF_ON_REFUSAL } from '../crown.js';
 import { WAVE } from '../independence.js';
-import { colonyReport, sonsOfLiberty, TORY_COLONY_BELOW } from '../production.js';
+import { sonsOfLiberty, TORY_COLONY_BELOW } from '../production.js';
+import { aiColonyReport } from './reports.js';
 import { answerMercenaries, INTERVENTION, interventionBells, interventionForce, mercenaryCompany, TORY_LANDING } from '../rebellion.js';
 import { proposePeace, WAR_WEARINESS } from '../diplomacy.js';
 import { colonyWorkers, distance, isCoastal, isShip, unitsAt } from '../queries.js';
@@ -185,7 +186,7 @@ export function supportParts(s: GameState, p: Player): { mercenaries: number; in
   if (p.independence !== 'none') return { mercenaries: 0, intervention: 0 };
   const company = mercenaryCompany(s, p.id);
   const mercenaries = company ? supportPower(company) : 0;
-  const bells = ownColonies(s, p).reduce((n, c) => n + colonyReport(s, c).produced.bells, 0);
+  const bells = ownColonies(s, p).reduce((n, c) => n + aiColonyReport(s, c).produced.bells, 0);
   const turns = bells > 0 ? Math.max(INTERVENTION.minTurns, Math.ceil(interventionBells(s, p) / bells)) : Infinity;
   return { mercenaries, intervention: turns <= INTERVENTION_HORIZON ? supportPower(interventionForce(p)) * INTERVENTION_TRUST : 0 };
 }
