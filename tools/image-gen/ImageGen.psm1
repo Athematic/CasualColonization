@@ -170,6 +170,8 @@ function Get-BoxArtJobs {
     return , $jobs.ToArray()
 }
 
+. (Join-Path $PSScriptRoot 'Comics.ps1')
+
 function Expand-JobVariants {
     <# One job per take: take 1 keeps the plain name, takes 2..N get the doc's "__v2", "__v3" suffix. #>
     param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Jobs, [int]$Variants = 1)
@@ -240,7 +242,7 @@ function Get-ImageJobs {
     param(
         [Parameter(Mandatory)][string]$SpriteDoc,
         [Parameter(Mandatory)][string]$BoxArtDoc,
-        [ValidateSet('sprites', 'boxart', 'all')][string]$Doc = 'all',
+        [ValidateSet('sprites', 'boxart', 'comics', 'all')][string]$Doc = 'all',
         [string[]]$Only,
         [int]$Variants = 1,
         [switch]$IncludeTitle,
@@ -250,11 +252,22 @@ function Get-ImageJobs {
         # The Read-ThumbPrompts result; needed for thumb and both.
         $ThumbPrompts,
         # Keep the sprite sections in the prompt document's order instead of reversing them (see Get-SpriteJobs).
-        [switch]$DocumentOrder
+        [switch]$DocumentOrder,
+        # Comics (docs/COMIC_PROMPTS.md + docs/comics/*.md): -Doc comics, or -IncludeComics to add them to -Doc all
+        # (all alone stays sprites + box art).
+        [string]$ComicPromptDoc,
+        [string]$ComicsDir,
+        [string[]]$Comic,
+        [ValidateSet('page', 'panel', 'cast')][string]$ComicUnit = 'page',
+        [switch]$IncludeComics
     )
     $jobs = @()
     if ($Doc -in 'sprites', 'all') { $jobs += Invoke-GenerationOrder -Jobs (Get-SpriteJobs -Path $SpriteDoc) -DocumentOrder:$DocumentOrder }
     if ($Doc -in 'boxart', 'all') { $jobs += Get-BoxArtJobs -Path $BoxArtDoc -IncludeTitle:$IncludeTitle }
+    if ($Doc -eq 'comics' -or ($Doc -eq 'all' -and $IncludeComics)) {
+        if (-not $ComicPromptDoc -or -not $ComicsDir) { throw 'Comics need -ComicPromptDoc and -ComicsDir.' }
+        $jobs += Get-ComicJobs -PromptDoc $ComicPromptDoc -ComicsDir $ComicsDir -Unit $ComicUnit -Comic $Comic
+    }
     if ($Variant -ne 'full') {
         if (-not $ThumbPrompts) { throw "-Variant $Variant needs the thumbnail prompts (Read-ThumbPrompts thumb-prompts.md)." }
         $thumbByFull = @{}
@@ -1198,8 +1211,16 @@ function Write-ContactSheet {
         if (-not $groups.Contains($gk)) { $groups[$gk] = @{ Full = $null; Thumb = $null } }
         if ($isThumb) { $groups[$gk].Thumb = $job } else { $groups[$gk].Full = $job }
     }
+    $lastSection = $null
     foreach ($gk in $groups.Keys) {
         $g = $groups[$gk]
+        # Comics: one heading per comic (cast sheet, then the pages in order) and frames in the image's own shape.
+        $comicJob = if ($g.Full -and $g.Full.Doc -eq 'comics') { $g.Full } else { $null }
+        if ($comicJob -and $comicJob.Section -ne $lastSection) {
+            $lastSection = $comicJob.Section
+            $null = $sb.AppendLine("<h2 style=""grid-column:1/-1;font-size:16px;margin:12px 0 0"">$(& $enc $comicJob.Section)</h2>")
+        }
+        $thumbStyle = if ($comicJob -and $comicJob.Size -match '^(\d+)x(\d+)$') { " style=""aspect-ratio:$($Matches[1])/$($Matches[2])""" } else { '' }
         $cols = [System.Collections.Generic.List[object]]::new()
         if ($g.Full) { $cols.Add(@{ Label = 'full'; Key = $g.Full.Key; Rel = $g.Full.OutputRel; Job = $g.Full }) }
         elseif ($g.Thumb.FullOutputRel -and (Test-Path -LiteralPath (Join-Path $OutDir $g.Thumb.FullOutputRel))) {
@@ -1217,7 +1238,7 @@ function Write-ContactSheet {
             $file = Join-Path $OutDir $c.Rel
             $has = Test-Path -LiteralPath $file
             if ($pair) { $null = $sb.Append('<div>') }
-            $null = $sb.Append('<div class="thumb">')
+            $null = $sb.Append("<div class=""thumb""$thumbStyle>")
             if ($has) { $null = $sb.Append("<img loading=""lazy"" src=""$(& $srcOf $c.Rel)"" alt=""$(& $enc $c.Key)"">") }
             else { $null = $sb.Append("<span class=""empty"">$(& $enc $status)</span>") }
             $null = $sb.Append('</div>')
@@ -1616,10 +1637,77 @@ function Write-EditContactSheet {
     return $path
 }
 
+function Write-PromptFiles {
+    <#
+    .SYNOPSIS
+    Writes the assembled prompt of every job as a Markdown file (for pasting into an image chat) plus an
+    index.md. Never touches the API or the manifest. The files mirror the image paths (sprites/units/x.md);
+    files of earlier runs are overwritten, others are left alone.
+    #>
+    param(
+        [Parameter(Mandatory)][object[]]$Jobs,
+        [Parameter(Mandatory)][string]$PromptsDir,
+        [Parameter(Mandatory)]$Settings,
+        [string]$SelectionText = ''
+    )
+    $nl = "`n"
+    $null = New-Item -ItemType Directory -Path $PromptsDir -Force
+    $written = [System.Collections.Generic.List[object]]::new()
+    foreach ($j in $Jobs) {
+        $rel = ($j.OutputRel -replace '\.png$', '.md')
+        $file = Join-Path $PromptsDir $rel
+        $null = New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force
+        $apiSize = Resolve-ImageSize -Size $j.Size -Model $Settings.Model
+        $transparent = ($j.Background -eq 'transparent')
+        $bgText = if ($transparent) { 'transparent (a real alpha channel, no painted checkerboard)' } else { 'opaque' }
+        $pngName = Split-Path -Leaf $j.OutputRel
+        $note = "Paste the prompt below into an image chat; ask for a $apiSize PNG" +
+            $(if ($transparent) { ' with a real transparent background (not a painted checkerboard).' } else { ' with an opaque background.' })
+        if ($j.PSObject.Properties['Kind'] -and $j.Kind -eq 'thumb') { $note += ' This is the thumbnail version; it is meant to be read at 16 to 48 px.' }
+        $fence = '```'
+        while ($j.Prompt.Contains($fence)) { $fence += '`' }
+        $sb = [System.Text.StringBuilder]::new()
+        $null = $sb.Append("# $($j.Key)$nl$nl")
+        $null = $sb.Append("- Doc: $($j.Doc)$nl")
+        if ($j.Section) { $null = $sb.Append("- Section: $($j.Section)$nl") }
+        $null = $sb.Append("- Size: $($j.Size) (sent to the API as $apiSize)$nl")
+        $null = $sb.Append("- Background: $bgText$nl")
+        $null = $sb.Append("- Suggested model: $($Settings.Model)$nl")
+        $null = $sb.Append("- Suggested quality: $($Settings.Quality)$nl")
+        $null = $sb.Append("- Output file name in a batch run: $pngName ($($j.OutputRel))$nl")
+        $null = $sb.Append("- Prompt hash: $(Get-PromptHash -Job $j)$nl$nl")
+        $null = $sb.Append("$note$nl$nl")
+        $null = $sb.Append("${fence}text$nl$($j.Prompt)$nl${fence}$nl")
+        [IO.File]::WriteAllText($file, $sb.ToString(), $script:Utf8NoBom)
+        $written.Add([pscustomobject]@{ Job = $j; Rel = $rel; Path = $file })
+    }
+    $ix = [System.Text.StringBuilder]::new()
+    $null = $ix.Append("# Prompts for manual use$nl$nl")
+    $null = $ix.Append("$($written.Count) prompt files. Each holds one assembled prompt, exactly as the batch run would send it, with its size and background.$nl$nl")
+    $null = $ix.Append("## Selection$nl$nl")
+    $null = $ix.Append("$(if ($SelectionText) { $SelectionText } else { '(defaults)' })$nl$nl")
+    $null = $ix.Append("- Suggested model: $($Settings.Model)$nl- Suggested quality: $($Settings.Quality)$nl$nl")
+    foreach ($d in ($written | Group-Object { $_.Job.Doc })) {
+        $null = $ix.Append("## $($d.Name) ($($d.Count))$nl$nl")
+        foreach ($c in ($d.Group | Group-Object { "$($_.Job.Category)" })) {
+            $null = $ix.Append("### $(if ($c.Name) { $c.Name } else { '(no category)' }) ($($c.Count))$nl$nl")
+            foreach ($w in $c.Group) {
+                $bg = if ($w.Job.Background -eq 'transparent') { 'transparent' } else { 'opaque' }
+                $null = $ix.Append("- [$($w.Job.Key)]($($w.Rel)) - $($w.Job.Size), $bg$nl")
+            }
+            $null = $ix.Append($nl)
+        }
+    }
+    $indexPath = Join-Path $PromptsDir 'index.md'
+    [IO.File]::WriteAllText($indexPath, $ix.ToString(), $script:Utf8NoBom)
+    return [pscustomobject]@{ Count = $written.Count; Files = $written.ToArray(); IndexPath = $indexPath }
+}
+
 Export-ModuleMember -Function ConvertTo-Slug, Get-SpriteJobs, Invoke-GenerationOrder, Get-BoxArtJobs, Expand-JobVariants, Select-JobsByPattern, Get-ImageJobs,
     Get-PromptHash, Get-Sha256Hex, Get-FileSha256, Get-UtcStamp, New-Manifest, Read-Manifest, Save-Manifest, Get-JobPlan, Resolve-ImageSize,
     New-ImageRequestBody, Test-InputFidelitySupport, New-ImageEditForm, New-MultipartContent, Invoke-ImageRequest, Get-ErrorClass,
     ConvertFrom-RateLimitDuration, Get-RetryDelaySeconds, Invoke-JobGeneration, Test-ImageResult, Save-BytesAtomic,
-    Test-EditJob, Get-ResumeCommand, Get-ApiKeySecure, Add-PlanToManifest, Invoke-ImageJobRun, Get-CostEstimate, Write-ContactSheet,
+    Test-EditJob, Get-ResumeCommand, Get-ApiKeySecure, Add-PlanToManifest, Invoke-ImageJobRun, Get-CostEstimate, Write-ContactSheet, Write-PromptFiles,
     Read-EditPrompts, Get-PixelGridSize, Expand-EditPlaceholders, Get-EditJobs, Write-EditContactSheet,
-    Read-ThumbPrompts, Get-ThumbOutline, ConvertTo-ThumbJobs
+    Read-ThumbPrompts, Get-ThumbOutline, ConvertTo-ThumbJobs,
+    Read-ComicPrompts, Read-ComicScript, Select-ComicCast, Get-ComicPanelHint, Get-ComicScriptPaths, Get-ComicJobs

@@ -10,6 +10,9 @@ import type { AiFocus, AiProfile } from './profiles.js';
 /** Turns between strategy reviews. */
 const REVIEW_EVERY = 8;
 
+/** Creative takes up an independence plan from this rebel share (after turn 100), or from this turn. */
+export const PLAN_FROM = { share: 25, turn: 160 };
+
 /**
  * The Creative level re-plans like a person would: it looks at the state of the game every
  * few turns, picks one thing to concentrate on, and reacts at once to wars and openings.
@@ -34,9 +37,11 @@ function chooseFocus(s: GameState, p: Player, base: AiProfile): AiFocus {
   const personality = p.aiMemory!.personality!;
   if (Object.entries(p.stance).some(([other, stance]) => stance === 'war' && other !== 'crown')) return p.aiMemory?.warTarget ? 'war' : 'defend';
   if (s.turn < 30) return 'explore';
+  // An independence plan, once taken up (ai/plan.ts), stays the focus: from PLAN_FROM.share percent
+  // rebels or PLAN_FROM.turn.
+  if (p.aiMemory?.independencePlan !== undefined || (share >= PLAN_FROM.share && s.turn > 100) || s.turn >= PLAN_FROM.turn) return 'independence';
   if (opening(s, p) && personality.aggression > 0.3 && s.turn - (p.aiMemory?.lastWar ?? -100) > 60) return 'war';
   if (colonies.length < base.colonyTarget(s.turn) - 1) return 'expand';
-  if (share >= 40 && s.turn > 140) return 'independence';
   if (s.turn > 90 && share < 40) return 'liberty';
   return 'develop';
 }
@@ -67,7 +72,7 @@ function applyFocus(base: AiProfile, focus: AiFocus, personality: { aggression: 
     case 'liberty':
       return { ...prof, liberty: 2.4 * personality.liberty, schools: true };
     case 'independence':
-      return { ...prof, liberty: 2, garrison: 2, independence: { minTurn: 140, minShare: 50, armyPerColony: 1, ratio: 1.15, arm: true } };
+      return { ...prof, liberty: 2, independence: { minTurn: 140, minShare: 50, armyPerColony: 1, ratio: 1.15, arm: true, adopt: PLAN_FROM } };
     case 'defend':
       return { ...prof, garrison: 2, aggression: 0, gifts: true };
     case 'war':

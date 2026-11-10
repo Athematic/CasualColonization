@@ -4,6 +4,7 @@
 
 - [`docs/SPRITE_PROMPTS.md`](../../docs/SPRITE_PROMPTS.md): 294 sprites (style bible, units, ships, goods, terrain, decorations, colonies, settlements, buildings, UI).
 - [`docs/BOX_ART_PROMPTS.md`](../../docs/BOX_ART_PROMPTS.md): 18 covers (fifteen front-cover concepts, two of them for the planned Australia scenario and two for Vinland, plus the back cover, wide banner and app icon), plus 15 lettered front covers with `-IncludeTitle`.
+- [`docs/COMIC_PROMPTS.md`](../../docs/COMIC_PROMPTS.md) with the fifteen scripts in [`docs/comics/`](../../docs/comics/README.md): the interior art of the twelve-page comics, without any lettering (see [Comics](#comics--doc-comics)). Not part of `-Doc all`.
 
 It runs on PowerShell 7 or later (`pwsh`) on Windows, macOS and Linux, and needs nothing else.
 
@@ -118,11 +119,36 @@ macOS and Linux have no execution policy.
 
 Get a key at <https://platform.openai.com/api-keys>. GPT image models can require organization verification (Settings → Organization → General) before the first call works.
 
+## Prompts for manual use: `-OutputPrompts`
+
+`-OutputPrompts` writes the fully assembled prompts as Markdown files instead of generating anything: it never calls the API, asks for no key, does not touch `manifest.json` and needs no cost confirmation. Paste a file's prompt into an image chat (ChatGPT, for example) and ask for the size and background it names.
+
+It works with every selection option (`-Doc`, `-Only`, `-Variant`, `-Variants`, `-IncludeTitle`, `-Comic`, `-ComicUnit`, `-IncludeComics`, `-DocumentOrder`). The files go to `-PromptsDir` (default `tools/image-gen/output/prompts`, which is git-ignored), one per job and mirroring the image path: `sprites/units/expert-lumberjack__none.md`, `boxart/front-a-landfall.md`, `thumbs/...`, `comics/<slug>/page-01.md`. Each has the job key, a short metadata list (doc, section, size, background, suggested model and quality, the file name a batch run would use, prompt hash), a note for manual use, and the prompt in a `text` block, byte for byte what the API run sends. `index.md` in the folder root lists all files, grouped by doc and category, with the selection used. Files of earlier runs are overwritten; other files are left alone.
+
+macOS / Linux:
+
+```bash
+pwsh ./tools/image-gen/Generate-Images.ps1 -OutputPrompts -Only 'fathers/*'
+pwsh ./tools/image-gen/Generate-Images.ps1 -OutputPrompts -Doc boxart -PromptsDir ~/Desktop/prompts
+pwsh ./tools/image-gen/Generate-Images.ps1 -OutputPrompts -Variant thumb -Only 'units/caravel*'
+```
+
+Windows:
+
+```powershell
+pwsh .\tools\image-gen\Generate-Images.ps1 -OutputPrompts -Only 'fathers/*'
+pwsh .\tools\image-gen\Generate-Images.ps1 -OutputPrompts -Doc comics -Comic a-landfall -PromptsDir C:\temp\prompts
+```
+
 ## Options
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `-Doc sprites\|boxart\|all` | `all` | Which document(s) to read. |
+| `-Doc sprites\|boxart\|comics\|all` | `all` | Which document(s) to read. `all` is sprites + box art, as before; comics only with `-Doc comics` or `-IncludeComics`. |
+| `-Comic <pattern>[,...]` | | Comics only: slug patterns such as `a-landfall` or `'n-*'` (a pattern without `*` matches anywhere in the slug). |
+| `-ComicUnit page\|panel\|cast` | `page` | Comics only: one image per page, per panel, or one character model sheet per comic. |
+| `-IncludeComics` | | Add the comics to `-Doc all`. |
+| `-ComicPromptDoc`, `-ComicsDir` | `docs/COMIC_PROMPTS.md`, `docs/comics` | Read other comic prompt blocks or scripts. |
 | `-Only <pattern>[,...]` | | Wildcards matched against the job id (`units/caravel__none`) or key (`sprites/units/caravel__none`). A pattern without `*` or `?` matches anywhere in the id. |
 | `-Variant full\|thumb\|both` | `full` | Which version of each sprite: the full image (as before), the [thumbnail](#thumbnails--variant-thumb), or both. Box art and the style bible have no thumbnail. Not the same as `-Variants`. |
 | `-ThumbPromptFile` | `thumb-prompts.md` | The thumbnail prompt blocks. Only read for `thumb` and `both`. |
@@ -178,6 +204,62 @@ Exit codes: `0` everything ok, `1` some jobs failed, `2` the run stopped (quota,
 
 Before it starts, the script shows the number of calls and a rough estimate. The estimate uses the prices in SPRITE_PROMPTS.md for 1024×1024: about $0.01 at low quality, $0.04 at medium and $0.17 at high, with about 1.5× that for 1536-pixel sizes. Prices change, so check <https://openai.com/api/pricing/>. The full sprite set (294 images) at high quality comes to roughly $50, before retakes.
 
+## Comics: `-Doc comics`
+
+The fifteen twelve-page scripts in `docs/comics/` can be drawn in the same ligne claire style as the covers. The images carry no lettering at all (no balloons, captions or text); the words stay in the scripts and are set on top later. The prompt blocks are in [`docs/COMIC_PROMPTS.md`](../../docs/COMIC_PROMPTS.md): `comic` (style, derived from the cover style), `page`, `panel` and `cast`.
+
+### Units and jobs
+
+| `-ComicUnit` | Images | Size | Job ids |
+| --- | --- | --- | --- |
+| `cast` | 15, one character model sheet per comic | 1536x1024 | `comics/<slug>/cast` |
+| `page` (default) | 180, twelve pages per comic | 1024x1536 portrait | `comics/<slug>/page-01` ... `page-12` |
+| `panel` | 919, one per panel | 1536x1024 if the description says wide, splash or establishing in its lead, else 1024x1024 | `comics/<slug>/page-01-panel-1` ... |
+
+All are opaque. PNGs go to `output/comics/<slug>/`. A full set is **15 cast sheets + 180 pages = 195 images**; **panel mode is about 900 images (919)**, roughly five times the pages. The script says so in the confirmation (and in `-List` and `-DryRun`) before anything is sent.
+
+### The prompt
+
+For each job the tool reads the script (`# Title`, the `Setting` line, the `Cast` list, the pages and panels; both writers' formats, `**Panel N.**` and `N.`) and assembles: the `comic` style block, a `SETTING:` line, a `CAST` block, the `page` (or `panel`, or `cast`) block, and the visual description of each panel in order (`PANEL 3 (wide): ...`). The cast block lists only the characters named in that page's or panel's visual descriptions or speaking in its dialogue, each with the look from the script's Cast section, so characters stay consistent from text alone (the API takes no reference image here). The captions, dialogue and sound effects are never sent; the speaker names are used only to decide who is in the cast block. A prompt over the API's 32000 characters would have the cast descriptions shortened (and a warning); real prompts are 4 to 7 thousand characters.
+
+### Examples
+
+macOS and Linux (run from the repository root; the first two need no key):
+
+```bash
+# what would be sent for one page (the assembled prompt, size and output path)
+pwsh ./tools/image-gen/Generate-Images.ps1 -Doc comics -Comic a-landfall -Only page-01 -DryRun
+# list the jobs of a unit
+pwsh ./tools/image-gen/Generate-Images.ps1 -Doc comics -ComicUnit cast -List
+# the 15 character model sheets, cheap first
+pwsh ./tools/image-gen/Generate-Images.ps1 -Doc comics -ComicUnit cast -Quality low
+# all twelve pages of one comic
+pwsh ./tools/image-gen/Generate-Images.ps1 -Doc comics -Comic a-landfall
+# the Vinland comics, then the panels of one page
+pwsh ./tools/image-gen/Generate-Images.ps1 -Doc comics -Comic 'n-*,o-*'
+pwsh ./tools/image-gen/Generate-Images.ps1 -Doc comics -Comic a-landfall -ComicUnit panel -Only 'page-01-panel'
+```
+
+Windows (PowerShell 7):
+
+```powershell
+pwsh .\tools\image-gen\Generate-Images.ps1 -Doc comics -Comic a-landfall -Only page-01 -DryRun
+pwsh .\tools\image-gen\Generate-Images.ps1 -Doc comics -ComicUnit cast -Quality low
+pwsh .\tools\image-gen\Generate-Images.ps1 -Doc comics -Comic a-landfall
+```
+
+Resume, `-Variants`, `-Force`, `-KeepChanged` and the contact sheet work as for the other documents (the sheet groups the images by comic: cast sheet first, then the pages in order). Editing `docs/COMIC_PROMPTS.md` or a script changes the prompt hash, so the affected images are generated again.
+
+### Cost
+
+Non-square images cost about 1.5 times a square one in the estimate. At the default medium quality that is roughly $0.06 per page or cast sheet (about $12 for the 195 images) and $0.04 to $0.06 per panel (about $40 for the 919). At low quality divide by about four. Check <https://openai.com/api/pricing/>. Draw the cast sheets and one comic first, and look at them before running the rest.
+
+### Limits
+
+- No reference images: consistency comes from the cast text only, so faces and clothes will still drift somewhat between pages. Fix the Cast section of the script if a look is read wrongly.
+- The model lays out the page grid itself; panel counts and order can come out wrong. Use `-ComicUnit panel` where a page matters.
+- The generations endpoint has no way to guarantee blank balloon space or the absence of stray text; check each page.
+
 ## Thumbnails: `-Variant thumb`
 
 The full masters look good at 1024 px, but they do not survive the downscale to 16 to 32 px: their lines are about 2.5 to 3 % of the width, which is under a pixel at 32 px, props are small, and the interior detail turns to noise. A thumbnail is a **second, separate text-to-image generation** of the same subject (`images/generations`, like the full one, with no input image), with a prompt that asks for an icon that reads at 32 px. It is not an edit of the full master, so it is cheap (one ordinary generation) and free to redraw the subject boldly. The two versions differ slightly; the game uses the thumbnail for the small sizes and the full master for the large ones.
@@ -202,7 +284,7 @@ Terrain tiles and ground overlays (`tile` in the `settings` block) get the `tile
 - **Separate jobs.** Each thumbnail is its own manifest entry, `thumbs/<category>/<id>` (for example `thumbs/units/expert-lumberjack__none`), with its own prompt hash, status, attempts, retries, PNG check and output `thumbs/<category>/<id>.png`. The entry also records `variant: "thumb"` and the `fullKey` of its full version.
 - **The full jobs do not change.** `-Variant full` is the default, and the full prompts, keys, paths and hashes are exactly as before, so the 302 done jobs in the committed manifest stay done. A thumbnail run adds entries and never touches the full ones.
 - **Resume, per variant.** Run the same command again: done thumbnails are skipped, failed ones retried (`-SkipFailed` skips them), a deleted thumbnail is made again. Editing `thumb-prompts.md` re-queues the thumbnails it affects (the old takes go to `_replaced/thumbs/`), never a full image. Editing a sprite's row or a master or category block in the docs re-queues both versions.
-- **Not made:** box art (covers are not needed small; `-Doc boxart -Variant thumb` says so and makes nothing) and the style bible (`skip: bible` in the `settings` block).
+- **Not made:** box art (covers are not needed small; `-Doc boxart -Variant thumb` says so and makes nothing), the style bible, the Founding Father figures and the Continental Congress hall (`skip: bible, fathers, hall` in the `settings` block; the figures are shown large, their small portraits are cropped from them, and the hall backdrop is scaled by the game).
 - **The PNG checks, the cost confirmation, `-List`, `-DryRun`, `-Only`, `-Doc`, `-Variants`, `-Force`, `-MaxJobs`, the retries and the exit codes** work as for the full jobs. `-Only` matches the id (`units/expert-lumberjack*`) or the key (`thumbs/units/*`).
 - **Contact sheet.** `output/index.html` shows the full version and the thumbnail side by side when both files exist (also when the run selected only one of them), each also at 32 and 48 px.
 
@@ -415,6 +497,7 @@ pwsh -NoProfile -NonInteractive -File ./tools/image-gen/tests/Run-Tests.ps1
 
 - **Parsing:** 294 sprite jobs and 8 box-art jobs (13 with titles), how prompts are assembled, filters and variants.
 - **Thumbnails:** `thumb-prompts.md` parses; `-Variant thumb` gives 293 jobs with their own keys, paths and hashes (no box art, no style bible), `both` gives 595 with each full job followed by its thumbnail and the full hashes unchanged; the prompt starts and ends with the line-weight rule and holds the full prompt unchanged, then the override, the background, category and per-sprite blocks; tiles get the tile blocks; takes pair with full takes. Against a copy of the committed `output/manifest.json`: every one of the 302 full prompt hashes still matches by default, the dry runs write nothing, and a thumbnail run against the fake server adds exactly one entry and leaves every full entry byte for byte as it was. Resume per variant, a deleted thumbnail, an edited `thumb-prompts.md` (only the thumbnail runs again, the old one goes to `_replaced/thumbs/`), `-SkipFailed`, `-Variants`, and the side-by-side contact sheet.
+- **Comics:** all 15 scripts parse into 12 pages (919 panels), panel counts checked against hand counts, both panel-marker styles and every cast-bullet style, cast matching, job ids, sizes and counts per unit, the assembled prompt (no dialogue), prompt-length shortening, `-Doc all` and the existing prompt hashes unchanged, the dry run, and one page against the fake server.
 - **Commands:** `-List` and `-DryRun`.
 - **PNG checks:** real alpha, missing alpha, all-opaque alpha and painted checkerboards. They also check the real `images/` files: the three unit sprites are flagged as fake transparency.
 - **Manifest:** atomic save and recovery from a corrupt file.

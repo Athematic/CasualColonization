@@ -24,6 +24,7 @@ import { proposePeace, startWar } from '../diplomacy.js';
 import { favouredPartners, hasTradeAgreement, isHostile } from '../relations.js';
 import { boardInEurope, buyGoods, buyPrice, inHomePort, portOf, recruit, recruitPrice, sailToAmerica, sellGoods, train, trainPrice } from '../europe.js';
 import { canDeclareIndependence, declareIndependence, rebelShare } from '../independence.js';
+import { abandonColony } from '../leaving.js';
 import { canImprove, findPath, setDestination, startImprovement } from '../movement.js';
 import { buyLand, establishMission, giftToTribe, landPrice, learnSkill, nativeLandOwner, speakToChief, takeLand, tensionOf } from '../natives.js';
 import { colonyReport, type ColonyReport } from '../production.js';
@@ -53,7 +54,8 @@ import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { maybeIncite } from './natives.js';
-import { armingPays, armyForIndependence, canBeatRef, crownAffairs, expectedSupport, hireMercenaries } from './royal.js';
+import { armyForIndependence, supportParts, colonyDefences, crownAffairs, defenceShort, expectedSupport, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
+import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './plan.js';
 import { equippedPrice, trainEquipped } from './outfit.js';
 import type { AiProfile } from './profiles.js';
 import { buildRoads, equipPioneer, pioneerToolsWanted } from './roads.js';
@@ -62,15 +64,26 @@ const SELLABLE: GoodId[] = ['sugar', 'tobacco', 'cotton', 'furs', 'ore', 'silver
 const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
 
 /** Plays one turn with the given profile. */
-export function runAdvanced(s: GameState, p: Player, prof: AiProfile): void {
+export function runAdvanced(s: GameState, p: Player, base: AiProfile): void {
   turnShare = rebelShare(s, p.id);
+  const plan = base.independence;
+  // Mercenaries and a foreign intervention count towards the defence (ai/royal.ts, rebellion.ts).
+  const support = plan && p.independence === 'none' && (preparingIndependence(base, 20) || p.aiMemory?.independencePlan !== undefined) ? expectedSupport(s, p) : 0;
+  turnSupport = support;
+  // The independence plan (ai/plan.ts): adopted from mid-game, it rings more bells, builds
+  // defences and, once the rebels are close to a majority, arms.
+  turnPlan = plan ? planTurn(s, p, base, turnShare, () => !!plan.arm && p.independence === 'none' && !readyToFight(s, p, plan.ratio, support), support) : NO_PLAN;
+  // Close to a declaration, and during the war, no more colonies (ai/plan.ts).
+  const colonies = ownColonies(s, p).length;
+  const settled = colonies > 0 && (p.independence === 'declared' || (turnPlan.arming && turnShare >= (plan?.minShare ?? 0) - FOUND_BELOW));
+  const prof: AiProfile =
+    turnPlan.adopted || p.independence === 'declared'
+      ? { ...base, liberty: planLiberty(p, base, turnPlan), ...(settled ? { colonyTarget: () => colonies } : {}) }
+      : base;
   turnExpansion = expansionCheck(s, p, prof);
   turnSaving = turnExpansion === 'ready' || turnExpansion === 'gold' ? charterCost(s, p.id) : 0;
-  const plan = prof.independence;
-  // Mercenaries and a foreign intervention count towards the defence (ai/royal.ts, rebellion.ts).
-  const support = plan && p.independence === 'none' && preparingIndependence(prof, 20) ? expectedSupport(s, p) : 0;
   turnArmy = plan ? (plan.arm ? armyForIndependence(s, p, plan, support) : plan.armyPerColony) : 0;
-  turnArming = !!plan?.arm && preparingIndependence(prof) && armingPays(s, p, plan.ratio, support);
+  turnArming = !!plan?.arm && turnPlan.arming;
   const army = spareArmy(s, p, prof);
   const strength = army.reduce((n, u) => n + offencePower(s, u), 0);
   safely(() => foreignAffairs(s, p, prof, strength, army.length));
@@ -102,6 +115,26 @@ let turnArmy = 0;
 
 /** Getting ready for independence while the defence is still short of the Royal Expeditionary Force: arm. */
 let turnArming = false;
+
+/** While arming, no colony is founded once the rebel share is this close to the share needed to declare (ai/plan.ts). */
+const FOUND_BELOW = 5;
+
+/** The independence plan's steps this turn (ai/plan.ts). */
+let turnPlan: PlanTurn = NO_PLAN;
+
+/** Help expected from mercenaries and a foreign intervention, for a nation planning independence. */
+let turnSupport = 0;
+
+/**
+ * Whether the nation's defence is ready for a War of Independence (ai/royal.ts): `ratio` times the
+ * royal force with the help it can expect, enough to hold until the intervention comes, and no
+ * third of the colonies weak.
+ */
+function readyToFight(s: GameState, p: Player, ratio: number, support: number): boolean {
+  const { mercenaries } = supportParts(s, p);
+  if (defenceShort(s, p, ratio, support) || !holdsAlone(s, p, mercenaries)) return false;
+  return weakColonies(s, p, mercenaries).length * 3 < ownColonies(s, p).length;
+}
 
 /** Whether the nation's rebel share is within `margin` points of the share at which it means to declare. */
 function preparingIndependence(prof: AiProfile, margin = 15): boolean {
@@ -138,10 +171,9 @@ function spareArmy(s: GameState, p: Player, prof: AiProfile): Unit[] {
 
 function garrisonFor(p: Player, prof: AiProfile): number {
   const atWar = Object.values(p.stance).includes('war');
-  const preparing = prof.independence && turnShare >= prof.independence.minShare - 15;
   let n = prof.garrison;
   if (atWar) n += 1;
-  if (preparing && prof.independence) n = Math.max(n, turnArmy);
+  if (preparingIndependence(prof) || p.independence === 'declared') n = Math.max(n, turnArmy);
   return n;
 }
 
@@ -257,16 +289,26 @@ function productValue(p: Player, c: Colony, report: ColonyReport, product: Produ
     case 'food':
       return report.net.food < 2 ? 10 : report.net.food < 6 ? 4 : 2;
     case 'bells':
+      // Curbing bells (ai/plan.ts) spares colonies with fewer than half their people in the Sons of Liberty.
+      if (turnPlan.curb && sol < 50) return 2.5 * PLAN_LIBERTY;
       return sol >= 100 ? 0.5 : 2.5 * prof.liberty;
     case 'crosses':
       return 1.2;
     case 'hammers': {
       // A wagon train that saves goods from rotting is worth a carpenter's time.
       const urgent = c.build?.kind === 'unit' && c.build.id === 'wagonTrain';
-      return c.build ? (urgent ? 7 : 3.2) : 0.4;
+      if (!c.build) return 0.4;
+      if (urgent) return 7;
+      // A building is worth its score and what it makes possible: in a colony of BUILDER_POP, the
+      // first carpenters (up to BUILDER_HAMMERS a turn) are valued highly enough to beat most farm
+      // and craft jobs. Smaller colonies need their farmers more.
+      return builds(c) && report.produced.hammers <= BUILDER_HAMMERS && report.population >= BUILDER_POP ? 7 : 3.2;
     }
-    case 'lumber':
-      return report.produced.lumber < report.consumed.lumber + 3 && c.goods.lumber < 60 ? 3 : 0.8;
+    case 'lumber': {
+      // The carpenters' lumber, while the woodpile is low.
+      const short = report.produced.lumber < report.consumed.lumber + 3 && c.goods.lumber < 60;
+      return short ? (builds(c) ? 5 : 3) : 0.8;
+    }
     case 'tools':
       return turnArming ? 4 : 3;
     case 'muskets':
@@ -281,6 +323,14 @@ function productValue(p: Player, c: Colony, report: ColonyReport, product: Produ
     }
   }
 }
+
+/** Hammers a turn up to which carpenters count as builders (productValue): about two colonists' work. */
+const BUILDER_HAMMERS = 6;
+/** Colonists a colony needs before carpenters count as builders. */
+const BUILDER_POP = 4;
+
+/** The colony is building a building (or, arming for independence, artillery). */
+const builds = (c: Colony) => c.build?.kind === 'building' || (turnArming && c.build?.kind === 'unit' && c.build.id === 'artillery');
 
 function jobValueFor(p: Player, c: Colony, u: Unit, job: Job, amount: number, report: ColonyReport, prof: AiProfile, sol: number): number {
   if (job.kind === 'building' && job.building === 'schoolhouse') return -1;
@@ -349,7 +399,9 @@ function optimiseWorkers(s: GameState, p: Player, c: Colony, prof: AiProfile): v
 
 function buildPlan(s: GameState, p: Player, c: Colony, prof: AiProfile): BuildTarget | null {
   const threatened = Object.values(p.stance).includes('war') || Object.values(s.settlements).some((st) => distance(st.x, st.y, c.x, c.y) <= 5 && tensionOf(st, p.id) > 500);
-  const preparing = !!prof.independence && turnShare >= prof.independence.minShare - 20;
+  // Following an independence plan (ai/plan.ts), or at war with the Crown.
+  const planning = turnPlan.adopted || p.independence === 'declared';
+  const preparing = planning || (!!prof.independence && turnShare >= prof.independence.minShare - 20);
   // Read-only below: the workers stay where they are.
   const workers = colonyWorkers(s, c);
   const pop = workers.length;
@@ -359,21 +411,28 @@ function buildPlan(s: GameState, p: Player, c: Colony, prof: AiProfile): BuildTa
   // An outpost without soldiers holds up expansion until it has a stockade (expansionCheck).
   const outpost = !armedAt(s, p, c.x, c.y).length && outposts(ownColonies(s, p), prof).includes(c);
   const walls = c.buildings.stockade;
-  // The fortress (third level) is for colonies of eight under threat; the first two levels as before.
-  if (walls < 2 ? threatened || preparing || prof.garrison > 1 || outpost : walls === 2 && pop >= 8 && (threatened || preparing)) b('stockade');
+  // The fortress (third level) is for colonies of eight under threat. A stockade comes first where
+  // there is a threat or a big garrison, and for a nation preparing independence; the fort too,
+  // except that a plan builds it later in colonies of five (after the armory and the press).
+  if (walls < 2 ? threatened || prof.garrison > 1 || outpost || (preparing && (!planning || walls === 0)) : walls === 2 && pop >= 8 && (threatened || preparing)) b('stockade');
   // Goods about to rot: more storage, and a wagon train to carry them to a port.
   const overflow = overflowSoon(s, c, 6);
   if (wantsWagon(s, p, c)) plan.push({ kind: 'unit', id: 'wagonTrain' });
   b('docks');
   if (overflow > 0) b('warehouse');
-  if (prof.liberty > 1) b('printingPress');
+  if (prof.liberty > 1 || planning) b('printingPress');
   b('carpenter');
   b('warehouse');
   if (militant(prof) || preparing) b('armory');
+  // An independence plan: forts in colonies of five, a newspaper, and room to store muskets and horses.
+  if (planning && pop >= 5) b('stockade');
+  if (planning && pop >= 4 && c.buildings.printingPress > 0) b('printingPress');
+  if (planning) b('warehouse');
   // Artillery defends a colony best of all against the Royal Expeditionary Force.
   if (turnArming && c.buildings.armory > 0 && c.buildings.stockade > 0) plan.push({ kind: 'unit', id: 'artillery' });
   if (prof.schools && pop >= 4) b('schoolhouse');
-  for (const k of ['weaver', 'distiller', 'tobacconist', 'furTrader', 'blacksmith'] as BuildingKind[]) if (staffed(k) >= 2) b(k);
+  // Shops for the goods the colony makes: someone at work there, and the people a shop needs.
+  for (const k of ['weaver', 'distiller', 'tobacconist', 'furTrader', 'blacksmith'] as BuildingKind[]) if (staffed(k) >= (pop >= 6 ? 1 : 2)) b(k);
   b('church');
   b('customHouse');
   b('printingPress');
@@ -401,7 +460,16 @@ function manageColony(s: GameState, p: Player, c: Colony, prof: AiProfile): void
       hurryBuild(s, c.id);
       return manageRest(s, p, c, prof);
     }
-    if (price > 0 && price < 1500 && p.gold > prof.reserve + turnSaving + price * 1.5 && colonyReport(s, c).produced.hammers > 0 && c.hammers >= cost.hammers / 3) {
+    // A building is hurried once a third is built, or outright in a colony of BUILDER_POP with
+    // gold to spare: idle gold scores little, a building more. While arming, gold goes to
+    // defences first.
+    // Walls, wanted for independence, are bought outright with the gold above the reserve.
+    const defence = c.build.kind === 'building' ? c.build.id === 'stockade' || c.build.id === 'armory' : c.build.id === 'artillery';
+    const spare = p.gold - prof.reserve - turnSaving - (turnArming && !defence ? 2500 : 0);
+    const started = colonyReport(s, c).produced.hammers > 0 && c.hammers >= cost.hammers / 3;
+    const walls = turnArming && c.build.kind === 'building' && c.build.id === 'stockade';
+    const outright = c.build.kind === 'building' && colonyWorkers(s, c).length >= BUILDER_POP && spare > price * 3;
+    if (price > 0 && price < 1500 && (started || walls ? spare > price * 1.5 : outright)) {
       hurryBuild(s, c.id);
     }
   }
@@ -432,13 +500,20 @@ function staffSchool(s: GameState, c: Colony): void {
 
 /** Arms a colonist with stored muskets when the garrison is short: far cheaper than buying soldiers. */
 function raiseMilitia(s: GameState, p: Player, c: Colony, prof: AiProfile): void {
+  mountTroops(s, p, c);
   const workers = colonyWorkers(s, c);
   if (workers.length < 3 || c.goods.muskets < 50) return;
+  // Before a declaration, muskets in store are as good as militia (they arm a colonist, or re-arm a
+  // beaten soldier, when the war comes: ai/royal.ts), so colonists stay at work beyond
+  // PEACE_MILITIA armed units a colony. During the war the muskets re-arm beaten soldiers
+  // (Continentals among them), so colonists take them up only while the colony has fewer than
+  // WAR_MILITIA armed units.
+  const garrison = p.independence === 'declared' ? WAR_MILITIA : turnArming ? Math.min(garrisonFor(p, prof), PEACE_MILITIA) : garrisonFor(p, prof);
   // Arming for independence, a port with the muskets also raises troops for colonies still short
   // of their garrison (they march there); otherwise only for its own garrison.
   // So does a nation whose expansion waits for a defender for an outpost.
-  const short = (turnArming || turnExpansion === 'defence') && countOwned(s, p, isArmed) < ownColonies(s, p).length * garrisonFor(p, prof);
-  if (armedAt(s, p, c.x, c.y).length >= garrisonFor(p, prof) && !short) return;
+  const short = (turnArming || turnExpansion === 'defence') && p.independence !== 'declared' && countOwned(s, p, isArmed) < ownColonies(s, p).length * garrison;
+  if (armedAt(s, p, c.x, c.y).length >= garrison && !short) return;
   // Arming, experts take up muskets too once no unskilled colonist is left (veterans first).
   const recruit = workers
     .filter((w) => (UNIT_TYPES[w.type].skill <= 0 || ((turnArming || turnExpansion === 'defence') && (w.type === 'veteranSoldier' || workers.length >= 4))) && w.type !== 'nativeConvert')
@@ -447,6 +522,27 @@ function raiseMilitia(s: GameState, p: Player, c: Colony, prof: AiProfile): void
   leaveColony(s, recruit.id);
   equipInColony(s, recruit.id, 'soldier');
   recruit.state = 'fortified';
+  mountTroops(s, p, c);
+}
+
+/** Armed units a colony raises from its colonists while arming for independence, before the war (raiseMilitia). */
+const PEACE_MILITIA = 2;
+/** Armed units below which colonists take up the muskets in store during the war (raiseMilitia). */
+const WAR_MILITIA = 2;
+
+/**
+ * Arming for independence or at war with the Crown, soldiers in a colony with horses in store
+ * mount up: a dragoon defends half again as well, and loses its horses before its muskets. A
+ * couple of horses stay behind to breed.
+ */
+function mountTroops(s: GameState, p: Player, c: Colony): void {
+  if (!turnArming && p.independence !== 'declared') return;
+  for (const u of armedAt(s, p, c.x, c.y)) {
+    if (c.goods.horses < 52) return;
+    if (u.role !== 'soldier' || UNIT_TYPES[u.type].kind !== 'colonist') continue;
+    safely(() => equipInColony(s, u.id, 'dragoon'));
+    u.state = 'fortified';
+  }
 }
 
 /** Buys (or takes) good native land next to a growing colony. */
@@ -504,11 +600,27 @@ function treasureTurn(s: GameState, p: Player, u: Unit): void {
 function soldierTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   // Damaged artillery is mended where it can be, before it goes anywhere.
   if (u.type === 'damagedArtillery') safely(() => repairArtillery(s, p.id, u.id));
+  if (p.independence === 'declared') return warTurn(s, p, u);
   if (aiFight(s, p, u)) return;
   const pos = unitPosition(s, u)!;
   const colonies = ownColonies(s, p);
-  // Fill garrisons first, nearest colony short of troops.
   const here = colonyAt(s, pos.x, pos.y);
+  // Getting ready for independence, troops in a colony with more defence than it needs to hold
+  // out alone (ai/royal.ts, powerNeeded) march to the nearest colony with too little.
+  if (turnArming && here && here.owner === p.id) {
+    const need = powerNeeded(s, p);
+    const surplus = new Map(colonyDefences(s, p).map((d) => [d.colony.id, d.power - need]));
+    const thin = (surplus.get(here.id) ?? 0) >= REBEL_DEFENCE
+      ? colonies
+          .filter((c) => c.id !== here.id && colonyWorkers(s, c).length > 0 && (surplus.get(c.id) ?? 0) < 0 && distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE)
+          .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0]
+      : undefined;
+    if (thin && findPath(s, u, thin.x, thin.y)) {
+      setDestination(s, u.id, { x: thin.x, y: thin.y });
+      return;
+    }
+  }
+  // Fill garrisons first, nearest colony short of troops.
   const need = garrisonFor(p, prof);
   if (here && here.owner === p.id && armedAt(s, p, here.x, here.y).filter((o) => o.id !== u.id).length < need) {
     u.state = 'fortified';
@@ -536,7 +648,7 @@ function soldierTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   }
   // Peaceful nations put surplus soldiers back to work.
   if (prof.aggression === 0 && UNIT_TYPES[u.type].kind === 'colonist' && UNIT_TYPES[u.type].skill <= 0 && here && here.owner === p.id && !Object.values(p.stance).includes('war')) {
-    if (!prof.independence || turnShare < prof.independence.minShare - 15) {
+    if (!preparingIndependence(prof)) {
       assignJob(s, u.id, here.id);
       return;
     }
@@ -547,6 +659,96 @@ function soldierTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
     if (home) setDestination(s, u.id, { x: home.x, y: home.y });
   }
 }
+
+/**
+ * A soldier, dragoon or artillery in the War of Independence. The royal troops land next to a
+ * coastal colony and attack the nearest one, so troops hold their colonies: they strike at royal
+ * troops in the open next to them (sortie), march from a colony nobody threatens to the most
+ * threatened one nearby (reinforce), and otherwise stay fortified. Troops in the open go to the
+ * nearest colony.
+ */
+function warTurn(s: GameState, p: Player, u: Unit): void {
+  if (sortie(s, p, u) || reinforce(s, p, u)) return;
+  const pos = unitPosition(s, u)!;
+  const here = colonyAt(s, pos.x, pos.y);
+  if (here && here.owner === p.id) {
+    // Orders given before the war (a march to another garrison) are dropped: troops hold.
+    delete u.dest;
+    u.state = 'fortified';
+    return;
+  }
+  if (aiFight(s, p, u)) return;
+  const home = nearestColony(s, p, pos.x, pos.y);
+  if (home) setDestination(s, u.id, { x: home.x, y: home.y });
+}
+
+/** Royal land units within `range` tiles of a colony (the War of Independence). */
+function royalsNear(s: GameState, p: Player, c: Colony, range = 2): number {
+  let n = 0;
+  for (const o of Object.values(s.units)) if (o.owner === 'crown' && o.against === p.id && o.loc.kind === 'map' && !isShip(o) && distance(o.loc.x, o.loc.y, c.x, c.y) <= range) n++;
+  return n;
+}
+
+/**
+ * The War of Independence: a soldier, dragoon or artillery in a colony strikes at royal troops
+ * next to it in the open when the odds are even (artillery: a quarter better). A soldier that
+ * loses there re-arms from the warehouse and a dragoon takes fresh horses (combat.ts), so with
+ * muskets or horses in store and another defender left behind, it strikes at somewhat worse
+ * odds (SORTIE_ODDS).
+ */
+function sortie(s: GameState, p: Player, u: Unit): boolean {
+  const pos = unitPosition(s, u);
+  if (!pos || u.moves <= 0) return false;
+  const here = colonyAt(s, pos.x, pos.y);
+  const artillery = UNIT_TYPES[u.type].kind === 'artillery';
+  let margin = u.type === 'damagedArtillery' ? 1.5 : artillery ? 1.25 : 1;
+  if (here && here.owner === p.id && !artillery && armedAt(s, p, here.x, here.y).length > 1) {
+    const stored = u.role === 'dragoon' ? here.goods.horses >= 50 : here.goods.muskets >= 50;
+    if (stored) margin = SORTIE_ODDS;
+  }
+  let best: { target: Unit; odds: number } | null = null;
+  for (const n of neighbours(s, pos.x, pos.y)) {
+    if (colonyAt(s, n.x, n.y)) continue;
+    const enemies = unitsAt(s, n.x, n.y).filter((o) => o.owner === 'crown' && !isShip(o));
+    if (!enemies.length) continue;
+    const defender = enemies.reduce((a, b) => (defencePower(s, b) > defencePower(s, a) ? b : a));
+    const odds = offencePower(s, u, defender) / defencePower(s, defender);
+    if (odds >= margin && (!best || odds > best.odds)) best = { target: defender, odds };
+  }
+  if (!best) return false;
+  attack(s, u.id, { unitId: best.target.id });
+  return true;
+}
+
+/** Odds at which a soldier or dragoon with a re-arm in store strikes from its colony (sortie). */
+const SORTIE_ODDS = 0.8;
+
+/**
+ * The War of Independence: troops in a colony that no royal troops threaten march to the most
+ * threatened colony within REINFORCE_RANGE tiles, leaving behind the defence the colony needs to
+ * hold out itself (ai/royal.ts, powerNeeded; twice that on the coast, where the King's next troops
+ * land next to the weakest colony, which one stripped of its garrison would become).
+ */
+function reinforce(s: GameState, p: Player, u: Unit): boolean {
+  const pos = unitPosition(s, u);
+  if (!pos || u.moves <= 0) return false;
+  const here = colonyAt(s, pos.x, pos.y);
+  if (!here || here.owner !== p.id || royalsNear(s, p, here, 3) > 0) return false;
+  const defence = colonyDefences(s, p).find((d) => d.colony.id === here.id);
+  const keep = powerNeeded(s, p) * (isCoastal(s, here.x, here.y) ? 2 : 1);
+  if (!defence || defence.power - keep < REBEL_DEFENCE || armedAt(s, p, here.x, here.y).length <= 1) return false;
+  const target = ownColonies(s, p)
+    .filter((c) => c.id !== here.id && distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE)
+    .map((c) => ({ c, threat: royalsNear(s, p, c) - armedAt(s, p, c.x, c.y).length }))
+    .filter((e) => e.threat > 0)
+    .sort((a, b) => b.threat - a.threat || distance(a.c.x, a.c.y, pos.x, pos.y) - distance(b.c.x, b.c.y, pos.x, pos.y))[0];
+  if (!target || !findPath(s, u, target.c.x, target.c.y)) return false;
+  setDestination(s, u.id, { x: target.c.x, y: target.c.y });
+  return true;
+}
+
+/** Tiles troops march to help a threatened colony in the War of Independence. */
+const REINFORCE_RANGE = 12;
 
 /** Scouts chase rumours, then chiefs, then the edge of the known world. */
 function scoutTurn(s: GameState, p: Player, u: Unit): void {
@@ -794,9 +996,11 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
   const supplies = SUPPLIES.reduce((n, g) => n + (ship.cargo?.[g] ?? 0), 0);
   if (supplies > 0) {
     const room = (c: Colony) => SUPPLIES.some((g) => (ship.cargo?.[g] ?? 0) > 0 && c.goods[g] < warehouseCapacity(c) - 20);
+    // Arming for independence, muskets and horses go first to the coastal colonies least able to hold out (ai/royal.ts).
+    const weak = turnArming ? new Set(weakColonies(s, p).map((c) => c.id)) : new Set<string>();
     const port = ownColonies(s, p)
       .filter((c) => c.id !== mine?.id && isCoastal(s, c.x, c.y) && room(c))
-      .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];
+      .sort((a, b) => Number(weak.has(b.id)) - Number(weak.has(a.id)) || distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];
     if (port) {
       setDestination(s, ship.id, { x: port.x, y: port.y });
       return;
@@ -860,6 +1064,9 @@ function countOwned(s: GameState, p: Player, test: (u: Unit) => boolean): number
   return Object.values(s.units).filter((u) => u.owner === p.id && test(u)).length;
 }
 
+/** Muskets a colony stocks while arming for independence, before veterans and artillery are bought. */
+const MUSKETS_PER_COLONY = 100;
+
 function europe(s: GameState, p: Player, prof: AiProfile): void {
   if (p.independence !== 'none') return;
   const inEurope = () => Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && isShip(u) && !u.repair && !u.route);
@@ -897,10 +1104,14 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
   // A worn-out hardy pioneer is given fresh tools in a colony rather than replaced.
   if (!countOwned(s, p, (u) => u.role === 'pioneer' || u.type === 'hardyPioneer') && colonies.length) buyUnit('hardyPioneer');
   const statesmen = countOwned(s, p, (u) => u.type === 'elderStatesman');
-  if (prof.liberty > 1.3 && s.turn > 30 && statesmen < colonies.length) buyUnit('elderStatesman');
+  // Under an independence plan, statesmen only while the rebels still need to grow (ai/plan.ts).
+  if (prof.liberty > 1.3 && s.turn > 30 && statesmen < colonies.length && (!turnPlan.adopted || turnPlan.boost)) buyUnit('elderStatesman');
   const armed = countOwned(s, p, isArmed);
-  // A nation getting ready for independence also buys veterans and artillery against the Royal Expeditionary Force.
-  const arming = turnArming;
+  // A nation getting ready for independence also buys veterans and artillery against the Royal
+  // Expeditionary Force, once the colonies hold the muskets they want: 50 muskets defend about as
+  // well as a veteran or a gun for a fraction of the price (ai/royal.ts).
+  const stocked = colonies.reduce((n, c) => n + c.goods.muskets, 0) >= colonies.length * MUSKETS_PER_COLONY;
+  const arming = turnArming && stocked;
   if (armed < colonies.length * garrisonFor(p, prof) && (armed === 0 || (militant(prof) && p.gold > prof.reserve + 4000) || (arming && p.gold > prof.reserve + 2500))) buyUnit('veteranSoldier');
   if ((militant(prof) || arming) && s.turn > 80 && countOwned(s, p, (u) => u.type === 'artillery') < Math.ceil(colonies.length / (arming ? 1 : 2))) {
     if (room() >= 0 && afford(trainPrice(p, 'artillery'))) safely(() => train(s, p.id, 'artillery'));
@@ -941,6 +1152,10 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
       if ((preparing || militant(prof)) && stock < colonies.length * 50 * (preparing ? Math.max(1, turnArmy) : 1) && afford(buyPrice(market, 'muskets') * 100 + 300)) safely(() => buyGoods(s, ship.id, 'muskets', 100));
     }
     if (!colonies.some((c) => c.goods.horses >= 2) && colonies.length && afford(buyPrice(market, 'horses') * 50)) safely(() => buyGoods(s, ship.id, 'horses', 50));
+    // Arming for independence: horses to mount the garrisons as dragoons (mountTroops), a hold a trip.
+    const horses = colonies.reduce((n, c) => n + c.goods.horses, 0) + (ship.cargo?.horses ?? 0);
+    const dragoons = countOwned(s, p, (u) => u.role === 'dragoon');
+    if (turnArming && !warship && cargoFree(s, ship) > 0 && horses + dragoons * 50 < countOwned(s, p, isArmed) * 50 + colonies.length * 50 && afford(buyPrice(market, 'horses') * 100 + 300)) safely(() => buyGoods(s, ship.id, 'horses', 100));
     // Creative: holds left over carry goods that another port pays clearly more for.
     if (!warship) safely(() => triangleBuy(s, p, ship, prof));
     sailToAmerica(s, ship.id);
@@ -1012,6 +1227,25 @@ function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
   }
 }
 
+/** Colonists at most in an outpost given up before a declaration (abandonOutposts). */
+const OUTPOST_COLONISTS = 2;
+
+/**
+ * Ready to declare but for weak colonies: tiny outposts (OUTPOST_COLONISTS or fewer, no
+ * stockade) that could not hold are abandoned first, as the original game allows (leaving.ts).
+ * Each colony held at the declaration counts towards the half that must be kept (independence.ts),
+ * and a weak one would only feed the royal troops. Their colonists join another colony. At least
+ * three colonies are kept.
+ */
+function abandonOutposts(s: GameState, p: Player): void {
+  const weak = new Set(weakColonies(s, p).map((c) => c.id));
+  for (const c of ownColonies(s, p)) {
+    if (ownColonies(s, p).length <= 3) return;
+    if (!weak.has(c.id) || c.buildings.stockade > 0 || colonyWorkers(s, c).length > OUTPOST_COLONISTS) continue;
+    safely(() => void abandonColony(s, c.id));
+  }
+}
+
 function independence(s: GameState, p: Player, prof: AiProfile): void {
   const plan = prof.independence;
   if (!plan || p.independence !== 'none' || s.turn < plan.minTurn) return;
@@ -1021,8 +1255,11 @@ function independence(s: GameState, p: Player, prof: AiProfile): void {
   const fortified = colonies.filter((c) => c.buildings.stockade > 0).length;
   if (armed < colonies.length * plan.armyPerColony || fortified < colonies.length / 3) return;
   // The Royal Expeditionary Force has grown all game: declare only when the defence can plausibly
-  // beat it, counting the mercenaries the treasury can hire and the intervention the bells bring.
-  if (!canBeatRef(s, p, plan.ratio, expectedSupport(s, p))) return;
+  // beat it, counting the mercenaries the treasury can hire and the intervention the bells bring,
+  // can hold until the intervention comes, and no third of the colonies is weak.
+  if (defenceShort(s, p, plan.ratio, turnSupport) || !holdsAlone(s, p)) return;
+  abandonOutposts(s, p);
+  if (!readyToFight(s, p, plan.ratio, turnSupport)) return;
   if (canDeclareIndependence(s, p.id) !== null) return;
   declareIndependence(s, p.id);
   hireMercenaries(s, p, prof, plan.ratio);

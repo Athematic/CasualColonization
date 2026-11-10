@@ -4,7 +4,7 @@
 import { CORE_PALETTE, EXTRA_PALETTE, Palette } from './color.mjs';
 import { cleanAlpha, encodePng, loadPng, savePng } from './image.mjs';
 import { distanceTo, inkLineWidth, inkMask } from './ink.mjs';
-import { classify, placement } from './normalise.mjs';
+import { classify, headPlacement, placement } from './normalise.mjs';
 import { CATEGORY_PIXEL } from './config.mjs';
 import { analyseHiRes, findExtraColors, gridToRgba8, reduce } from './pixel.mjs';
 import { renderSmooth } from './smooth.mjs';
@@ -54,4 +54,18 @@ export async function renderPng(sp, size, mode, settings, refSize = 32) {
   const hi = analyseHiRes(sp.master, sp.ink, sp.place, size * pixel.factor, size, pixel);
   const { px } = reduce(hi, size, palette, pixel);
   return encodePng(size, size, gridToRgba8(px));
+}
+
+/**
+ * A Founding Father full figure (layout `figure`) at height h: smooth only, on a non-square canvas
+ * round(h * aspect) wide. Returns { png, width, height }.
+ */
+export async function renderFigurePng(sp, h, settings) {
+  const w = Math.round(h * (sp.place.aspect ?? 1));
+  return { png: await savePng(renderSmooth(sp.master, sp.ink, sp.place, h, settings.smooth, w)), width: w, height: h };
+}
+
+/** The head-and-shoulders crop of a prepared figure, as a square sprite that renderPng can render. */
+export function headSprite(sp, opts = {}) {
+  return { ...sp, id: `${sp.id}__head`, layout: 'head', place: headPlacement(sp.master, opts), extras: new Map() };
 }

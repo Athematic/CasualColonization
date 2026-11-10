@@ -21,7 +21,8 @@ export function abandonProblem(s: GameState, colonyId: string): string | null {
 /**
  * Abandons a colony as in the original game: only small colonies without a stockade. The
  * colonists step out onto the tile as units, the goods and buildings are lost. The computer
- * players never issue this command (not even for a starving one-colonist colony).
+ * players issue it only just before declaring independence, for a tiny outpost that could not
+ * hold (ai/advanced.ts, abandonOutposts), never for a starving one-colonist colony.
  */
 export function abandonColony(s: GameState, colonyId: string): string {
   const colony = s.colonies[colonyId];
