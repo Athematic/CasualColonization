@@ -1,5 +1,5 @@
 // Copies the runtime sprite set (the output of tools/sprite-pipeline) into a built site, so the
-// "Ligne claire (painted)" style finds it at assets/runtime/ next to index.html.
+// "Ligne claire (painted)" style finds it at assets/sprites/ next to index.html.
 //
 // Usage: node scripts/copy-runtime.mjs <site dir> [--from <runtime dir>]
 //   <site dir>   the built site, e.g. site (npm run release) or apps/web/dist
@@ -10,7 +10,7 @@
 // Copies manifest.json and every file it lists (nothing else: not the contact sheet). When there is
 // no runtime set it says so and exits without error: the style then loads the sprites from the
 // server, or draws procedurally. The copied images are gitignored; upload them to the server
-// (https://casual.spence.dk/assets/runtime/) rather than committing them.
+// (https://casual.spence.dk/assets/sprites/) rather than committing them.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
@@ -32,7 +32,7 @@ if (!existsSync(manifestFile)) {
   process.exit(0);
 }
 const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
-const dest = resolve(site, 'assets/runtime');
+const dest = resolve(site, 'assets/sprites');
 let files = 0;
 let bytes = 0;
 const copy = (rel) => {

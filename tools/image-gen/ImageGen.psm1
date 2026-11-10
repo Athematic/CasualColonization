@@ -145,7 +145,10 @@ function Get-BoxArtJobs {
         }
         if ($ids.ContainsKey($id)) { throw "Duplicate box art id '$id' in $Path" }
         $ids[$id] = $true
-        $head = ($c.Body -split '\.')[0]
+        # The size comes from the line that names the format ("FRONT COVER, portrait."); a concept
+        # may start with a SETTING line before it.
+        $formatLine = @($c.Body -split '\r?\n' | Where-Object { $_ -match '^(FRONT COVER|BACK COVER|WIDE BANNER|APP ICON)\b' })[0]
+        $head = (($(if ($formatLine) { $formatLine } else { $c.Body })) -split '\.')[0]
         $size = if ($head -match '\bportrait\b') { '1024x1536' }
                 elseif ($head -match '\blandscape\b') { '1536x1024' }
                 else { '1024x1024' }
@@ -214,6 +217,25 @@ function Select-JobsByPattern {
         })
 }
 
+function Invoke-GenerationOrder {
+    <#
+    .SYNOPSIS
+    The order sprites are generated in: sections in reverse (UI pieces first, colonist units last),
+    because the units vary least between runs; the style bible always stays first, as everything else
+    is judged against it. -DocumentOrder keeps the document's order. Rows within a section keep their order.
+    #>
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Jobs, [switch]$DocumentOrder)
+    if ($DocumentOrder) { return , $Jobs }
+    $sections = [System.Collections.Generic.List[string]]::new()
+    foreach ($job in $Jobs) { if (-not $sections.Contains($job.Section)) { $sections.Add($job.Section) } }
+    $rest = @($sections | Where-Object { $_ -notmatch 'bible' })
+    [array]::Reverse($rest)
+    $order = @($sections | Where-Object { $_ -match 'bible' }) + $rest
+    $sorted = [System.Collections.Generic.List[object]]::new()
+    foreach ($sec in $order) { foreach ($job in $Jobs) { if ($job.Section -eq $sec) { $sorted.Add($job) } } }
+    return , $sorted.ToArray()
+}
+
 function Get-ImageJobs {
     param(
         [Parameter(Mandatory)][string]$SpriteDoc,
@@ -226,10 +248,12 @@ function Get-ImageJobs {
         # full job followed by its thumbnail. Box art and the categories marked skip in thumb-prompts.md get none.
         [ValidateSet('full', 'thumb', 'both')][string]$Variant = 'full',
         # The Read-ThumbPrompts result; needed for thumb and both.
-        $ThumbPrompts
+        $ThumbPrompts,
+        # Keep the sprite sections in the prompt document's order instead of reversing them (see Get-SpriteJobs).
+        [switch]$DocumentOrder
     )
     $jobs = @()
-    if ($Doc -in 'sprites', 'all') { $jobs += Get-SpriteJobs -Path $SpriteDoc }
+    if ($Doc -in 'sprites', 'all') { $jobs += Invoke-GenerationOrder -Jobs (Get-SpriteJobs -Path $SpriteDoc) -DocumentOrder:$DocumentOrder }
     if ($Doc -in 'boxart', 'all') { $jobs += Get-BoxArtJobs -Path $BoxArtDoc -IncludeTitle:$IncludeTitle }
     if ($Variant -ne 'full') {
         if (-not $ThumbPrompts) { throw "-Variant $Variant needs the thumbnail prompts (Read-ThumbPrompts thumb-prompts.md)." }
@@ -1592,7 +1616,7 @@ function Write-EditContactSheet {
     return $path
 }
 
-Export-ModuleMember -Function ConvertTo-Slug, Get-SpriteJobs, Get-BoxArtJobs, Expand-JobVariants, Select-JobsByPattern, Get-ImageJobs,
+Export-ModuleMember -Function ConvertTo-Slug, Get-SpriteJobs, Invoke-GenerationOrder, Get-BoxArtJobs, Expand-JobVariants, Select-JobsByPattern, Get-ImageJobs,
     Get-PromptHash, Get-Sha256Hex, Get-FileSha256, Get-UtcStamp, New-Manifest, Read-Manifest, Save-Manifest, Get-JobPlan, Resolve-ImageSize,
     New-ImageRequestBody, Test-InputFidelitySupport, New-ImageEditForm, New-MultipartContent, Invoke-ImageRequest, Get-ErrorClass,
     ConvertFrom-RateLimitDuration, Get-RetryDelaySeconds, Invoke-JobGeneration, Test-ImageResult, Save-BytesAtomic,

@@ -18,9 +18,35 @@ npm run dev        # http://localhost:5173
 
 Or build a static site with `npm run build` (output in `apps/web/dist`), or a single self-contained HTML file with `npm run build:single`.
 
-**Releases** are built with `npm run release`, which writes the finished site to `site/`. That folder is committed and copied by hand to https://casual.spence.dk/. It uses relative paths, so it works from any folder on the server. There is no automatic GitHub Pages deployment any more.
+**Releases** are built with `npm run release`, which writes the finished site to `site/`. That folder is committed, and the Deploy workflow uploads it to https://casual.spence.dk/ (see [Deploying](#deploying)). It uses relative paths, so it works from any folder on the server. There is no automatic GitHub Pages deployment any more.
 
-**Painted sprites** (the *Ligne claire (painted)* style) are not in git. To update them: run the sprite pipeline (`node tools/sprite-pipeline/build.mjs --in https://casual.spence.dk/assets/sprites/`, from the image tool branch), upload its `out/` folder (without `index.html` and `_sheet/`) to https://casual.spence.dk/assets/runtime/, then run `npm run release`. The release also copies a local runtime set into `site/assets/runtime/` (gitignored) when it finds one in `tools/sprite-pipeline/out` or in the folder named by `CC_RUNTIME_DIR`. Without the sprites, the style draws everything as Ligne claire. See [docs/STYLE_PLUGINS.md](docs/STYLE_PLUGINS.md#sprite-packs).
+**Painted sprites** (the *Ligne claire (painted)* style) are not in git. To update them: run the sprite pipeline (`node tools/sprite-pipeline/build.mjs --in https://casual.spence.dk/assets/sprites/`, from the image tool branch), upload its `out/` folder (without `index.html` and `_sheet/`) to https://casual.spence.dk/assets/sprites/, then run `npm run release`. The release also copies a local runtime set into `site/assets/sprites/` (gitignored) when it finds one in `tools/sprite-pipeline/out` or in the folder named by `CC_RUNTIME_DIR`. Without the sprites, the style draws everything as Ligne claire. See [docs/STYLE_PLUGINS.md](docs/STYLE_PLUGINS.md#sprite-packs).
+
+### Deploying
+
+`.github/workflows/deploy.yml` uploads `site/` to the server whenever a merge to `main` changes it. You can also run it by hand from the **Actions** tab (**Deploy → Run workflow**), and tick *dry run* to only list what would change. It uses `scripts/deploy.sh`, which:
+
+1. uploads the assets, then `index.html`, so the live page never points at a missing file;
+2. then deletes the bundles of earlier builds (`assets/index-*.js|css`, `assets/cover-*.webp`).
+
+It never touches the images hosted on the server (`assets/sprites`, `thumbs`, `runtime`, `boxart`) or files such as `web.config`.
+
+**One-time setup** in GitHub, under *Settings → Environments → New environment*, named `production`. Optionally add yourself as a **required reviewer** there, so every deployment waits for your approval. Then add these as **environment secrets**:
+
+| Secret | Value |
+| --- | --- |
+| `DEPLOY_HOST` | the FTP server's host name |
+| `DEPLOY_PORT` | optional; defaults to 21 (FTP) or 22 (SFTP) |
+| `DEPLOY_USER` | the FTP user (ideally one limited to the site's folder) |
+| `DEPLOY_PASSWORD` | its password |
+| `DEPLOY_PATH` | the site's folder as that user sees it after logging in, e.g. `/` or `/casual.spence.dk` |
+
+The connection is **FTP with TLS** (FTPS, explicit) by default, so the password and files travel encrypted. IIS's FTP server supports this once a certificate is bound to the FTP site. Optional environment **variables** change that:
+- `DEPLOY_TLS_VERIFY` = `false`: the certificate is self-signed or issued for another name. The connection stays encrypted, but the server's identity isn't checked.
+- `DEPLOY_PROTOCOL` = `ftp`: plain FTP, only if the server has no TLS at all. The password is then sent unencrypted, and the workflow warns about it.
+- `DEPLOY_PROTOCOL` = `sftp`: SSH, with the secret `DEPLOY_KNOWN_HOSTS` set to the server's host key line (`ssh-keyscan <host>`).
+
+Secrets are encrypted: they can't be read back in GitHub's interface and are masked in the logs.
 
 ### Controls
 

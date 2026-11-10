@@ -2,7 +2,7 @@ import { TERRAIN, type Tile } from '@cc/engine';
 import type { IconRequest, StylePlugin } from '@cc/render-api';
 import { INK, LAND, PAPER } from './palette.js';
 import { LigneClaireMapRenderer, lineWidthFor } from './renderer.js';
-import { FONT, house, productIcon, unitSprite } from './sprites.js';
+import { FONT, HEADING_FONT, house, productIcon, unitSprite } from './sprites.js';
 
 function drawIcon(ctx: CanvasRenderingContext2D, icon: IconRequest, size: number): void {
   const lw = lineWidthFor(size) * 1.1;
@@ -36,7 +36,7 @@ export const ligneClaire: StylePlugin = {
   id: 'ligne-claire',
   name: 'Ligne claire',
   description: 'Clean, even ink lines and flat, bright colours in the tradition of the Franco-Belgian comic.',
-  stylesheets: ['https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&family=Fredoka:wght@700&display=swap'],
+  stylesheets: ['https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&family=Fredoka:wght@600;700&display=swap'],
   theme: {
     '--paper': PAPER,
     '--ink': INK,
@@ -47,7 +47,7 @@ export const ligneClaire: StylePlugin = {
     '--muted': '#6b665c',
     '--line': INK,
     '--font': FONT,
-    '--heading-font': FONT,
+    '--heading-font': HEADING_FONT,
     '--line-width': '2px',
     '--radius': '10px',
   },

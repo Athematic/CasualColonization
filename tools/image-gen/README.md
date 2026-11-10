@@ -3,7 +3,7 @@
 `Generate-Images.ps1` makes the game's bitmap art with the OpenAI Images API, straight from the prompt documents:
 
 - [`docs/SPRITE_PROMPTS.md`](../../docs/SPRITE_PROMPTS.md): 294 sprites (style bible, units, ships, goods, terrain, decorations, colonies, settlements, buildings, UI).
-- [`docs/BOX_ART_PROMPTS.md`](../../docs/BOX_ART_PROMPTS.md): 8 covers (five front-cover concepts, back cover, wide banner, app icon), plus 5 lettered front covers with `-IncludeTitle`.
+- [`docs/BOX_ART_PROMPTS.md`](../../docs/BOX_ART_PROMPTS.md): 18 covers (fifteen front-cover concepts, two of them for the planned Australia scenario and two for Vinland, plus the back cover, wide banner and app icon), plus 15 lettered front covers with `-IncludeTitle`.
 
 It runs on PowerShell 7 or later (`pwsh`) on Windows, macOS and Linux, and needs nothing else.
 
@@ -138,6 +138,7 @@ Get a key at <https://platform.openai.com/api-keys>. GPT image models can requir
 | `-Force` | | Regenerate even done jobs. |
 | `-SkipFailed` | | Do not retry jobs that failed in an earlier run. |
 | `-RedoFlagged` | | Regenerate done jobs that failed the PNG check. |
+| `-DocumentOrder` | | Generate sprites in the prompt document's order. By default the sections run in reverse (UI pieces first, colonist units last, since units vary least between runs), with the style bible always first. |
 | `-IncludeTitle` | | Also generate `front-*__titled` covers with model-lettered titles (BOX_ART_PROMPTS.md section 6). |
 | `-MaxJobs N` | 0 (no limit) | Make at most N API jobs in this run. |
 | `-MaxRetries` | 6 | HTTP attempts per job for 429, 5xx and network errors. |

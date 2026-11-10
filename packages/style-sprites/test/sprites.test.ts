@@ -203,7 +203,7 @@ describe('sprite source', () => {
     return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) };
   };
 
-  it('defaults to assets/runtime/ next to the page', () => {
+  it('defaults to assets/sprites/ next to the page', () => {
     expect(spriteBase('', memory())).toBe(DEFAULT_SPRITE_BASE);
   });
 

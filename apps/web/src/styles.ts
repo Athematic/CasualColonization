@@ -8,7 +8,10 @@ registerStyle(ligneClaire);
 registerStyle(ligneClairePainted);
 registerStyle(schematic);
 
-export const DEFAULT_STYLE = ligneClaire.id;
+// The painted pack falls back to plain Ligne claire wherever a sprite is missing or offline.
+export const DEFAULT_STYLE = ligneClairePainted.id;
+/** Where the chosen style is remembered. A new key when the default changes, so everyone starts on it once. */
+const STYLE_KEY = 'cc.style.v2';
 
 let active: StylePlugin = ligneClaire;
 const listeners = new Set<(s: StylePlugin) => void>();
@@ -55,7 +58,7 @@ export function setStyle(id: string): void {
     document.head.appendChild(el);
   }
   try {
-    localStorage.setItem('cc.style', style.id);
+    localStorage.setItem(STYLE_KEY, style.id);
   } catch {
     // Storage may be unavailable; the choice just will not persist.
   }
@@ -69,7 +72,7 @@ export function setStyle(id: string): void {
 
 export function savedStyle(): string {
   try {
-    return new URLSearchParams(location.search).get('style') ?? localStorage.getItem('cc.style') ?? DEFAULT_STYLE;
+    return new URLSearchParams(location.search).get('style') ?? localStorage.getItem(STYLE_KEY) ?? DEFAULT_STYLE;
   } catch {
     return DEFAULT_STYLE;
   }

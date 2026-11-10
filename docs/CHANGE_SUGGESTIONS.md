@@ -4,11 +4,7 @@ This file is the inbox for new ideas. Once we have discussed an idea, it moves t
 
 ## Tweaks
 
-- When moving a unit it is possible to set a target they cannot reach on the current turn. When the mouse is moving the target square gets big dot in the center (good), but it would be nice with a badge counter style number indicating how many turns the journey is expected to take.
-
-- When a turn starts and there is something unusual for the user to take action on (nominations for congress for instance), there should be a centered modal poping up to let them know and deal with it. Having non-routine interactions in the right hand frame is poor UX.
-
-- When no more units can move this turn, the "End turn" button should pulse to indicate this.
+- Update tiles with tessellation (https://www.sandromaglione.com/articles/how-to-create-a-pixel-art-tileset-complete-guide + https://www.sandromaglione.com/articles/pixel-art-game-tileset-made-easier)
 
 ### AI intelligence too low
 

@@ -8,7 +8,7 @@
   --accent-ink: #fffaf0;
   --muted: #6b665c;
   --line: #1b1a17;
-  --font: 'Comic Neue', 'Trebuchet MS', sans-serif;
+  --font: 'Nunito', 'Segoe UI', 'Helvetica Neue', sans-serif;
   --heading-font: var(--font);
   --line-width: 2px;
   --radius: 10px;
@@ -1281,7 +1281,7 @@ button.good:not(:disabled):hover {
 }
 
 .cover-title text {
-  font-family: 'Fredoka', 'Comic Neue', 'Arial Rounded MT Bold', sans-serif;
+  font-family: 'Fredoka', 'Nunito', 'Arial Rounded MT Bold', sans-serif;
   font-weight: 700;
   text-anchor: middle;
   paint-order: stroke;
