@@ -127,6 +127,8 @@ export interface ArenaEntry {
   refFormula?: number;
   /** Turn of the declaration of independence, if any. */
   declared?: number;
+  /** Turns the War of Independence lasted: to its outcome, or to the end of the game if it was still going on. */
+  warTurns?: number;
   /** The game was cheated in (arena games never cheat, but standings can come from any state). */
   cheated?: boolean;
   /** Highest score in its game (ties count for all). */
@@ -241,6 +243,7 @@ export function standing(s: GameState, seed: number, nation: NationId, level: Ai
     independence: p.independence,
     spoiled: p.goodsSpoiled ?? 0,
     ...royalStanding(p, colonies.length),
+    ...(p.refAtDeclaration ? { warTurns: s.turn - p.refAtDeclaration.turn } : {}),
     ...(isCheated(s) ? { cheated: true } : {}),
   };
 }
@@ -341,13 +344,14 @@ export function formatRelationsLine(entries: ArenaEntry[]): string {
 }
 
 /**
- * A Markdown table of the Crown per level: independence declared, won and lost, the Royal
+ * A Markdown table of the Crown per level: independence declared, won and lost, when, how long the
+ * war lasted (to its outcome or the end of the game), the Royal
  * Expeditionary Force at the declaration (or at the end) against the old formula, and the King's
  * demands and wars, as averages per nation per game.
  */
 export function formatCrown(entries: ArenaEntry[]): string {
-  const head = '| Level | Declared | Won / lost | Turn declared | REF at declaration | old formula then | REF at end (no declaration) | old formula then | Demands | paid | refused | Royal wars | REF units added |';
-  const rule = '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
+  const head = '| Level | Declared | Won / lost | Turn declared | War turns | REF at declaration | old formula then | REF at end (no declaration) | old formula then | Demands | paid | refused | Royal wars | REF units added |';
+  const rule = '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
   const levels = [...new Set(entries.map((e) => e.level))];
   const avg = (rows: ArenaEntry[], f: (e: ArenaEntry) => number) => (rows.length ? String(Math.round((rows.reduce((n, e) => n + f(e), 0) / rows.length) * 10) / 10) : '–');
   const rows = levels.map((level) => {
@@ -355,7 +359,7 @@ export function formatCrown(entries: ArenaEntry[]): string {
     const declared = all.filter((e) => e.declared !== undefined);
     const rest = all.filter((e) => e.declared === undefined);
     const t = (k: keyof RelationsTally) => avg(all, (e) => e.relations?.[k] ?? 0);
-    return `| ${AI_LEVEL_INFO[level].name} | ${declared.length} | ${all.filter((e) => e.independence === 'won').length} / ${all.filter((e) => e.independence === 'lost').length} | ${avg(declared, (e) => e.declared!)} | ${avg(declared, (e) => e.ref ?? 0)} | ${avg(declared, (e) => e.refFormula ?? 0)} | ${avg(rest, (e) => e.ref ?? 0)} | ${avg(rest, (e) => e.refFormula ?? 0)} | ${t('demands')} | ${t('demandsPaid')} | ${t('demandsRefused')} | ${t('royalWars')} | ${t('refAdded')} |`;
+    return `| ${AI_LEVEL_INFO[level].name} | ${declared.length} | ${all.filter((e) => e.independence === 'won').length} / ${all.filter((e) => e.independence === 'lost').length} | ${avg(declared, (e) => e.declared!)} | ${avg(declared, (e) => e.warTurns ?? 0)} | ${avg(declared, (e) => e.ref ?? 0)} | ${avg(declared, (e) => e.refFormula ?? 0)} | ${avg(rest, (e) => e.ref ?? 0)} | ${avg(rest, (e) => e.refFormula ?? 0)} | ${t('demands')} | ${t('demandsPaid')} | ${t('demandsRefused')} | ${t('royalWars')} | ${t('refAdded')} |`;
   });
   return [head, rule, ...rows].join('\n');
 }

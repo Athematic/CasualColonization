@@ -47,10 +47,23 @@ export interface AiProfile {
   /**
    * When to declare independence: not before `minTurn`, with at least `minShare` percent rebels,
    * at least `armyPerColony` armed units per colony, and a defence of at least `ratio` times the
-   * Royal Expeditionary Force built up by then (ai/royal.ts). With `arm` (Creative's plan) the
-   * nation also arms for it: garrisons sized against the REF, muskets first, militia, artillery.
+   * Royal Expeditionary Force built up by then (ai/royal.ts). With `arm` the nation also arms for
+   * it: garrisons sized against the REF, muskets and horses first, militia, artillery.
+   *
+   * `adopt` is when the nation takes up an independence plan (ai/plan.ts): once `share` percent of
+   * its colonists are rebels, or from `turn`, and, with `strength`, only once its defence (with the
+   * help it can expect) is that share of what the declaration needs. A plan, once adopted, raises
+   * liberty until the rebels are a safe majority and builds printing presses, armories, stockades
+   * and forts; once the rebels are close to a majority it arms.
    */
-  independence: { minTurn: number; minShare: number; armyPerColony: number; ratio: number; arm?: boolean } | null;
+  independence: {
+    minTurn: number;
+    minShare: number;
+    armyPerColony: number;
+    ratio: number;
+    arm?: boolean;
+    adopt?: { share: number; turn: number; strength?: number };
+  } | null;
   /** Re-plans its focus every few turns (Creative). */
   adaptive: boolean;
   /**
@@ -78,7 +91,7 @@ const competent: AiProfile = {
   missions: true,
   schools: true,
   gifts: true,
-  independence: { minTurn: 200, minShare: 55, armyPerColony: 1, ratio: 1.25 },
+  independence: { minTurn: 200, minShare: 55, armyPerColony: 1, ratio: 1.25, arm: true, adopt: { share: 45, turn: 240 } },
   adaptive: false,
   expansion: { minPopulation: 3, everyTurns: 6, undefended: 2, graceTurns: 20, settlers: 2 },
 };
@@ -94,7 +107,9 @@ export const AI_PROFILES: Record<Exclude<AiLevel, 'naive'>, AiProfile> = {
     raidNatives: true,
     piracy: true,
     gifts: false,
-    independence: { minTurn: 170, minShare: 50, armyPerColony: 1.5, ratio: 1.1 },
+    // Takes up an independence plan only once its army is strong: 60% of what the declaration needs;
+    // declares only with a clear margin (its declarations at 1.1 were crushed in probe games).
+    independence: { minTurn: 170, minShare: 50, armyPerColony: 1.5, ratio: 1.35, arm: true, adopt: { share: 35, turn: Infinity, strength: 0.6 } },
     // Grabs land sooner and faster than the others, but still not with one-man colonies.
     expansion: { minPopulation: 2.5, everyTurns: 4, undefended: 2, graceTurns: 20, settlers: 2 },
   },
@@ -128,4 +143,6 @@ export interface AiMemory {
   lastIncite?: number;
   /** Colonists sent out to found colonies, by unit id (ai/advanced.ts, sendSettler). */
   settlers?: string[];
+  /** Turn the nation adopted its independence plan (ai/plan.ts). */
+  independencePlan?: number;
 }
