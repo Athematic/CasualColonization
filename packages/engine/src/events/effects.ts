@@ -6,14 +6,13 @@ import { colonyWorkers, createUnit, isWater, neighbours, player, reveal, tileAt 
 import { placeOnMap } from '../movement.js';
 import { colonyReport } from '../production.js';
 import { BUILDINGS, BUILDING_ORDER, type BuildingKind } from '../rules/buildings.js';
-import { difficultyRules } from '../rules/difficulty.js';
 import type { GoodId, ProductId } from '../rules/goods.js';
 import { portPriceBand } from '../rules/ports.js';
 import { TERRAIN } from '../rules/terrain.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState } from '../types.js';
 import type { Effect, EventVars, EventsState, GoodRef, Num } from './types.js';
-import { goodsOf } from '../scenarios/index.js';
+import { difficultyOf, goodsOf } from '../scenarios/index.js';
 
 /** What a point of tax is worth to a nation over the rest of a game, in gold (measured against 30-turn outcomes in docs/design/events.md). */
 export const TAX_POINT_VALUE = 150;
@@ -112,7 +111,7 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
       p.crosses = Math.max(0, p.crosses + num(e.amount, v));
       return;
     case 'tax':
-      p.tax = Math.max(0, Math.min(difficultyRules(p).taxCeiling, p.tax + e.delta));
+      p.tax = Math.max(0, Math.min(difficultyOf(s, p).taxCeiling, p.tax + e.delta));
       return;
     case 'unit': {
       const type = e.type ?? v.unit;

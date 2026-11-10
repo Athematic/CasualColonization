@@ -158,7 +158,7 @@ function aiShip(s: GameState, p: Player, ship: Unit): void {
   }
   const loaded = Object.values(ship.cargo ?? {}).some((n) => (n ?? 0) > 0);
   const docks = Object.values(s.units).some((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u));
-  if (loaded || docks || p.gold >= recruitPrice(p) + 200 || !here) {
+  if (loaded || docks || p.gold >= recruitPrice(s, p) + 200 || !here) {
     if (!ship.dest) setDestination(s, ship.id, { europe: true });
     return;
   }
@@ -177,7 +177,7 @@ function aiEurope(s: GameState, p: Player): void {
   for (const ship of ships) {
     for (const g of goodsOf(s)) if ((ship.cargo?.[g] ?? 0) > 0) sellGoods(s, ship.id, g, ship.cargo![g]!);
     const totalUnits = Object.values(s.units).filter((u) => u.owner === p.id).length;
-    while (cargoFree(s, ship) > 0 && p.gold >= recruitPrice(p) + 300 && totalUnits < 60) {
+    while (cargoFree(s, ship) > 0 && p.gold >= recruitPrice(s, p) + 300 && totalUnits < 60) {
       const docksCount = Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u)).length;
       if (docksCount >= cargoFree(s, ship)) break;
       safely(() => {

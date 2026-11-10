@@ -15,7 +15,7 @@ import type { NationId } from '../rules/nations.js';
 import { track } from '../telemetry.js';
 import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
 import type { GoodId } from '../rules/goods.js';
-import { aiGoodsOf, goodsOf } from '../scenarios/index.js';
+import { aiGoodsOf, goodsOf, mechanicsOf } from '../scenarios/index.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, RouteCargo, RouteStop, TradeRoute, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
@@ -288,7 +288,7 @@ export function saleGain(s: GameState, p: Player, f: Colony, g: GoodId): number 
 
 /** Gold per unit gained buying a good at a partner's colony and selling it at home. */
 export function buyGain(s: GameState, p: Player, f: Colony, g: GoodId): number {
-  return homeNet(p, g) - buyPrice(player(s, f.owner), g);
+  return homeNet(p, g) - buyPrice(s, player(s, f.owner), g);
 }
 
 /**
@@ -300,6 +300,7 @@ export function buyGain(s: GameState, p: Player, f: Colony, g: GoodId): number {
 export function buildingTies(s: GameState, p: Player, other: NationId): boolean {
   return (
     !s.config.noFavoured &&
+    mechanicsOf(s).favoured &&
     hasTradeAgreement(s, p.id, other) &&
     !isFavoured(s, p.id, other) &&
     !favouredUnlocked(s, p.id, other) &&

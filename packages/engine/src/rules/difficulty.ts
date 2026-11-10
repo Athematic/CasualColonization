@@ -1,6 +1,7 @@
 /**
  * Difficulty levels, as in the original game. Every rule a level changes is a named multiplier
- * or value in DIFFICULTY, so a scenario can later replace or adjust the table.
+ * or value in DIFFICULTY; a scenario can override values per level (`Scenario.difficulty`), and
+ * the engine reads a nation's rules with `difficultyOf(s, p)` (scenarios/index.ts).
  *
  * Who it applies to: the level sets the economics of the nations people play (and of those
  * nations while the computer plays them during a head start). Computer players always play at
@@ -233,7 +234,10 @@ export function resolveDifficulty(id: string | undefined): DifficultyId {
   return id && id in DIFFICULTY ? (id as DifficultyId) : DEFAULT_DIFFICULTY;
 }
 
-/** The rules a nation plays by: its own difficulty, or Conquistador when it has none. */
+/**
+ * The rules a nation plays by in this table: its own difficulty, or Conquistador when it has none.
+ * Without the scenario's overrides; in a game use `difficultyOf(s, p)` (scenarios/index.ts).
+ */
 export function difficultyRules(p: { difficulty?: DifficultyId }): DifficultyRules {
   return DIFFICULTY[p.difficulty ?? DEFAULT_DIFFICULTY] ?? DIFFICULTY[DEFAULT_DIFFICULTY];
 }

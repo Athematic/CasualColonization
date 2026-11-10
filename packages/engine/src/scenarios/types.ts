@@ -12,7 +12,7 @@ import type { BuildingKind } from '../rules/buildings.js';
 import type { DifficultyId, DifficultyRules } from '../rules/difficulty.js';
 import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
-import type { Modifier } from '../rules/modifiers.js';
+import type { Modifier, RumourOutcome } from '../rules/modifiers.js';
 import type { Effect } from '../events/types.js';
 import type { NationId, TribeId } from '../rules/nations.js';
 import type { PortEntry } from '../rules/ports.js';
@@ -59,9 +59,18 @@ export interface Scenario {
   ai: ScenarioAi;
   /** Id of a registered event set (events/index.ts). `config.eventSet` overrides it (tests). */
   events: string;
-  /** Overrides merged over the engine's DIFFICULTY per level (step 5). */
+  /** Which of the engine's systems are in play (step 5). */
+  mechanics: Mechanics;
+  /**
+   * How the game can end, checked in this order (victory.ts registers the kinds). The first rule
+   * that ends the game decides the reason and the winner.
+   */
+  victory: VictoryRule[];
+  /** The outcomes of a Lost City Rumour and their odds, in the order they are drawn (rumours.ts). */
+  rumours: RumourEntry[];
+  /** Overrides merged over the engine's DIFFICULTY per level; absent levels and fields keep the engine's values. */
   difficulty?: Partial<Record<DifficultyId, Partial<DifficultyRules>>>;
-  /** Overrides merged over the engine's SCORE_WEIGHTS (step 5). */
+  /** Overrides merged over the engine's SCORE_WEIGHTS; absent fields keep the engine's values. */
   score?: Partial<ScoreWeights>;
 
   /**
@@ -69,6 +78,66 @@ export interface Scenario {
    * refused (Q3). Must leave the state as if the game had been created with `version`.
    */
   migrate?: (from: number, s: GameState) => void;
+}
+
+/**
+ * Switches for the engine's systems (docs/design/scenario-framework.md, section 3.12). A system
+ * that is off is skipped where it would run, its commands are refused with a reason, the computer
+ * players do not try it, and the web game hides its buttons. A system that is off draws no random
+ * numbers. The Americas switch everything on.
+ */
+export interface Mechanics {
+  /** The Crown raises the tax rate after sales in the home port (europe.ts). */
+  taxes: boolean;
+  /** A tax raise may be refused, boycotting the good until arrears are paid. Off: every raise simply applies. */
+  boycotts: boolean;
+  /** The King demands gold from the treasury (crown.ts). */
+  demands: boolean;
+  /** The King drags the nation into wars with other European nations (crown.ts). */
+  royalWars: boolean;
+  /**
+   * The Crown builds up a Royal Expeditionary Force during the game (crown.ts), and adds regulars
+   * when a demand is refused. `independence` needs it.
+   */
+  ref: boolean;
+  /** Nations may declare independence and fight the War of Independence (independence.ts, rebellion.ts). */
+  independence: boolean;
+  /** Favoured Nation status between European nations (relations.ts). Trade agreements stay either way. */
+  favoured: boolean;
+  /**
+   * The colony charter's price (rules/difficulty.ts COLONY_CHARTER: `base` gold per colony held, at
+   * most `cap`), when the game uses the rule (`GameConfig.colonyCharter`); false: never a charter.
+   */
+  charter: false | { base: number; cap: number };
+  /** The custom house can be built, and sells a colony's exports (europe.ts). */
+  customHouse: boolean;
+  /** Missionaries found missions among the natives and denounce rivals' missions (natives.ts). */
+  missions: boolean;
+}
+
+/** One way the game can end: a registered victory kind (victory.ts) and its data. */
+export interface VictoryRule {
+  /** 'time', 'independence-war', or another registered kind. */
+  id: string;
+  params?: Record<string, unknown>;
+}
+
+/**
+ * One outcome of a Lost City Rumour with its odds (rumours.ts). The weight is `weight` (or `scout`
+ * for a unit in the scout role, `expert` for a seasoned scout), times the explorer's
+ * `rumourOutcome` modifiers (Hernando de Soto), times the difficulty multiplier named by `difficulty`.
+ */
+export interface RumourEntry {
+  outcome: RumourOutcome;
+  weight: number;
+  /** Weight for a unit in the scout role, instead of `weight`. */
+  scout?: number;
+  /** Weight for a seasoned scout, instead of `scout` and `weight`. */
+  expert?: number;
+  /** The difficulty rule that scales this outcome's odds (rules/difficulty.ts). */
+  difficulty?: 'rumourGood' | 'rumourBad' | 'burialGrounds';
+  /** Only on tribal land (a burial ground); otherwise left out of the draw. */
+  tribal?: boolean;
 }
 
 export interface ScenarioMap {

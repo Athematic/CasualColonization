@@ -6,17 +6,16 @@
  * Imports only the leaf rule tables, so any engine module can import the registry.
  */
 import { BUILDING_ORDER } from '../rules/buildings.js';
-import { DIFFICULTY } from '../rules/difficulty.js';
+import { COLONY_CHARTER } from '../rules/difficulty.js';
 import { FATHER_CATEGORIES, FATHERS, type FatherId } from '../rules/fathers.js';
 import { GOODS } from '../rules/goods.js';
 import type { Modifier } from '../rules/modifiers.js';
 import { NATION_ORDER, NATIONS, TRIBE_ORDER, type NationId } from '../rules/nations.js';
-import { NATIVE_PRODUCE } from '../rules/natives.js';
+import { BURIAL_WEIGHT, NATIVE_PRODUCE } from '../rules/natives.js';
 import { PORT_CHARACTER } from '../rules/ports.js';
-import { SCORE_WEIGHTS } from '../rules/score.js';
 import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import { AMERICAS_CALENDAR } from './calendar.js';
-import type { NationEntry, Scenario } from './types.js';
+import type { NationEntry, RumourEntry, Scenario } from './types.js';
 
 /** What each nation's bonus does (its text is NATIONS[id].bonus), read at the engine's hook points (rules/modifiers.ts). */
 const BONUSES: Partial<Record<NationId, Modifier[]>> = {
@@ -34,6 +33,22 @@ function entry(id: NationId): NationEntry {
   const def = NATIONS[id];
   return { id, bonus: { text: def.bonus, modifiers: BONUSES[id] ?? [] }, colonyNames: def.colonyNames, port: PORT_CHARACTER[id]! };
 }
+
+/**
+ * The Lost City Rumours' outcomes and odds, in the order they are drawn (rumours.ts). A scout finds
+ * treasure and the Fountain of Youth twice as often and is lost half as often; a seasoned scout is
+ * never lost. The burial ground is listed last, so rumours off tribal land draw as before it existed.
+ */
+const AMERICAS_RUMOURS: RumourEntry[] = [
+  { outcome: 'nothing', weight: 30, difficulty: 'rumourBad' },
+  { outcome: 'tales', weight: 14 },
+  { outcome: 'smallTreasure', weight: 26 },
+  { outcome: 'colonist', weight: 10, difficulty: 'rumourGood' },
+  { outcome: 'treasure', weight: 5, scout: 10, difficulty: 'rumourGood' },
+  { outcome: 'fountain', weight: 2, scout: 4, difficulty: 'rumourGood' },
+  { outcome: 'lost', weight: 6, scout: 3, expert: 0, difficulty: 'rumourBad' },
+  { outcome: 'burial', weight: BURIAL_WEIGHT, difficulty: 'burialGrounds', tribal: true },
+];
 
 /** The original game's four rivals (Q9). */
 const REAL_RIVALS: NationId[] = ['england', 'france', 'netherlands', 'spain'];
@@ -69,7 +84,21 @@ export const AMERICAS: Scenario = {
       farm: ['food', 'sugar', 'tobacco', 'cotton'],
     },
   },
-  // The engine's own tables: the Americas override nothing.
-  difficulty: DIFFICULTY,
-  score: SCORE_WEIGHTS,
+  // Every system the engine has is on (section 3.12).
+  mechanics: {
+    taxes: true,
+    boycotts: true,
+    demands: true,
+    royalWars: true,
+    ref: true,
+    independence: true,
+    favoured: true,
+    charter: COLONY_CHARTER,
+    customHouse: true,
+    missions: true,
+  },
+  // Winning the War of Independence ends the game; otherwise it ends after autumn 1850.
+  victory: [{ id: 'independence-war' }, { id: 'time' }],
+  rumours: AMERICAS_RUMOURS,
+  // No `difficulty` or `score`: the Americas play by the engine's own DIFFICULTY and SCORE_WEIGHTS.
 };

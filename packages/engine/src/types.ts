@@ -56,6 +56,12 @@ export interface GameConfig {
   scenarioVersion?: number;
   /** Which nation set the setup offered (real rivals or alternative history); missing means the scenario's default. */
   rivals?: 'real' | 'alternative';
+  /**
+   * Arena play-on (tournaments, `--play-on`): a War of Independence won or lost does not end the
+   * game; the nation is finished (`Player.finished`) and the others play on to the end of the
+   * calendar (victory.ts). Missing means off; the New game screen never sets it.
+   */
+  playOn?: boolean;
 }
 
 export interface Tile {
@@ -131,6 +137,11 @@ export interface Player {
   /** A tax raise waiting for the player to accept or refuse. */
   pendingTax: { rate: number; good: GoodId } | null;
   independence: 'none' | 'declared' | 'won' | 'lost';
+  /**
+   * Arena play-on only (`GameConfig.playOn`, victory.ts): the nation's War of Independence is over
+   * and it takes no more turns. Its score and the score's parts are kept as they were then.
+   */
+  finished?: { turn: number; score: number; parts: Record<string, number> };
   /**
    * The Royal Expeditionary Force: before independence, the force the Crown has built up so far
    * (it grows during the game, see crown.ts); after the declaration, what is still to land.

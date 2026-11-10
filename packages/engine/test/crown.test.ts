@@ -70,7 +70,7 @@ function rounds(s: GameState, n: number, bells = 0, onRound?: (turn: number) => 
 describe('Royal Expeditionary Force', () => {
   it('starts with the fixed part of the old formula', () => {
     const s = game();
-    expect(nation(s, 'england').ref).toEqual(royalForce(nation(s, 'england'), 0));
+    expect(nation(s, 'england').ref).toEqual(royalForce(s, nation(s, 'england'), 0));
     expect(landForce(nation(s, 'england').ref)).toBe(7);
   });
 
@@ -119,7 +119,7 @@ describe('Royal Expeditionary Force', () => {
       bells = total;
     });
     const p = nation(s, 'england');
-    const old = landForce(royalForce(p, 15));
+    const old = landForce(royalForce(s, p, 15));
     const now = landForce(p.ref);
     expect(now / old).toBeGreaterThan(0.7);
     expect(now / old).toBeLessThan(1.3);

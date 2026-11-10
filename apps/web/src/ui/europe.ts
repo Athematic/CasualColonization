@@ -1,4 +1,5 @@
 import {
+  mechanicsOf,
   arrears,
   buyableInPartnerPort,
   buyPrice,
@@ -88,8 +89,8 @@ export class EuropeScreen implements Screen {
         me.pendingTax ? h('button', { class: 'btn small', onclick: () => void this.app.answerPending() }, 'Answer the tax raise') : null,
         h('button', { class: 'btn close', onclick: () => this.app.closeScreen(), 'aria-label': 'Close Europe' }, 'Close')),
       h('p', { class: 'muted small port-character', title: 'Each home port has its own prices, depth of market and ship prices.' }, `${portSummary(port, goodsOf(this.app.state))}.`),
-      h('p', { class: 'muted small royal-forces', title: 'The Royal Expeditionary Force the Crown holds against a rebellion. It grows during the game, faster as your colonies ring more liberty bells, and sails if you declare independence.' },
-        `Royal forces: ${describeForce(me.ref)}.`),
+      ...(!mechanicsOf(this.app.state).ref ? [] : [h('p', { class: 'muted small royal-forces', title: 'The Royal Expeditionary Force the Crown holds against a rebellion. It grows during the game, faster as your colonies ring more liberty bells, and sails if you declare independence.' },
+        `Royal forces: ${describeForce(me.ref)}.`)]),
       views.length > 1 ? h('div', { class: 'port-tabs', role: 'tablist', 'aria-label': 'Ports' }, views.map((p) =>
         h('button', { class: `tab${p === port ? ' active' : ''}`, role: 'tab', 'aria-selected': String(p === port), onclick: () => { this.port = p; this.ship = undefined; this.selected = undefined; this.app.requestRender(); } },
           h('span', { class: 'foreign-flag', style: `background:${NATIONS[p].color}` }), portName(p), p === viewer ? ' (home)' : ''))) : '',
@@ -116,7 +117,7 @@ export class EuropeScreen implements Screen {
       h('div', { class: 'goods market-goods' }, goodsOf(this.app.state).map((g) => {
         const carried = ship?.cargo?.[g] ?? 0;
         if (home && me.boycotts[g]) {
-          const owed = arrears(me, g);
+          const owed = arrears(this.app.state, me, g);
           return h('div', { class: 'good market-good boycott', title: `${GOOD_DEFS[g].name} is boycotted` },
             icon({ kind: 'product', product: g }, 30, GOOD_DEFS[g].name),
             h('span', { class: 'price' }, 'Boycott'),
@@ -124,9 +125,9 @@ export class EuropeScreen implements Screen {
         }
         return h('div', { class: 'good market-good' },
           icon({ kind: 'product', product: g }, 30, GOOD_DEFS[g].name),
-          h('span', { class: 'price' }, `${sellPrice(host, g)}/${buyPrice(host, g)}`),
+          h('span', { class: 'price' }, `${sellPrice(host, g)}/${buyPrice(this.app.state, host, g)}`),
           h('div', { class: 'row' },
-            h('button', { class: 'btn tiny', disabled: !ship || cargoFree(this.app.state, ship) <= 0 && carried % 100 === 0, title: `Buy 100 ${GOOD_DEFS[g].name.toLowerCase()} for ${buyPrice(host, g) * 100}`, onclick: () => this.buy(g) }, 'Buy'),
+            h('button', { class: 'btn tiny', disabled: !ship || cargoFree(this.app.state, ship) <= 0 && carried % 100 === 0, title: `Buy 100 ${GOOD_DEFS[g].name.toLowerCase()} for ${buyPrice(this.app.state, host, g) * 100}`, onclick: () => this.buy(g) }, 'Buy'),
             h('button', { class: 'btn tiny', disabled: !carried, title: `Sell ${carried}`, onclick: () => this.dispatch({ type: 'sellGoods', carrierId: ship!.id, good: g, amount: carried }) }, 'Sell')));
       })),
       h('p', { class: 'muted small' }, home
@@ -139,7 +140,7 @@ export class EuropeScreen implements Screen {
     const list = unitsOf(this.app.state).purchasable.filter(buyableInPartnerPort);
     return h('div', { class: 'card recruit' },
       h('h3', null, `Shipyard of ${portName(host.id)}`),
-      h('div', { class: 'offers' }, list.map((type) => this.offer(type, trainPrice(host, type), () => this.dispatch({ type: 'train', unitType: type, port: host.id })))),
+      h('div', { class: 'offers' }, list.map((type) => this.offer(type, trainPrice(this.app.state, host, type), () => this.dispatch({ type: 'train', unitType: type, port: host.id })))),
       h('p', { class: 'muted small' }, 'Merchant ships only: warships and artillery are not sold to foreigners. A ship bought here starts in this port.'));
   }
 
@@ -175,7 +176,7 @@ export class EuropeScreen implements Screen {
       for (const role of ['soldier', 'dragoon', 'pioneer', 'scout', 'missionary', 'none'] as RoleId[]) {
         if (role === u.role) continue;
         const goods = role === 'pioneer' ? { tools: 100 } : ROLES[role].goods;
-        const cost = Object.entries(goods).reduce((sum, [g, n]) => sum + (n ?? 0) * buyPrice(this.app.me, g as GoodId), 0);
+        const cost = Object.entries(goods).reduce((sum, [g, n]) => sum + (n ?? 0) * buyPrice(this.app.state, this.app.me, g as GoodId), 0);
         actions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'equip', unitId: u.id, role }) }, role === 'none' ? 'Sell equipment' : cost ? `${ROLES[role].name} (${cost})` : ROLES[role].name));
       }
     }
@@ -188,14 +189,14 @@ export class EuropeScreen implements Screen {
       h('button', { class: `tab${this.tab === t ? ' active' : ''}`, role: 'tab', 'aria-selected': String(this.tab === t), onclick: () => { this.tab = t; this.app.requestRender(); } }, t[0].toUpperCase() + t.slice(1))));
     let content: HTMLElement;
     if (this.tab === 'recruit') {
-      const price = recruitPrice(me);
+      const price = recruitPrice(this.app.state, me);
       content = h('div', { class: 'offers' },
         h('p', { class: 'muted small' }, `Crosses ${me.crosses}/${me.crossesRequired}: when full, the next immigrant comes for free. Recruiting now costs ${price}.`),
         me.recruitPool.map((type, slot) => this.offer(type, price, () => this.dispatch({ type: 'recruit', slot }))));
     } else {
       const offer = unitsOf(this.app.state);
       const list = this.tab === 'train' ? offer.trainable : offer.purchasable;
-      content = h('div', { class: 'offers' }, list.map((type) => this.offer(type, trainPrice(me, type), () => this.dispatch({ type: 'train', unitType: type }))));
+      content = h('div', { class: 'offers' }, list.map((type) => this.offer(type, trainPrice(this.app.state, me, type), () => this.dispatch({ type: 'train', unitType: type }))));
     }
     return h('div', { class: 'card recruit' }, tabs, content);
   }

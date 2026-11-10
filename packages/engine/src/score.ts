@@ -1,11 +1,11 @@
 import { sellPrice } from './europe.js';
 import { sonsOfLiberty } from './production.js';
-import { AMERICAS_CALENDAR, buildingsOf, calendarOf, goodsOf, lastTurn } from './scenarios/index.js';
+import { AMERICAS_CALENDAR, buildingsOf, goodsOf, scoreWeightsOf } from './scenarios/index.js';
 import { hasTradeAgreement, isFavoured } from './relations.js';
 import { BUILDINGS } from './rules/buildings.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { recentProduction } from './stats.js';
-import { SCORE_WEIGHTS, type ScoreWeights } from './rules/score.js';
+import type { ScoreWeights } from './rules/score.js';
 import type { GameState, Player } from './types.js';
 
 /** The Americas end after the autumn turn of this year (other scenarios: their calendar's `end`). */
@@ -39,8 +39,11 @@ export interface ScoreBreakdown {
   total: number;
 }
 
-/** Each component of a nation's score: what is counted and the points it earns. The total is their sum. */
-export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = SCORE_WEIGHTS): ScoreBreakdown {
+/**
+ * Each component of a nation's score: what is counted and the points it earns. The total is their
+ * sum. The weights are the scenario's (SCORE_WEIGHTS with its overrides) unless given.
+ */
+export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreWeightsOf(s)): ScoreBreakdown {
   let colonists = 0;
   let experts = 0;
   const workers = new Map<string, number>();
@@ -103,22 +106,16 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = SCORE_
   return { lines, total: lines.reduce((sum, l) => sum + l.points, 0) };
 }
 
-export function score(s: GameState, p: Player, w: ScoreWeights = SCORE_WEIGHTS): number {
+export function score(s: GameState, p: Player, w: ScoreWeights = scoreWeightsOf(s)): number {
   return scoreBreakdown(s, p, w).total;
 }
 
+/**
+ * Every European nation's score at the end: its score now, or, for a nation finished in arena
+ * play-on (victory.ts), the score it had when its War of Independence ended.
+ */
 export function finalScores(s: GameState): Partial<Record<Player['id'], number>> {
   const out: Partial<Record<Player['id'], number>> = {};
-  for (const p of s.players) if (p.id !== 'crown') out[p.id] = score(s, p);
+  for (const p of s.players) if (p.id !== 'crown') out[p.id] = p.finished ? p.finished.score : score(s, p);
   return out;
-}
-
-/** Ends the game when time runs out: after the last turn of the scenario's calendar. */
-export function checkTimeLimit(s: GameState): void {
-  if (s.gameOver) return;
-  const cal = calendarOf(s);
-  if (s.turn < lastTurn(cal)) return;
-  const scores = finalScores(s);
-  const winner = (Object.entries(scores) as [Player['id'], number][]).sort((a, b) => b[1] - a[1])[0]?.[0];
-  s.gameOver = { turn: s.turn, reason: `The year ${cal.end.year} has come and the age of colonization is over.`, winner, scores };
 }

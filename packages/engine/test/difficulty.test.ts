@@ -80,11 +80,11 @@ describe('difficulty levels', () => {
     const s = createGame(config('conquistador'));
     const p = nation(s, 'england');
     expect(p.crossesRequired).toBe(30);
-    for (const g of Object.keys(GOOD_DEFS) as (keyof typeof GOOD_DEFS)[]) expect(buyPrice(p, g)).toBe(p.market[g].price + GOOD_DEFS[g].spread);
-    expect(trainPrice(p, 'expertFarmer')).toBe(UNIT_TYPES.expertFarmer.price);
-    expect(recruitPrice(p)).toBe(Math.max(80, Math.round(300 * (1 - Math.min(1, p.crosses / 30) * 0.6))));
+    for (const g of Object.keys(GOOD_DEFS) as (keyof typeof GOOD_DEFS)[]) expect(buyPrice(s, p, g)).toBe(p.market[g].price + GOOD_DEFS[g].spread);
+    expect(trainPrice(s, p, 'expertFarmer')).toBe(UNIT_TYPES.expertFarmer.price);
+    expect(recruitPrice(s, p)).toBe(Math.max(80, Math.round(300 * (1 - Math.min(1, p.crosses / 30) * 0.6))));
     for (let n = 0; n < 20; n++) {
-      expect(royalForce(p, n)).toEqual({ regulars: 4 + 2 * n, dragoons: 2 + n, artillery: 1 + Math.floor(n / 2), menOfWar: 2 });
+      expect(royalForce(s, p, n)).toEqual({ regulars: 4 + 2 * n, dragoons: 2 + n, artillery: 1 + Math.floor(n / 2), menOfWar: 2 });
     }
   });
 
@@ -100,14 +100,14 @@ describe('difficulty levels', () => {
     const s = createGame(config('viceroy'));
     const human = nation(s, 'england');
     const ai = nation(s, 'france');
-    expect(buyPrice(human, 'food') - human.market.food.price).toBeGreaterThan(buyPrice(ai, 'food') - ai.market.food.price);
-    expect(buyPrice(human, 'silver') - human.market.silver.price).toBeGreaterThan(GOOD_DEFS.silver.spread);
-    expect(trainPrice(human, 'expertFarmer')).toBeGreaterThan(trainPrice(ai, 'expertFarmer'));
-    expect(recruitPrice(human)).toBeGreaterThan(recruitPrice(ai));
+    expect(buyPrice(s, human, 'food') - human.market.food.price).toBeGreaterThan(buyPrice(s, ai, 'food') - ai.market.food.price);
+    expect(buyPrice(s, human, 'silver') - human.market.silver.price).toBeGreaterThan(GOOD_DEFS.silver.spread);
+    expect(trainPrice(s, human, 'expertFarmer')).toBeGreaterThan(trainPrice(s, ai, 'expertFarmer'));
+    expect(recruitPrice(s, human)).toBeGreaterThan(recruitPrice(s, ai));
     expect(human.crossesRequired).toBeGreaterThan(ai.crossesRequired);
     const easy = nation(createGame(config('discoverer')), 'england');
-    expect(recruitPrice(easy)).toBeLessThan(recruitPrice(ai));
-    expect(trainPrice(easy, 'expertFarmer')).toBeLessThan(trainPrice(ai, 'expertFarmer'));
+    expect(recruitPrice(s, easy)).toBeLessThan(recruitPrice(s, ai));
+    expect(trainPrice(s, easy, 'expertFarmer')).toBeLessThan(trainPrice(s, ai, 'expertFarmer'));
   });
 
   it('makes prices fall faster when people sell on harder levels', () => {
@@ -180,14 +180,14 @@ describe('difficulty levels', () => {
 
   it('sends a bigger Royal Expeditionary Force against people on harder levels', () => {
     const s = createGame(config('viceroy'));
-    const hard = royalForce(nation(s, 'england'), 8);
-    const normal = royalForce(nation(s, 'france'), 8);
-    const easy = royalForce(nation(createGame(config('discoverer')), 'england'), 8);
+    const hard = royalForce(s, nation(s, 'england'), 8);
+    const normal = royalForce(s, nation(s, 'france'), 8);
+    const easy = royalForce(s, nation(createGame(config('discoverer')), 'england'), 8);
     const size = (r: typeof hard) => r.regulars + r.dragoons + r.artillery;
     expect(size(hard)).toBeGreaterThan(size(normal));
     expect(size(normal)).toBeGreaterThan(size(easy));
     // It also grows faster with each colony.
-    expect(size(royalForce(nation(s, 'england'), 9)) - size(hard)).toBeGreaterThan(size(royalForce(nation(s, 'france'), 9)) - size(normal));
+    expect(size(royalForce(s, nation(s, 'england'), 9)) - size(hard)).toBeGreaterThan(size(royalForce(s, nation(s, 'france'), 9)) - size(normal));
   });
 
   it('loses more expeditions to Lost City Rumours on harder levels', () => {

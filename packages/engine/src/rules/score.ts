@@ -1,6 +1,6 @@
 /**
- * Score weights, in one table so a scenario can override them (pass a modified copy to
- * `scoreBreakdown` / `score`). Each component is `round(value * weight)`; the total is the sum of
+ * Score weights, in one table so a scenario can override them (`Scenario.score`, merged over this
+ * table by `scoreWeightsOf(s)`; `scoreBreakdown` / `score` also take a table). Each component is `round(value * weight)`; the total is the sum of
  * the rounded components, so a breakdown always adds up.
  *
  * Calibration (0.7): a few big, developed colonies must score at least as high as many tiny ones,

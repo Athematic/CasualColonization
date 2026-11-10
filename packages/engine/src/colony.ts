@@ -24,7 +24,6 @@ import {
 } from './queries.js';
 import { BUILDINGS, SCHOOL_TEACHERS, TEACH_TURNS, type BuildingKind } from './rules/buildings.js';
 import { GOOD_DEFS, emptyGoods, type GoodId } from './rules/goods.js';
-import { COLONY_CHARTER, difficultyRules } from './rules/difficulty.js';
 import { NATIONS, TRIBES, type NationId } from './rules/nations.js';
 import { COLONY_BUILDS, PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId } from './rules/units.js';
 import { runCustomHouse } from './europe.js';
@@ -33,7 +32,7 @@ import { noteMining } from './mines.js';
 import { noteProduction } from './stats.js';
 import { nativeLandOwner, onColonyFounded } from './natives.js';
 import type { BuildTarget, Colony, GameState, Job, Unit } from './types.js';
-import { buildingsOf, goodsOf, unitsOf } from './scenarios/index.js';
+import { buildingsOf, difficultyOf, goodsOf, mechanicsOf, unitsOf } from './scenarios/index.js';
 
 export function canFoundColony(s: GameState, u: Unit): string | null {
   if (UNIT_TYPES[u.type].kind !== 'colonist') return 'Only colonists can found colonies.';
@@ -48,16 +47,19 @@ export function canFoundColony(s: GameState, u: Unit): string | null {
 
 /**
  * Gold the nation pays the Crown for its next colony under the colony charter rule
- * (`GameConfig.colonyCharter`, COLONY_CHARTER in rules/difficulty.ts): 0 with the rule off, for
- * the first colony, and once the nation has declared independence (there is no Crown to pay).
+ * (`GameConfig.colonyCharter`, the scenario's `mechanics.charter`; the Americas' is COLONY_CHARTER
+ * in rules/difficulty.ts): 0 with the rule off or not in the scenario, for the first colony, and
+ * once the nation has declared independence (there is no Crown to pay).
  */
 export function charterCost(s: GameState, nation: NationId): number {
   if (!s.config.colonyCharter) return 0;
+  const charter = mechanicsOf(s).charter;
+  if (!charter) return 0;
   const p = s.players.find((o) => o.id === nation);
   if (!p || p.independence !== 'none') return 0;
   const held = Object.values(s.colonies).filter((c) => c.owner === nation).length;
   if (held === 0) return 0;
-  return Math.round(Math.min(COLONY_CHARTER.cap, COLONY_CHARTER.base * held) * difficultyRules(p).colonyCharter);
+  return Math.round(Math.min(charter.cap, charter.base * held) * difficultyOf(s, p).colonyCharter);
 }
 
 /** Why a colony cannot stand on this tile, or null if it can. */
@@ -401,6 +403,7 @@ export function canBuild(s: GameState, colony: Colony, target: BuildTarget): boo
   const next = def.levels[colony.buildings[target.id]];
   if (!next) return false;
   if (def.locked && !modifiers(s, colony.owner, 'unlockBuilding').some((m) => m.building === target.id)) return false;
+  if (target.id === 'customHouse' && !mechanicsOf(s).customHouse) return false;
   if (def.coastalOnly && !isCoastal(s, colony.x, colony.y)) return false;
   return pop >= next.minPop;
 }
@@ -431,7 +434,7 @@ export function hurryPrice(s: GameState, colony: Colony): number {
   const hammers = Math.max(0, cost.hammers - colony.hammers);
   const tools = Math.max(0, cost.tools - colony.goods.tools);
   const toolPrice = player(s, colony.owner).market.tools.price + GOOD_DEFS.tools.spread;
-  return Math.round((hammers * 20 + Math.ceil(tools * toolPrice * 1.5)) * difficultyRules(player(s, colony.owner)).hurryCost);
+  return Math.round((hammers * 20 + Math.ceil(tools * toolPrice * 1.5)) * difficultyOf(s, player(s, colony.owner)).hurryCost);
 }
 
 /** Pays gold so the current build completes at the end of the turn. */

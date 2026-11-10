@@ -46,9 +46,8 @@ import {
   unitsAt,
 } from './queries.js';
 import { hasTradeAgreement, isFavoured, pairRandom } from './relations.js';
-import { difficultyRules } from './rules/difficulty.js';
 import { NATIONS, type NationId } from './rules/nations.js';
-import { nationSet, scenarioOf } from './scenarios/index.js';
+import { difficultyOf, nationSet, scenarioOf } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, MercenaryOffer, Player, Unit } from './types.js';
 
@@ -90,10 +89,10 @@ type Company = Pick<MercenaryOffer, 'soldiers' | 'dragoons' | 'artillery'>;
 
 const companySize = (c: Company) => c.soldiers + c.dragoons + c.artillery;
 
-function companyPrice(p: Player, c: Company): number {
+function companyPrice(s: GameState, p: Player, c: Company): number {
   const { price } = MERCENARIES;
   const gold = c.soldiers * price.soldier + c.dragoons * price.dragoon + c.artillery * price.artillery;
-  return Math.round((gold * difficultyRules(p).mercenaryPrice) / 100) * 100;
+  return Math.round((gold * difficultyOf(s, p).mercenaryPrice) / 100) * 100;
 }
 
 /**
@@ -104,14 +103,14 @@ export function mercenaryCompany(s: GameState, nation: NationId, turn = s.turn):
   const p = player(s, nation);
   const r = (what: string) => draw(s, nation, `mercenaries ${what} ${turn}`);
   const c: Company = { soldiers: 2 + Math.floor(r('soldiers') * 3), dragoons: 1 + Math.floor(r('dragoons') * 2), artillery: Math.floor(r('artillery') * 3) };
-  while (companySize(c) > 0 && companyPrice(p, c) > p.gold) {
+  while (companySize(c) > 0 && companyPrice(s, p, c) > p.gold) {
     if (c.artillery) c.artillery--;
     else if (c.dragoons) c.dragoons--;
     else c.soldiers--;
   }
   if (!companySize(c)) return null;
   const name = MERCENARIES.names[Math.floor(r('name') * MERCENARIES.names.length)];
-  return { name, ...c, price: companyPrice(p, c), turn };
+  return { name, ...c, price: companyPrice(s, p, c), turn };
 }
 
 /** "3 veteran soldiers, 1 veteran dragoon and 2 artillery". */
@@ -215,8 +214,8 @@ function mercenaryRound(s: GameState, p: Player, lostColony: boolean): void {
 export const INTERVENTION = { minTurns: 8, bells: 500, hold: 2 / 3, share: 0.4, minLand: 6, menOfWar: 2 };
 
 /** Liberty bells a nation's rebels must ring after the declaration before a power intervenes. */
-export function interventionBells(p: Player): number {
-  return Math.round(INTERVENTION.bells * difficultyRules(p).interventionBells);
+export function interventionBells(s: GameState, p: Player): number {
+  return Math.round(INTERVENTION.bells * difficultyOf(s, p).interventionBells);
 }
 
 /** The force a power would send: INTERVENTION.share of the land units of the REF that sailed (at least minLand), half soldiers, a quarter each dragoons and artillery. */
@@ -237,7 +236,7 @@ export function interventionStatus(s: GameState, nation: NationId): { turns: num
     turns: s.turn - declaredOn(s, p),
     minTurns: INTERVENTION.minTurns,
     bells: Math.max(0, p.bells - r.bells),
-    needBells: interventionBells(p),
+    needBells: interventionBells(s, p),
     held: Object.values(s.colonies).filter((c) => c.owner === nation).length,
     needHeld: Math.ceil((p.coloniesAtDeclaration ?? 1) * INTERVENTION.hold),
     ...(r.intervention ? { came: r.intervention } : {}),

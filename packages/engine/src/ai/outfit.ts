@@ -11,23 +11,23 @@ import type { GameState, Player, Unit } from '../types.js';
 import { safely } from './common.js';
 
 /** Gold needed to give a colonist a role in Europe. */
-export function outfitPrice(p: Player, role: RoleId): number {
-  if (role === 'pioneer') return PIONEER_MAX_TOOLS * buyPrice(p, 'tools');
+export function outfitPrice(s: GameState, p: Player, role: RoleId): number {
+  if (role === 'pioneer') return PIONEER_MAX_TOOLS * buyPrice(s, p, 'tools');
   let cost = 0;
-  for (const [g, n] of Object.entries(ROLES[role].goods)) cost += (n ?? 0) * buyPrice(p, g as GoodId);
+  for (const [g, n] of Object.entries(ROLES[role].goods)) cost += (n ?? 0) * buyPrice(s, p, g as GoodId);
   return cost;
 }
 
 /** Price of a unit bought in Europe together with the equipment its speciality needs. */
-export function equippedPrice(p: Player, type: UnitTypeId): number {
+export function equippedPrice(s: GameState, p: Player, type: UnitTypeId): number {
   const def = UNIT_TYPES[type];
-  return trainPrice(p, type) + (def.expertRole ? outfitPrice(p, def.expertRole) : 0);
+  return trainPrice(s, p, type) + (def.expertRole ? outfitPrice(s, p, def.expertRole) : 0);
 }
 
 /** Trains a unit in Europe and equips it for its speciality. Returns the unit. */
 export function trainEquipped(s: GameState, p: Player, type: UnitTypeId): Unit {
   const u = train(s, p.id, type);
   const role = UNIT_TYPES[type].expertRole;
-  if (role && p.gold >= outfitPrice(p, role)) safely(() => equipInEurope(s, u.id, role));
+  if (role && p.gold >= outfitPrice(s, p, role)) safely(() => equipInEurope(s, u.id, role));
   return u;
 }

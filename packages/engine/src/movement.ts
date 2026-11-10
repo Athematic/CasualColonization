@@ -30,6 +30,7 @@ import { riverLinked } from './rivers.js';
 import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
 import type { TribeId } from './rules/nations.js';
 import type { GameState, ImprovementKind, Player, Unit } from './types.js';
+import { mechanicsOf } from './scenarios/index.js';
 
 export type MoveOption =
   | { kind: 'move' }
@@ -114,8 +115,10 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
     if (UNIT_TYPES[u.type].kind === 'colonist' && u.role === 'none' && UNIT_TYPES[u.type].skill <= 0) actions.push('learn');
     if (UNIT_TYPES[u.type].kind === 'wagon') actions.push('trade');
     if (u.role === 'missionary') {
-      if (!settlement.mission) actions.push('mission');
-      else if (settlement.mission !== u.owner) actions.push('denounce');
+      if (mechanicsOf(s).missions) {
+        if (!settlement.mission) actions.push('mission');
+        else if (settlement.mission !== u.owner) actions.push('denounce');
+      }
       if (s.players.some((p) => p.id !== u.owner && p.id !== 'crown')) actions.push('incite');
     }
     if (canAttack(u)) actions.push('attack');

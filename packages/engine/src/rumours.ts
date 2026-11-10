@@ -5,9 +5,9 @@ import { randInt, weightedPick } from './rng.js';
 import { randomImmigrant } from './europe.js';
 import { modifiers } from './scenarios/modifiers.js';
 import type { RumourOutcome } from './rules/modifiers.js';
-import { difficultyRules } from './rules/difficulty.js';
+import { difficultyOf, rumoursOf } from './scenarios/index.js';
 import { NATIONS, TRIBES } from './rules/nations.js';
-import { BURIAL_RADIUS, BURIAL_WEIGHT } from './rules/natives.js';
+import { BURIAL_RADIUS } from './rules/natives.js';
 import type { GameState, Settlement, Unit } from './types.js';
 
 type Outcome = RumourOutcome;
@@ -24,8 +24,9 @@ export function tribalLandOwner(s: GameState, x: number, y: number): Settlement 
 }
 
 /**
- * The weighted outcomes of a rumour explored by this unit, in the order they are drawn. `tribal`
- * is the settlement whose land the rumour lies on, if any: only there can it be a burial ground.
+ * The weighted outcomes of a rumour explored by this unit, in the order they are drawn: the
+ * scenario's rumour table (Scenario.rumours). `tribal` is the settlement whose land the rumour lies
+ * on, if any: only there can it be a burial ground.
  */
 export function rumourOdds(s: GameState, u: Unit, tribal: Settlement | undefined): [Outcome, number][] {
   const scout = u.role === 'scout';
@@ -38,18 +39,16 @@ export function rumourOdds(s: GameState, u: Unit, tribal: Settlement | undefined
     return k;
   };
   // Harder levels make the bad results likelier and the best ones rarer.
-  const { rumourBad: bad, rumourGood: good, burialGrounds } = difficultyRules(player(s, u.owner));
-  return [
-    ['nothing', 30 * f('nothing') * bad],
-    ['tales', 14 * f('tales')],
-    ['smallTreasure', 26 * f('smallTreasure')],
-    ['colonist', 10 * f('colonist') * good],
-    ['treasure', (scout ? 10 : 5) * f('treasure') * good],
-    ['fountain', (scout ? 4 : 2) * f('fountain') * good],
-    ['lost', (expert ? 0 : (scout ? 3 : 6) * f('lost')) * bad],
-    // Listed last, so rumours elsewhere draw as before.
-    ...(tribal ? [['burial', BURIAL_WEIGHT * f('burial') * burialGrounds] as [Outcome, number]] : []),
-  ];
+  const rules = difficultyOf(s, player(s, u.owner));
+  const odds: [Outcome, number][] = [];
+  for (const e of rumoursOf(s)) {
+    if (e.tribal && !tribal) continue;
+    const base = expert && e.expert !== undefined ? e.expert : scout && e.scout !== undefined ? e.scout : e.weight;
+    let w = base * f(e.outcome);
+    if (e.difficulty) w *= rules[e.difficulty];
+    odds.push([e.outcome, w]);
+  }
+  return odds;
 }
 
 /** Explores a Lost City Rumour with the unit that stepped onto it. */

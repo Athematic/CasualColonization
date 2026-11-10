@@ -147,7 +147,7 @@ export function tradeOverview(s: GameState, nation: NationId): TradeRow[] {
   const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
   return goodsOf(s).map((g) => ({
     good: g,
-    prices: ports.map((q) => ({ port: q.id, sell: sellPrice(q, g), buy: buyPrice(q, g), tax: q.tax })),
+    prices: ports.map((q) => ({ port: q.id, sell: sellPrice(q, g), buy: buyPrice(s, q, g), tax: q.tax })),
     boycotted: !!p.boycotts[g],
     sold: { total: ledger.total.europe[g] ?? 0, now: ledger.now.europe[g] ?? 0, last: ledger.last.europe[g] ?? 0 },
     custom: ledger.total.custom[g] ?? 0,

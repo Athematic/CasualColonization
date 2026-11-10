@@ -8,12 +8,14 @@ import { SaveVersionError } from '../errors.js';
 import type { BuildingKind } from '../rules/buildings.js';
 import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
+import { DEFAULT_DIFFICULTY, DIFFICULTY, DIFFICULTY_LEVELS, type DifficultyId, type DifficultyRules } from '../rules/difficulty.js';
 import type { NationId, TribeId } from '../rules/nations.js';
+import { SCORE_WEIGHTS, type ScoreWeights } from '../rules/score.js';
 import { COLONY_BUILDS, IMMIGRANT_WEIGHTS, PURCHASABLE, TRAINABLE, type UnitTypeId } from '../rules/units.js';
 import type { GameConfig, GameState } from '../types.js';
 import { AMERICAS } from './americas.js';
 import type { Calendar } from './calendar.js';
-import type { NationEntry, Rivals, Scenario, ScenarioAi } from './types.js';
+import type { Mechanics, NationEntry, Rivals, RumourEntry, Scenario, ScenarioAi } from './types.js';
 
 export * from './types.js';
 export * from './calendar.js';
@@ -119,6 +121,53 @@ export function unitsOf(s: HasScenario): UnitSelection {
     UNIT_SELECTIONS.set(scenario, sel);
   }
   return sel;
+}
+
+// ---- Mechanics, difficulty, score and rumours (step 5) ----
+
+/** Which of the engine's systems the game's scenario has switched on. */
+export function mechanicsOf(s: HasScenario): Mechanics {
+  return scenarioOf(s).mechanics;
+}
+
+/** The Lost City Rumours' outcomes and odds, in the order they are drawn. */
+export function rumoursOf(s: HasScenario): readonly RumourEntry[] {
+  return scenarioOf(s).rumours;
+}
+
+const DIFFICULTY_TABLES = new WeakMap<Scenario, Record<DifficultyId, DifficultyRules>>();
+
+/** The engine's DIFFICULTY with a scenario's overrides merged over it (the same table when it has none). */
+export function difficultyTable(scenario: Scenario): Record<DifficultyId, DifficultyRules> {
+  if (!scenario.difficulty) return DIFFICULTY;
+  let table = DIFFICULTY_TABLES.get(scenario);
+  if (!table) {
+    const over = scenario.difficulty;
+    table = Object.fromEntries(DIFFICULTY_LEVELS.map((id) => [id, { ...DIFFICULTY[id], ...over[id] }])) as Record<DifficultyId, DifficultyRules>;
+    DIFFICULTY_TABLES.set(scenario, table);
+  }
+  return table;
+}
+
+/**
+ * The rules a nation plays by in its game: its own difficulty level (Conquistador when it has
+ * none), with the scenario's overrides. Replaces rules/difficulty.ts `difficultyRules` wherever
+ * the game is at hand.
+ */
+export function difficultyOf(s: HasScenario, p: { difficulty?: DifficultyId }): DifficultyRules {
+  const table = difficultyTable(scenarioOf(s));
+  return table[p.difficulty ?? DEFAULT_DIFFICULTY] ?? table[DEFAULT_DIFFICULTY];
+}
+
+const SCORE_TABLES = new WeakMap<Scenario, ScoreWeights>();
+
+/** The score weights of a game: the engine's SCORE_WEIGHTS with the scenario's overrides. */
+export function scoreWeightsOf(s: HasScenario): ScoreWeights {
+  const scenario = scenarioOf(s);
+  if (!scenario.score) return SCORE_WEIGHTS;
+  let w = SCORE_TABLES.get(scenario);
+  if (!w) SCORE_TABLES.set(scenario, (w = { ...SCORE_WEIGHTS, ...scenario.score }));
+  return w;
 }
 
 /** The nations a game's setup may choose from: the chosen set, or the scenario's default. */

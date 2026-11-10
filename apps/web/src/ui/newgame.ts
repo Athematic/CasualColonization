@@ -1,7 +1,6 @@
 import {
   AI_LEVEL_INFO,
   AI_LEVELS,
-  COLONY_CHARTER,
   DEFAULT_DIFFICULTY,
   DIFFICULTY,
   DIFFICULTY_LEVELS,
@@ -41,6 +40,9 @@ interface Slot {
 
 /** The scenario of new games: the default one, until the Scenario select is real (plan step 7). */
 const SCENARIO = scenarioOf({ config: {} });
+
+/** The scenario's colony charter, if it has one (the option is hidden otherwise). */
+const CHARTER = SCENARIO.mechanics.charter;
 const CALENDAR = SCENARIO.calendar;
 
 /** The nations the chosen rivals offer, in the scenario's order. */
@@ -261,9 +263,10 @@ export function newGameScreen(
           h('label', { class: 'rule-option', title: 'Surprises in the Sim City spirit: storms, fires, bumper harvests, gold fever, pirates, a skilled immigrant. Some ask you to choose. Can be switched in the Game menu during play.' },
             h('input', { type: 'checkbox', checked: randomEvents || undefined, 'aria-label': 'Random events', onchange: (e: Event) => (randomEvents = (e.target as HTMLInputElement).checked) }),
             h('span', null, h('b', null, 'Random events'), h('br'), h('span', { class: 'muted small' }, 'Storms, fires, bumper harvests, pirates.'))),
-          h('label', { class: 'rule-option', title: `Every colony after the first needs a charter from the Crown: ${COLONY_CHARTER.base} gold for each colony the nation already has, at most ${COLONY_CHARTER.cap}, scaled by difficulty. Free after the declaration of independence.` },
+          // Shown only when the scenario has a charter (mechanics.charter).
+          CHARTER ? h('label', { class: 'rule-option', title: `Every colony after the first needs a charter from the Crown: ${CHARTER.base} gold for each colony the nation already has, at most ${CHARTER.cap}, scaled by difficulty. Free after the declaration of independence.` },
             h('input', { type: 'checkbox', checked: colonyCharter || undefined, 'aria-label': 'Colony charter (founding costs gold)', onchange: (e: Event) => (colonyCharter = (e.target as HTMLInputElement).checked) }),
-            h('span', null, h('b', null, 'Colony charter (founding costs gold)'), h('br'), h('span', { class: 'muted small' }, 'The Crown charges for each new colony after the first.')))),
+            h('span', null, h('b', null, 'Colony charter (founding costs gold)'), h('br'), h('span', { class: 'muted small' }, 'The Crown charges for each new colony after the first.'))) : null),
         h('details', { class: 'planned-options' },
           h('summary', null, 'Rules and options ', planned('coming')),
           h('p', { class: 'muted small' }, 'On the roadmap and not playable yet. Hover or tap for details.'),

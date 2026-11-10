@@ -358,7 +358,7 @@ export const RANDOM_EVENTS: EventDef[] = [
       const good = CARGO_GOODS[Math.floor(r() * CARGO_GOODS.length)];
       v.good = good;
       v.amount = 50;
-      v.cost = roundTo((buyPrice(player(s, v.nation), good) * 50) / 2, 10);
+      v.cost = roundTo((buyPrice(s, player(s, v.nation), good) * 50) / 2, 10);
     },
     choices: [
       {
