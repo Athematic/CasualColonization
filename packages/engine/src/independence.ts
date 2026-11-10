@@ -48,6 +48,7 @@ export const DECLARE_AT = 50;
 export function canDeclareIndependence(s: GameState, nation: NationId): string | null {
   if (!mechanicsOf(s).independence) return 'There is no declaring independence in this scenario.';
   const p = player(s, nation);
+  if (p.kind === 'company') return 'A chartered company has no Crown to break with.';
   if (p.independence !== 'none') return 'Independence has already been declared.';
   if (!Object.values(s.colonies).some((c) => c.owner === nation)) return 'You have no colonies.';
   const share = rebelShare(s, nation);

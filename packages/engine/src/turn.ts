@@ -8,6 +8,7 @@ import { advanceWork, continueOrders, continueRoadTo, placeOnMap } from './movem
 import { processNatives } from './natives.js';
 import { processCongress } from './fathers.js';
 import { processCrown } from './crown.js';
+import { processCompanies } from './chartered.js';
 import { processEvents } from './events/index.js';
 import { processIndependence } from './independence.js';
 import { runAllies } from './rebellion.js';
@@ -103,6 +104,7 @@ function advance(s: GameState): void {
     perfEnd('markets', t);
     t = perfStart();
     processCrown(s);
+    processCompanies(s);
     perfEnd('crown', t);
     t = perfStart();
     processEvents(s);

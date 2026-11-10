@@ -2,6 +2,7 @@ import { declareWar } from './combat.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { fail } from './errors.js';
+import { isCompanyId } from './companies.js';
 import { hasModifier } from './scenarios/modifiers.js';
 import { message, player } from './queries.js';
 import { type NationId } from './rules/nations.js';
@@ -17,6 +18,7 @@ export function startWar(s: GameState, nation: NationId, other: NationId): strin
   if (nation === other) fail('A nation cannot fight itself.');
   if (other === 'crown') fail(`Declare independence to fight ${term(s, 'crown')}.`);
   const p = player(s, nation);
+  if (isCompanyId(s, nation) || isCompanyId(s, other)) fail('Chartered companies trade and settle; nobody makes war on them, and they make war on nobody.');
   if (p.stance[other] === 'war') fail(`You are already at war with ${nationOf(s, other).name}.`);
   if (!p.human && isFavoured(s, nation, other)) fail('Computer players never declare war on a Favoured Nation.');
   if (!p.human && warOnFriend(s, nation, other)) fail('Computer players never go to war with an ally, or with the ally of a friend.');

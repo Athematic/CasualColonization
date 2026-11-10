@@ -29,6 +29,7 @@ import { random, randInt } from './rng.js';
 import { riverLinked } from './rivers.js';
 import { isFavoured, onWar } from './relations.js';
 import { pactAllies, sendOut, warOnFriend } from './alliances.js';
+import { isCompanyId } from './companies.js';
 import { STOCKADE_DEFENCE } from './rules/buildings.js';
 import { AMBUSH_BONUS, BOMBARD_CHANCE, CAPTURE_CHANCE, REPAIR_COST, RIVER_DEFENCE } from './rules/combat.js';
 import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
@@ -345,6 +346,7 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
   if (!defender) fail('There is nothing to attack.');
   // The nation attacked: a colony's owner (its allies' garrison defends it), else the defender's.
   const enemy = colony ? colony.owner : defender.owner;
+  if (s.players.length > s.config.nations.length && (isCompanyId(s, enemy) || isCompanyId(s, u.owner))) fail('Chartered companies are neutral: they are not attacked and do not attack.');
   if (!player(s, u.owner).human && (isFavoured(s, u.owner, enemy) || (s.treaties && warOnFriend(s, u.owner, enemy)))) fail('Computer players never attack a Favoured Nation or an ally.');
   // Privateers sail under no flag, so their attacks do not start wars.
   if (u.type !== 'privateer') declareWar(s, u.owner, enemy);

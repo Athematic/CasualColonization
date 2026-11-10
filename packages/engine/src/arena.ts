@@ -94,6 +94,10 @@ export interface RelationsTally {
   alliesAtEnd: number;
   /** Wars the nation joined on an ally's side by choice (the defensive pact's wars are not counted). */
   allyWars: number;
+  /** Chartered companies the nation founded, shares it bought, and gold it received in dividends. */
+  companies: number;
+  shares: number;
+  dividends: number;
 }
 
 const TALLY: Record<string, keyof RelationsTally> = {
@@ -118,13 +122,16 @@ const TALLY: Record<string, keyof RelationsTally> = {
   'diplomacy:alliance joined': 'alliances',
   'diplomacy:alliance left': 'alliancesLeft',
   "diplomacy:joined an ally's war": 'allyWars',
+  'company:founded': 'companies',
+  'company:shares bought': 'shares',
+  'company:dividend': 'dividends',
 };
 
 /** Tally keys that add up the amount reported, not the number of reports. */
-const AMOUNTS = new Set<keyof RelationsTally>(['foreignStopSales', 'partnerPortSales', 'refAdded']);
+const AMOUNTS = new Set<keyof RelationsTally>(['foreignStopSales', 'partnerPortSales', 'refAdded', 'shares', 'dividends']);
 
 function emptyTally(): RelationsTally {
-  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0, alliances: 0, alliancesLeft: 0, alliesAtEnd: 0, allyWars: 0 };
+  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0, alliances: 0, alliancesLeft: 0, alliesAtEnd: 0, allyWars: 0, companies: 0, shares: 0, dividends: 0 };
 }
 
 /** What one event did to one nation over a game: times it fired, the choices taken (by index) and the computer players' gold value of the outcomes. */
@@ -445,7 +452,11 @@ export function allianceLine(entries: ArenaEntry[]): string {
   // A new alliance counts for both its founders, a join for the newcomer and the member who invited it.
   const made = entries.reduce((n, e) => n + (e.relations?.alliances ?? 0), 0) / 2;
   const concord = rows.filter((g) => g.some((e) => e.concord)).length;
-  return `Alliances: ${withAlliance} of ${games} games with an alliance, ${Math.round((made / games) * 10) / 10} made per game; ${concord} of ${games} games won together (concord).`;
+  const withCompany = rows.filter((g) => g.some((e) => (e.relations?.companies ?? 0) > 0)).length;
+  const founded = entries.reduce((n, e) => n + (e.relations?.companies ?? 0), 0);
+  const dividends = entries.reduce((n, e) => n + (e.relations?.dividends ?? 0), 0);
+  return `Alliances: ${withAlliance} of ${games} games with an alliance, ${Math.round((made / games) * 10) / 10} made per game; ${concord} of ${games} games won together (concord). ` +
+    `Companies: ${withCompany} of ${games} games with a chartered company, ${Math.round((founded / games) * 10) / 10} founded per game, ${Math.round(dividends / games)} gold of dividends per game.`;
 }
 
 /**
@@ -471,7 +482,7 @@ export function formatCrown(entries: ArenaEntry[]): string {
 
 /** A Markdown table of the average points per score component for each level. */
 export function formatScoreSplit(entries: ArenaEntry[]): string {
-  const keys: ScoreComponent[] = ['colonists', 'experts', 'buildings', 'production', 'liberty', 'fathers', 'wealth', 'peace', 'independence'];
+  const keys: ScoreComponent[] = ['colonists', 'experts', 'buildings', 'production', 'liberty', 'fathers', 'wealth', 'peace', 'independence', 'companies'];
   const levels = [...new Set(entries.map((e) => e.level))];
   const head = `| Level | ${keys.join(' | ')} | Total |`;
   const rule = `| --- | ${keys.map(() => '---:').join(' | ')} | ---: |`;

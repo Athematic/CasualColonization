@@ -4,11 +4,13 @@ import type { GameState, Player } from '../types.js';
 import { runAdvanced } from './advanced.js';
 import { creativeProfile } from './creative.js';
 import { runNaive } from './naive.js';
-import { AI_PROFILES, type AiProfile } from './profiles.js';
+import { AI_PROFILES, COMPANY_PROFILE, type AiProfile } from './profiles.js';
 
 /** Plays one turn for a computer-controlled nation at its level. */
 export function runAi(s: GameState, p: Player): void {
   if (p.id === 'crown') return runCrown(s);
+  // A chartered company plays its own simple profile (companies.ts).
+  if (p.kind === 'company') return runAdvanced(s, p, COMPANY_PROFILE);
   const level = p.ai ?? 'naive';
   if (level === 'naive') return runNaive(s, p);
   const base = inScenario(s, AI_PROFILES[level]);

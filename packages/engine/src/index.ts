@@ -37,6 +37,8 @@ export * from './routes.js';
 export * from './relations.js';
 export * from './treaties.js';
 export * from './alliances.js';
+export * from './companies.js';
+export * from './chartered.js';
 export * from './cheats.js';
 export * from './stats.js';
 export * from './history.js';

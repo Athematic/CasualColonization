@@ -46,6 +46,8 @@ const AI_PREFERENCE: FatherId[] = [
 
 /** Collects liberty bells for the Continental Congress; called once per turn for each player. */
 export function processCongress(s: GameState, p: Player): void {
+  // A chartered company has no Congress (companies.ts).
+  if (p.kind === 'company') return;
   if (!p.currentFather) {
     const offered = Object.values(p.fatherOffer) as FatherId[];
     if (!offered.length) return;

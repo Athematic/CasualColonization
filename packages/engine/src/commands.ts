@@ -23,6 +23,7 @@ import { chooseFather } from './fathers.js';
 import { proposePeace, startWar } from './diplomacy.js';
 import { answerProposal, cancelFavoured, cancelTrade, proposeAlliance, proposeFavoured, proposeTrade } from './relations.js';
 import { leaveAlliance, tradeInColony } from './alliances.js';
+import { buyShares, foundCompany } from './chartered.js';
 import { abandonColony, retire } from './leaving.js';
 import { declareIndependence } from './independence.js';
 import { answerDemand } from './crown.js';
@@ -108,6 +109,9 @@ export type Command =
   /** Proposes an alliance to `nation`, or invites it to join yours (alliances.ts). */
   | { type: 'proposeAlliance'; nation: NationId }
   | { type: 'leaveAlliance' }
+  /** Founds a chartered company from the scenario's list, or buys new shares in one (companies.ts). */
+  | { type: 'foundCompany'; company: NationId }
+  | { type: 'buyShares'; company: NationId; count: number }
   /** A ship or wagon train in an ally's colony sells goods to it, or buys goods from it (alliances.ts). */
   | { type: 'sellInColony'; carrierId: string; good: GoodId; amount: number }
   | { type: 'buyInColony'; carrierId: string; good: GoodId; amount: number }
@@ -408,6 +412,14 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'leaveAlliance':
         text = leaveAlliance(s, nation);
+        break;
+      case 'foundCompany':
+        track(nation, 'cmd:foundCompany');
+        text = foundCompany(s, nation, cmd.company);
+        break;
+      case 'buyShares':
+        track(nation, 'cmd:buyShares');
+        text = buyShares(s, nation, cmd.company, cmd.count);
         break;
       case 'sellInColony':
       case 'buyInColony':

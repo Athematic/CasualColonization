@@ -14,7 +14,7 @@ import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
 import type { Modifier, RumourOutcome } from '../rules/modifiers.js';
 import type { Effect } from '../events/types.js';
-import type { Lifeway, NationId, PeopleDef, TribeId } from '../rules/nations.js';
+import type { CompanyId, Lifeway, NationId, PeopleDef, TribeId } from '../rules/nations.js';
 import type { SettlementKindDef } from '../rules/natives.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { ScoreWeights } from '../rules/score.js';
@@ -77,6 +77,8 @@ export interface Scenario {
    * that unlock an alliance and the penalties for leaving one. Absent fields keep the engine's values.
    */
   alliances?: Partial<AllianceRules>;
+  /** Chartered company rules merged over the engine's COMPANY_RULES (companies.ts). */
+  companyRules?: Partial<CompanyRules>;
   /**
    * How the game can end, checked in this order (victory.ts registers the kinds). The first rule
    * that ends the game decides the reason and the winner.
@@ -141,6 +143,11 @@ export interface Mechanics {
    * Favoured Nation, with a defensive pact, open colonies and shared sight. Absent means off.
    */
   alliances?: boolean;
+  /**
+   * Chartered companies (companies.ts): nations found companies from the scenario's
+   * `nations.companies`, buy shares and receive dividends. Absent means off.
+   */
+  companies?: boolean;
 }
 
 /** A whole number of years from `base − spread` to `base + spread`, drawn from the game seed. */
@@ -173,6 +180,10 @@ export interface Cooperation {
   acceptAlliance: number;
   /** How good a target an ally's enemy must be before a computer ally joins the war (1: as good as one it would attack alone). */
   joinWar: number;
+  /** Chance per review that a nation with the gold founds a company it may charter. */
+  foundCompany: number;
+  /** Chance per review that a nation with gold to spare buys shares in a company. */
+  buyShares: number;
 }
 
 /** One way the game can end: a registered victory kind (victory.ts) and its data. */
@@ -340,6 +351,37 @@ export interface ScenarioNations {
    * port. Its bonus and colony names are not used.
    */
   crown: NationEntry;
+  /**
+   * Chartered companies nations may found in this scenario (companies.ts, with
+   * `mechanics.companies`): each a company player's name, colour, colony names and port. Absent
+   * means none.
+   */
+  companies?: CompanyEntry[];
+}
+
+/** A chartered company a scenario offers: how it is shown, and who may found it, from when. */
+export interface CompanyEntry extends NationEntry {
+  id: CompanyId;
+  /** The nations that may found it (charter it); any nation may buy shares once it exists. Empty: any nation. */
+  founders: NationId[];
+  /** The first year it may be founded. */
+  from?: number;
+}
+
+/** The rules for chartered companies a scenario can change (companies.ts COMPANY_RULES has the engine's). */
+export interface CompanyRules {
+  /** Gold a nation pays to found a company: the company's first treasury. */
+  capital: number;
+  /** Shares the founder gets for it. */
+  foundingShares: number;
+  /** Least price of a share; above it the price follows the company's worth per share. */
+  sharePrice: number;
+  /** Turns between dividends. */
+  dividendEvery: number;
+  /** Gold a company keeps before it pays dividends. */
+  reserve: number;
+  /** Share of the gold above the reserve paid out at each dividend. */
+  payout: number;
 }
 
 /** How a nation is named and shown: per scenario (Q2), read with `nationOf(s, id)`. */

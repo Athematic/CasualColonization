@@ -22,6 +22,7 @@ import { SOUTH_AMERICA_PEOPLES } from '../maps/south-america.js';
 import { AMERICAS_CALENDAR } from './calendar.js';
 import { AMERICAS_TEXT } from './terms.js';
 import type { GeneratorSettings, NationEntry, RumourEntry, Scenario } from './types.js';
+import { HUDSONS_BAY, MISSISSIPPI, WEST_INDIA } from './companies.js';
 
 /**
  * The generated New World (mapgen.ts): one continent a little west of the middle, with Europe across
@@ -137,6 +138,8 @@ export const AMERICAS: Scenario = {
     default: 'alternative',
     max: 8,
     crown: entry('crown'),
+    // Chartered companies (companies.ts), with `mechanics.companies`.
+    companies: [HUDSONS_BAY, WEST_INDIA, MISSISSIPPI],
   },
   peoples: {
     ids: [...TRIBE_ORDER],

@@ -106,6 +106,10 @@ export type Stance = 'peace' | 'war';
 
 export interface Player {
   id: NationId;
+  /** A chartered company (companies.ts) rather than a nation; missing means a nation (or the Crown). */
+  kind?: 'company';
+  /** A company's shareholders and bookkeeping; only on a company. */
+  company?: CompanyBook;
   human: boolean;
   /** Computer level, for nations not played by people. */
   ai?: AiLevel;
@@ -182,6 +186,18 @@ export interface Player {
   goodsSpoiled?: number;
   /** Difficulty whose economics this nation plays at; missing means Conquistador (computer players). */
   difficulty?: DifficultyId;
+}
+
+/** A chartered company's shareholders and bookkeeping (companies.ts). */
+export interface CompanyBook {
+  /** Shares held, by nation. */
+  shares: Partial<Record<NationId, number>>;
+  /** The nation that founded it, and the turn. */
+  founder: NationId;
+  founded: number;
+  /** Turn of the last dividend, and the gold paid out in dividends so far. */
+  lastDividend: number;
+  paid: number;
 }
 
 /** A mercenary company's offer to rebels: veteran soldiers, veteran dragoons and artillery for gold. */
@@ -574,6 +590,8 @@ export type HistoryKind =
   | 'favoured'
   /** Alliances made, joined and left (alliances.ts). */
   | 'alliance'
+  /** Chartered companies founded (companies.ts). */
+  | 'company'
   | 'cancel'
   | 'treasure'
   | 'burned'

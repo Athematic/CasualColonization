@@ -18,7 +18,7 @@
 import { BUILDING_ORDER } from '../rules/buildings.js';
 import { FATHER_CATEGORIES, type FatherId } from '../rules/fathers.js';
 import { GOODS, type GoodId } from '../rules/goods.js';
-import { NATIONS, type NationId } from '../rules/nations.js';
+import { NATIONS, type CompanyId, type NationId } from '../rules/nations.js';
 import { SETTLEMENT_KINDS } from '../rules/natives.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { TerrainId } from '../rules/terrain.js';
@@ -27,6 +27,7 @@ import { CARIBBEAN_PEOPLES } from '../maps/caribbean.js';
 import { AMERICAS, AMERICAS_GENERATOR } from './americas.js';
 import type { Calendar } from './calendar.js';
 import type { GeneratorSettings, NationEntry, Scenario } from './types.js';
+import { COURLAND_COMPANY, DARIEN, WEST_INDIA } from './companies.js';
 
 const without = <T>(list: readonly T[], ...drop: T[]): T[] => list.filter((x) => !drop.includes(x));
 
@@ -82,7 +83,7 @@ export const CARIBBEAN_GENERATOR: GeneratorSettings = {
 };
 
 /** The home ports and their markets in this century. Factors as in rules/ports.ts: 10–30%, no furs or coats. */
-const PORTS: Record<Exclude<NationId, 'portugal' | 'sweden' | 'russia' | 'crown'>, PortEntry> = {
+const PORTS: Record<Exclude<NationId, 'portugal' | 'sweden' | 'russia' | 'crown' | CompanyId>, PortEntry> = {
   // London: the great sugar and tobacco market, protected by the duties on foreign sugar.
   england: { name: 'London', market: { prices: { sugar: 1.15, tobacco: 1.2, silver: 0.9 }, depth: { cotton: 1.5, tools: 1.5 } } },
   // La Rochelle: the sugar of the Antilles; France banned colonial rum in 1713 to protect its brandy.
@@ -313,6 +314,8 @@ export const CARIBBEAN: Scenario = {
     default: 'alternative',
     max: ALTERNATIVE.length,
     crown: { ...AMERICAS.nations.crown },
+    // The companies of the Caribbean century: the Darien scheme, the Dutch WIC, Courland's Tobago.
+    companies: [DARIEN, WEST_INDIA, COURLAND_COMPANY],
   },
   peoples: {
     // North to south: the Arawak of the Greater Antilles, the Kalinago of the Lesser Antilles, the

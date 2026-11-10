@@ -4,6 +4,12 @@ import {
   allianceProblem,
   alliesOf,
   allTreaties,
+  companyCharters,
+  companyRules,
+  foundProblem,
+  sharePrice,
+  sharesIn,
+  sharesProblem,
   bound,
   canDeclareIndependence,
   describeTreaty,
@@ -54,7 +60,7 @@ export class DiplomacyScreen implements Screen {
     const me = app.me;
     clear(this.body);
 
-    const nations = s.players.filter((p) => p.id !== me.id && p.id !== 'crown');
+    const nations = s.players.filter((p) => p.id !== me.id && p.id !== 'crown' && p.kind !== 'company');
     const europe = h('div', { class: 'card' },
       h('h3', null, 'European nations'),
       nations.length
@@ -63,6 +69,7 @@ export class DiplomacyScreen implements Screen {
       nations.length ? h('p', { class: 'muted small' }, 'A trade agreement lets your trade routes call at each other’s colonies. After years of peace and enough trade routes between you, Favoured Nations may trade, and buy merchant ships, in each other’s home ports. Cancelling it costs both sides dearly.', mechanicsOf(s).alliances ? ' Favoured Nations at peace for many more years, with more trade between them, may ally: an attack on one ally is war with all, allied units may enter each other’s colonies, and allies share what they see.' : '') : null);
 
     const treaties = this.treatyCard();
+    const companies = this.companyCard();
 
     const tribes = s.tribes
       .map((t) => {
@@ -133,7 +140,7 @@ export class DiplomacyScreen implements Screen {
         h('h2', null, 'Foreign affairs'),
         h('span', { class: 'muted' }, `Gold ${me.gold.toLocaleString()}`),
         h('button', { class: 'btn close', onclick: () => app.closeScreen(), 'aria-label': 'Close foreign affairs' }, 'Close')),
-      h('div', { class: 'diplomacy-grid' }, europe, treaties, natives, congress, independence),
+      h('div', { class: 'diplomacy-grid' }, europe, treaties, companies, natives, congress, independence),
     );
   }
 
@@ -223,6 +230,39 @@ export class DiplomacyScreen implements Screen {
       mine.length ? h('ul', { class: 'treaty-list' }, mine.map(item)) : h('p', { class: 'muted small' }, 'You have no treaties in force.'),
       others.length ? h('details', null, h('summary', { class: 'small' }, `Between other nations (${others.length})`), h('ul', { class: 'treaty-list' }, others.map(item))) : null,
       past.length ? h('details', null, h('summary', { class: 'small' }, `Your past treaties (${past.length})`), h('ul', { class: 'treaty-list muted' }, past.map(item))) : null);
+  }
+
+  /**
+   * Chartered companies: those the scenario offers, founded or not, with the shares you hold,
+   * the price of a share and the dividends paid; found one, or buy shares.
+   */
+  private companyCard(): HTMLElement | null {
+    const app = this.app;
+    const s = app.state;
+    const me = app.me;
+    const charters = companyCharters(s);
+    if (!charters.length) return null;
+    const rules = companyRules(s);
+    const rows = charters.map((entry) => {
+      const co = s.players.find((p) => p.id === entry.id);
+      const name = h('strong', null, h('span', { class: 'flag', style: `background:${entry.color}` }), ' ', nationTitle(s, entry.id));
+      if (!co) {
+        const why = foundProblem(s, me.id, entry.id);
+        return h('li', { class: 'company', 'data-company': entry.id }, name, ' ', h('span', { class: 'muted small' }, 'not founded'), ' ',
+          h('button', { class: 'btn tiny', 'data-action': 'found-company', disabled: !!why || !app.isMyTurn(), title: why ?? `Charter it for ${rules.capital} gold`, onclick: () => app.dispatch({ type: 'foundCompany', company: entry.id }) }, `Found (${rules.capital} gold)`));
+      }
+      const { held, total } = sharesIn(co, me.id);
+      const price = sharePrice(s, co);
+      const colonies = Object.values(s.colonies).filter((c) => c.owner === co.id).length;
+      const why = sharesProblem(s, me.id, co.id, 5);
+      return h('li', { class: 'company', 'data-company': entry.id }, name, ' ',
+        h('span', { class: 'small' }, `${colonies} ${colonies === 1 ? 'colony' : 'colonies'} · you hold ${held} of ${total} shares · ${price} gold a share · ${co.company?.paid ?? 0} gold paid in dividends`), ' ',
+        h('button', { class: 'btn tiny', 'data-action': 'buy-shares', disabled: !!why || !app.isMyTurn(), title: why ?? `Buy 5 shares for ${price * 5} gold`, onclick: () => app.dispatch({ type: 'buyShares', company: co.id, count: 5 }) }, 'Buy 5 shares'));
+    });
+    return h('div', { class: 'card companies' },
+      h('h3', null, 'Chartered companies'),
+      h('ul', { class: 'treaty-list' }, rows),
+      h('p', { class: 'muted small' }, `A company founds and runs colonies of its own, with no ${term(s, 'crown')} and no taxes. Its founder pays ${rules.capital} gold for the first ${rules.foundingShares} shares; anyone may buy more. Every ${rules.dividendEvery} turns it pays out part of its gold to its shareholders, and its score counts for them by their shares. Nobody makes war on a company.`));
   }
 
   private async cancelTrade(nation: NationId): Promise<void> {

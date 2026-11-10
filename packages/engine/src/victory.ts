@@ -134,7 +134,7 @@ registerVictory({
     if (moment.kind !== 'warEnded') return null;
     if (s.config.playOn) {
       // Arena play-on: the game goes on while any nation still plays.
-      if (s.players.some((p) => p.id !== 'crown' && !p.finished)) return null;
+      if (s.players.some((p) => p.id !== 'crown' && p.kind !== 'company' && !p.finished)) return null;
       const scores = finalScores(s);
       return { turn: s.turn, reason: term(s, 'gameOver.playOn'), winner: leader(scores), scores };
     }

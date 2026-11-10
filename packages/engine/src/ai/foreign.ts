@@ -46,6 +46,9 @@ import type { Colony, GameState, Player, ProposalKind, Unit } from '../types.js'
 import { alliancesOn, allianceOf, allianceProblem, alliesOf, cooperationOf, isAllied, LEVEL_COOPERATION, leaveAlliance, warOnFriend } from '../alliances.js';
 import { proposeAlliance } from '../relations.js';
 import { startWar } from '../diplomacy.js';
+import { companies, companiesOn, companyCharters, companyRules } from '../companies.js';
+import { buyShares, foundCompany, foundProblem, sharePrice, sharesProblem } from '../chartered.js';
+import type { AiLevel } from './profiles.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
 import { aiGoodsOf, aiTurn } from '../scenarios/index.js';
@@ -97,6 +100,7 @@ export function foreignAffairs(s: GameState, p: Player, prof: AiProfile, strengt
   safely(() => reconsiderFavoured(s, p, prof, strength, army));
   if (!s.config.noFavoured) safely(() => makeProposals(s, p, prof, strength));
   if (s.treaties && alliancesOn(s)) safely(() => joinAlliesWars(s, p, prof, strength, army));
+  if (companiesOn(s)) safely(() => companyAffairs(s, p, prof));
   pruneTriangles(s, p);
 }
 
@@ -172,7 +176,7 @@ export function favouredPays(s: GameState, p: Player, prof: AiProfile, other: Na
 function makeProposals(s: GameState, p: Player, prof: AiProfile, strength: number): void {
   const memory = p.aiMemory ?? {};
   for (const o of s.players) {
-    if (o.id === p.id || o.id === 'crown' || !atPeace(s, p.id, o.id) || isHostile(s, p.id, o.id)) continue;
+    if (o.id === p.id || o.id === 'crown' || o.kind === 'company' || !atPeace(s, p.id, o.id) || isHostile(s, p.id, o.id)) continue;
     if (memory.warTarget && s.colonies[memory.warTarget]?.owner === o.id) continue;
     if (memory.warPlan?.nation === o.id) continue;
     if (!hasTradeAgreement(s, p.id, o.id)) {
@@ -207,6 +211,35 @@ function wantsAlliance(s: GameState, p: Player, prof: AiProfile, other: NationId
   }
   const chance = cooperationOf(s).proposeAlliance * LEVEL_COOPERATION[p.ai ?? 'naive'].propose;
   return chance > 0 && pairRandom(s, p.id, other, `${p.id} alliance wish ${s.turn}`) < chance;
+}
+
+/** Each level's share of COOPERATION's company chances: Creative founds and buys most readily. */
+export const LEVEL_COMPANIES: Record<AiLevel, number> = { naive: 0, competent: 0.7, combative: 0.4, creative: 1 };
+
+/**
+ * Chartered companies (companies.ts): a nation with gold to spare founds a company it may charter
+ * (the capital, plus its reserve and 1,000 more), or buys five shares in one that exists (their
+ * price, plus its reserve and 1,500 more), each at a seeded chance per review: the scenario's
+ * `foundCompany` and `buyShares` times the level's share. Not before the turn it would start wars,
+ * nor once it has declared independence.
+ */
+function companyAffairs(s: GameState, p: Player, prof: AiProfile): void {
+  if (p.independence !== 'none' || s.turn <= aiTurn(s, 50)) return;
+  const coop = cooperationOf(s);
+  const share = LEVEL_COMPANIES[p.ai ?? 'naive'];
+  if (!share) return;
+  for (const entry of companyCharters(s)) {
+    if (foundProblem(s, p.id, entry.id) || p.gold < companyRules(s).capital + prof.reserve + 1000) continue;
+    if (pairRandom(s, p.id, entry.id, `found ${s.turn}`) >= coop.foundCompany * share) continue;
+    foundCompany(s, p.id, entry.id);
+    return;
+  }
+  for (const co of companies(s)) {
+    if (p.gold < sharePrice(s, co) * 5 + prof.reserve + 1500 || sharesProblem(s, p.id, co.id, 5)) continue;
+    if (pairRandom(s, p.id, co.id, `shares ${s.turn}`) >= coop.buyShares * share) continue;
+    buyShares(s, p.id, co.id, 5);
+    return;
+  }
 }
 
 /**
@@ -277,7 +310,7 @@ export function bestWarTarget(s: GameState, p: Player, prof: AiProfile, strength
     if (s.treaties && (isAllied(s, p.id, c.owner) ? !favoured : warOnFriend(s, p.id, c.owner))) continue;
     if (memory.warPlan && memory.warPlan.nation === c.owner && s.turn < memory.warPlan.turn) continue;
     const enemy = s.players.find((o) => o.id === c.owner);
-    if (!enemy || enemy.independence !== 'none') continue;
+    if (!enemy || enemy.independence !== 'none' || enemy.kind === 'company') continue;
     const hostile = isHostile(s, p.id, c.owner);
     const aggression = hostile ? Math.max(prof.aggression, HOSTILE_AGGRESSION) : prof.aggression;
     if (aggression <= 0) continue;

@@ -49,7 +49,7 @@ export const ALLIANCE_RULES: AllianceRules = {
  * computer-only tournaments to give an alliance in about one game in four and a concord victory
  * about once in 30–40 games (docs/design/cooperation.md, C11).
  */
-export const COOPERATION: Cooperation = { proposeAlliance: 0.5, acceptAlliance: 0.8, joinWar: 0.8 };
+export const COOPERATION: Cooperation = { proposeAlliance: 0.5, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1 };
 
 /** Each level's share of COOPERATION's chances: Creative seeks alliances out, Naive never proposes. */
 export const LEVEL_COOPERATION: Record<AiLevel, { propose: number; accept: number }> = {
@@ -166,7 +166,7 @@ function bothHuman(s: GameState, a: NationId, b: NationId): boolean {
  */
 export function allianceProblem(s: GameState, from: NationId, to: NationId): string | null {
   if (!alliancesOn(s)) return 'There are no alliances in this scenario.';
-  if (from === to || from === 'crown' || to === 'crown') return 'Alliances are made between European nations.';
+  if (from === to || from === 'crown' || to === 'crown' || s.players.find((p) => p.id === from)?.kind === 'company' || s.players.find((p) => p.id === to)?.kind === 'company') return 'Alliances are made between European nations.';
   if (!s.players.some((p) => p.id === from) || !s.players.some((p) => p.id === to)) return `${nationOf(s, to).name} is not taking part.`;
   const name = nationOf(s, to).name;
   if (!atPeace(s, from, to)) return `You are at war with ${name}.`;

@@ -9,7 +9,14 @@ export type AmericasNationId = 'england' | 'france' | 'netherlands' | 'spain' | 
  * Every nation id a scenario may use (Q2: a scenario's `NationEntry` says all about the nation).
  * The lesser powers of the Caribbean, 1650–1750 (scenarios/caribbean.ts) have no catalogue entry.
  */
-export type NationId = AmericasNationId | 'courland' | 'brandenburg' | 'scotland' | 'malta' | 'crown';
+export type NationId = AmericasNationId | 'courland' | 'brandenburg' | 'scotland' | 'malta' | 'crown' | CompanyId;
+
+/**
+ * Chartered companies (docs/design/cooperation.md, step 3): players of their own (`Player.kind`
+ * 'company'), founded during a game by nations, named by a scenario's `nations.companies`. They are
+ * never in `GameConfig.nations`, so they are not in NATION_IDS (game codes).
+ */
+export type CompanyId = 'hudsonsBay' | 'westIndia' | 'mississippi' | 'darien' | 'courlandCompany';
 
 /**
  * Every nation id but the Crown, in a fixed order that never changes: game codes store a nation as
