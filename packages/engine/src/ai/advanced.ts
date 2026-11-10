@@ -984,7 +984,7 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
     (!here || colonyWorkers(s, here).length >= 3) &&
     (sent.some((o) => o.id === u.id)
       ? charterInHand && paced
-      : (sent.length < prof.expansion.settlers && expansionReady(s, p, prof, colonies)) || (!here && !reachableColonies().length && charterInHand));
+      : (sent.length < prof.expansion.settlers && expansionReady(s, p, prof, colonies)) || (!here && charterInHand && !reachableColonies().length));
   if (expand) {
     const best = bestColonySite(s, pos.x, pos.y, {
       radius: here ? 8 : 5,
@@ -1016,9 +1016,12 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
     assignJob(s, u.id, here.id);
     return;
   }
-  const home = reachableColonies()
-    .slice()
-    .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - colonyReport(s, a).net.food / 2 - (distance(b.x, b.y, pos.x, pos.y) - colonyReport(s, b).net.food / 2))[0];
+  // The nearest reachable colony, counting food to spare as nearness. Ranked first (each colony's
+  // report once), so that only the colonies up to the first reachable one need a path.
+  const ranked = (reachable ?? colonies)
+    .map((c) => ({ c, near: distance(c.x, c.y, pos.x, pos.y) - colonyReport(s, c).net.food / 2 }))
+    .sort((a, b) => a.near - b.near);
+  const home = reachable ? ranked[0]?.c : ranked.find((e) => findPath(s, u, e.c.x, e.c.y))?.c;
   if (home) {
     setDestination(s, u.id, { x: home.x, y: home.y });
     const now = unitPosition(s, u)!;
