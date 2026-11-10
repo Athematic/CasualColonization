@@ -34,7 +34,7 @@ export const STAT_KEYS = [
 export type StatKey = (typeof STAT_KEYS)[number];
 
 export const STAT_INFO: Record<StatKey, { name: string; description: string; perTurn?: boolean; percent?: boolean }> = {
-  score: { name: 'Score', description: 'Score as it would be counted at the end of the game.' },
+  score: { name: 'Score', description: 'Score as it would be counted at the end of the game: colonists, experts at work, buildings, production, liberty, Founding Fathers, wealth, peace and cooperation. Saves from before version 0.7 keep the old formula’s numbers for turns already recorded.' },
   gold: { name: 'Gold', description: 'Gold in the treasury.' },
   colonies: { name: 'Colonies', description: 'Colonies held.' },
   population: { name: 'Colonists', description: 'Colonists living and working in colonies.' },
@@ -187,6 +187,31 @@ export function statsSnapshot(s: GameState, nation: NationId, c: StatsCensus = c
     tension: met ? Math.round(tension / met) : 0,
     explored: c.land ? Math.round((explored / c.land) * 100) : 0,
   };
+}
+
+/**
+ * Average goods produced per turn (food excluded) over the last `turns` recorded snapshots plus
+ * the turn in progress; 0 before anything is recorded. Used by the score.
+ */
+export function recentProduction(s: GameState, nation: NationId, turns: number): number {
+  const st = s.stats;
+  const j = st ? st.keys.indexOf('production') : -1;
+  const samples: number[] = [];
+  if (st && j >= 0) {
+    const flat = st.data[nation];
+    const width = st.keys.length;
+    if (flat) {
+      let v = 0;
+      for (let i = 0; i < st.turns.length; i++) {
+        v += flat[i * width + j] ?? 0;
+        samples.push(v);
+      }
+    }
+  }
+  const now = st?.flows?.[nation]?.production;
+  if (now !== undefined) samples.push(now);
+  const recent = samples.slice(-turns);
+  return recent.length ? recent.reduce((a, b) => a + b, 0) / recent.length : 0;
 }
 
 /** Records one snapshot per European nation for the current turn. Called once per round. */
