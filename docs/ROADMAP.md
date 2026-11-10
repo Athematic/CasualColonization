@@ -27,10 +27,8 @@ The one plan for Casual Colonization. We decide the priorities here together. Ne
 | Audit of which features each computer level uses; computer players build roads and buy ships | M | P1 | done (see [AI_FEATURE_AUDIT.md](AI_FEATURE_AUDIT.md)) |
 | Next computer-player gaps from the audit: Combative's idle army, missions and native trade, schools and custom houses earlier, buying experts, declaring independence, refusing taxes | M | P2 | planned |
 | New game screen previews planned options | S | P3 | done |
-| Difficulty follow-ups: scale hurry-buy costs; computer ship buying uses adjusted prices; tune values against the original | S | P3 | idea |
 | Rivers (minor and major): road-like movement, production bonus, in generated and stored maps, drawn in both styles, valued by the computer players | M | P1 | done |
 | Difficulty levels (prices, taxes, native tension, size of the Royal Expeditionary Force, computer-player strength) | M | P2 | done (five levels in one `DIFFICULTY` table; they apply to the people's nations, computer players keep standard economics and their chosen level) |
-| Rivers follow-ups: draw roads along rivers only as bridges, smooth diagonal seams, river defence bonus, Cooper Creek and the Yukon | S | P3 | idea |
 
 ## 0.4: Favoured Nation, the first thing the original could not do (done)
 
@@ -58,11 +56,8 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | A Royal Expeditionary Force that grows during the game, visible to the player | M | P1 | done |
 | Royal demands for gold; royal wars | M | P1 | done |
 | Advisor reports (colony, trade, military, naval, religion, natives, Congress, history) | M | P1 | done (eight tabs, `A`/`F1`–`F8`; engine keeps a capped history and a goods ledger) |
-| Port character: each home port gets its own starting prices, demand and ship prices (for example cheap trade goods in Amsterdam, furs dear in La Rochelle, silver in Seville, cheap ships in Lisbon), so Favoured Nation access and triangle trading pay off. Scenario data per nation | M | P2 | idea (noted after 0.4) |
-| Find why Creative scores about 14 points less with Favoured Nation on | S | P2 | idea |
 | Computer players reach a winnable War of Independence (they now only declare when their defence beats the grown royal army, and never get there: staff armories, build artillery, plan earlier) | M | P2 | idea |
-| Brave sprites (plain, armed, mounted) in SPRITE_PROMPTS.md | S | P3 | idea |
-| Trade routes may call at a favoured partner's port, not only the home port | S | P3 | idea |
+| Brave sprites (plain, armed, mounted) in SPRITE_PROMPTS.md | S | P3 | done (prompts in pull request #11) |
 
 ## 0.6: A living world
 
@@ -90,6 +85,32 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Performance pass: profile computer turns and the map renderer; a head start to 1700 currently takes about 100 seconds. Goal: under 30 seconds, with identical game outcomes | M | P1 | done for the computer turns: `npm run bench` (seed 2024, the web head start to 1700) went from 43–46 s to 12–14 s in Node and from 40 s to 14 s in Chromium (Skip ahead), with the same final state hash on four seeds (`npm run bench -- --verify`). Fixed: the worker optimiser's unit scans (one pass per colony, shared until a job changes), the path search (heap, reused buffers, per-search context, the first step reuses the route just found) and array-building lookups. The map renderer was not part of this pass (Skip ahead draws nothing); speed-ups that would change games are listed in the README's Performance section |
 | Scoring review: reward well-developed colonies (buildings, experts, production, liberty) and not only headcount, to fit the colony charter and the measured pace | S | P1 | done (`score.ts` `SCORE_WEIGHTS`, `scoreBreakdown`; breakdown table in Progress and on the game-over screen; the arena prints the split per level) |
 
+## 0.8: Polish and leftovers
+
+Closes the smaller items left from earlier releases while the classic game is complete.
+
+| Item | Size | Prio | Status |
+| --- | --- | --- | --- |
+| Difficulty follow-ups: scale hurry-buy costs; computer ship buying uses adjusted prices; tune values against the original | S | P3 | planned |
+| Rivers follow-ups: draw roads along rivers only as bridges, smooth diagonal seams, river defence bonus, Cooper Creek and the Yukon | S | P3 | planned |
+| Port character: each home port gets its own starting prices, demand and ship prices (for example cheap trade goods in Amsterdam, furs dear in La Rochelle, silver in Seville, cheap ships in Lisbon), so Favoured Nation access and triangle trading pay off. Scenario data per nation | M | P2 | planned |
+| Find why Creative scores about 14 points less with Favoured Nation on | S | P2 | planned |
+| Trade routes may call at a favoured partner's port, not only the home port | S | P3 | planned |
+| Founding Father portraits in the Continental Congress screen and the father choices (once generated) | S | P2 | planned |
+| Wire in the new brave, damaged artillery and fortress sprites (once generated) | S | P2 | planned |
+| Tune event rates and the computer players' event choices (one tournament with `--events`) | S | P2 | planned |
+| Tessellated terrain tiles: edge and corner pieces that blend neighbouring terrains, as a sprite-pack feature (Simon's idea, see CHANGE_SUGGESTIONS.md) | M | P2 | idea |
+| Speed-ups that change outcomes (each 10–20%: follow a found route for the whole turn, sharper path estimate, re-plan colony workers less often, keep colony reports per computer turn); renderer performance pass | M | P3 | idea |
+
+## 0.9: Scenario framework
+
+Done before Beta, so the cooperation rules are scenario data from the start. See [design/scenarios.md](design/scenarios.md).
+
+| Item | Size | Prio | Status |
+| --- | --- | --- | --- |
+| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | idea, agreed |
+| Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | idea, agreed |
+
 ## Beta 1–2: Cooperation
 
 Builds on 0.4.
@@ -99,14 +120,14 @@ Builds on 0.4.
 
 Each beta gets design notes first.
 
-## Scenarios
+## Scenarios (content)
+
+Scenario content, built on the 0.9 framework.
 
 Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](design/australia.md). Comes after the cooperation betas, so Federation can be a peaceful way to win.
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | idea, agreed |
-| Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | idea, agreed |
 | Convict transport mechanic (Australia; late game for British colonies in the Americas) | M | P2 | idea, agreed |
 | Australia map (geography preview with the current rules; ships arrive from the west) | M | P2 | done |
 | Australia, 1788–1901: map, Aboriginal nations and Country, wool, wheat, gold and whaling, convict colonists, the long sea route, drought, Federation | XL | P1 | idea |

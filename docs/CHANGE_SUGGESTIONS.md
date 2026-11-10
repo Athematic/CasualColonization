@@ -4,7 +4,7 @@ This file is the inbox for new ideas. Once we have discussed an idea, it moves t
 
 ## Tweaks
 
-- Update tiles with tessellation (https://www.sandromaglione.com/articles/how-to-create-a-pixel-art-tileset-complete-guide + https://www.sandromaglione.com/articles/pixel-art-game-tileset-made-easier)
+- (On the roadmap: 0.8, tessellated terrain tiles.) Update tiles with tessellation (https://www.sandromaglione.com/articles/how-to-create-a-pixel-art-tileset-complete-guide + https://www.sandromaglione.com/articles/pixel-art-game-tileset-made-easier)
 
 ### AI intelligence too low
 
