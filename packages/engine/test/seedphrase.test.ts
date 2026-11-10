@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   GAME_VERSION,
+  buildShare,
+  gameCodeFromSearch,
+  gameLink,
+  searchWithoutGameCode,
   createGame,
   decodeGameCode,
   describeSeed,
@@ -113,5 +117,52 @@ describe('game code', () => {
   it('refuses nonsense', () => {
     for (const t of ['', 'Peters Game', 'CC1~0.8~', 'CC1~0.8~!!!', 'CC9~0.8~abc', `CC1~0.8~${btoa('[1]')}`]) expect(decodeGameCode(t).ok).toBe(false);
     expect(looksLikeGameCode('Peters Game')).toBe(false);
+  });
+});
+
+describe('share link', () => {
+  const settings: GameCodeSettings = {
+    seed: PETERS,
+    seedPhrase: 'Peters Game',
+    mapSize: 'medium',
+    nations: [
+      { nation: 'england', controller: 'human' },
+      { nation: 'france', controller: 'competent' },
+      { nation: 'netherlands', controller: 'combative' },
+      { nation: 'spain', controller: 'creative' },
+    ],
+    difficulty: 'conquistador',
+    historicalEvents: true,
+    randomEvents: true,
+    colonyCharter: true,
+  };
+  const base = 'https://example.org/casual/';
+
+  it('round-trips settings to a link and back', () => {
+    const link = gameLink(base, settings);
+    expect(link.startsWith(`${base}?game=`)).toBe(true);
+    const code = gameCodeFromSearch(new URL(link).search);
+    expect(code).toBe(encodeGameCode(settings));
+    const r = decodeGameCode(code!);
+    expect(r.ok && r.settings).toEqual(settings);
+  });
+
+  it('stays short enough for a comfortable QR code', () => {
+    expect(gameLink(base, settings).length).toBeLessThan(220);
+  });
+
+  it('clears only the game parameter after reading', () => {
+    expect(searchWithoutGameCode('?game=CC1~0.8~abc')).toBe('');
+    expect(searchWithoutGameCode('?a=1&game=CC1~0.8~abc&b=2')).toBe('?a=1&b=2');
+    expect(gameCodeFromSearch('?game=hello')).toBeNull();
+    expect(gameCodeFromSearch('')).toBeNull();
+  });
+
+  it('gives the QR encoder exactly the link', () => {
+    const seen: string[] = [];
+    const share = buildShare(settings, base, (text) => (seen.push(text), 'qr'));
+    expect(seen).toEqual([share.link]);
+    expect(share.qr).toBe('qr');
+    expect(share.code).toBe(encodeGameCode(settings));
   });
 });

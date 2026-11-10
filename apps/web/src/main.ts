@@ -1,4 +1,4 @@
-import { createGame, deserialize, formatDate, Game, handOver, headStartConfig, playUntil, serialize, type GameConfig, type GameState } from '@cc/engine';
+import { createGame, deserialize, gameCodeFromSearch, searchWithoutGameCode, formatDate, Game, handOver, headStartConfig, playUntil, serialize, type GameConfig, type GameState } from '@cc/engine';
 import { h } from './dom.js';
 import { App } from './app.js';
 import { savedStyle, setStyle } from './styles.js';
@@ -23,7 +23,7 @@ function showLanding(): void {
   const randomSeed = () => Math.floor(Math.random() * 1e9);
   landingScreen(host, {
     resume: resumeGame,
-    newGame: showMenu,
+    newGame: () => showMenu(),
     quickGame: () =>
       startGame({ seed: randomSeed(), mapSize: 'medium', nations: ['england', 'france', 'netherlands', 'spain'], humans: ['england'], ai: { france: 'competent', netherlands: 'competent', spain: 'competent' }, historicalEvents: true, randomEvents: true, colonyCharter: true }),
     watch: () =>
@@ -37,9 +37,9 @@ function showLanding(): void {
 }
 
 /** The new-game settings screen. */
-function showMenu(): void {
+function showMenu(code?: string): void {
   leaveGame();
-  newGameScreen(host, startGame, resumeGame, showLanding);
+  newGameScreen(host, startGame, resumeGame, showLanding, code);
 }
 
 export interface HeadStart {
@@ -115,6 +115,14 @@ hot?.snapshot?.(() => ({ save: app ? serialize(app.game.state) : null }));
 
 function boot(data: HotHook['data']): void {
   setStyle(savedStyle());
+  // A share link (?game=<code>) opens the New game screen filled in; nothing starts by itself, so an autosave is never replaced by surprise.
+  const shared = gameCodeFromSearch(location.search);
+  if (shared) {
+    const rest = searchWithoutGameCode(location.search);
+    history.replaceState(null, '', `${location.pathname}${rest}${location.hash}`);
+    showMenu(shared);
+    return;
+  }
   if (data?.save) {
     try {
       resumeGame(deserialize(data.save));

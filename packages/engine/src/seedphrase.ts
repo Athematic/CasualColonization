@@ -182,3 +182,37 @@ export function decodeGameCode(code: string): DecodedGameCode {
     return bad;
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Share links
+
+/** The query parameter that carries a game code in a share link. */
+export const SHARE_PARAM = 'game';
+
+/** The link for a game: the page address (origin and path, no query) plus `?game=<code>`. */
+export function gameLink(base: string, settings: GameCodeSettings): string {
+  return `${base}?${SHARE_PARAM}=${encodeURIComponent(encodeGameCode(settings))}`;
+}
+
+/** The game code in a location's query string ("?game=..."), or null. */
+export function gameCodeFromSearch(search: string): string | null {
+  const code = new URLSearchParams(search).get(SHARE_PARAM);
+  return code && looksLikeGameCode(code) ? code : null;
+}
+
+/** The query string without the game parameter ("" when nothing else is left), for history.replaceState. */
+export function searchWithoutGameCode(search: string): string {
+  const params = new URLSearchParams(search);
+  params.delete(SHARE_PARAM);
+  const rest = params.toString();
+  return rest ? `?${rest}` : '';
+}
+
+/**
+ * Everything the share dialog shows: the link, the short code, and the QR code made from exactly
+ * the link (the encoder is given the link string and nothing else).
+ */
+export function buildShare<Qr>(settings: GameCodeSettings, base: string, qr: (text: string) => Qr): { link: string; code: string; qr: Qr } {
+  const link = gameLink(base, settings);
+  return { link, code: encodeGameCode(settings), qr: qr(link) };
+}
