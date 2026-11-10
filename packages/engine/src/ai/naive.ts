@@ -1,8 +1,8 @@
 import { assignJob, bestJob, canBuild, charterCost, foundColony, jobOptions, setBuild } from '../colony.js';
 import { aiPeace } from '../diplomacy.js';
 import { boardInEurope, recruit, recruitPrice, sailToAmerica, sellGoods } from '../europe.js';
-import { canImprove, findPath, setDestination, startImprovement } from '../movement.js';
-import { colonyReport } from '../production.js';
+import { canImprove, goTo, setDestination, startImprovement } from '../movement.js';
+import { aiColonyReport } from './reports.js';
 import { cargoFree, cargoRoomFor, colonyAt, colonyWorkers, distance, isCoastal, isShip, isWater, tileAt, unitsAboard, warehouseCapacity } from '../queries.js';
 import type { BuildingKind } from '../rules/buildings.js';
 import type { GoodId } from '../rules/goods.js';
@@ -87,16 +87,14 @@ function aiColonist(s: GameState, p: Player, u: Unit): void {
         foundColony(s, u.id);
         return;
       }
-      if (findPath(s, u, best.x, best.y)) {
-        setDestination(s, u.id, { x: best.x, y: best.y });
+      if (goTo(s, u, best.x, best.y)) {
         if (u.loc.kind === 'map' && u.loc.x === best.x && u.loc.y === best.y && u.moves > 0) foundColony(s, u.id);
         return;
       }
     }
   }
   const target = nearestColony(s, p, x, y);
-  if (target && findPath(s, u, target.x, target.y)) {
-    setDestination(s, u.id, { x: target.x, y: target.y });
+  if (target && goTo(s, u, target.x, target.y)) {
     const now = u.loc.kind === 'map' ? colonyAt(s, u.loc.x, u.loc.y) : undefined;
     if (now && now.id === target.id) assignJob(s, u.id, target.id);
   } else if (siteScore(s, x, y) > 0 && u.moves > 0) {
@@ -124,8 +122,7 @@ function aiPioneer(s: GameState, p: Player, u: Unit): boolean {
       }
       continue;
     }
-    if (findPath(s, u, t.x, t.y)) {
-      setDestination(s, u.id, { x: t.x, y: t.y });
+    if (goTo(s, u, t.x, t.y)) {
       if (u.loc.x === t.x && u.loc.y === t.y && canImprove(s, u, kind) === null) startImprovement(s, u.id, kind);
       return true;
     }
@@ -172,7 +169,7 @@ function aiShip(s: GameState, p: Player, ship: Unit): void {
     .map((c) => ({ c, n: Math.max(...aiGoodsOf(s).export.map((g) => c.goods[g] - (warehouseCapacity(c) - 30))) }))
     .filter((r) => r.n >= 0)
     .sort((a, b) => b.n - a.n)[0];
-  if (rotting && findPath(s, ship, rotting.c.x, rotting.c.y)) setDestination(s, ship.id, { x: rotting.c.x, y: rotting.c.y });
+  if (rotting) goTo(s, ship, rotting.c.x, rotting.c.y);
 }
 
 function aiEurope(s: GameState, p: Player): void {
@@ -203,7 +200,7 @@ function aiColony(s: GameState, c: Colony): void {
   }
   // Move workers onto food until the colony stops starving.
   for (const worker of colonyWorkers(s, c)) {
-    if (colonyReport(s, c).net.food >= 0) break;
+    if (aiColonyReport(s, c).net.food >= 0) break;
     if (worker.loc.kind === 'colony' && worker.loc.job.kind === 'tile' && worker.loc.job.good === 'food') continue;
     const food = jobOptions(s, c, worker)
       .filter((o) => o.job.kind === 'tile' && o.job.good === 'food')
