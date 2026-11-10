@@ -1,4 +1,4 @@
-import { aBrave, demandPenalty, demandText, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, TRIBES, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { aBrave, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, TRIBES, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
 
@@ -86,6 +86,21 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
           h('div', { class: 'decision-actions' },
             h('button', { class: 'btn primary', disabled: short, title: short ? 'The treasury cannot pay this much.' : undefined, onclick: () => app.dispatch({ type: 'answerDemand', pay: true }, true) && done(`Paid ${demand.gold.toLocaleString()} gold to the King.`) }, `Pay ${demand.gold.toLocaleString()} gold`),
             h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerDemand', pay: false }, true) && done(colony ? `Refused: the goods in ${colony.name} were seized.` : 'Refused.') }, 'Refuse'))),
+    });
+  }
+  // A mercenary company offers its services during the War of Independence (rebellion.ts).
+  const company = me.mercenaryOffer;
+  if (company) {
+    const short = me.gold < company.price;
+    list.push({
+      id: 'mercenaries',
+      required: true,
+      render: (done) =>
+        h('div', { class: 'decision-body' },
+          h('p', null, `A company of ${company.name} mercenaries offers to fight for independence: ${describeCompany(company)}, for ${company.price.toLocaleString()} gold (your treasury: ${me.gold.toLocaleString()} gold). They would join the garrison of your weakest coastal colony. If you turn them away, they take service elsewhere.`),
+          h('div', { class: 'decision-actions' },
+            h('button', { class: 'btn primary', disabled: short, title: short ? 'The treasury cannot pay this much.' : undefined, onclick: () => app.dispatch({ type: 'answerMercenaries', hire: true }, true) && done(`Hired the ${company.name} mercenaries for ${company.price.toLocaleString()} gold.`) }, `Hire for ${company.price.toLocaleString()} gold`),
+            h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerMercenaries', hire: false }, true) && done('Turned the mercenaries away.') }, 'Turn them away'))),
     });
   }
   // Native braves at the colonies: demands for tribute (to answer now) and goods for sale.
@@ -189,7 +204,7 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
   return list;
 }
 
-const TITLES: Record<string, string> = { tax: 'The Crown raises taxes', demand: 'The King demands gold', father: 'Continental Congress' };
+const TITLES: Record<string, string> = { tax: 'The Crown raises taxes', demand: 'The King demands gold', mercenaries: 'Mercenaries offer their services', father: 'Continental Congress' };
 
 let open = false;
 

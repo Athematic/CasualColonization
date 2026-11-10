@@ -13,12 +13,14 @@ import {
   navalOverview,
   player,
   portName,
+  powerName,
   PRODUCT_NAMES,
   religionOverview,
   royalForces,
   tradeOverview,
   TRIBES,
   UNIT_TYPES,
+  warSupport,
   yearOf,
   type ColonyOverview,
   type ForceKind,
@@ -318,6 +320,27 @@ function militaryTab(ctx: ReportContext): Child[] {
   ], colonies, ctx.rerender, (r) => (r.defence.soldiers + r.defence.artillery === 0 ? 'alert' : undefined));
 
   const refTotal = ref ? ref.regulars + ref.dragoons + ref.artillery + ref.menOfWar : 0;
+  // Mercenaries and the foreign intervention force (rebellion.ts).
+  const support = warSupport(s, nation);
+  const kinds = (list: typeof support.allies) => {
+    const n = (f: (u: (typeof list)[number]) => boolean) => list.filter(f).length;
+    const parts = [
+      [n((u) => u.role === 'soldier'), 'soldiers'],
+      [n((u) => u.role === 'dragoon'), 'dragoons'],
+      [n((u) => UNIT_TYPES[u.type].kind === 'artillery'), 'artillery'],
+      [n((u) => UNIT_TYPES[u.type].kind === 'ship'), 'men-of-war'],
+    ].filter(([k]) => k) as [number, string][];
+    return parts.map(([k, what]) => `${k} ${what}`).join(', ');
+  };
+  const iv = support.intervention;
+  const supportCard = support.mercenaries.length || support.allies.length || iv
+    ? card('Mercenaries and allies',
+      h('p', null, support.mercenaries.length ? `Mercenaries in your service: ${kinds(support.mercenaries)}.` : 'No mercenaries in your service.'),
+      iv?.came
+        ? h('p', null, `${powerName(iv.came.by)} intervened in ${formatDate(iv.came.turn)} with ${iv.came.land} land units and men-of-war.${support.allies.length ? ` Still fighting: ${kinds(support.allies)}. They fight the Crown on their own and go home when the war ends.` : ' None of them is still fighting.'}`)
+        : iv ? h('p', null, `Foreign intervention: a European power will send a force once the war has lasted ${iv.minTurns} turns (now ${iv.turns}), your colonies have rung ${iv.needBells.toLocaleString()} liberty bells since the declaration (now ${iv.bells.toLocaleString()}) and you still hold ${iv.needHeld} colonies (now ${iv.held}).`)
+        : null)
+    : null;
   return [
     h('div', { class: 'report-stats' },
       stat('Strength', strength, 'combined attack'),
@@ -331,6 +354,7 @@ function militaryTab(ctx: ReportContext): Child[] {
         : p.independence === 'won' ? 'The Crown’s forces have been defeated.'
         : `The Crown keeps ${ref.regulars} regulars, ${ref.dragoons} dragoons, ${ref.artillery} artillery and ${ref.menOfWar} men-of-war ready to sail against a rebellion${refTotal ? '' : ' (none yet)'}. The King adds to it during the game, faster as your colonies ring more liberty bells.`),
       h('p', { class: 'muted small' }, 'Your own strength above counts soldiers at 2, dragoons at 3 and artillery at 5, as the Crown’s regulars would.')) : null,
+    supportCard,
     card('By place', byPlace),
     h('div', { class: 'report-columns' }, card('By type', forces.length ? byType : empty('None.')), card('Fortifications', colonies.length ? forts : empty('No colonies.'))),
   ];
