@@ -8,7 +8,7 @@ import {
   isTileExplored,
   isTileVisible,
   riverCourse,
-  roadStrands,
+  roadDrawing,
   tileToScreen,
   traceStrand,
   unitStacks,
@@ -124,13 +124,30 @@ class SchematicRenderer implements MapRenderer {
         RIVER_DIRS.forEach(([dx, dy], dir) => {
           if (road(x + dx, y + dy)) mask |= 1 << dir;
         });
-        const strands = roadStrands(s, x, y, mask);
+        const { strands, bridge } = roadDrawing(s, x, y, mask);
         ctx.beginPath();
         for (const st of strands) traceStrand(ctx, st, cx, cy, z, true);
         ctx.stroke();
-        const [hx, hy] = strands.length ? [cx + strands[0].sx * z, cy + strands[0].sy * z] : [cx, cy];
-        ctx.fillStyle = color;
-        ctx.fillRect(hx - z * 0.06, hy - z * 0.06, z * 0.12, z * 0.12);
+        if (bridge) {
+          // Two short bars across the river where the road crosses it.
+          const half = z * (bridge.size === 2 ? 0.14 : 0.1);
+          const gap = z * 0.04;
+          const hx = cx + bridge.x * z;
+          const hy = cy + bridge.y * z;
+          ctx.beginPath();
+          for (const side of [-1, 1]) {
+            const ox = hx + bridge.tx * gap * side;
+            const oy = hy + bridge.ty * gap * side;
+            ctx.moveTo(ox - bridge.ty * half, oy + bridge.tx * half);
+            ctx.lineTo(ox + bridge.ty * half, oy - bridge.tx * half);
+          }
+          ctx.stroke();
+        }
+        if (strands.length || !s.map.tiles[y * s.map.width + x].rv) {
+          const [hx, hy] = strands.length ? [cx + strands[0].sx * z, cy + strands[0].sy * z] : [cx, cy];
+          ctx.fillStyle = color;
+          ctx.fillRect(hx - z * 0.06, hy - z * 0.06, z * 0.12, z * 0.12);
+        }
       }
     }
     for (const st of Object.values(s.settlements)) {

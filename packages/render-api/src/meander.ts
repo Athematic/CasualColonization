@@ -261,3 +261,39 @@ export function roadStrands(s: Readonly<GameState>, x: number, y: number, mask: 
   hit.byMask.set(mask, out);
   return out;
 }
+
+// ---- Roads on river tiles ----
+
+/** Where a road crosses its tile's river: the hub, and the river's unit direction there (tile units from the tile's centre). */
+export interface Bridge {
+  x: number;
+  y: number;
+  tx: number;
+  ty: number;
+  /** River size under the bridge. */
+  size: 1 | 2;
+}
+
+/** What to draw for a tile's road: the strands, and a bridge where it crosses the tile's river. */
+export interface RoadDrawing {
+  strands: Strand[];
+  bridge?: Bridge;
+}
+
+/**
+ * The road of tile (x, y) as it is drawn. A road that runs along the river (towards a neighbour the
+ * river links, on the river's own curve) is not drawn on top of the water: the river carries it.
+ * Only the strands that leave the river for another tile are drawn, and where they start at the
+ * river there is a `bridge` across it. On a tile without a river this is `roadStrands`.
+ */
+export function roadDrawing(s: Readonly<GameState>, x: number, y: number, mask: number): RoadDrawing {
+  const all = roadStrands(s, x, y, mask);
+  const river = riverCourse(s, x, y);
+  if (!river.strands.length) return { strands: all };
+  const strands = all.filter((st) => !river.strands.includes(st as RiverStrand));
+  if (!strands.length) return { strands };
+  // The river's direction at the hub: along its main stream, else out of its only (or first) strand.
+  const lead = river.main?.[1] ?? river.strands[0];
+  const [tx, ty] = norm(lead.c1x - lead.sx, lead.c1y - lead.sy);
+  return { strands, bridge: { x: lead.sx, y: lead.sy, tx, ty, size: lead.size } };
+}
