@@ -1,7 +1,7 @@
 import { fail } from './errors.js';
 import { noteGoods } from './history.js';
 import { track } from './telemetry.js';
-import { hasFather } from './fathers.js';
+import { addOf, hasModifier, modifiers, mulOf } from './scenarios/modifiers.js';
 import {
   cargoFree,
   cargoRoomFor,
@@ -27,7 +27,7 @@ import { goodsOf, unitsOf } from './scenarios/index.js';
 export const SAIL_TURNS = 3;
 
 export function sailTurns(s: GameState, nation: Player['id']): number {
-  return hasFather(s, nation, 'ferdinandMagellan') ? SAIL_TURNS - 1 : SAIL_TURNS;
+  return SAIL_TURNS + addOf(modifiers(s, nation, 'sailTurns'));
 }
 
 /** Gold needed to lift a boycott. */
@@ -99,9 +99,9 @@ export function trainPrice(p: Player, type: UnitTypeId): number {
 }
 
 export function randomImmigrant(s: GameState, nation?: Player['id']): UnitTypeId {
-  const brewster = nation && hasFather(s, nation, 'williamBrewster');
+  const excluded = nation ? modifiers(s, nation, 'immigrantsExcluded') : [];
   const pool = unitsOf(s).immigrants;
-  return weightedPick(s, brewster ? pool.filter(([t]) => t !== 'pettyCriminal' && t !== 'indenturedServant') : pool);
+  return weightedPick(s, excluded.length ? pool.filter(([t]) => !excluded.some((m) => m.units.includes(t))) : pool);
 }
 
 function requireInEurope(u: Unit | undefined): asserts u is Unit {
@@ -340,7 +340,7 @@ export function processImmigration(s: GameState, p: Player): void {
   p.crosses -= p.crossesRequired;
   p.crossesRequired += Math.round((p.id === 'england' ? 12 : 20) * difficultyRules(p).crosses);
   // Brewster lets the colony pick the best candidate; otherwise chance decides.
-  const slot = hasFather(s, p.id, 'williamBrewster')
+  const slot = hasModifier(s, p.id, 'chooseImmigrant')
     ? p.recruitPool.reduce((best, t, i) => (UNIT_TYPES[t].skill > UNIT_TYPES[p.recruitPool[best]].skill ? i : best), 0)
     : randInt(s, p.recruitPool.length);
   const type = p.recruitPool[slot];
@@ -460,10 +460,15 @@ export function unboardInEurope(s: GameState, unitId: string): void {
   track(u.owner, 'cmd:unboard');
 }
 
+/** The chance each round that a good's price in the nation's home port drifts back a step. */
+export function priceRecoveryChance(s: GameState, p: Player): number {
+  return (p.id === 'netherlands' ? 0.2 : 0.1) * mulOf(modifiers(s, p.id, 'priceRecovery')) * difficultyRules(p).priceRecovery * (portCharacter(p.id).recovery ?? 1);
+}
+
 /** Drifts prices back toward their starting value in each home port (its own, rules/ports.ts). */
 export function recoverMarkets(s: GameState): void {
   for (const p of s.players) {
-    const chance = (p.id === 'netherlands' ? 0.2 : 0.1) * (hasFather(s, p.id, 'janDeWitt') ? 2 : 1) * difficultyRules(p).priceRecovery * (portCharacter(p.id).recovery ?? 1);
+    const chance = priceRecoveryChance(s, p);
     for (const g of goodsOf(s)) {
       if (random(s) >= chance) continue;
       const m = p.market[g];

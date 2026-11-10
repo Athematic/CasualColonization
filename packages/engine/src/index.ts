@@ -38,6 +38,8 @@ export * from './stats.js';
 export * from './history.js';
 export * from './events/index.js';
 export * from './scenarios/index.js';
+export * from './scenarios/modifiers.js';
+export * from './rules/modifiers.js';
 export * from './reports.js';
 export { RIVER_DIRS, MAJOR_RIVER_LENGTH, riverLinked, riverName, parseRivers } from './rivers.js';
 export { MAP_SIZES, entryPoints, type EntrySide } from './mapgen.js';

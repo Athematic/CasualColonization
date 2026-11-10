@@ -2,7 +2,7 @@ import { declareWar } from './combat.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { fail } from './errors.js';
-import { hasFather } from './fathers.js';
+import { hasModifier } from './scenarios/modifiers.js';
 import { message, nationTitle, player } from './queries.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { isFavoured, onPeace } from './relations.js';
@@ -30,7 +30,7 @@ export function proposePeace(s: GameState, nation: NationId, other: NationId): s
   if (other === 'crown') fail('The Crown does not negotiate with rebels.');
   track(nation, 'cmd:proposePeace');
   const tired = s.turn - (p.warSince[other] ?? s.turn) >= WAR_WEARINESS;
-  if (!o.human && !tired && !hasFather(s, nation, 'benjaminFranklin')) {
+  if (!o.human && !tired && !hasModifier(s, nation, 'peaceAccepted')) {
     return `${NATIONS[other].name} refuses to make peace for now.`;
   }
   makePeace(s, nation, other);

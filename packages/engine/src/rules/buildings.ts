@@ -1,4 +1,3 @@
-import type { FatherId } from './fathers.js';
 import type { GoodId, ProductId } from './goods.js';
 
 export type BuildingKind =
@@ -37,7 +36,8 @@ export interface BuildingDef {
   /** Free production with no workers, per level. */
   baseOutput?: number[];
   coastalOnly?: boolean;
-  requiresFather?: FatherId;
+  /** Only built by nations with an `unlockBuilding` modifier for it (rules/modifiers.ts; the custom house: Peter Stuyvesant). */
+  locked?: boolean;
 }
 
 const lvl = (name: string, hammers: number, tools: number, minPop: number): BuildingLevel => ({ name, hammers, tools, minPop });
@@ -93,7 +93,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     kind: 'schoolhouse', levels: [lvl('Schoolhouse', 64, 0, 4), lvl('College', 160, 50, 8), lvl('University', 240, 100, 10)],
     initialLevel: 0, workplaces: 3,
   },
-  customHouse: { kind: 'customHouse', levels: [lvl('Custom House', 150, 50, 3)], initialLevel: 0, workplaces: 0, requiresFather: 'peterStuyvesant' },
+  customHouse: { kind: 'customHouse', levels: [lvl('Custom House', 150, 50, 3)], initialLevel: 0, workplaces: 0, locked: true },
 };
 
 /** Teachers a school of each level can hold. */

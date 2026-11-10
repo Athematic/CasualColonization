@@ -6,8 +6,8 @@ import { FOREST_DEFENCE, TERRAIN, type TerrainDef } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeDef } from './rules/units.js';
 import type { Colony, GameState, Player, Settlement, Tile, Unit, UnitLocation } from './types.js';
 import type { UnitTypeId } from './rules/units.js';
-import type { FatherId } from './rules/fathers.js';
 import { goodsOf } from './scenarios/index.js';
+import { modifiers } from './scenarios/modifiers.js';
 
 export const DIRECTIONS = [
   { id: 'n', dx: 0, dy: -1 },
@@ -103,12 +103,8 @@ export function maxMoves(u: Unit, s: GameState): number {
   const def = UNIT_TYPES[u.type];
   let moves = ROLES[u.role].moves ?? def.moves;
   if (def.kind === 'ship' && u.owner === 'portugal') moves += 1;
-  if (def.kind === 'ship' && ownerHasFather(s, u.owner, 'ferdinandMagellan')) moves += 1;
+  if (def.kind === 'ship') for (const m of modifiers(s, u.owner, 'shipMoves')) moves += m.add;
   return moves * 3;
-}
-
-function ownerHasFather(s: GameState, nation: NationId, id: FatherId): boolean {
-  return s.players.find((p) => p.id === nation)?.fathers.includes(id) ?? false;
 }
 
 export function unitName(u: Unit): string {
@@ -226,7 +222,7 @@ export function sightRadius(u: Unit, s: GameState): number {
   if (u.role === 'scout') r = 2;
   if (def.kind === 'ship' && def.offence > 0) r = 2;
   if (u.owner === 'russia' && (u.role === 'scout' || u.role === 'dragoon')) r += 1;
-  if (def.kind !== 'ship' && ownerHasFather(s, u.owner, 'hernandoDeSoto')) r += 1;
+  for (const m of modifiers(s, u.owner, 'sight')) if ((!m.roles || m.roles.includes(u.role)) && (!m.land || def.kind !== 'ship')) r += m.add;
   return r;
 }
 

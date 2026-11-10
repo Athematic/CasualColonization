@@ -3,7 +3,7 @@ import { track } from './telemetry.js';
 import { describeMove } from './movement.js';
 import { perfEnd, perfStart } from './perf.js';
 import { hasSubmitted, nativeUnitPrice, processBraves, settlementKind } from './braves.js';
-import { hasFather } from './fathers.js';
+import { modifiers, mulOf } from './scenarios/modifiers.js';
 import { noteGoods, noteHistory } from './history.js';
 import { cargoRoomFor, colonyWorkers, createUnit, distance, message, player, reveal, tileAt, unitName, unitPosition } from './queries.js';
 import { random, randInt } from './rng.js';
@@ -21,7 +21,7 @@ import {
   TENSION,
 } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
-import { UNIT_TYPES } from './rules/units.js';
+import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
 import { goodsOf, nativeProduceOf } from './scenarios/index.js';
 
@@ -205,7 +205,10 @@ export function nativeLandOwner(s: GameState, x: number, y: number): Settlement 
 
 export function landPrice(s: GameState, nation: NationId, x: number, y: number): number {
   const st = nativeLandOwner(s, x, y);
-  if (!st || hasFather(s, nation, 'peterMinuit') || hasSubmitted(s, st.tribe, nation)) return 0;
+  if (!st) return 0;
+  const set = modifiers(s, nation, 'landPrice');
+  if (set.length) return set[set.length - 1].set;
+  if (hasSubmitted(s, st.tribe, nation)) return 0;
   const city = TRIBES[st.tribe].settlement === 'city';
   return Math.round((80 + (city ? 120 : 0) + (st.capital ? 80 : 0)) * (1 + tensionOf(st, nation) / 500));
 }
@@ -298,6 +301,16 @@ function nearestColony(s: GameState, nation: NationId, x: number, y: number, wit
  * Once per round: trade gold recovers, tension drifts, missions convert, tribes go to war or make
  * peace, and then the braves move (braves.ts): gifts, trade, demands and raids are their doing.
  */
+/** The chance each round that a settlement's mission (of `nation`) wins a convert. */
+export function conversionChance(s: GameState, st: Settlement, nation: NationId): number {
+  return 0.03 * (st.missionExpert ? 2 : 1) * mulOf(modifiers(s, nation, 'conversionChance'));
+}
+
+/** What a mission's convert becomes for a nation (Bartolomé de las Casas: a free colonist). */
+export function convertType(s: GameState, nation: NationId): UnitTypeId {
+  return modifiers(s, nation, 'convertsBecome').at(-1)?.unit ?? 'nativeConvert';
+}
+
 export function processNatives(s: GameState): void {
   const nations = s.players.filter((p) => p.id !== 'crown').map((p) => p.id);
   const rules = new Map(s.players.map((p) => [p.id, difficultyRules(p)]));
@@ -329,10 +342,10 @@ export function processNatives(s: GameState): void {
       }
     }
     if (st.mission) {
-      const chance = 0.03 * (st.missionExpert ? 2 : 1) * (hasFather(s, st.mission, 'jeanDeBrebeuf') ? 2 : 1);
+      const chance = conversionChance(s, st, st.mission);
       const colony = nearestColony(s, st.mission, st.x, st.y, 8);
       if (colony && random(s) < chance) {
-        const type = hasFather(s, st.mission, 'bartolomeDeLasCasas') ? 'freeColonist' : 'nativeConvert';
+        const type = convertType(s, st.mission);
         createUnit(s, st.mission, type, { kind: 'map', x: colony.x, y: colony.y });
         track(st.mission, 'natives:convert joined');
         message(s, `A ${TRIBES[st.tribe].name} convert has joined ${colony.name}.`, st.mission, colony);

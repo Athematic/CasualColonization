@@ -12,6 +12,8 @@ import type { BuildingKind } from '../rules/buildings.js';
 import type { DifficultyId, DifficultyRules } from '../rules/difficulty.js';
 import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
+import type { Modifier } from '../rules/modifiers.js';
+import type { Effect } from '../events/types.js';
 import type { NationId, TribeId } from '../rules/nations.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { ScoreWeights } from '../rules/score.js';
@@ -88,11 +90,12 @@ export interface ScenarioNations {
 
 /**
  * A nation's game facts in this scenario. Its identity (name, adjective, colour) stays in the
- * catalogue (NATIONS); the bonus's modifiers come in step 4.
+ * catalogue (NATIONS).
  */
 export interface NationEntry {
   id: NationId;
-  bonus: { text: string };
+  /** The bonus: its shown text and the modifiers that make it work (rules/modifiers.ts). */
+  bonus: { text: string; modifiers?: Modifier[] };
   colonyNames: string[];
   /** The home port and its character (rules/ports.ts). */
   port: PortEntry;
@@ -110,6 +113,19 @@ export interface Council {
   categories: FatherCategory[];
   /** Ids in the global catalogue (FATHERS), in catalogue order. */
   members: FatherId[];
+  /**
+   * Members whose effects differ in this scenario from the catalogue's (FATHERS). A member not
+   * listed here has the catalogue's modifiers and joining effects.
+   */
+  effects?: Partial<Record<FatherId, MemberEffects>>;
+}
+
+/** What a council member does: passive modifiers while in the council, and effects once on joining. */
+export interface MemberEffects {
+  /** Read at the engine's hook points (rules/modifiers.ts, scenarios/modifiers.ts). */
+  modifiers?: Modifier[];
+  /** Applied once, in order, when the member joins (the events' effects, events/effects.ts). */
+  onJoin?: Effect[];
 }
 
 /**

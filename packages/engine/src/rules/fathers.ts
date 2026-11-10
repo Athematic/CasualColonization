@@ -1,3 +1,5 @@
+import type { Modifier } from './modifiers.js';
+
 export type FatherCategory = 'trade' | 'exploration' | 'military' | 'political' | 'religious';
 
 export type FatherId =
@@ -34,36 +36,82 @@ export interface FatherDef {
   effect: string;
   /** Relative chance of being offered; some fathers only become likely later. */
   weight: number;
+  /** What the effect does while the father is in the council, read at the engine's hook points (rules/modifiers.ts). */
+  modifiers?: Modifier[];
 }
 
-const f = (id: FatherId, name: string, category: FatherCategory, effect: string, weight = 5): FatherDef => ({ id, name, category, effect, weight });
+const f = (id: FatherId, name: string, category: FatherCategory, effect: string, weight = 5, more: Partial<FatherDef> = {}): FatherDef => ({ id, name, category, effect, weight, ...more });
 
 export const FATHERS: Record<FatherId, FatherDef> = {
-  adamSmith: f('adamSmith', 'Adam Smith', 'trade', 'Manufacturing buildings produce 50% more.'),
+  adamSmith: f('adamSmith', 'Adam Smith', 'trade', 'Manufacturing buildings produce 50% more.', 5, {
+    modifiers: [{ hook: 'manufactureCapacity', mul: 1.5, except: ['carpenter'] }],
+  }),
   jakobFugger: f('jakobFugger', 'Jakob Fugger', 'trade', 'All boycotts are lifted without paying arrears.', 3),
-  peterMinuit: f('peterMinuit', 'Peter Minuit', 'trade', 'Natives ask nothing for their land.'),
-  peterStuyvesant: f('peterStuyvesant', 'Peter Stuyvesant', 'trade', 'Colonies may build a Custom House.', 6),
-  janDeWitt: f('janDeWitt', 'Jan de Witt', 'trade', 'Market prices recover twice as fast.'),
-  ferdinandMagellan: f('ferdinandMagellan', 'Ferdinand Magellan', 'exploration', 'Ships gain a move and reach Europe a turn sooner.'),
+  peterMinuit: f('peterMinuit', 'Peter Minuit', 'trade', 'Natives ask nothing for their land.', 5, {
+    modifiers: [{ hook: 'landPrice', set: 0 }],
+  }),
+  peterStuyvesant: f('peterStuyvesant', 'Peter Stuyvesant', 'trade', 'Colonies may build a Custom House.', 6, {
+    modifiers: [{ hook: 'unlockBuilding', building: 'customHouse' }],
+  }),
+  janDeWitt: f('janDeWitt', 'Jan de Witt', 'trade', 'Market prices recover twice as fast.', 5, {
+    modifiers: [{ hook: 'priceRecovery', mul: 2 }],
+  }),
+  ferdinandMagellan: f('ferdinandMagellan', 'Ferdinand Magellan', 'exploration', 'Ships gain a move and reach Europe a turn sooner.', 5, {
+    modifiers: [{ hook: 'shipMoves', add: 1 }, { hook: 'sailTurns', add: -1 }],
+  }),
   franciscoDeCoronado: f('franciscoDeCoronado', 'Francisco de Coronado', 'exploration', 'The surroundings of every existing colony are revealed.'),
-  hernandoDeSoto: f('hernandoDeSoto', 'Hernando de Soto', 'exploration', 'Land units see further, and rumours are always worth exploring.'),
-  henryHudson: f('henryHudson', 'Henry Hudson', 'exploration', 'Fur trapping produces 100% more.'),
-  laSalle: f('laSalle', 'René-Robert de La Salle', 'exploration', 'Every colony of three or more gets a free stockade.'),
-  hernanCortes: f('hernanCortes', 'Hernán Cortés', 'military', 'Conquered settlements yield more treasure, and the Crown carries it free of charge.'),
-  georgeWashington: f('georgeWashington', 'George Washington', 'military', 'Soldiers and dragoons who win a battle become veterans.'),
-  paulRevere: f('paulRevere', 'Paul Revere', 'military', 'Colonists take up stored muskets when a colony without soldiers is attacked.'),
-  francisDrake: f('francisDrake', 'Francis Drake', 'military', 'Privateers fight 50% harder.'),
+  hernandoDeSoto: f('hernandoDeSoto', 'Hernando de Soto', 'exploration', 'Land units see further, and rumours are always worth exploring.', 5, {
+    modifiers: [
+      { hook: 'sight', add: 1, land: true },
+      { hook: 'rumourOutcome', outcome: 'nothing', mul: 0 },
+      { hook: 'rumourOutcome', outcome: 'lost', mul: 0 },
+    ],
+  }),
+  henryHudson: f('henryHudson', 'Henry Hudson', 'exploration', 'Fur trapping produces 100% more.', 5, {
+    modifiers: [{ hook: 'tileYield', good: 'furs', mul: 2 }],
+  }),
+  laSalle: f('laSalle', 'René-Robert de La Salle', 'exploration', 'Every colony of three or more gets a free stockade.', 5, {
+    modifiers: [{ hook: 'autoStockade', minColonists: 3 }],
+  }),
+  hernanCortes: f('hernanCortes', 'Hernán Cortés', 'military', 'Conquered settlements yield more treasure, and the Crown carries it free of charge.', 5, {
+    modifiers: [{ hook: 'conquestTreasure', mul: 1.5 }, { hook: 'treasureFee', set: 0 }],
+  }),
+  georgeWashington: f('georgeWashington', 'George Washington', 'military', 'Soldiers and dragoons who win a battle become veterans.', 5, {
+    modifiers: [{ hook: 'alwaysPromote' }],
+  }),
+  paulRevere: f('paulRevere', 'Paul Revere', 'military', 'Colonists take up stored muskets when a colony without soldiers is attacked.', 5, {
+    modifiers: [{ hook: 'armedFromStock', muskets: 50 }],
+  }),
+  francisDrake: f('francisDrake', 'Francis Drake', 'military', 'Privateers fight 50% harder.', 5, {
+    modifiers: [{ hook: 'unitOffence', unit: 'privateer', mul: 1.5 }],
+  }),
   johnPaulJones: f('johnPaulJones', 'John Paul Jones', 'military', 'A frigate joins your fleet.', 3),
-  thomasJefferson: f('thomasJefferson', 'Thomas Jefferson', 'political', 'Liberty bell production rises by 10%.', 7),
+  thomasJefferson: f('thomasJefferson', 'Thomas Jefferson', 'political', 'Liberty bell production rises by 10%.', 7, {
+    modifiers: [{ hook: 'bellsBonus', add: 10 }],
+  }),
   pocahontas: f('pocahontas', 'Pocahontas', 'political', 'All native tension disappears and every tribe makes peace.', 4),
-  thomasPaine: f('thomasPaine', 'Thomas Paine', 'political', 'Liberty bell production rises by the current tax rate.'),
+  thomasPaine: f('thomasPaine', 'Thomas Paine', 'political', 'Liberty bell production rises by the current tax rate.', 5, {
+    modifiers: [{ hook: 'bellsBonus', add: 'tax' }],
+  }),
   simonBolivar: f('simonBolivar', 'Simón Bolívar', 'political', 'Sons of Liberty membership rises by 20% in every colony.', 3),
-  benjaminFranklin: f('benjaminFranklin', 'Benjamin Franklin', 'political', 'Other European nations always accept peace.'),
-  williamBrewster: f('williamBrewster', 'William Brewster', 'religious', 'Criminals and servants no longer arrive as immigrants.', 7),
-  williamPenn: f('williamPenn', 'William Penn', 'religious', 'Cross production rises by 50%.'),
-  jeanDeBrebeuf: f('jeanDeBrebeuf', 'Jean de Brébeuf', 'religious', 'Missions convert natives twice as often.'),
-  juanDeSepulveda: f('juanDeSepulveda', 'Juan Ginés de Sepúlveda', 'religious', 'Conquering a settlement brings converts.'),
-  bartolomeDeLasCasas: f('bartolomeDeLasCasas', 'Bartolomé de las Casas', 'religious', 'All native converts become free colonists.', 3),
+  benjaminFranklin: f('benjaminFranklin', 'Benjamin Franklin', 'political', 'Other European nations always accept peace.', 5, {
+    modifiers: [{ hook: 'peaceAccepted' }],
+  }),
+  williamBrewster: f('williamBrewster', 'William Brewster', 'religious', 'Criminals and servants no longer arrive as immigrants.', 7, {
+    modifiers: [{ hook: 'immigrantsExcluded', units: ['pettyCriminal', 'indenturedServant'] }, { hook: 'chooseImmigrant' }],
+  }),
+  williamPenn: f('williamPenn', 'William Penn', 'religious', 'Cross production rises by 50%.', 5, {
+    modifiers: [{ hook: 'buildingOutput', building: 'church', mul: 1.5 }],
+  }),
+  jeanDeBrebeuf: f('jeanDeBrebeuf', 'Jean de Brébeuf', 'religious', 'Missions convert natives twice as often.', 5, {
+    modifiers: [{ hook: 'conversionChance', mul: 2 }],
+  }),
+  juanDeSepulveda: f('juanDeSepulveda', 'Juan Ginés de Sepúlveda', 'religious', 'Conquering a settlement brings converts.', 5, {
+    modifiers: [{ hook: 'conquestConverts', unit: 'nativeConvert', min: 1, spread: 2 }],
+  }),
+  bartolomeDeLasCasas: f('bartolomeDeLasCasas', 'Bartolomé de las Casas', 'religious', 'All native converts become free colonists.', 3, {
+    modifiers: [{ hook: 'convertsBecome', unit: 'freeColonist' }],
+  }),
 };
 
 export const FATHER_CATEGORIES: FatherCategory[] = ['trade', 'exploration', 'military', 'political', 'religious'];
