@@ -87,6 +87,8 @@ function nationColor(s: GameState, nation: NationId, dark: boolean): string {
 export interface GameOverInfo {
   reason: string;
   winner?: NationId;
+  /** Every winner, best first (several when an alliance wins together). */
+  winners?: NationId[];
   scores: Partial<Record<NationId, number>>;
   /** The nation of the person looking, if any. */
   viewer?: NationId;
@@ -207,10 +209,19 @@ export class ProgressScreen implements Screen {
       h('p', null, over.reason),
       h('p', { class: 'muted small', title: level.description }, `Difficulty: ${level.name}`),
       this.app.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used'), ` since ${formatDate(this.app.state.cheated.turn, calendarOf(this.app.state))}.`) : null,
-      over.winner ? h('p', null, h('strong', null, `${nationTitle(this.app.state, over.winner)} ${over.winner === over.viewer ? '(you) ' : ''}wins.`)) : null,
+      this.winnersLine(over),
       h('table', { class: 'scores' }, rows.map(([n, score]) => h('tr', null,
         h('td', null, h('span', { class: 'flag', style: `background:${nationOf(this.app.state, n).color}` }), ' ', nationTitle(this.app.state, n)),
         h('td', null, String(score))))));
+  }
+
+  /** "England wins.", or for an alliance that won together "England, France (you) and Spain win together." */
+  private winnersLine(over: GameOverInfo): HTMLElement | null {
+    const winners = over.winners ?? (over.winner ? [over.winner] : []);
+    if (!winners.length) return null;
+    const names = winners.map((n) => `${nationTitle(this.app.state, n)}${n === over.viewer ? ' (you)' : ''}`);
+    const text = names.length === 1 ? `${names[0]} wins.` : `${names.slice(0, -1).join(', ')} and ${names.at(-1)} win together.`;
+    return h('p', { class: 'winners' }, h('strong', null, text));
   }
 
   private setMetric(m: Metric): void {

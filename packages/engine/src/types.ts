@@ -515,7 +515,20 @@ export interface GameState {
   braves?: Record<string, Brave>;
   /** Native demands and offers waiting for a person's answer. Missing means none. */
   nativeDemands?: NativeDemand[];
-  gameOver?: { turn: number; reason: string; winner?: NationId; scores: Partial<Record<NationId, number>>; /** The person ended the game early (leaving.ts). */ retired?: boolean };
+  gameOver?: {
+    turn: number;
+    reason: string;
+    /** The first winner, for code that knows one winner only; missing when nobody won. */
+    winner?: NationId;
+    scores: Partial<Record<NationId, number>>;
+    /** The person ended the game early (leaving.ts). */
+    retired?: boolean;
+    /**
+     * Every winner, best first (C3): one nation, or the members of an alliance that won together
+     * (`concord`, victory.ts), ranked by their own score; empty when nobody won.
+     */
+    winners: NationId[];
+  };
   /** Silver and ore dug so far from mining tiles, by "x,y" (see mines.ts). Missing means none. */
   mined?: Record<string, number>;
   /** Set the first time a cheat is used and never cleared. Missing means the game is not cheated. */

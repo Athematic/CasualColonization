@@ -50,7 +50,7 @@ export function retire(s: GameState): string {
   if (!p.human) fail('Only a person can retire.');
   if (s.gameOver) fail('The game is already over.');
   const text = `Retired in ${yearOf(s.turn, calendarOf(s)).year}.`;
-  s.gameOver = { turn: s.turn, reason: text, scores: finalScores(s), retired: true };
+  s.gameOver = { turn: s.turn, reason: text, scores: finalScores(s), retired: true, winners: [] };
   track(p.id, 'cmd:retire');
   noteHistory(s, 'event', [p.id], `${p.id} retired in ${formatDate(s.turn, calendarOf(s))}.`);
   return text;

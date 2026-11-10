@@ -70,6 +70,7 @@ export const AMERICAS_TEXT = {
 
   /** The end of the game (victory.ts, independence.ts): {year}, {nation}. */
   'gameOver.time': 'The year {year} has come and the age of colonization is over.',
+  'gameOver.concord': 'The year {year} has come and the age of colonization is over. The alliance of {allies} holds the greater part of {colonyLand} and wins together.',
   'gameOver.playOn': 'Every nation has fought its {independenceWar}.',
   'gameOver.won': '{nation} has won the {independenceWar}! A new nation is born.',
   'gameOver.lost': "The rebellion in {nation}'s colonies has been crushed.",

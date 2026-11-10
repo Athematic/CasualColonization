@@ -1,3 +1,3 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`a full computer game in the Caribbean > plays the same game every time (golden hash) 1`] = `"63486bc6c2297039"`;
+exports[`a full computer game in the Caribbean > plays the same game every time (golden hash) 1`] = `"6093cee54506ef99"`;

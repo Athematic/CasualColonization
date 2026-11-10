@@ -11,7 +11,6 @@ import {
   allianceProblem,
   allianceThresholds,
   alliesOf,
-  answerProposal,
   applyCommand,
   colonySiteProblem,
   createGame,
@@ -35,6 +34,10 @@ import {
   turnAfterYears,
   WAITING_YEARS,
   attack,
+  calendarOf,
+  checkVictory,
+  concordWinners,
+  lastTurn,
   type Colony,
   type Direction,
   type GameState,
@@ -45,7 +48,7 @@ import {
 import { foreignAffairs } from '../src/ai/foreign.js';
 
 /** The Americas with alliances on; and a copy whose computer players cooperate eagerly. */
-const ALLIED: Scenario = { ...AMERICAS, id: 'test-alliances', name: 'test-alliances', hidden: true, mechanics: { ...AMERICAS.mechanics, alliances: true } };
+const ALLIED: Scenario = { ...AMERICAS, id: 'test-alliances', name: 'test-alliances', hidden: true, mechanics: { ...AMERICAS.mechanics, alliances: true }, victory: [{ id: 'independence-war' }, { id: 'concord', params: { share: 0.6 } }, { id: 'time' }] };
 const EAGER: Scenario = { ...ALLIED, id: 'test-alliances-eager', name: 'test-alliances-eager', ai: { ...AMERICAS.ai, cooperation: { proposeAlliance: 1, acceptAlliance: 1 } } };
 registerScenario(ALLIED);
 registerScenario(EAGER);
@@ -387,6 +390,52 @@ describe('alliances: computer players', () => {
     foreignAffairs(s, s.players[1], AI_PROFILES.creative, 0, 0);
     expect(isAllied(s, 'england', 'france')).toBe(false);
     expect(s.treaties!.some((t) => t.kind === 'alliance')).toBe(false);
+  });
+});
+
+describe('concord: winning together', () => {
+  function ending(golds: Partial<Record<Seat, number>>) {
+    const s = game();
+    for (const p of s.players) p.gold = golds[p.id as Seat] ?? 0;
+    s.turn = lastTurn(calendarOf(s));
+    return s;
+  }
+
+  it('ends the game with every member of an alliance holding enough of the score as winners, best first', () => {
+    const s = ending({ england: 400_000, france: 800_000, spain: 600_000 });
+    makeAlliance(s, 'england', 'france');
+    // England and France hold two thirds of the score, above the scenario's 60%.
+    checkVictory(s, { kind: 'round' });
+    expect(s.gameOver?.winners).toEqual(['france', 'england']);
+    expect(s.gameOver?.winner).toBe('france');
+    expect(s.gameOver?.reason).toMatch(/alliance of France and England .* wins together/);
+  });
+
+  it('falls back to the highest score when no alliance holds enough', () => {
+    const s = ending({ england: 400_000, france: 400_000, spain: 800_000 });
+    makeAlliance(s, 'england', 'france');
+    checkVictory(s, { kind: 'round' });
+    expect(s.gameOver?.winners).toEqual(['spain']);
+    expect(s.gameOver?.winner).toBe('spain');
+  });
+
+  it('ranks the members of a larger alliance, and needs at least two members', () => {
+    const s = ending({});
+    makeAlliance(s, 'england', 'france');
+    makeAlliance(s, 'england', 'spain');
+    expect(concordWinners(s, { england: 10, france: 30, spain: 20 }, 0.5)).toEqual(['france', 'spain', 'england']);
+    expect(concordWinners(s, { england: 10, france: 30 }, 0.5)).toEqual(['france', 'england']);
+    expect(concordWinners(s, { england: 10, france: 0, spain: 0 }, 0.5)).toEqual(['england', 'france', 'spain']);
+    expect(concordWinners(s, { england: 0, france: 0, spain: 0 }, 0.5)).toBeNull();
+  });
+
+  it('a game ended otherwise names its single winner, or none', () => {
+    const s = ending({ england: 5000 });
+    checkVictory(s, { kind: 'round' });
+    expect(s.gameOver?.winners).toEqual([s.gameOver!.winner]);
+    const t = game();
+    ok(t, 'england', { type: 'retire' });
+    expect(t.gameOver?.winners).toEqual([]);
   });
 });
 
