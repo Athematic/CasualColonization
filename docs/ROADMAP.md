@@ -111,6 +111,7 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
 | Australia map (geography preview with the current rules; ships arrive from the west) | M | P2 | done |
 | Australia, 1788–1901: map, Aboriginal nations and Country, wool, wheat, gold and whaling, convict colonists, the long sea route, drought, Federation | XL | P1 | idea |
 | Vinland, around 1000: Norse survival from Greenland with scarce resources and a fragile supply line | L | P3 | idea |
+| Specialised councils per scenario: each scenario has its own Founding Fathers counterpart (Australia: Legislative Council and Federation figures; Vinland: the Thing, with saga figures), with effects suited to the scenario and portraits in the same cameo prompt style (see design/scenarios.md, Specialised councils) | M | P1 | idea |
 
 ## Later
 
