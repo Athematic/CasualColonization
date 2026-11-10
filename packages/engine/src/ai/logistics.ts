@@ -157,6 +157,19 @@ function cartingNeeds(s: GameState, p: Player): { served: Set<string>; waiting: 
   return entry;
 }
 
+/** The units following each route (as routeUnits gives them, in the units' order). */
+function unitsByRoute(s: GameState): Map<string, Unit[]> {
+  const out = new Map<string, Unit[]>();
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (!u.route) continue;
+    const list = out.get(u.route.id);
+    if (list) list.push(u);
+    else out.set(u.route.id, [u]);
+  }
+  return out;
+}
+
 /** Plays the nation's logistics for one turn. */
 export function manageLogistics(s: GameState, p: Player): void {
   const review = s.turn % REVIEW_EVERY === 0;
@@ -164,8 +177,11 @@ export function manageLogistics(s: GameState, p: Player): void {
   if (p.independence !== 'none') {
     for (const r of routesOf(s, p.id)) if (r.stops.some((st) => st.at === EUROPE_STOP)) deleteRoute(s, p.id, r.id);
   }
+  // Outside a review, each route's units come from one pass over the units: deleting a route
+  // without units changes no other route's. A review can reassign units, so it asks per route.
+  const following = review ? undefined : unitsByRoute(s);
   for (const r of routesOf(s, p.id)) {
-    const users = routeUnits(s, r.id);
+    const users = following ? (following.get(r.id) ?? []) : routeUnits(s, r.id);
     if (!users.length) {
       deleteRoute(s, p.id, r.id);
       continue;

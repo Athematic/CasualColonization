@@ -187,7 +187,13 @@ export function nearestColony(s: GameState, p: Player, x: number, y: number, coa
 }
 
 export function ownColonies(s: GameState, p: Player): Colony[] {
-  return Object.values(s.colonies).filter((c) => c.owner === p.id);
+  // A plain loop (in Object.values' order): asked for constantly, it need not copy every colony first.
+  const out: Colony[] = [];
+  for (const id in s.colonies) {
+    const c = s.colonies[id];
+    if (c.owner === p.id) out.push(c);
+  }
+  return out;
 }
 
 export function guardColony(s: GameState, p: Player, u: Unit): void {

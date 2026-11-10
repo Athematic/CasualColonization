@@ -615,6 +615,8 @@ const WAR_MILITIA = 2;
  */
 function mountTroops(s: GameState, p: Player, c: Colony): void {
   if (!turnArming && p.independence !== 'declared') return;
+  // (The horses first: without them no one mounts, and the armed units need no looking up.)
+  if (c.goods.horses < 52) return;
   for (const u of armedAt(s, p, c.x, c.y)) {
     if (c.goods.horses < 52) return;
     if (u.role !== 'soldier' || UNIT_TYPES[u.type].kind !== 'colonist') continue;
@@ -625,7 +627,9 @@ function mountTroops(s: GameState, p: Player, c: Colony): void {
 
 /** Buys (or takes) good native land next to a growing colony. */
 function acquireLand(s: GameState, p: Player, c: Colony, prof: AiProfile): void {
-  if (prof.land === 'avoid' || colonyWorkers(s, c).length < 3) return;
+  if (prof.land === 'avoid') return;
+  // Native land next to the colony before its people: most colonies have none left to acquire.
+  if (!neighbours(s, c.x, c.y).some((n) => nativeLandOwner(s, n.x, n.y)) || colonyWorkers(s, c).length < 3) return;
   for (const n of neighbours(s, c.x, c.y)) {
     const st = nativeLandOwner(s, n.x, n.y);
     if (!st) continue;
