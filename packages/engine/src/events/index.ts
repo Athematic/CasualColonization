@@ -14,7 +14,7 @@ import { buildingName } from '../rules/buildings.js';
 import { GOOD_DEFS } from '../rules/goods.js';
 import { NATIONS, TRIBES, type NationId } from '../rules/nations.js';
 import { UNIT_TYPES } from '../rules/units.js';
-import { track } from '../telemetry.js';
+import { track, tracking } from '../telemetry.js';
 import type { GameState, Player } from '../types.js';
 import { AMERICAS_EVENTS } from './americas.js';
 import { applyEffects, atRoundEnd, eventsState, num, valueEffects } from './effects.js';
@@ -23,10 +23,10 @@ import type { EventChoice, EventDef, EventKind, EventVars, PendingEvent } from '
 export * from './types.js';
 export { eventProductionPct } from './modifiers.js';
 export { HISTORICAL_EVENTS, RANDOM_EVENTS, AMERICAS_EVENTS } from './americas.js';
-export { applyEffects, valueEffects } from './effects.js';
+export { applyEffects, valueEffects, tensionCost, tensionValue, TAX_POINT_VALUE } from './effects.js';
 
 /** Chance per round that a nation has a random event (if one has a target). */
-export const RANDOM_EVENT_RATE = 0.04;
+export const RANDOM_EVENT_RATE = 0.012;
 /** Default turns before a random event can strike the same nation again. */
 export const RANDOM_COOLDOWN = 40;
 
@@ -210,6 +210,8 @@ function resolveChoice(s: GameState, def: EventDef, v: EventVars, index: number,
   const cost = Math.min(choiceCost(choice, v), player(s, v.nation).gold);
   player(s, v.nation).gold -= cost;
   const r = eventStream(s, `choice ${def.id} ${v.nation} ${s.turn}`);
+  // The arena reports what the choice was worth, in the computer players' gold values (never read back).
+  if (tracking()) track(v.nation, `eventvalue ${def.id}`, Math.round(valueEffects(s, choice.effects, v) - cost));
   const extra = applyEffects(s, def.id, choice.effects, v, r);
   const result = [choice.result ? eventText(s, choice.result, v) : '', ...extra.map((t) => eventText(s, t, v))].filter(Boolean).join(' ');
   const label = eventText(s, choice.label, v);
@@ -256,6 +258,7 @@ export function fireEvent(s: GameState, def: EventDef, nation: NationId, given?:
     noteHistory(s, 'event', [], `${eventText(s, def.title, v)} (${formatDate(s.turn)}).`);
   }
   track(nation, `event:${def.id}`);
+  if (tracking() && def.effects?.length) track(nation, `eventvalue ${def.id}`, Math.round(valueEffects(s, def.effects, v)));
   const extra = applyEffects(s, def.id, def.effects ?? [], v, r);
   const text = [eventText(s, def.text, v), ...extra.map((t) => eventText(s, t, v))].join(' ');
   const at = eventPlace(s, v);
