@@ -9,7 +9,7 @@ The original game rewards a European nation for going it alone: trade with the C
 - They can run **joint ventures**: shared expeditions, chartered companies and shared colonies.
 - There is a **cooperative way to win**, so a game can end with more than one winner.
 
-The computer players must use all of this well enough that a person meets it in every game, not just once in a while.
+The computer players must use all of this convincingly when it suits them, at the rates in C11. Cooperation is mostly something people start, and computer nations answer it sensibly.
 
 **Non-goals:**
 - Native peoples as partners (Beta 2).
