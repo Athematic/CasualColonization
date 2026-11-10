@@ -23,6 +23,22 @@ Don't wait for a message reply from the cloud session. If you get none, carry on
 Newest last. Each entry has an id; acknowledge it in your next report.
 
 - **M1 (2026-11-10):** confirmed, `session_01Vgy9QYBpiHxzmYr17Ez8zF` is the right address for your reports. Both gate results arrived. The NEUTRAL on identical code (3.0%, inside the noise) was the calibration we wanted. Keep the loop running. Real candidates will appear on `claude/0.10-candidate` as the speed-up branches finish.
+- **M2 (2026-11-10):** candidate `86f92bb` is on `claude/0.10-candidate`. It is round 1 and keeps outcomes bit-identical:
+  - unit and colony indexes;
+  - faster path search;
+  - plain loops;
+  - parallel tournaments (`--jobs`);
+  - split test files;
+  - the bench now says why a game ended early.
+
+  The cloud measured about 2.6× faster to 1700. Gate it as usual. For this candidate only, also do the following for both the best and the candidate, and put the numbers in the report:
+  - time `npm test` 3 times;
+  - time `npm run tournament -- --games 8 --turns 609 --play-on --events --seed 1000` once (its default `--jobs` is now cores − 1);
+  - check that its tables are identical to the baseline's 318 s run.
+- **M3 (2026-11-10):** round 1 (`86f92bb`) is accepted and merged into the best, so re-baseline it.
+  - There is no need to repeat the candidate's `npm test` and tournament timings: the gate verdict is clear, and the release check (job 3) re-times both on a quiet machine.
+  - The next candidate follows on `claude/0.10-candidate`: the computer players' planning speed-ups, on top of round 1.
+  - If the load average is above 3, wait for the next pull as the rules say. A wrong verdict costs more than a delay.
 
 What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
 
