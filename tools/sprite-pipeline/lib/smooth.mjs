@@ -71,15 +71,16 @@ export function unsharp(img, amount = 0.4, sigma = 0.6) {
  * @param master   cleaned master (FImage)
  * @param ink      { dist, width } from the ink analysis of the master
  * @param place    placement() result
- * @param n        output size in pixels
+ * @param n        output size in pixels (the height, for a non-square figure canvas)
+ * @param w        output width (default n: square)
  */
-export function renderSmooth(master, ink, place, n, opts) {
+export function renderSmooth(master, ink, place, n, opts, w = n) {
   const pxPerSrc = place.scale * n;
   let src = master;
   if (opts.inkMinPx > 0 && ink && ink.width > 0) {
     const r = growRadius(ink.width, pxPerSrc, opts.inkMinPx, opts.inkMaxGrowPx);
     if (r > 0.25) src = thickenInk(master, ink.dist, r, opts.inkGrow);
   }
-  const img = resample(src, n, n, { ...transformFor(place, n), kernel: opts.kernel });
+  const img = resample(src, w, n, { ...transformFor(place, n), kernel: opts.kernel });
   return unsharp(img, opts.sharpen, opts.sharpenSigma);
 }

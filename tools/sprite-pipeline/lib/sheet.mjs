@@ -4,13 +4,14 @@
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-function img(src, size, zoom, cls = '') {
+// `w`: the image width when it is not square (Founding Father figures); `size` is then the height.
+function img(src, size, zoom, cls = '', w = size) {
   const px = size * zoom;
-  return `<img src="${esc(src)}" width="${px}" height="${px}" data-size="${size}" data-zoom="${zoom}" class="${zoom > 1 ? 'zoom' : 'native'} ${cls}" alt="">`;
+  return `<img src="${esc(src)}" width="${w * zoom}" height="${px}" data-size="${size}" data-zoom="${zoom}" class="${zoom > 1 ? 'zoom' : 'native'} ${cls}" alt="">`;
 }
 
-function tile(bg, src, size, zoom, label = '') {
-  return `<figure class="t ${bg}">${img(src, size, zoom)}${label ? `<figcaption>${esc(label)}</figcaption>` : ''}</figure>`;
+function tile(bg, src, size, zoom, label = '', w = size) {
+  return `<figure class="t ${bg}">${img(src, size, zoom, '', w)}${label ? `<figcaption>${esc(label)}</figcaption>` : ''}</figure>`;
 }
 
 /**
@@ -20,10 +21,10 @@ function tile(bg, src, size, zoom, label = '') {
  * }
  */
 /** One size of one sprite: 1:1 on paper and grass, pixel and grid sizes also enlarged. */
-function sizeGroup(n, mode, file, note = '', bad = false, zoom = 4) {
+function sizeGroup(n, mode, file, note = '', bad = false, zoom = 4, w = n) {
   const big = mode === 'smooth' ? '' : `${tile('paper', file, n, n > 32 ? 2 : zoom)}${tile('grass', file, n, n > 32 ? 2 : zoom)}`;
-  return `<div class="grp"><div class="h">${n} px${mode === 'smooth' ? '' : ' · ' + mode}${note ? ` <span class="${bad ? 'bad' : ''}">${esc(note)}</span>` : ''}</div><div class="cells">
-      ${tile('paper', file, n, 1)}${tile('grass', file, n, 1)}${big}</div></div>`;
+  return `<div class="grp"><div class="h">${w === n ? n : `${w} × ${n}`} px${mode === 'smooth' ? '' : ' · ' + mode}${note ? ` <span class="${bad ? 'bad' : ''}">${esc(note)}</span>` : ''}</div><div class="cells">
+      ${tile('paper', file, n, 1, '', w)}${tile('grass', file, n, 1, '', w)}${big}</div></div>`;
 }
 
 export function contactSheet(data) {
@@ -32,7 +33,7 @@ export function contactSheet(data) {
   const gridReport = data.gridReport ?? [];
   const rows = sprites.map((s) => {
     const list = s.list ?? [...pixelSizes, ...smoothSizes].map((n) => ({ n, mode: n <= (pixelSizes.at(-1) ?? 0) ? 'pixel' : 'smooth', file: s.files[n] }));
-    const groups = list.map((f) => sizeGroup(f.n, f.mode, f.file, f.note, f.bad)).join('');
+    const groups = list.map((f) => sizeGroup(f.n, f.mode, f.file, f.note, f.bad, 4, f.w ?? f.n)).join('');
     return `<section class="sprite" id="${esc(s.id)}">
       <div class="name">${esc(s.id)} <span class="muted">${esc(s.layout)}${s.extras.length ? ' · extra colours ' + s.extras.map((h) => `<i class="sw" style="background:${h}" title="${h}"></i>`).join('') : ''}</span></div>
       <div class="line">

@@ -19,7 +19,7 @@ Placeholders you can use in any block: `{WIDTH}` and `{HEIGHT}` (the image size)
 - `tile`: prompt-doc categories drawn with the `tile` blocks instead of the `icon` blocks: full-bleed or edge-aligned map tiles, where big simple shapes matter more than outlines.
 
 ```settings
-skip: bible
+skip: bible, fathers, hall
 tile: terrain, ground-overlays
 ```
 
