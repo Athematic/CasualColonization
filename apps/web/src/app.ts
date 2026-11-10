@@ -169,6 +169,7 @@ export class App {
   /** Milliseconds between turns while autoplaying. */
   speed = 400;
   private autoplayTimer = 0;
+  private autoplayGen = 0;
   /**
    * Computer turns are being played (in the engine worker): the map still draws and scrolls, but
    * no commands are taken until the new state arrives.
@@ -346,14 +347,21 @@ export class App {
   setAutoplay(on: boolean): void {
     this.autoplay = on && !this.state.gameOver;
     clearTimeout(this.autoplayTimer);
+    // One chain of ticks: a tick of an earlier call (still waiting for its round) stops when it is in.
+    const gen = ++this.autoplayGen;
     const tick = async () => {
-      if (!this.autoplay || this.busy) return;
+      if (!this.autoplay || gen !== this.autoplayGen) return;
+      // A round started by hand (+1, +10) is still being played: start when it is in.
+      if (this.busy) {
+        this.autoplayTimer = window.setTimeout(tick, 50);
+        return;
+      }
       const started = performance.now();
       await this.observeTurns(1);
       // Each turn is shown for at least `speed` ms, counting the time it took to play.
-      if (this.autoplay) this.autoplayTimer = window.setTimeout(tick, Math.max(0, this.speed - (performance.now() - started)));
+      if (this.autoplay && gen === this.autoplayGen) this.autoplayTimer = window.setTimeout(tick, Math.max(0, this.speed - (performance.now() - started)));
     };
-    if (this.autoplay && !this.busy) this.autoplayTimer = window.setTimeout(tick, 0);
+    if (this.autoplay) this.autoplayTimer = window.setTimeout(tick, 0);
     this.requestRender();
   }
 

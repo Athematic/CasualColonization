@@ -88,7 +88,9 @@ function skipAhead(config: GameConfig, turn: number): void {
     .run({ type: 'headStart', config, turn }, (p) => {
       if (cancelled || p.turn === shown) return;
       shown = p.turn;
-      const pct = Math.min(100, Math.round((p.turn / turn) * 100));
+      // Later turns take longer (more colonies and units): by the square of the turn, the bar moves
+      // about evenly in time (on the bench, 1600 is 11% of the way to 1700 in time, and 12% squared).
+      const pct = Math.min(100, Math.round((p.turn / turn) ** 2 * 100));
       bar.style.width = `${pct}%`;
       meter.setAttribute('aria-valuenow', String(pct));
       label.textContent = `${formatDate(p.turn, cal)} of ${formatDate(turn, cal)} · turn ${p.turn} of ${turn}`;
@@ -121,8 +123,8 @@ function run(game: Game): void {
 // Debug handle for the browser console and automated play-tests.
 (window as unknown as { cc: object }).cc = {
   get app() { return app; },
-  /** Whether computer turns run in the engine worker, and how long the last skipped head start took. */
-  get turns() { return { worker: turnRunner.usesWorker, lastHeadStartMs }; },
+  /** Whether computer turns run in the engine worker, how long the last skipped head start took, and the last job's timing. */
+  get turns() { return { worker: turnRunner.usesWorker, lastHeadStartMs, lastJob: turnRunner.last }; },
 };
 
 interface HotHook {

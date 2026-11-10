@@ -12,6 +12,7 @@ const post = (reply: WorkerReply) => scope.postMessage(reply);
 
 scope.onmessage = (e: MessageEvent<WorkerRequest>) => {
   const { id, job } = e.data;
+  const started = performance.now();
   try {
     // During an end of turn, report each nation as it finishes (the engine counts 'cmd:endTurn'
     // for every nation whose turn ends). The sink only observes; it never touches the state.
@@ -25,7 +26,7 @@ scope.onmessage = (e: MessageEvent<WorkerRequest>) => {
     for (;;) {
       const step = it.next();
       if (step.done) {
-        post({ id, kind: 'done', done: step.value });
+        post({ id, kind: 'done', done: step.value, workMs: performance.now() - started });
         break;
       }
       post({ id, kind: 'progress', progress: step.value });

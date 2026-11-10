@@ -21,8 +21,19 @@ export class JobCancelled extends Error {
   }
 }
 
+/** Timing of the last job, for play-tests and the debug handle (window.cc.turns). */
+export interface JobTiming {
+  type: Job['type'];
+  /** From the request to the result, on the page. */
+  totalMs: number;
+  /** The job itself, in the worker (equal to totalMs on the main thread). */
+  workMs: number;
+  worker: boolean;
+}
+
 interface Pending {
   id: number;
+  started: number;
   job: Job;
   onProgress?: (p: Progress) => void;
   resolve: (r: JobResult) => void;
@@ -40,6 +51,8 @@ export class TurnRunner {
   private pending: Pending | null = null;
   private nextId = 1;
   private cancelMain: (() => void) | null = null;
+  /** The last job's timing. */
+  last?: JobTiming;
 
   /** Whether jobs run in a worker (false once it has fallen back to the main thread). */
   get usesWorker(): boolean {
@@ -52,7 +65,7 @@ export class TurnRunner {
     const worker = this.noWorker ? null : this.spawn();
     if (!worker) return this.runHere(job, onProgress);
     return new Promise<JobResult>((resolve, reject) => {
-      this.pending = { id: this.nextId++, job, onProgress, resolve, reject };
+      this.pending = { id: this.nextId++, started: performance.now(), job, onProgress, resolve, reject };
       try {
         worker.postMessage({ id: this.pending.id, job });
       } catch (err) {
@@ -109,6 +122,7 @@ export class TurnRunner {
     if (msg.kind === 'progress') p.onProgress?.(msg.progress);
     else if (msg.kind === 'done') {
       this.pending = null;
+      this.last = { type: p.job.type, totalMs: performance.now() - p.started, workMs: msg.workMs, worker: true };
       p.resolve(msg.done);
     } else {
       this.pending = null;
@@ -140,6 +154,7 @@ export class TurnRunner {
    * between rounds. An end of turn is one slice (as before workers). Works on the state in place.
    */
   private runHere(job: Job, onProgress?: (p: Progress) => void): Promise<JobResult> {
+    const started = performance.now();
     return new Promise<JobResult>((resolve, reject) => {
       const it = runJob(job);
       let stopped = false;
@@ -156,6 +171,8 @@ export class TurnRunner {
             const step = it.next();
             if (step.done) {
               this.cancelMain = null;
+              const ms = performance.now() - started;
+              this.last = { type: job.type, totalMs: ms, workMs: ms, worker: false };
               resolve(step.value);
               return;
             }

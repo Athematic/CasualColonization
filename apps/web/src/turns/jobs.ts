@@ -77,7 +77,7 @@ function* play(job: Job): Generator<Progress, JobResult, void> {
 /** Messages from the worker. */
 export type WorkerReply =
   | { id: number; kind: 'progress'; progress: Progress }
-  | { id: number; kind: 'done'; done: JobResult }
+  | { id: number; kind: 'done'; done: JobResult; workMs: number }
   | { id: number; kind: 'error'; message: string };
 
 /** Messages to the worker. */
