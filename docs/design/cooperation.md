@@ -51,7 +51,7 @@ So the ladder today is **peace → trade agreement → Favoured Nation**. Beta 1
    - **Chartered company:** several nations buy shares in a company that founds and runs **its own colonies**. It is a third party, like the VOC, the Hudson's Bay Company or the Darien Company. Profits are paid out as dividends in proportion to shares; the company's score counts for its shareholders.
    - **Shared colony (condominium):** see C1. Proposed: only through a company, not as a colony with two owners.
 3. **Cooperative victory** (`concord`): by the scenario's end year, an alliance (or a group of Favoured Nations, see C6) that together holds a share of the score above a threshold wins together. Its members share the win, ranked by their own score. It sits next to `independence-war` and `time` in the victory registry.
-4. **Independence with allies:** colonies of allied nations may declare together, as a confederation. They then fight the REFs together, and their winning counts for both.
+4. **Independence with allies:** colonies of allied nations may declare together, as a confederation. They then fight the REFs together, and their winning counts for both. This is mostly for people to start (Simon, 10 November 2026). In games of computer players alone it should be exceedingly rare: even with every nation at Creative level, about once in 30–50 games.
 5. **Computer players:** each level gets an attitude to alliances and companies. The cooperative levels (Creative, and a new trait for some of them) seek them out; Combative uses alliances for war.
 6. **Scenario data:**
    - Mechanics switches `alliances`, `companies`, `condominiums` and `confederation`, plus victory kind `concord`.
@@ -74,7 +74,7 @@ The ones marked **(structural)** shape the engine's data model; getting them wro
 | C8 | **People in hot-seat games.** | As with Favoured Nation: two people can ally at any time and break it without the computer hostility. |
 | C9 | **Shapes shared with Beta 2.** Should agreements be one general "treaty" record (kind, parties, terms, start, end) used for European alliances now and for native treaties in Beta 2? | **Yes: a `Treaty` record with typed terms.** Today's trade agreements and Favoured Nation can be expressed as treaties too, but they stay where they are until a later clean-up (no save migration needed: per Q3, pre-0.9 saves aren't supported anyway). |
 | C10 | **Which scenario shows cooperation off best?** | The Caribbean, with the Darien Company, the Dutch WIC and Courland's companies. The Americas get the full set. Each scenario chooses with the mechanics switches. |
-| C11 | **How much should the AI cooperate?** | Enough that in a tournament **every game has at least one alliance and most games one company**, and that `concord` wins sometimes (10–30% of games) without being the dominant path. The thresholds get tuned with tournaments on the Mac. |
+| C11 | **How much should the AI cooperate?** | Enough that in a tournament **every game has at least one alliance and most games one company**, and that `concord` wins sometimes (10–30% of games) without being the dominant path. **Joint independence (confederation) is the exception:** computer players start it only about once in 30–50 games, even when every nation is Creative (Simon), because it is mainly for people. A person allied with a computer nation can propose it, and the computer nation's answer follows its usual readiness for independence. The thresholds get tuned with tournaments on the Mac. |
 
 ## 5. Phased plan (sizes as in the roadmap)
 
