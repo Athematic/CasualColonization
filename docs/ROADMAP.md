@@ -87,7 +87,7 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Mines running out | S | P3 | in progress |
 | Abandoning a colony; retiring early | S | P2 | in progress |
 | Performance pass: profile computer turns and the map renderer; a head start to 1700 currently takes about 100 seconds. Goal: under 30 seconds, with identical game outcomes | M | P1 | planned (after the other 0.7 items) |
-| Scoring review: reward well-developed colonies (buildings, experts, production, liberty) and not only headcount, to fit the colony charter and the measured pace | S | P1 | in progress |
+| Scoring review: reward well-developed colonies (buildings, experts, production, liberty) and not only headcount, to fit the colony charter and the measured pace | S | P1 | done (`score.ts` `SCORE_WEIGHTS`, `scoreBreakdown`; breakdown table in Progress and on the game-over screen; the arena prints the split per level) |
 
 ## Beta 1–2: Cooperation
 

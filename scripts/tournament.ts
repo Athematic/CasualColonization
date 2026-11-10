@@ -8,7 +8,7 @@
 // Favoured Nation brings. Every run also prints relations and trade between the nations, and the
 // Crown: independence, the Royal Expeditionary Force against the old formula, demands and royal wars.
 // Games use the colony charter (founding costs gold), as new games do; --no-charter switches it off.
-import { AI_LEVELS, DIFFICULTY_LEVELS, formatArena, formatCrown, formatFeatures, formatRelations, formatRelationsLine, runArena, type AiLevel, type DifficultyId, type MapSize } from '../packages/engine/src/index.ts';
+import { AI_LEVELS, DIFFICULTY_LEVELS, formatArena, formatCrown, formatFeatures, formatRelations, formatScoreSplit, formatRelationsLine, runArena, type AiLevel, type DifficultyId, type MapSize } from '../packages/engine/src/index.ts';
 
 const args = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
@@ -48,6 +48,7 @@ const result = runArena(options, (rows, g) => {
 if (args.includes('--json')) console.log(JSON.stringify(result, null, 2));
 else {
   console.log(`\n${formatArena(result.summary)}\n`);
+  console.log(`Score by component, average points per nation:\n\n${formatScoreSplit(result.entries)}\n`);
   console.log(`Relations and trade between the Europeans, average per nation per game:\n\n${formatRelations(result.summary)}\n\n${formatRelationsLine(result.entries)}\n`);
   console.log(`The Crown: independence, the Royal Expeditionary Force (land units) against the old formula, demands and royal wars, average per nation per game:\n\n${formatCrown(result.entries)}\n`);
   if (features) {

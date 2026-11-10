@@ -1,4 +1,4 @@
-import { DIFFICULTY, formatDate, NATIONS, resolveDifficulty, nationTitle, STAT_INFO, STAT_KEYS, statsHistory, yearOf, type NationId, type StatKey, type StatsSeries } from '@cc/engine';
+import { DIFFICULTY, formatDate, NATIONS, resolveDifficulty, nationTitle, scoreBreakdown, STAT_INFO, STAT_KEYS, statsHistory, yearOf, type NationId, type StatKey, type StatsSeries } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
 import { activeStyle } from '../styles.js';
@@ -168,9 +168,34 @@ export class ProgressScreen implements Screen {
         h('button', { class: 'btn small', 'aria-label': 'Next statistic', onclick: () => step(1) }, '›'),
         h('p', { class: 'muted small progress-desc' }, info.description)),
       h('div', { class: 'card progress-card' }, this.chartHost, this.legend),
+      this.breakdownCard(),
       h('p', { class: 'muted small' }, 'All nations are shown, as in the reports of the original game. Figures are recorded at the end of every turn; games saved before this feature start recording when loaded. Tap or hover the graph to read values; tap a nation to hide or show it.'),
     );
     this.draw();
+  }
+
+  /** The score of every nation split into its components: what is counted, and the points it earns. */
+  private breakdownCard(): HTMLElement {
+    const s = this.app.state;
+    const players = s.players.filter((p) => p.id !== 'crown');
+    const parts = players.map((p) => scoreBreakdown(s, p));
+    const best = Math.max(...parts.map((b) => b.total));
+    const lines = parts[0]?.lines ?? [];
+    return h('div', { class: 'card progress-breakdown' },
+      h('h3', null, 'Score breakdown'),
+      h('div', { class: 'table-scroll' },
+        h('table', { class: 'scores breakdown' },
+          h('thead', null, h('tr', null,
+            h('th', null, 'Component'),
+            players.map((p) => h('th', { title: nationTitle(p.id) }, h('span', { class: 'flag', style: `background:${NATIONS[p.id].color}` }), ' ', NATIONS[p.id].name)))),
+          h('tbody', null,
+            lines.map((line, i) => h('tr', null,
+              h('td', { title: line.unit }, line.label),
+              parts.map((b) => h('td', { title: `${b.lines[i].value} ${b.lines[i].unit}` }, `${b.lines[i].points}`)))),
+            h('tr', { class: 'total' },
+              h('th', null, 'Total'),
+              parts.map((b) => h('th', null, b.total === best ? h('strong', null, String(b.total)) : String(b.total))))))),
+      h('p', { class: 'muted small' }, 'Points per component; hover a figure for what is counted. Saves from before version 0.7 keep the old formula’s numbers in the graph for turns already recorded.'));
   }
 
   private gameOverCard(over: GameOverInfo): HTMLElement {
