@@ -1,5 +1,5 @@
 import { colonySiteProblem } from '../colony.js';
-import { braveDefence, hostileBraveAt } from '../braves.js';
+import { braveDefence } from '../braves.js';
 import { attack, defencePower, offencePower } from '../combat.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import { RuleError } from '../errors.js';
@@ -20,7 +20,7 @@ import {
   unitsAt,
   type Direction,
 } from '../queries.js';
-import type { Colony, GameState, Player, Unit } from '../types.js';
+import type { Brave, Colony, GameState, Player, Unit } from '../types.js';
 import { goodsOf } from '../scenarios/index.js';
 
 /** Runs an AI action, ignoring moves the rules turn down. */
@@ -171,6 +171,40 @@ export function guardColony(s: GameState, p: Player, u: Unit): void {
   if (target) setDestination(s, u.id, { x: target.x, y: target.y });
 }
 
+/** What stands on one tile next to a unit (tilesAround). */
+interface TileAround {
+  units: Unit[];
+  colony?: Colony;
+  braves: Brave[];
+}
+
+/**
+ * The units on the map, the colony and the braves on each tile next to x, y (not x, y itself), at
+ * (dy + 1) × 3 + (dx + 1); undefined where nothing stands. Each list is in the order unitsAt,
+ * colonyAt and bravesAt would give.
+ */
+function tilesAround(s: GameState, x: number, y: number): (TileAround | undefined)[] {
+  const out: (TileAround | undefined)[] = new Array(9);
+  const at = (tx: number, ty: number): TileAround | undefined => {
+    const dx = tx - x;
+    const dy = ty - y;
+    if (dx < -1 || dx > 1 || dy < -1 || dy > 1 || (dx === 0 && dy === 0)) return undefined;
+    const i = (dy + 1) * 3 + (dx + 1);
+    return (out[i] ??= { units: [], braves: [] });
+  };
+  for (const id in s.units) {
+    const o = s.units[id];
+    if (o.loc.kind === 'map') at(o.loc.x, o.loc.y)?.units.push(o);
+  }
+  for (const id in s.colonies) {
+    const c = s.colonies[id];
+    const t = at(c.x, c.y);
+    if (t && !t.colony) t.colony = c;
+  }
+  for (const b of Object.values(s.braves ?? {})) at(b.x, b.y)?.braves.push(b);
+  return out;
+}
+
 /** Armed units strike adjacent enemies when the odds favour them. */
 export function aiFight(s: GameState, p: Player, u: Unit): boolean {
   const pos = unitPosition(s, u);
@@ -178,23 +212,28 @@ export function aiFight(s: GameState, p: Player, u: Unit): boolean {
   const atWar = (owner: string) => p.stance[owner] === 'war';
   // Artillery is costly to lose: it only fights with a clear edge, damaged artillery with a larger one.
   const margin = u.type === 'damagedArtillery' ? 1.5 : UNIT_TYPES[u.type].kind === 'artillery' ? 1.25 : 1;
+  // What stands on the tiles around, gathered in one pass over the units, colonies and braves
+  // (in their usual order, as unitsAt, colonyAt and hostileBraveAt see them) instead of one per tile.
+  const around = tilesAround(s, pos.x, pos.y);
   for (const n of neighbours(s, pos.x, pos.y)) {
-    const colony = colonyAt(s, n.x, n.y);
+    const near = around[(n.y - pos.y + 1) * 3 + (n.x - pos.x + 1)];
+    if (!near) continue;
+    const colony = near.colony;
     if (colony && atWar(colony.owner)) {
-      const defenders = unitsAt(s, n.x, n.y).filter((o) => o.owner === colony.owner && !isShip(o));
+      const defenders = near.units.filter((o) => o.owner === colony.owner && !isShip(o));
       const best = Math.max(0, ...defenders.map((d) => defencePower(s, d)));
       if (offencePower(s, u) >= best * margin) {
         attack(s, u.id, { colonyId: colony.id });
         return true;
       }
     }
-    const enemy = unitsAt(s, n.x, n.y).find((o) => atWar(o.owner) && isShip(o) === isShip(u));
+    const enemy = near.units.find((o) => atWar(o.owner) && isShip(o) === isShip(u));
     if (enemy && offencePower(s, u, enemy) >= defencePower(s, enemy) * margin) {
       attack(s, u.id, { unitId: enemy.id });
       return true;
     }
     // Hostile braves next to the unit, when the odds are good.
-    const brave = !isShip(u) ? hostileBraveAt(s, p.id, n.x, n.y) : undefined;
+    const brave = !isShip(u) ? near.braves.find((b) => s.tribes.find((t) => t.id === b.tribe)?.stance[p.id] === 'war') : undefined;
     if (brave && offencePower(s, u) >= braveDefence(s, brave) * 2.5 * margin) {
       attack(s, u.id, { braveId: brave.id });
       return true;
