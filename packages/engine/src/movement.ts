@@ -400,6 +400,29 @@ function stepCost(s: GameState, ctx: SearchContext, fi: number, ti: number, fx: 
   return TERRAIN[to.t].moveCost;
 }
 
+/**
+ * Whether the goal has a neighbour the unit could ever stand on: the start, or for a ship water or
+ * one of its owner's colonies, for anyone else land (passableAt allows no other tiles). Without
+ * one the search cannot reach the goal, and would only find that out after visiting every tile it
+ * can reach (a ship sent to an inland colony searched the whole ocean).
+ */
+function approachable(s: GameState, ctx: SearchContext, startIdx: number, tx: number, ty: number, index: PathIndex): boolean {
+  const w = s.map.width;
+  const h = s.map.height;
+  for (let d = 0; d < 8; d++) {
+    const nx = tx + DIR_DX[d];
+    const ny = ty + DIR_DY[d];
+    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+    const i = ny * w + nx;
+    if (i === startIdx) return true;
+    const tile = s.map.tiles[i];
+    if (!tile) continue;
+    const water = TERRAIN[tile.t].water;
+    if (ctx.ship ? water || index.colonies.get(i)?.owner === ctx.owner : !water) return true;
+  }
+  return false;
+}
+
 // Search buffers, reused between path searches: a tile's cost and previous tile count only when
 // its stamp is the current search's, so nothing is cleared between searches.
 let searchSize = 0;
@@ -443,6 +466,7 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
   if (!passable(s, ctx, tx, ty, true, index)) return null;
   const w = s.map.width;
   const h = s.map.height;
+  if (!approachable(s, ctx, start.y * w + start.x, tx, ty, index)) return null;
   const gen = searchBuffers(w * h);
   const cost = searchCost;
   const prev = searchPrev;
