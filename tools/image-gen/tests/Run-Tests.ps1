@@ -328,6 +328,62 @@ try {
         Assert-Match $r.Out 'SUBJECT: Food: a ripe ear of maize'
     }
 
+
+    Test '-OutputPrompts writes prompt files and index.md, never calls the API or asks for a key' {
+        $srvP = Start-FakeOpenAIServer -ExpectedKey $secret
+        $saved = $env:OPENAI_API_KEY; $env:OPENAI_API_KEY = $null
+        try {
+            $out = Join-Path $scratch 'op-out'
+            $pdir = Join-Path $scratch 'op-prompts'
+            $null = New-Item -ItemType Directory -Path $pdir -Force
+            [IO.File]::WriteAllText((Join-Path $pdir 'keep.txt'), 'x')
+            $base = @{ OutputPrompts = $true; OutDir = $out; PromptsDir = $pdir; ApiBase = $srvP.ApiBase }
+            $r = Invoke-Tool ($base + @{ Doc = 'sprites'; Only = 'units/expert-lumberjack__none'; Variant = 'both' })
+            Assert-Equal 0 $r.Exit
+            Assert-Match $r.Out 'Wrote 2 prompt files'
+            Assert-Equal 0 $srvP.State.Requests.Count 'no API request'
+            Assert-True (-not (Test-Path (Join-Path $out 'manifest.json'))) 'manifest untouched'
+            Assert-True (Test-Path (Join-Path $pdir 'keep.txt')) 'other files kept'
+            $tp = Read-ThumbPrompts -Path $thumbPromptsReal
+            $jobs = @(Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Doc sprites -Only 'units/expert-lumberjack__none' -Variant both -ThumbPrompts $tp | ForEach-Object { $_ })
+            Assert-Equal 2 $jobs.Count
+            $ix = [IO.File]::ReadAllText((Join-Path $pdir 'index.md'))
+            $fence = '```'
+            foreach ($j in $jobs) {
+                $f = Join-Path $pdir ($j.OutputRel -replace '\.png$', '.md')
+                Assert-True (Test-Path $f) "file for $($j.Key)"
+                $txt = [IO.File]::ReadAllText($f)
+                Assert-Match $txt "^# $([regex]::Escape($j.Key))\n"
+                Assert-Match $txt "Prompt hash: $(Get-PromptHash -Job $j)"
+                Assert-Match $txt '(?m)^- Suggested model: gpt-image-2\.5-flare$'
+                Assert-Match $txt ([regex]::Escape((Split-Path -Leaf $j.OutputRel)))
+                $a = $txt.IndexOf("${fence}text`n") + 8
+                $b = $txt.LastIndexOf("`n$fence")
+                Assert-Equal $j.Prompt $txt.Substring($a, $b - $a) 'fenced prompt equals the job prompt'
+                Assert-True ($ix.Contains("($($j.OutputRel -replace '\.png$', '.md'))")) "index links $($j.Key)"
+            }
+            Assert-Match $ix "-Variant 'both'"
+            Assert-Match ([IO.File]::ReadAllText((Join-Path $pdir 'sprites/units/expert-lumberjack__none.md'))) 'real transparent background'
+            # boxart: count matches the selection, opaque note
+            $r = Invoke-Tool ($base + @{ Doc = 'boxart'; Only = 'front-*' })
+            $n = @(Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Doc boxart -Only 'front-*' | ForEach-Object { $_ }).Count
+            Assert-Match $r.Out "Wrote $n prompt files"
+            Assert-Equal $n @(Get-ChildItem (Join-Path $pdir 'boxart') -Filter 'front-*.md').Count
+            Assert-Match ([IO.File]::ReadAllText((Join-Path $pdir 'boxart/front-a-landfall.md'))) 'opaque background'
+            # thumbs
+            $r = Invoke-Tool ($base + @{ Doc = 'sprites'; Variant = 'thumb'; Only = 'units/caravel*' })
+            Assert-Equal 0 $r.Exit
+            Assert-True (@(Get-ChildItem (Join-Path $pdir 'thumbs/units') -Filter 'caravel*.md').Count -gt 0) 'thumb files'
+            # a comic page
+            $r = Invoke-Tool ($base + @{ Doc = 'comics'; Comic = 'a-landfall'; Only = 'page-01' })
+            Assert-Equal 0 $r.Exit
+            Assert-True (Test-Path (Join-Path $pdir 'comics/a-landfall/page-01.md')) 'comic page file'
+            Assert-Match ([IO.File]::ReadAllText((Join-Path $pdir 'index.md'))) 'comics/a-landfall/page-01'
+            Assert-Equal 0 $srvP.State.Requests.Count 'still no API request'
+            Assert-True (-not (Test-Path (Join-Path $out 'manifest.json'))) 'manifest still untouched'
+        } finally { $env:OPENAI_API_KEY = $saved; Stop-FakeOpenAIServer $srvP }
+    }
+
     # ------------------------------------------------------------------ helpers
     Test 'size mapping' {
         Assert-Equal '1024x1536' (Resolve-ImageSize '1024x1536' 'gpt-image-1')

@@ -119,6 +119,27 @@ macOS and Linux have no execution policy.
 
 Get a key at <https://platform.openai.com/api-keys>. GPT image models can require organization verification (Settings → Organization → General) before the first call works.
 
+## Prompts for manual use: `-OutputPrompts`
+
+`-OutputPrompts` writes the fully assembled prompts as Markdown files instead of generating anything: it never calls the API, asks for no key, does not touch `manifest.json` and needs no cost confirmation. Paste a file's prompt into an image chat (ChatGPT, for example) and ask for the size and background it names.
+
+It works with every selection option (`-Doc`, `-Only`, `-Variant`, `-Variants`, `-IncludeTitle`, `-Comic`, `-ComicUnit`, `-IncludeComics`, `-DocumentOrder`). The files go to `-PromptsDir` (default `tools/image-gen/output/prompts`, which is git-ignored), one per job and mirroring the image path: `sprites/units/expert-lumberjack__none.md`, `boxart/front-a-landfall.md`, `thumbs/...`, `comics/<slug>/page-01.md`. Each has the job key, a short metadata list (doc, section, size, background, suggested model and quality, the file name a batch run would use, prompt hash), a note for manual use, and the prompt in a `text` block, byte for byte what the API run sends. `index.md` in the folder root lists all files, grouped by doc and category, with the selection used. Files of earlier runs are overwritten; other files are left alone.
+
+macOS / Linux:
+
+```bash
+pwsh ./tools/image-gen/Generate-Images.ps1 -OutputPrompts -Only 'fathers/*'
+pwsh ./tools/image-gen/Generate-Images.ps1 -OutputPrompts -Doc boxart -PromptsDir ~/Desktop/prompts
+pwsh ./tools/image-gen/Generate-Images.ps1 -OutputPrompts -Variant thumb -Only 'units/caravel*'
+```
+
+Windows:
+
+```powershell
+pwsh .\tools\image-gen\Generate-Images.ps1 -OutputPrompts -Only 'fathers/*'
+pwsh .\tools\image-gen\Generate-Images.ps1 -OutputPrompts -Doc comics -Comic a-landfall -PromptsDir C:\temp\prompts
+```
+
 ## Options
 
 | Option | Default | Meaning |
