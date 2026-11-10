@@ -51,7 +51,8 @@ describe('the Caribbean scenario', () => {
     expect(playableScenarios().map((sc) => sc.id)).toEqual(expect.arrayContaining(['americas', 'caribbean']));
     const o = newGameOptions(CARIBBEAN);
     expect(o.generated).toBe(true);
-    expect(o.maps).toEqual([]);
+    expect(o.maps.map((m) => m.id)).toEqual(['caribbean']);
+    expect(o.defaultMap).toBe('caribbean');
     expect(o.firstYear).toBe(1650);
     expect(o.startYears.map((y) => y.year)).toEqual([1675, 1700, 1725]);
     expect(o.victory).toEqual(['Highest score when time runs out']);
