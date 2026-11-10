@@ -221,6 +221,34 @@ export function indexedTileWorker(s: GameState, x: number, y: number): Unit | un
   return indexedTileWorkers(s, x, y)[0];
 }
 
+/**
+ * Units on the map by tile (y * width + x), each list in record order, for path searches. Shared
+ * with the index: read it, never change it. Units off the map's bounds are not in it.
+ */
+export function unitTiles(s: GameState): ReadonlyMap<number, readonly Unit[]> {
+  const ix = unitIndex(s);
+  if (ix && !checks) return ix.onMap;
+  const w = s.map.width;
+  const out = new Map<number, Unit[]>();
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (u.loc.kind !== 'map' || u.loc.x < 0 || u.loc.y < 0 || u.loc.x >= w || u.loc.y >= s.map.height) continue;
+    const k = u.loc.y * w + u.loc.x;
+    const list = out.get(k);
+    if (list) list.push(u);
+    else out.set(k, [u]);
+  }
+  if (ix) {
+    // Checking: the index must hold exactly these lists.
+    const same = ix.onMap.size === out.size && [...out].every(([k, list]) => {
+      const got = ix.onMap.get(k);
+      return !!got && got.length === list.length && got.every((u, i) => u === list[i]);
+    });
+    if (!same) throw new Error('Stale unit index for unitTiles');
+  }
+  return out;
+}
+
 // Colonies by tile. Colonies are few and rarely founded or lost, so the index is rebuilt after
 // each addColony or removeColony. A colony's x and y never change (read-only in types.ts).
 
@@ -228,6 +256,8 @@ interface ColonyIndex {
   width: number;
   height: number;
   byTile: Map<number, Colony>;
+  /** The last colony in key order on each tile (two share a tile only in tests), as path searches kept it. */
+  lastByTile: Map<number, Colony>;
 }
 
 const colonyIndexes = new WeakMap<Colonies, ColonyIndex>();
@@ -235,13 +265,14 @@ const colonyIndexes = new WeakMap<Colonies, ColonyIndex>();
 function colonyIndex(s: GameState): ColonyIndex | undefined {
   let ix = colonyIndexes.get(s.colonies);
   if (ix && ix.width === s.map.width && ix.height === s.map.height) return ix;
-  ix = { width: s.map.width, height: s.map.height, byTile: new Map() };
+  ix = { width: s.map.width, height: s.map.height, byTile: new Map(), lastByTile: new Map() };
   for (const id in s.colonies) {
     if (INDEX_LIKE.test(id)) return undefined;
     const c = s.colonies[id];
     const k = colonyTileKey(ix, c.x, c.y);
     // The first colony in key order wins, as in the scan.
     if (k >= 0 && !ix.byTile.has(k)) ix.byTile.set(k, c);
+    if (k >= 0) ix.lastByTile.set(k, c);
   }
   colonyIndexes.set(s.colonies, ix);
   return ix;
@@ -266,6 +297,23 @@ export function indexedColonyAt(s: GameState, x: number, y: number): Colony | un
   const got = k >= 0 ? ix!.byTile.get(k) : scanColonyAt(s, x, y);
   if (checks && got !== scanColonyAt(s, x, y)) throw new Error(`Stale colony index at ${x},${y}`);
   return got;
+}
+
+/**
+ * Colonies by tile (y * width + x), the last in key order where two share one, for path searches.
+ * Shared with the index: read it, never change it. A colony's owner is read from the colony.
+ */
+export function colonyTiles(s: GameState): ReadonlyMap<number, Colony> {
+  const ix = colonyIndex(s);
+  if (ix && !checks) return ix.lastByTile;
+  const w = s.map.width;
+  const out = new Map<number, Colony>();
+  for (const id in s.colonies) {
+    const c = s.colonies[id];
+    if (c.x >= 0 && c.y >= 0 && c.x < w && c.y < s.map.height) out.set(c.y * w + c.x, c);
+  }
+  if (ix && (ix.lastByTile.size !== out.size || [...out].some(([k, c]) => ix.lastByTile.get(k) !== c))) throw new Error('Stale colony index for colonyTiles');
+  return out;
 }
 
 /** Adds a colony to the state (or replaces the colony with its id). */

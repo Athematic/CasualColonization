@@ -29,9 +29,9 @@ import { FOREST_MOVE_COST, RIVER_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './ru
 import { riverLinked } from './rivers.js';
 import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
 import type { TribeId } from './rules/nations.js';
-import type { GameState, ImprovementKind, Player, Unit } from './types.js';
+import type { Colony, GameState, ImprovementKind, Player, Unit } from './types.js';
 import { mechanicsOf, term } from './scenarios/index.js';
-import { setUnitLoc } from './unitindex.js';
+import { colonyTiles, setUnitLoc, unitTiles } from './unitindex.js';
 
 export type MoveOption =
   | { kind: 'move' }
@@ -272,9 +272,45 @@ export function buildMapIndex(s: GameState): MapIndex {
   return index;
 }
 
-function passable(s: GameState, u: Unit, x: number, y: number, isGoal: boolean, index: MapIndex): boolean {
+/**
+ * What a path search needs of the map's occupants. Answers as buildMapIndex's MapIndex would, but
+ * the units and colonies come from the live indexes (unitindex.ts), so only settlements and braves
+ * are gathered per search.
+ */
+interface PathIndex {
+  /** The colony on each tile (its owner read live). */
+  colonies: ReadonlyMap<number, Colony>;
+  settlements: Set<number>;
+  /** Units standing on each tile. */
+  units: ReadonlyMap<number, readonly Unit[]>;
+  /** Tribes whose braves stand on each tile. */
+  braves: Map<number, TribeId[]>;
+}
+
+function pathIndex(s: GameState): PathIndex {
+  const w = s.map.width;
+  const settlements = new Set<number>();
+  for (const id in s.settlements) {
+    const st = s.settlements[id];
+    settlements.add(st.y * w + st.x);
+  }
+  const braves = new Map<number, TribeId[]>();
+  const all = s.braves;
+  if (all) {
+    for (const id in all) {
+      const b = all[id];
+      const i = b.y * w + b.x;
+      const list = braves.get(i);
+      if (list) list.push(b.tribe);
+      else braves.set(i, [b.tribe]);
+    }
+  }
+  return { colonies: colonyTiles(s), settlements, units: unitTiles(s), braves };
+}
+
+function passable(s: GameState, ctx: SearchContext, x: number, y: number, isGoal: boolean, index: PathIndex): boolean {
   if (!inBounds(s, x, y)) return false;
-  return passableAt(s, searchContext(s, u), y * s.map.width + x, isGoal, index);
+  return passableAt(s, ctx, y * s.map.width + x, isGoal, index);
 }
 
 /** What a path search needs to know about the unit, worked out once per search. */
@@ -300,15 +336,16 @@ function searchContext(s: GameState, u: Unit): SearchContext {
 }
 
 /** Whether the unit can stand on the tile with map index `i` (on the map) while pathing. */
-function passableAt(s: GameState, ctx: SearchContext, i: number, isGoal: boolean, index: MapIndex): boolean {
+function passableAt(s: GameState, ctx: SearchContext, i: number, isGoal: boolean, index: PathIndex): boolean {
   const tile = s.map.tiles[i];
   if (!tile) return false;
-  const colonyOwner = index.colonies.get(i);
+  const colonyOwner = index.colonies.get(i)?.owner;
   if (colonyOwner && colonyOwner !== ctx.owner) return false;
   if (index.settlements.has(i)) return false;
-  const owners = index.units.get(i);
-  if (owners && (owners.size > 1 || !owners.has(ctx.owner))) return false;
-  const tribes = isGoal ? undefined : index.braves?.get(i);
+  // Any other nation's unit on the tile blocks it.
+  const here = index.units.get(i);
+  if (here) for (const v of here) if (v.owner !== ctx.owner) return false;
+  const tribes = isGoal ? undefined : index.braves.get(i);
   if (tribes) for (const t of tribes) if (ctx.war.has(t)) return false;
   // People can only route through land they have seen; the AI knows the map.
   const owner = ctx.player;
@@ -320,7 +357,7 @@ function passableAt(s: GameState, ctx: SearchContext, i: number, isGoal: boolean
 }
 
 /** moveCost for a search: from tile `fi` to the neighbouring tile `ti`, both on the map. */
-function stepCost(s: GameState, ctx: SearchContext, fi: number, ti: number, fx: number, fy: number, tx: number, ty: number, index: MapIndex): number {
+function stepCost(s: GameState, ctx: SearchContext, fi: number, ti: number, fx: number, fy: number, tx: number, ty: number, index: PathIndex): number {
   if (ctx.ship) return 3;
   const from = s.map.tiles[fi];
   const to = s.map.tiles[ti];
@@ -341,6 +378,11 @@ let searchPrev = new Int32Array(0);
 let searchSeen = new Uint32Array(0);
 let searchDone = new Uint32Array(0);
 let searchGen = 0;
+// The open list: a binary heap of keys (estimate * 2^32 + insertion number, exact in a double
+// because move costs and estimates are whole numbers) and their tiles.
+let heapKey = new Float64Array(1024);
+let heapTile = new Int32Array(1024);
+const SEQ = 4294967296;
 
 function searchBuffers(size: number): number {
   if (size !== searchSize || searchGen >= 0xfffffff0) {
@@ -363,9 +405,9 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
   const start = unitPosition(s, u);
   if (!start) return null;
   if (start.x === tx && start.y === ty) return [];
-  const index = buildMapIndex(s);
-  if (!passable(s, u, tx, ty, true, index)) return null;
+  const index = pathIndex(s);
   const ctx = searchContext(s, u);
+  if (!passable(s, ctx, tx, ty, true, index)) return null;
   const w = s.map.width;
   const h = s.map.height;
   const gen = searchBuffers(w * h);
@@ -378,57 +420,41 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
   seen[startIdx] = gen;
   cost[startIdx] = 0;
   prev[startIdx] = -1;
-  // The open list as a heap of (estimate, insertion number, tile).
-  const heapF: number[] = [0];
-  const heapSeq: number[] = [0];
-  const heapIdx: number[] = [startIdx];
+  // The heap is ordered by estimate, then by insertion: the same order in which a plain list
+  // scanned for its first lowest estimate gives up its entries, so routes are unchanged.
+  let keys = heapKey;
+  let tiles = heapTile;
+  keys[0] = 0;
+  tiles[0] = startIdx;
+  let size = 1;
   let seq = 1;
-  const before = (a: number, b: number) => heapF[a] < heapF[b] || (heapF[a] === heapF[b] && heapSeq[a] < heapSeq[b]);
-  const swap = (a: number, b: number) => {
-    const f = heapF[a]; heapF[a] = heapF[b]; heapF[b] = f;
-    const q = heapSeq[a]; heapSeq[a] = heapSeq[b]; heapSeq[b] = q;
-    const i = heapIdx[a]; heapIdx[a] = heapIdx[b]; heapIdx[b] = i;
-  };
-  const push = (idx: number, f: number) => {
-    let i = heapF.length;
-    heapF.push(f);
-    heapSeq.push(seq++);
-    heapIdx.push(idx);
-    while (i > 0) {
-      const parent = (i - 1) >> 1;
-      if (!before(i, parent)) break;
-      swap(i, parent);
-      i = parent;
-    }
-  };
-  const pop = (): number => {
-    const top = heapIdx[0];
-    const last = heapF.length - 1;
-    swap(0, last);
-    heapF.pop();
-    heapSeq.pop();
-    heapIdx.pop();
-    let i = 0;
-    for (;;) {
-      const l = 2 * i + 1;
-      const r = l + 1;
-      let m = i;
-      if (l < last && before(l, m)) m = l;
-      if (r < last && before(r, m)) m = r;
-      if (m === i) break;
-      swap(i, m);
-      i = m;
-    }
-    return top;
-  };
   let reached = false;
-  while (heapF.length) {
-    const idx = pop();
+  while (size > 0) {
+    // Pop the smallest key.
+    const idx = tiles[0];
+    size--;
+    if (size > 0) {
+      const k = keys[size];
+      const t = tiles[size];
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1;
+        if (l >= size) break;
+        const r = l + 1;
+        const m = r < size && keys[r] < keys[l] ? r : l;
+        if (keys[m] >= k) break;
+        keys[i] = keys[m];
+        tiles[i] = tiles[m];
+        i = m;
+      }
+      keys[i] = k;
+      tiles[i] = t;
+    }
     if (idx === goalIdx) break;
     if (done[idx] === gen) continue;
     done[idx] = gen;
     const cx = idx % w;
-    const cy = Math.floor(idx / w);
+    const cy = (idx - cx) / w;
     for (const d of DIRECTIONS) {
       const nx = cx + d.dx;
       const ny = cy + d.dy;
@@ -442,7 +468,26 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
         cost[nIdx] = c;
         prev[nIdx] = idx;
         if (nIdx === goalIdx) reached = true;
-        push(nIdx, c + distance(nx, ny, tx, ty));
+        // Push.
+        if (size === keys.length) {
+          const k2 = new Float64Array(size * 2);
+          k2.set(keys);
+          const t2 = new Int32Array(size * 2);
+          t2.set(tiles);
+          keys = heapKey = k2;
+          tiles = heapTile = t2;
+        }
+        const key = (c + distance(nx, ny, tx, ty)) * SEQ + seq++;
+        let i = size++;
+        while (i > 0) {
+          const parent = (i - 1) >> 1;
+          if (keys[parent] <= key) break;
+          keys[i] = keys[parent];
+          tiles[i] = tiles[parent];
+          i = parent;
+        }
+        keys[i] = key;
+        tiles[i] = nIdx;
       }
     }
   }
@@ -461,7 +506,8 @@ export function nearestHighSeas(s: GameState, ship: Unit): { x: number; y: numbe
   const start = unitPosition(s, ship);
   if (!start) return null;
   const w = s.map.width;
-  const index = buildMapIndex(s);
+  const index = pathIndex(s);
+  const ctx = searchContext(s, ship);
   const seen = new Set([start.y * w + start.x]);
   const queue = [start];
   while (queue.length) {
@@ -469,7 +515,7 @@ export function nearestHighSeas(s: GameState, ship: Unit): { x: number; y: numbe
     if (s.map.tiles[p.y * w + p.x].t === 'highSeas' && !index.colonies.has(p.y * w + p.x)) return p;
     for (const n of neighbours(s, p.x, p.y)) {
       const i = n.y * w + n.x;
-      if (seen.has(i) || !passable(s, ship, n.x, n.y, true, index)) continue;
+      if (seen.has(i) || !passable(s, ctx, n.x, n.y, true, index)) continue;
       seen.add(i);
       queue.push(n);
     }
