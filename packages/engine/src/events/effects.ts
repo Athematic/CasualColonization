@@ -7,7 +7,8 @@ import { placeOnMap } from '../movement.js';
 import { colonyReport } from '../production.js';
 import { BUILDINGS, BUILDING_ORDER, type BuildingKind } from '../rules/buildings.js';
 import { difficultyRules } from '../rules/difficulty.js';
-import { GOOD_DEFS, GOODS, type GoodId, type ProductId } from '../rules/goods.js';
+import { GOODS, type GoodId, type ProductId } from '../rules/goods.js';
+import { portPriceBand } from '../rules/ports.js';
 import { TERRAIN } from '../rules/terrain.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState } from '../types.js';
@@ -98,9 +99,9 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
       const g = goodOf(e.good, v);
       if (!g) return;
       const m = p.market[g];
-      const def = GOOD_DEFS[g];
+      const band = portPriceBand(p.id, g);
       const change = e.delta ?? Math.round((m.price * (e.pct ?? 0)) / 100);
-      m.price = Math.max(def.minPrice, Math.min(def.maxPrice * 2, m.price + change));
+      m.price = Math.max(band.min, Math.min(band.max * 2, m.price + change));
       return;
     }
     case 'crosses':

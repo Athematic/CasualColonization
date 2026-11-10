@@ -14,7 +14,7 @@ import { noteTrade } from './stats.js';
 import { cargoRoomFor, colonyAt, distance, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
 import { random } from './rng.js';
 import { GOODS } from './rules/goods.js';
-import { NATIONS, type NationId } from './rules/nations.js';
+import { HOME_PORTS, NATIONS, type NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import type { GameState, ProposalKind, Relation, RouteCargo, Unit } from './types.js';
 
@@ -347,6 +347,8 @@ export function cancelFavoured(s: GameState, by: NationId, to: NationId, why: 'c
   delete rel.proposal;
   pruneRoutes(s, by, to);
   sendShipsHome(s, by, to);
+  closedRoutePorts(s, by);
+  closedRoutePorts(s, to);
   const seized = [seizeGoods(s, to, by), seizeGoods(s, by, to)];
   if (!bothHuman(s, by, to)) {
     rel.cancels = (rel.cancels ?? 0) + 1;
@@ -375,6 +377,7 @@ export function lapseFavoured(s: GameState, nation: NationId): void {
     delete rel.favoured;
     if (rel.proposal?.kind === 'favoured') delete rel.proposal;
     sendShipsHome(s, nation, partner);
+    closedRoutePorts(s, partner);
     message(s, `With ${NATIONS[nation].name}'s declaration of independence, its Favoured Nation status with ${NATIONS[partner].name} has lapsed.`);
   }
 }
@@ -421,6 +424,28 @@ function pruneRoutes(s: GameState, a: NationId, b: NationId): void {
       }
     }
     message(s, `The ${route.name} route no longer calls at ${NATIONS[partner].adjective} colonies.`, route.owner);
+  }
+}
+
+/**
+ * Europe stops of a nation's trade routes that name a port no longer open to it (no Favoured
+ * Nation status any more, or the partner has no home port) fall back to its own home port, with a
+ * report. Called when Favoured Nation ends, and at the start of the nation's route moves.
+ */
+export function closedRoutePorts(s: GameState, nation: NationId): void {
+  for (const route of Object.values(s.routes ?? {})) {
+    if (route.owner !== nation) continue;
+    for (const stop of route.stops) {
+      const port = stop.port;
+      if (!port) continue;
+      const open = port !== nation && favouredPartners(s, nation).includes(port);
+      if (open) continue;
+      delete stop.port;
+      if (port === nation) continue;
+      for (const u of Object.values(s.units)) if (u.route?.id === route.id && u.dest && 'europe' in u.dest) delete u.dest.port;
+      track(nation, 'route:partner port closed');
+      message(s, `The ${route.name} route now calls at ${HOME_PORTS[nation]}: ${HOME_PORTS[port]} is closed to ${NATIONS[nation].adjective} ships.`, nation);
+    }
   }
 }
 

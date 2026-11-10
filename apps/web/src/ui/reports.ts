@@ -13,6 +13,7 @@ import {
   navalOverview,
   player,
   portName,
+  portSummary,
   powerName,
   PRODUCT_NAMES,
   religionOverview,
@@ -252,7 +253,9 @@ function tradeTab(ctx: ReportContext): Child[] {
       stat('Favoured ports', partners.length, partners.length ? partners.map((n) => portName(n)).join(', ') : 'none')),
     card(null,
       sortableTable('trade', cols, rows, ctx.rerender, (r) => (r.boycotted ? 'boycott' : undefined)),
-      h('p', { class: 'muted small' }, `Prices are sell / buy per unit before tax. ${partners.length ? 'Favoured Nation ports are shown at their own prices; green means they pay more than home. ' : ''}Sales are counted from the moment this report was added; games saved before start counting when loaded.`)),
+      h('p', { class: 'muted small' }, `Prices are sell / buy per unit before tax. ${partners.length ? 'Favoured Nation ports are shown at their own prices; green means they pay more than home. ' : ''}Sales are counted from the moment this report was added; games saved before start counting when loaded.`),
+      // Each home port has its own character (rules/ports.ts): what it pays more for, what is cheap there.
+      [nation, ...partners].map((port) => h('p', { class: 'muted small port-character' }, portSummary(port) + '.'))),
   ];
 }
 

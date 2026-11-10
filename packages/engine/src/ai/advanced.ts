@@ -53,6 +53,7 @@ import { aiFight, bestColonySite, disembarkAll, keenSiteScore, landingSpot, near
 import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
+import { stopPort } from '../routes.js';
 import { maybeIncite } from './natives.js';
 import { armyForIndependence, supportParts, colonyDefences, crownAffairs, defenceShort, expectedSupport, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
 import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './plan.js';
@@ -1072,7 +1073,8 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
   const inEurope = () => Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && isShip(u) && !u.repair && !u.route);
   const ships = inEurope();
   // Ships on routes that call at Europe pick up colonists from the docks as they pass.
-  const liners = countOwned(s, p, (u) => isShip(u) && !!u.route && !!s.routes?.[u.route.id]?.stops.some((st) => st.passengers));
+  // Only routes calling at the home port: colonists board only there.
+  const liners = countOwned(s, p, (u) => isShip(u) && !!u.route && !!s.routes?.[u.route.id]?.stops.some((st) => st.passengers && stopPort(s, p.id, st) === p.id));
   if (!ships.length && !liners) return;
   // Sell everything but supplies, in whichever port the ship is in; goods bought for a triangle
   // trade wait for the port they were bought for (foreign.ts).

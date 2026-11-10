@@ -12,6 +12,7 @@ import {
   isCheated,
   isWater,
   mapRevealed,
+  portPriceBand,
   sellToMarket,
   serialize,
   standing,
@@ -86,16 +87,17 @@ describe('cheats', () => {
     const [eng, fra] = s.players;
     const furs = eng.market.furs.price;
     const muskets = eng.market.muskets.price;
+    const frenchFurs = fra.market.furs.price;
     cheat(s, { cheat: 'doublePrices', nation: 'england' });
     expect(eng.market.furs.price).toBe(furs * 2);
     expect(eng.market.muskets.price).toBe(muskets * 2);
-    expect(fra.market.furs.price).toBe(furs);
+    expect(fra.market.furs.price).toBe(frenchFurs);
     // Selling still lowers the price, starting from the doubled level.
     sellToMarket(s, eng, 'furs', GOOD_DEFS.furs.elasticity * 3);
     expect(eng.market.furs.price).toBe(furs * 2 - 3);
     // Buying above the usual maximum does not snap the price back down.
     const high = eng.market.silver.price;
-    expect(high).toBeGreaterThan(GOOD_DEFS.silver.maxPrice);
+    expect(high).toBeGreaterThan(portPriceBand('england', 'silver').max);
     sellToMarket(s, eng, 'silver', -GOOD_DEFS.silver.elasticity * 2);
     expect(eng.market.silver.price).toBe(high);
   });

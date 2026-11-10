@@ -8,6 +8,7 @@ export * from './rules/nations.js';
 export * from './rules/fathers.js';
 export * from './rules/colonyNames.js';
 export * from './rules/difficulty.js';
+export * from './rules/ports.js';
 export * from './queries.js';
 export * from './production.js';
 export * from './colony.js';

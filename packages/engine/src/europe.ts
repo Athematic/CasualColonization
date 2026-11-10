@@ -18,6 +18,7 @@ import { noteTrade } from './stats.js';
 import { favouredPartners, isFavoured } from './relations.js';
 import { HOME_PORTS, NATIONS, type NationId } from './rules/nations.js';
 import { difficultyRules } from './rules/difficulty.js';
+import { portBasePrice, portCharacter, portDepth, portPriceBand } from './rules/ports.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import { IMMIGRANT_WEIGHTS, PIONEER_MAX_TOOLS, PURCHASABLE, ROLES, TRAINABLE, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
 import type { GameState, MarketEntry, Player, Unit } from './types.js';
@@ -38,8 +39,9 @@ function requireTrade(p: Player, good: GoodId): void {
   if (p.boycotts[good]) fail(`${GOOD_DEFS[good].name} is under boycott. Pay the arrears to trade it again.`);
 }
 
-export function initialMarket(): Record<GoodId, MarketEntry> {
-  return Object.fromEntries(GOODS.map((g) => [g, { price: GOOD_DEFS[g].price, volume: 0 }])) as Record<GoodId, MarketEntry>;
+/** A home port's market at the start of the game: its starting prices (rules/ports.ts), or the plain ones without `port`. */
+export function initialMarket(port?: NationId): Record<GoodId, MarketEntry> {
+  return Object.fromEntries(GOODS.map((g) => [g, { price: port ? portBasePrice(port, g) : GOOD_DEFS[g].price, volume: 0 }])) as Record<GoodId, MarketEntry>;
 }
 
 export function sellPrice(p: Player, good: GoodId): number {
@@ -57,19 +59,24 @@ export function priceSpread(p: Player, good: GoodId): number {
   return m === 1 ? spread : Math.max(1, Math.round(spread * m));
 }
 
+/** Units of a good traded in a port's market before its price moves one step. */
+export function marketElasticity(p: Player, good: GoodId): number {
+  return Math.max(1, Math.round(GOOD_DEFS[good].elasticity * portDepth(p.id, good) * difficultyRules(p).priceElasticity));
+}
+
 function adjustMarket(p: Player, good: GoodId, sold: number): void {
-  const def = GOOD_DEFS[good];
+  const band = portPriceBand(p.id, good);
   const m = p.market[good];
-  const elasticity = Math.max(1, Math.round(def.elasticity * difficultyRules(p).priceElasticity));
+  const elasticity = marketElasticity(p, good);
   m.volume += sold;
   while (m.volume >= elasticity) {
     m.volume -= elasticity;
-    m.price = Math.max(def.minPrice, m.price - 1);
+    m.price = Math.max(band.min, m.price - 1);
   }
   while (m.volume <= -elasticity) {
     m.volume += elasticity;
     // A price above the maximum (after the double-prices cheat) does not jump back down on a purchase.
-    if (m.price < def.maxPrice) m.price += 1;
+    if (m.price < band.max) m.price += 1;
   }
 }
 
@@ -79,11 +86,15 @@ export function recruitPrice(p: Player): number {
   return Math.max(Math.round(80 * cost), Math.round((300 + 40 * p.recruited) * (1 - progress * 0.6) * cost));
 }
 
-/** Price of training an expert, or buying a ship or artillery, in Europe. */
+/**
+ * Price of training an expert, or buying a ship or artillery, in Europe. `p` is the nation whose
+ * port it is bought in (its difficulty and, for ships, its port's ship prices).
+ */
 export function trainPrice(p: Player, type: UnitTypeId): number {
   const price = UNIT_TYPES[type].price;
   if (price === undefined) return Infinity;
-  return Math.round(price * difficultyRules(p).trainCost);
+  const ships = UNIT_TYPES[type].kind === 'ship' ? portCharacter(p.id).ships ?? 1 : 1;
+  return Math.round(price * difficultyRules(p).trainCost * ships);
 }
 
 export function randomImmigrant(s: GameState, nation?: Player['id']): UnitTypeId {
@@ -446,14 +457,14 @@ export function unboardInEurope(s: GameState, unitId: string): void {
   track(u.owner, 'cmd:unboard');
 }
 
-/** Drifts prices back toward their starting value. */
+/** Drifts prices back toward their starting value in each home port (its own, rules/ports.ts). */
 export function recoverMarkets(s: GameState): void {
   for (const p of s.players) {
-    const chance = (p.id === 'netherlands' ? 0.2 : 0.1) * (hasFather(s, p.id, 'janDeWitt') ? 2 : 1) * difficultyRules(p).priceRecovery;
+    const chance = (p.id === 'netherlands' ? 0.2 : 0.1) * (hasFather(s, p.id, 'janDeWitt') ? 2 : 1) * difficultyRules(p).priceRecovery * (portCharacter(p.id).recovery ?? 1);
     for (const g of GOODS) {
       if (random(s) >= chance) continue;
       const m = p.market[g];
-      const base = GOOD_DEFS[g].price;
+      const base = portBasePrice(p.id, g);
       if (m.price < base) m.price++;
       else if (m.price > base) m.price--;
     }
