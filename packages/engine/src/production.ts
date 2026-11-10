@@ -4,6 +4,7 @@ import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { yieldMultiplier } from './cheats.js';
 import { hasFather } from './fathers.js';
+import { applyEventModifiers } from './events/modifiers.js';
 import { colonyWorkers, isWater, tileAt } from './queries.js';
 import type { Colony, GameState, Tile } from './types.js';
 
@@ -177,6 +178,9 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
     produced[def.output] += output;
     buildings[kind] = { output, capacity };
   }
+
+  // Storms, sickness, bumper harvests and the like (events/): a percentage on gross production.
+  applyEventModifiers(s, colony, produced);
 
   const net = zero();
   for (const key of Object.keys(net) as ProductId[]) net[key] = produced[key] - consumed[key];

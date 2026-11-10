@@ -1,5 +1,5 @@
 // Plays computer-only games and compares AI levels.
-// Usage: npm run tournament -- [--games 8] [--turns 300] [--size medium] [--levels naive,competent,combative,creative] [--seed 1000] [--map id] [--difficulty conquistador] [--features] [--no-favoured] [--json]
+// Usage: npm run tournament -- [--games 8] [--turns 300] [--size medium] [--levels naive,competent,combative,creative] [--seed 1000] [--map id] [--difficulty conquistador] [--features] [--no-favoured] [--events] [--json]
 // --difficulty plays every nation at that level's economics, as if each were a person (computer
 // players normally stay at Conquistador). Without it, games use the standard rules (Conquistador).
 // --features also counts how often each level uses each game feature and prints a table of
@@ -29,10 +29,12 @@ const options = {
   features,
   difficulty,
   noFavoured: args.includes('--no-favoured'),
+  // Historical and random events (docs/design/events.md) are off in tournaments unless asked for.
+  events: args.includes('--events'),
 };
 
 const started = Date.now();
-console.error(`Playing ${options.games} games of ${options.turns} turns: ${levels.join(' vs ')} on a ${options.mapSize} map${difficulty ? ` at ${difficulty}` : ''}${options.noFavoured ? ', without Favoured Nation proposals' : ''}...`);
+console.error(`Playing ${options.games} games of ${options.turns} turns: ${levels.join(' vs ')} on a ${options.mapSize} map${difficulty ? ` at ${difficulty}` : ''}${options.noFavoured ? ', without Favoured Nation proposals' : ''}${options.events ? ', with events' : ''}...`);
 const result = runArena(options, (rows, g) => {
   const line = rows.map((r) => `${r.level}:${r.score}`).join('  ');
   const half = (k: 'agreements' | 'favoured') => rows.reduce((n, r) => n + (r.relations?.[k] ?? 0), 0) / 2;

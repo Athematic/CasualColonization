@@ -1,4 +1,4 @@
-import { aBrave, demandPenalty, demandText, FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, pendingDemands, REF_ON_REFUSAL, TRIBES, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { aBrave, demandPenalty, demandText, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, NATIONS, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, TRIBES, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
 
@@ -26,6 +26,7 @@ const ROUTINE = [
   /as a gift\./,
   /has been founded\./,
   /has joined the Continental Congress of/,
+  /You decide in the turn-start briefing\.$/,
 ];
 
 export function isRoutine(m: GameMessage): boolean {
@@ -119,6 +120,32 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
               h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerNativeDemand', demandId: d.id, accept: false }, true) && done('Declined.') }, 'Decline'))),
       });
     }
+  }
+  // Historical and random events that ask for a choice (events/ in the engine).
+  for (const ev of pendingEvents(app.state, me.id)) {
+    const choices = eventChoices(app.state, ev);
+    list.push({
+      id: `event-${ev.id}`,
+      title: eventTitle(app.state, ev),
+      required: true,
+      render: (done) =>
+        h('div', { class: 'decision-body' },
+          h('p', null, ev.text),
+          h('div', { class: 'decision-actions' },
+            choices.map((c, i) =>
+              h('button', {
+                class: i === 0 ? 'btn primary' : 'btn',
+                disabled: !c.available,
+                title: c.available ? undefined : 'The treasury cannot pay for this.',
+                onclick: () => {
+                  if (!app.dispatch({ type: 'answerEvent', eventId: ev.id, choice: i }, true)) return;
+                  // The outcome is the newest message to this nation.
+                  const said = [...app.state.messages].reverse().find((m) => m.to === me.id)?.text ?? `${c.label}.`;
+                  const title = `${eventTitle(app.state, ev)}: `;
+                  done(said.startsWith(title) ? said.slice(title.length) : said);
+                },
+              }, c.label)))),
+    });
   }
   // Proposals from other nations: a trade agreement or Favoured Nation status.
   for (const rel of Object.values(app.state.relations ?? {}) as Relation[]) {

@@ -24,6 +24,7 @@ import { proposePeace, startWar } from './diplomacy.js';
 import { answerProposal, cancelFavoured, cancelTrade, proposeFavoured, proposeTrade } from './relations.js';
 import { declareIndependence } from './independence.js';
 import { answerDemand } from './crown.js';
+import { answerEvent, setEvents } from './events/index.js';
 import type { FatherId } from './rules/fathers.js';
 import { cargoRoomFor, colonyAt, currentPlayer, type Direction } from './queries.js';
 import type { GoodId } from './rules/goods.js';
@@ -82,6 +83,10 @@ export type Command =
   | { type: 'answerTax'; accept: boolean }
   /** Pays (or refuses) the King's demand for gold. */
   | { type: 'answerDemand'; pay: boolean }
+  /** Answers a pending event (events/): `choice` is the index of the choice taken. */
+  | { type: 'answerEvent'; eventId: string; choice: number }
+  /** Switches historical and/or random events on or off for the rest of the game. */
+  | { type: 'setEvents'; historical?: boolean; random?: boolean }
   | { type: 'payArrears'; good: GoodId }
   | { type: 'setExport'; colonyId: string; good: GoodId; on: boolean }
   | { type: 'declareWar'; nation: NationId }
@@ -329,6 +334,12 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'answerDemand':
         text = answerDemand(s, nation, cmd.pay);
+        break;
+      case 'answerEvent':
+        text = answerEvent(s, nation, cmd.eventId, cmd.choice);
+        break;
+      case 'setEvents':
+        text = setEvents(s, { historical: cmd.historical, random: cmd.random });
         break;
       case 'payArrears':
         payArrears(s, nation, cmd.good);
