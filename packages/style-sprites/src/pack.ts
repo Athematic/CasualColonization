@@ -12,6 +12,7 @@
  */
 import type { BuildingKind, ProductId, RoleId, TerrainId, TribeId, UnitTypeId } from '@cc/engine';
 import type { StyleTheme } from '@cc/render-api';
+import { DEFAULT_TRANSITION_ORDER, type TransitionMode } from './transitions.js';
 
 /** One template, several in order of preference, or null for "keep this procedural". */
 export type IdSlot = string | readonly string[] | null;
@@ -55,6 +56,12 @@ export interface SpriteMapping {
   roads: { hub: IdSlot; spoke: IdSlot; diagonal: IdSlot };
   /** Shallow-water bands on water tiles next to land: along the top edge, the top and left edges, the top-left corner. */
   coast: { edge: IdSlot; inner: IdSlot; outer: IdSlot };
+  /**
+   * Terrain transition pieces (see rules.transitions): the band a terrain bleeds onto a lower-ranked
+   * neighbour, along the top edge, along the top and left edges, in the top-left corner. `{terrain}` is the
+   * bleeding terrain. Terrains without an edge piece keep the hard boundary.
+   */
+  transitions: { edge: IdSlot; inner: IdSlot; outer: IdSlot };
   colonies: {
     /** By population: the entry with the largest `min` not above the colony's size. */
     sizes: readonly { min: number; id: IdSlot }[];
@@ -104,6 +111,12 @@ export interface DrawRules {
    * height; the flag is the tinted `overlays.flag` sprite, or a plain ink pennant without it.
    */
   colonyFlag: { x: number; y: number; height: number } | null;
+  /**
+   * Terrain borders: 'none' (default) keeps the hard flat-colour boundary; 'overlay' draws the
+   * mapped transition pieces, for the terrains ranked in `transitionOrder` (lowest first).
+   */
+  transitions: TransitionMode;
+  transitionOrder: readonly TerrainId[];
   /** Unit icons: sprite size relative to the icon, and the owner's pennant on ships and soldiers. */
   unitIcon: { scale: number; pennant: { size: number; minIcon: number } | null };
 }
@@ -201,6 +214,11 @@ export const DEFAULT_MAPPING: SpriteMapping = {
   rumour: 'decor/ruins',
   roads: { hub: 'decor/road__hub', spoke: 'decor/road__spoke', diagonal: 'decor/road__spoke-diagonal' },
   coast: { edge: 'terrain/coast__edge', inner: 'terrain/coast__inner', outer: 'terrain/coast__outer' },
+  transitions: {
+    edge: 'terrain/blend__{terrain}__edge',
+    inner: 'terrain/blend__{terrain}__inner',
+    outer: 'terrain/blend__{terrain}__outer',
+  },
   colonies: {
     // The house-count thresholds of the procedural colony.
     sizes: [
@@ -233,6 +251,8 @@ export const DEFAULT_RULES: DrawRules = {
   colony: { scale: 1.75, x: 0.5, y: 0.97 },
   defence: { scale: 2.1, x: 0.5, y: 1.04 },
   colonyFlag: { x: 0.42, y: 0.56, height: 0.5 },
+  transitions: 'none',
+  transitionOrder: DEFAULT_TRANSITION_ORDER,
   unitIcon: { scale: 0.98, pennant: { size: 0.36, minIcon: 28 } },
 };
 

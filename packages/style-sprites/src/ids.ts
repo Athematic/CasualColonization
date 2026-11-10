@@ -115,6 +115,13 @@ export class SpriteIds {
     return { edge: fill(c.edge), inner: fill(c.inner), outer: fill(c.outer) };
   }
 
+  /** The transition pieces a terrain bleeds onto lower-ranked neighbours. */
+  transition(t: TerrainId): { edge: string[]; inner: string[]; outer: string[] } {
+    const c = this.mapping.transitions;
+    const vars = { terrain: t };
+    return { edge: fill(c.edge, vars), inner: fill(c.inner, vars), outer: fill(c.outer, vars) };
+  }
+
   overlay(kind: 'pennant' | 'flag' | 'mission'): string[] {
     return fill(this.mapping.overlays[kind]);
   }
