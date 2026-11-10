@@ -75,12 +75,11 @@ function plannedSelect(label: string, release: string, choices: string[], note?:
 
 /** Rule options from the roadmap, shown as disabled switches. */
 const PLANNED_OPTIONS: { label: string; release: string; note: string }[] = [
-  { label: 'Favoured Nation', release: '0.4', note: 'Years of peace and shared trade routes let two nations trade and buy ships in each other\'s home ports.' },
-  { label: 'A market for every home port', release: '0.4', note: 'Each nation\'s port has its own prices and taxes, which makes triangle trading possible.' },
-  { label: 'Visible native braves', release: '0.5', note: 'Braves wander, visit, trade, demand tribute and fight as units on the map.' },
-  { label: 'A growing royal army', release: '0.5', note: 'The king builds up the Royal Expeditionary Force during the game, and you can watch it grow.' },
-  { label: 'Convict transport', release: 'Scenarios', note: 'The Crown sends convicts as colonists; lobby for free settlers instead.' },
-  { label: 'Play on past the end year', release: 'Long term', note: 'After the last year, the game continues in the style of Civilization II.' },
+  { label: 'Alliances', release: 'Beta 1', note: 'Allied nations defend each other, open their colonies to each other and share sight. Leaving an alliance has a price.' },
+  { label: 'Chartered companies', release: 'Beta 1', note: 'Several nations buy shares in a company that founds and runs its own colonies and pays dividends.' },
+  { label: 'Winning together', release: 'Beta 1', note: 'An alliance that together holds enough of the score at the end can win together.' },
+  { label: 'Native peoples as partners', release: 'Beta 2', note: 'Trade agreements, shared land and mutual defence with the native peoples.' },
+  { label: 'Hexagon maps', release: 'Later', note: 'A scenario can choose hexagon tiles instead of squares.' },
 ];
 
 export function newGameScreen(
@@ -228,6 +227,12 @@ export function newGameScreen(
     // What the chosen scenario offers.
     /** The scenario's colony charter, if it has one (the option is hidden otherwise). */
     const CHARTER = options.charter;
+    const alwaysOn = [
+      scenario.mechanics.favoured ? 'Favoured Nation' : null,
+      'a market and prices for every home port',
+      'native braves on the map',
+      scenario.mechanics.ref ? 'a royal army that grows during the game' : null,
+    ].filter((x): x is string => !!x);
     const scenarios = playableScenarios();
     /** The scenario with the chosen rivals, for the nations' entries in that set. */
     const setup = { config: { scenario: scenario.id, rivals } };
@@ -285,7 +290,7 @@ export function newGameScreen(
             h('select', { 'aria-label': 'Difficulty', onchange: (e: Event) => { difficulty = (e.target as HTMLSelectElement).value as DifficultyId; render(); } },
               DIFFICULTY_LEVELS.map((d) => h('option', { value: d, selected: d === difficulty || undefined, title: DIFFICULTY[d].description },
                 `${DIFFICULTY[d].name}${d === DEFAULT_DIFFICULTY ? ' (standard)' : ''}`)))),
-          plannedSelect('Players', 'Later', ['On this device (hot seat)', 'Online'])),
+          plannedSelect('Online play', 'Later', ['Online'], 'Several people can already play on this device (hot seat): set more than one nation to Player.')),
         humans > 1 ? h('p', { class: 'muted small' }, 'Several players take turns on this device (hot seat).') : null,
         humans === 0 ? h('p', { class: 'muted small' }, 'No players: you watch the computer nations play each other, with a live scoreboard.') : null,
         h('div', { class: 'row wrap' },
@@ -314,8 +319,10 @@ export function newGameScreen(
           CHARTER ? h('label', { class: 'rule-option', title: `Every colony after the first needs a charter from ${term(scenario, 'crown')}: ${CHARTER.base} gold for each colony the nation already has, at most ${CHARTER.cap}, scaled by difficulty.${scenario.mechanics.independence ? ' Free after the declaration of independence.' : ''}` },
             h('input', { type: 'checkbox', checked: colonyCharter || undefined, 'aria-label': 'Colony charter (founding costs gold)', onchange: (e: Event) => (colonyCharter = (e.target as HTMLInputElement).checked) }),
             h('span', null, h('b', null, 'Colony charter (founding costs gold)'), h('br'), h('span', { class: 'muted small' }, `${Term(scenario, 'crown')} charges for each new colony after the first.`))) : null),
+        // Rules that are part of the game now (formerly listed as planned for 0.4 and 0.5), where the scenario has them.
+        alwaysOn.length ? h('p', { class: 'muted small' }, `Always part of the game: ${alwaysOn.join(', ')}.`) : null,
         h('details', { class: 'planned-options' },
-          h('summary', null, 'Rules and options ', planned('coming')),
+          h('summary', null, 'Rules and options ', planned('later releases')),
           h('p', { class: 'muted small' }, 'On the roadmap and not playable yet. Hover or tap for details.'),
           h('div', { class: 'planned-grid' }, PLANNED_OPTIONS.map((o) =>
             h('label', { class: 'planned-option', title: o.note },
