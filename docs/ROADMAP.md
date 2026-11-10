@@ -104,7 +104,6 @@ Closes the smaller items left from earlier releases while the classic game is co
 | Tessellated terrain tiles: edge and corner pieces that blend neighbouring terrains, as a sprite-pack feature (Simon's idea, see CHANGE_SUGGESTIONS.md). Design and the `rules.transitions: 'overlay'` pack option are in ([design/tessellated-tiles.md](design/tessellated-tiles.md)), off by default; left: generate the 12 trial images (SPRITE_PROMPTS 4.8a), look at them on a map, then the other terrains | M | P2 | trial |
 | Seed phrases: the Game seed field also accepts text ("Peters Game"), hashed to a seed number, so a game is easy to share by name. Numbers keep working; the phrase is shown with the game and in saves. The same phrase gives the same world only with the same settings (map, nations, difficulty, options) and game version, so a share link or code could carry those too | S | P3 | done (seed phrases, game codes, share links and a QR code; Simon's idea) |
 | Terrain variants: several sprite variants per terrain (`terrain/<id>__v2` …), chosen per tile from the map position so neighbours rarely repeat (Simon's idea); `rules.variants` | S | P2 | done |
-| Speed-ups that change outcomes (each 10–20%: follow a found route for the whole turn, sharper path estimate, re-plan colony workers less often, keep colony reports per computer turn); renderer performance pass | M | P3 | idea |
 
 ## 0.9: Scenario framework
 
@@ -141,6 +140,9 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
 
 ## Later
 
+- Speed-ups that change outcomes (each 10–20%: follow a found route for the whole turn, sharper path estimate, re-plan colony workers less often, keep colony reports per computer turn); renderer performance pass. Moved out of 0.8: head starts already take about 12 s.
+- Triangle trading that actually happens: the computer players never have a free cargo hold for it (all ships run routes), so it needs a route-level triangle or a ship kept free for it, not price tuning.
+- Favoured Nation forms about a third as often since the 0.8 fix (partner trade must pay); a ties-building rule that doesn't cost detours would bring it back.
 - Interface redesign: one or two side branches that try a redesigned interface (panels, menus, screens) with a front-end design approach, compared side by side before choosing (Simon's idea).
 - More sprites in the interface: buttons, panel frames, icons and screen headers from the art set, through sprite pack interface CSS (Simon's idea).
 

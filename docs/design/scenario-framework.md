@@ -604,3 +604,8 @@ Total: about **XL** (roughly two weeks of agent work in the project's sizes: one
 | Q13 | **Do the unit "slots" (treasure, convert, regulars, the starting ship) stay engine concepts?** | **Yes.** A scenario points a slot at a unit type and renames it in text; the mechanics stay in the engine. |
 | Q14 | **Title screen with several scenarios:** random covers from all scenarios, or the last-played one? | Covers of the **last-played** scenario when there is one, otherwise all. Landing copy becomes general once there are two scenarios. |
 | Q15 | **Should Australia and Vinland stay visible as disabled "planned" options** in the Scenario select during 0.9? | **Yes**, as today, so players see where the game is going. |
+
+
+## Added after the 0.8 measurements
+
+- **Arena play-on:** a won or lost War of Independence ends the game for every nation, so tournaments stop at the first one (all games so far ended before turn 380, about 1736). The victory rules in step 5 should let the arena continue for the other nations (an option, not the default for people's games), so computer players can be measured to the end year.
