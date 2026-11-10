@@ -6,6 +6,7 @@ import { resolveRumour } from './rumours.js';
 import {
   cargoFree,
   colonyAt,
+  DIRECTIONS,
   dirOffset,
   distance,
   inBounds,
@@ -241,9 +242,16 @@ export interface MapIndex {
 export function buildMapIndex(s: GameState): MapIndex {
   const w = s.map.width;
   const index: MapIndex = { colonies: new Map(), settlements: new Set(), units: new Map() };
-  for (const c of Object.values(s.colonies)) index.colonies.set(c.y * w + c.x, c.owner);
-  for (const st of Object.values(s.settlements)) index.settlements.add(st.y * w + st.x);
-  for (const u of Object.values(s.units)) {
+  for (const id in s.colonies) {
+    const c = s.colonies[id];
+    index.colonies.set(c.y * w + c.x, c.owner);
+  }
+  for (const id in s.settlements) {
+    const st = s.settlements[id];
+    index.settlements.add(st.y * w + st.x);
+  }
+  for (const id in s.units) {
+    const u = s.units[id];
     if (u.loc.kind !== 'map') continue;
     const i = u.loc.y * w + u.loc.x;
     let owners = index.units.get(i);
@@ -269,7 +277,7 @@ function passable(s: GameState, u: Unit, x: number, y: number, isGoal: boolean, 
   if (colonyOwner && colonyOwner !== u.owner) return false;
   if (index.settlements.has(i)) return false;
   const owners = index.units.get(i);
-  if (owners && [...owners].some((o) => o !== u.owner)) return false;
+  if (owners && (owners.size > 1 || !owners.has(u.owner))) return false;
   const tribes = isGoal ? undefined : index.braves?.get(i);
   if (tribes && tribes.some((t) => s.tribes.find((o) => o.id === t)?.stance[u.owner] === 'war')) return false;
   // People can only route through land they have seen; the AI knows the map.
@@ -279,7 +287,32 @@ function passable(s: GameState, u: Unit, x: number, y: number, isGoal: boolean, 
   return !isWater(tile);
 }
 
-/** Cheapest route by move points; returns the steps after the start, or null. */
+// Search buffers, reused between path searches: a tile's cost and previous tile count only when
+// its stamp is the current search's, so nothing is cleared between searches.
+let searchSize = 0;
+let searchCost = new Float64Array(0);
+let searchPrev = new Int32Array(0);
+let searchSeen = new Uint32Array(0);
+let searchDone = new Uint32Array(0);
+let searchGen = 0;
+
+function searchBuffers(size: number): number {
+  if (size !== searchSize || searchGen >= 0xfffffff0) {
+    searchSize = size;
+    searchCost = new Float64Array(size);
+    searchPrev = new Int32Array(size);
+    searchSeen = new Uint32Array(size);
+    searchDone = new Uint32Array(size);
+    searchGen = 0;
+  }
+  return ++searchGen;
+}
+
+/**
+ * Cheapest route by move points; returns the steps after the start, or null.
+ * A* with a binary heap ordered by estimate, then by insertion: the same order in which a plain
+ * list scanned for its first lowest estimate gives up its entries, so routes are unchanged.
+ */
 export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: number; y: number }[] | null {
   const start = unitPosition(s, u);
   if (!start) return null;
@@ -287,41 +320,93 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
   const index = buildMapIndex(s);
   if (!passable(s, u, tx, ty, true, index)) return null;
   const w = s.map.width;
+  const h = s.map.height;
+  const gen = searchBuffers(w * h);
+  const cost = searchCost;
+  const prev = searchPrev;
+  const seen = searchSeen;
+  const done = searchDone;
   const startIdx = start.y * w + start.x;
   const goalIdx = ty * w + tx;
-  const cost = new Map<number, number>([[startIdx, 0]]);
-  const prev = new Map<number, number>();
-  const open: { idx: number; f: number }[] = [{ idx: startIdx, f: 0 }];
-  const closed = new Set<number>();
-  while (open.length) {
-    let bi = 0;
-    for (let i = 1; i < open.length; i++) if (open[i].f < open[bi].f) bi = i;
-    const { idx } = open.splice(bi, 1)[0];
+  seen[startIdx] = gen;
+  cost[startIdx] = 0;
+  prev[startIdx] = -1;
+  // The open list as a heap of (estimate, insertion number, tile).
+  const heapF: number[] = [0];
+  const heapSeq: number[] = [0];
+  const heapIdx: number[] = [startIdx];
+  let seq = 1;
+  const before = (a: number, b: number) => heapF[a] < heapF[b] || (heapF[a] === heapF[b] && heapSeq[a] < heapSeq[b]);
+  const swap = (a: number, b: number) => {
+    const f = heapF[a]; heapF[a] = heapF[b]; heapF[b] = f;
+    const q = heapSeq[a]; heapSeq[a] = heapSeq[b]; heapSeq[b] = q;
+    const i = heapIdx[a]; heapIdx[a] = heapIdx[b]; heapIdx[b] = i;
+  };
+  const push = (idx: number, f: number) => {
+    let i = heapF.length;
+    heapF.push(f);
+    heapSeq.push(seq++);
+    heapIdx.push(idx);
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (!before(i, parent)) break;
+      swap(i, parent);
+      i = parent;
+    }
+  };
+  const pop = (): number => {
+    const top = heapIdx[0];
+    const last = heapF.length - 1;
+    swap(0, last);
+    heapF.pop();
+    heapSeq.pop();
+    heapIdx.pop();
+    let i = 0;
+    for (;;) {
+      const l = 2 * i + 1;
+      const r = l + 1;
+      let m = i;
+      if (l < last && before(l, m)) m = l;
+      if (r < last && before(r, m)) m = r;
+      if (m === i) break;
+      swap(i, m);
+      i = m;
+    }
+    return top;
+  };
+  let reached = false;
+  while (heapF.length) {
+    const idx = pop();
     if (idx === goalIdx) break;
-    if (closed.has(idx)) continue;
-    closed.add(idx);
+    if (done[idx] === gen) continue;
+    done[idx] = gen;
     const cx = idx % w;
     const cy = Math.floor(idx / w);
-    for (const n of neighbours(s, cx, cy)) {
-      const nIdx = n.y * w + n.x;
-      if (closed.has(nIdx)) continue;
-      if (!passable(s, u, n.x, n.y, nIdx === goalIdx, index)) continue;
-      const c = cost.get(idx)! + moveCost(s, u, cx, cy, n.x, n.y, index);
-      if (c < (cost.get(nIdx) ?? Infinity)) {
-        cost.set(nIdx, c);
-        prev.set(nIdx, idx);
-        open.push({ idx: nIdx, f: c + distance(n.x, n.y, tx, ty) });
+    for (const d of DIRECTIONS) {
+      const nx = cx + d.dx;
+      const ny = cy + d.dy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const nIdx = ny * w + nx;
+      if (done[nIdx] === gen) continue;
+      if (!passable(s, u, nx, ny, nIdx === goalIdx, index)) continue;
+      const c = cost[idx] + moveCost(s, u, cx, cy, nx, ny, index);
+      if (seen[nIdx] !== gen || c < cost[nIdx]) {
+        seen[nIdx] = gen;
+        cost[nIdx] = c;
+        prev[nIdx] = idx;
+        if (nIdx === goalIdx) reached = true;
+        push(nIdx, c + distance(nx, ny, tx, ty));
       }
     }
   }
-  if (!prev.has(goalIdx)) return null;
+  if (!reached) return null;
   const path: { x: number; y: number }[] = [];
   let cur = goalIdx;
   while (cur !== startIdx) {
-    path.unshift({ x: cur % w, y: Math.floor(cur / w) });
-    cur = prev.get(cur)!;
+    path.push({ x: cur % w, y: Math.floor(cur / w) });
+    cur = prev[cur];
   }
-  return path;
+  return path.reverse();
 }
 
 /** Nearest high-seas tile a ship can reach. */

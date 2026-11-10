@@ -13,7 +13,9 @@ import {
   foundColony,
   hurryBuild,
   hurryPrice,
+  colonyOccupancy,
   jobOptions,
+  type ColonyOccupancy,
   leaveColony,
   setBuild,
 } from '../colony.js';
@@ -24,7 +26,7 @@ import { boardInEurope, buyGoods, buyPrice, inHomePort, portOf, recruit, recruit
 import { canDeclareIndependence, declareIndependence, rebelShare } from '../independence.js';
 import { canImprove, findPath, setDestination, startImprovement } from '../movement.js';
 import { buyLand, establishMission, giftToTribe, landPrice, learnSkill, nativeLandOwner, speakToChief, takeLand, tensionOf } from '../natives.js';
-import { colonyReport, sonsOfLiberty, type ColonyReport } from '../production.js';
+import { colonyReport, type ColonyReport } from '../production.js';
 import {
   cargoFree,
   cargoRoomFor,
@@ -303,10 +305,10 @@ function currentValue(p: Player, c: Colony, u: Unit, report: ColonyReport, prof:
   return jobValueFor(p, c, u, job, amount, report, prof, sol);
 }
 
-/** `report` and `sol` are the colony's current report and Sons of Liberty share. */
-function bestJobFor(s: GameState, p: Player, c: Colony, u: Unit, prof: AiProfile, report: ColonyReport, sol: number): { job: Job; value: number } | null {
+/** `report`, `sol` and `occupancy` are the colony's current report, Sons of Liberty share and occupancy. */
+function bestJobFor(s: GameState, p: Player, c: Colony, u: Unit, prof: AiProfile, report: ColonyReport, sol: number, occupancy: ColonyOccupancy): { job: Job; value: number } | null {
   let best: { job: Job; value: number } | null = null;
-  for (const opt of jobOptions(s, c, u)) {
+  for (const opt of jobOptions(s, c, u, occupancy)) {
     const v = jobValueFor(p, c, u, opt.job, opt.amount, report, prof, sol);
     if (!best || v > best.value) best = { job: opt.job, value: v };
   }
@@ -317,28 +319,30 @@ function bestJobFor(s: GameState, p: Player, c: Colony, u: Unit, prof: AiProfile
 function optimiseWorkers(s: GameState, p: Player, c: Colony, prof: AiProfile): void {
   let changes = 0;
   const workers = colonyWorkers(s, c).sort((a, b) => UNIT_TYPES[b.type].skill - UNIT_TYPES[a.type].skill);
-  // The report and Sons of Liberty share only change when someone changes jobs.
+  // The report, the Sons of Liberty share (the report's) and who works where only change when
+  // someone changes jobs.
   let report = colonyReport(s, c);
-  let sol = sonsOfLiberty(s, c);
+  let occupancy = colonyOccupancy(s, c);
   for (const u of workers) {
     if (changes >= 3) break;
-    const now = currentValue(p, c, u, report, prof, sol);
-    const best = bestJobFor(s, p, c, u, prof, report, sol);
+    const now = currentValue(p, c, u, report, prof, report.sonsOfLiberty);
+    const best = bestJobFor(s, p, c, u, prof, report, report.sonsOfLiberty, occupancy);
     if (best && best.value > now * 1.15 + 0.5) {
       assignJob(s, u.id, c.id, best.job);
       changes++;
       report = colonyReport(s, c);
-      sol = sonsOfLiberty(s, c);
+      occupancy = colonyOccupancy(s, c);
     }
   }
   // Never starve: move people onto food until the colony breaks even.
   for (const u of colonyWorkers(s, c)) {
     if (report.net.food >= 0) break;
     if (u.loc.kind === 'colony' && u.loc.job.kind === 'tile' && u.loc.job.good === 'food') continue;
-    const food = jobOptions(s, c, u).filter((o) => o.job.kind === 'tile' && o.job.good === 'food').sort((a, b) => b.amount - a.amount)[0];
+    const food = jobOptions(s, c, u, occupancy).filter((o) => o.job.kind === 'tile' && o.job.good === 'food').sort((a, b) => b.amount - a.amount)[0];
     if (food && food.amount > 2) {
       assignJob(s, u.id, c.id, food.job);
       report = colonyReport(s, c);
+      occupancy = colonyOccupancy(s, c);
     }
   }
 }
@@ -346,8 +350,10 @@ function optimiseWorkers(s: GameState, p: Player, c: Colony, prof: AiProfile): v
 function buildPlan(s: GameState, p: Player, c: Colony, prof: AiProfile): BuildTarget | null {
   const threatened = Object.values(p.stance).includes('war') || Object.values(s.settlements).some((st) => distance(st.x, st.y, c.x, c.y) <= 5 && tensionOf(st, p.id) > 500);
   const preparing = !!prof.independence && turnShare >= prof.independence.minShare - 20;
-  const pop = colonyWorkers(s, c).length;
-  const staffed = (k: BuildingKind) => colonyWorkers(s, c).filter((w) => w.loc.kind === 'colony' && w.loc.job.kind === 'building' && w.loc.job.building === k).length;
+  // Read-only below: the workers stay where they are.
+  const workers = colonyWorkers(s, c);
+  const pop = workers.length;
+  const staffed = (k: BuildingKind) => workers.filter((w) => w.loc.kind === 'colony' && w.loc.job.kind === 'building' && w.loc.job.building === k).length;
   const plan: BuildTarget[] = [];
   const b = (id: BuildingKind) => plan.push({ kind: 'building', id });
   // An outpost without soldiers holds up expansion until it has a stockade (expansionCheck).

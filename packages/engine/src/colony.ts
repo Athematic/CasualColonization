@@ -143,16 +143,34 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
   return colony;
 }
 
-/** All jobs open to a unit in a colony, with the amount it would produce. */
-export function jobOptions(s: GameState, colony: Colony, u: Unit): { job: Job; amount: number }[] {
-  const out: { job: Job; amount: number }[] = [];
+/**
+ * Who works around and inside a colony, gathered in one pass over the units (a hot path for the
+ * computer players). Valid until a unit changes jobs or moves, or the land around changes.
+ */
+export interface ColonyOccupancy {
+  /** The tiles around the colony, in `neighbours` order. */
+  tiles: { x: number; y: number }[];
+  /** The unit working each tile around the colony (the first found, as tileWorkedBy), by map index. */
+  worked: Map<number, Unit>;
+  /** Tiles around the colony nobody can work: a settlement, a colony or native land on them. */
+  closed: Set<number>;
+  /** Workers in each of the colony's buildings. */
+  inBuilding: Map<string, number>;
+  /** The colony's population and liberty bonus. */
+  pop: number;
+  bonus: number;
+}
+
+export function colonyOccupancy(s: GameState, colony: Colony): ColonyOccupancy {
   const tiles = neighbours(s, colony.x, colony.y);
-  // One pass over the units (a hot path for the computer players): who works each nearby tile
-  // (the first found, as tileWorkedBy), and how many others work in each of this colony's
-  // buildings. The colony's own size gives the liberty bonus.
   const w = s.map.width;
   const near = new Set<number>();
-  for (const p of tiles) near.add(p.y * w + p.x);
+  const closed = new Set<number>();
+  for (const p of tiles) {
+    const i = p.y * w + p.x;
+    near.add(i);
+    if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y) || nativeLandOwner(s, p.x, p.y)) closed.add(i);
+  }
   const worked = new Map<number, Unit>();
   const inBuilding = new Map<string, number>();
   let pop = 0;
@@ -162,30 +180,47 @@ export function jobOptions(s: GameState, colony: Colony, u: Unit): { job: Job; a
     const job = v.loc.job;
     if (v.loc.colonyId === colony.id) {
       pop++;
-      if (job.kind === 'building' && v.id !== u.id) inBuilding.set(job.building, (inBuilding.get(job.building) ?? 0) + 1);
+      if (job.kind === 'building') inBuilding.set(job.building, (inBuilding.get(job.building) ?? 0) + 1);
     }
     if (job.kind === 'tile') {
       const i = job.y * w + job.x;
       if (near.has(i) && !worked.has(i)) worked.set(i, v);
     }
   }
-  const bonus = libertyBonus(s, colony, pop);
-  for (const p of tiles) {
-    const worker = worked.get(p.y * w + p.x);
+  return { tiles, worked, closed, inBuilding, pop, bonus: libertyBonus(s, colony, pop) };
+}
+
+/**
+ * All jobs open to a unit in a colony, with the amount it would produce. Pass `occupancy` to reuse
+ * one gathered for the colony while nothing has changed.
+ */
+export function jobOptions(s: GameState, colony: Colony, u: Unit, occupancy = colonyOccupancy(s, colony)): { job: Job; amount: number }[] {
+  const out: { job: Job; amount: number }[] = [];
+  const { worked, closed, inBuilding, bonus } = occupancy;
+  const w = s.map.width;
+  for (const p of occupancy.tiles) {
+    const i = p.y * w + p.x;
+    const worker = worked.get(i);
     if (worker && worker.id !== u.id) continue;
-    if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y) || nativeLandOwner(s, p.x, p.y)) continue;
+    if (closed.has(i)) continue;
     for (const g of GOODS) {
       const amount = tileYield(s, colony, p.x, p.y, g, u.type, bonus);
       if (amount > 0) out.push({ job: { kind: 'tile', x: p.x, y: p.y, good: g }, amount });
     }
   }
+  // The unit's own place does not count against a building's room.
+  const own = u.loc.kind === 'colony' && u.loc.colonyId === colony.id && u.loc.job.kind === 'building' ? u.loc.job.building : null;
+  const others = (kind: string) => (inBuilding.get(kind) ?? 0) - (own === kind ? 1 : 0);
   for (const kind of BUILDING_ORDER) {
     const def = BUILDINGS[kind];
     if (def.workplaces === 0 || colony.buildings[kind] === 0 || !def.output) continue;
-    if ((inBuilding.get(kind) ?? 0) >= def.workplaces) continue;
+    if (others(kind) >= def.workplaces) continue;
     out.push({ job: { kind: 'building', building: kind }, amount: buildingCapacityPerWorker(s, colony, kind, u.type, bonus) });
   }
-  if (canTeachHere(s, colony, u, u.id)) out.push({ job: { kind: 'building', building: 'schoolhouse' }, amount: 0 });
+  // As canTeachHere.
+  const level = colony.buildings.schoolhouse;
+  const teach = UNIT_TYPES[u.type].teach;
+  if (level && teach && teach <= level && others('schoolhouse') < SCHOOL_TEACHERS[level - 1]) out.push({ job: { kind: 'building', building: 'schoolhouse' }, amount: 0 });
   return out;
 }
 

@@ -132,12 +132,16 @@ export interface ColonyReport {
   sonsOfLiberty: number;
 }
 
-function zero(): Record<ProductId, number> {
+const ZERO = (() => {
   const out = Object.fromEntries(GOODS.map((g) => [g, 0])) as Record<ProductId, number>;
   out.hammers = 0;
   out.bells = 0;
   out.crosses = 0;
-  return out;
+  return Object.freeze(out);
+})();
+
+function zero(): Record<ProductId, number> {
+  return { ...ZERO };
 }
 
 export function colonyReport(s: GameState, colony: Colony): ColonyReport {
