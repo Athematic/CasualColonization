@@ -78,14 +78,16 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Computer players space colonies and expand at a measured pace: sites that share work tiles with another colony count those tiles at a quarter, bonus resources, rivers, rich food and the coast are chased; a new colony only once the others average three colonists (2.5 Combative), at most one every 6 turns (4 Combative), with a defender or stockade for each colony beyond the first two, and the charter paid with the reserve kept | M | P1 | done ([audit note](AI_FEATURE_AUDIT.md#colony-spacing-and-pace-06); `ai/common.ts` `siteScore`, `keenSiteScore`, `bestColonySite`; `ai/advanced.ts` `expansionCheck`, `sendSettler`; `AiProfile.expansion`) |
 | Colony charter: founding costs gold (100 × colonies held, at most 2,000, times difficulty; free after independence; `GameConfig.colonyCharter`, on in new games and tournaments, `--no-charter`) | S | P1 | done (`charterCost`, `COLONY_CHARTER` and `DifficultyRules.colonyCharter` in `rules/difficulty.ts`) |
 
-## 0.7: The classic game, part 2
+## 0.7: The classic game, part 2 (in progress)
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Mercenaries; foreign intervention force; Tories after the declaration | M | P2 | idea |
-| Damaged artillery, ambush bonus, fortresses and coastal forts, capturing equipment | M | P2 | idea |
-| Mines running out | S | P3 | idea |
-| Abandoning a colony; retiring early | S | P2 | idea |
+| Mercenaries; foreign intervention force; Tories after the declaration | M | P2 | in progress |
+| Damaged artillery, ambush bonus, fortresses and coastal forts, capturing equipment | M | P2 | in progress |
+| Mines running out | S | P3 | in progress |
+| Abandoning a colony; retiring early | S | P2 | in progress |
+| Performance pass: profile computer turns and the map renderer; a head start to 1700 currently takes about 100 seconds. Goal: under 30 seconds, with identical game outcomes | M | P1 | planned (after the other 0.7 items) |
+| Scoring review: reward well-developed colonies (buildings, experts, production, liberty) and not only headcount, to fit the colony charter and the measured pace | S | P1 | in progress |
 
 ## Beta 1–2: Cooperation
 
