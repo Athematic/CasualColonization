@@ -104,6 +104,7 @@ Ids are templates. `{type}`, `{role}`, `{terrain}`, `{tribe}`, `{building}`, `{l
 | Lost City Rumour | `decor/ruins` |
 | Road | `decor/road__hub`, `decor/road__spoke` and `decor/road__spoke-diagonal`, turned in quarter steps |
 | Shore | `terrain/coast__edge`, `__inner` and `__outer`, turned in quarter steps |
+| Terrain border (trial; `rules.transitions: 'overlay'`) | `terrain/blend__{terrain}__edge`, `__inner`, `__outer` of the higher-ranked neighbour (`rules.transitionOrder`), over the lower tile, turned in quarter steps. See [design/tessellated-tiles.md](design/tessellated-tiles.md) |
 | Colony | `colonies/colony__small` (0 to 3 colonists), `__medium` (4 to 7), `__large` (8 or more); walls `colonies/stockade` (level 1) and `colonies/fort` (level 2), split at the manifest's `split` line into a back and a front part |
 | Settlement | `settlements/{tribe}`; a capital tries `settlements/{tribe}__capital` first |
 | Building icon | `buildings/{building}__{level}`, then the lower levels |

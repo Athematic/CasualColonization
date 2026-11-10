@@ -99,7 +99,7 @@ Closes the smaller items left from earlier releases while the classic game is co
 | Founding Father portraits in the Continental Congress screen and the father choices (once generated) | S | P2 | planned |
 | Wire in the new brave, damaged artillery and fortress sprites (once generated) | S | P2 | planned |
 | Tune event rates and the computer players' event choices (one tournament with `--events`) | S | P2 | planned |
-| Tessellated terrain tiles: edge and corner pieces that blend neighbouring terrains, as a sprite-pack feature (Simon's idea, see CHANGE_SUGGESTIONS.md) | M | P2 | idea |
+| Tessellated terrain tiles: edge and corner pieces that blend neighbouring terrains, as a sprite-pack feature (Simon's idea, see CHANGE_SUGGESTIONS.md). Design and the `rules.transitions: 'overlay'` pack option are in ([design/tessellated-tiles.md](design/tessellated-tiles.md)), off by default; left: generate the 12 trial images (SPRITE_PROMPTS 4.8a), look at them on a map, then the other terrains | M | P2 | trial |
 | Speed-ups that change outcomes (each 10–20%: follow a found route for the whole turn, sharper path estimate, re-plan colony workers less often, keep colony reports per computer turn); renderer performance pass | M | P3 | idea |
 
 ## 0.9: Scenario framework
