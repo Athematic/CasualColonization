@@ -4,7 +4,7 @@ import {
   hash2,
   isTileExplored,
   riverCourse,
-  roadStrands,
+  roadDrawing,
   strandPoints,
   traceStrand,
   isTileVisible,
@@ -189,10 +189,18 @@ function drawRiver(ctx: Ctx, course: RiverCourse, px: number, py: number, z: num
     const k = (lw * 2.5) / Math.hypot(st.dx, st.dy);
     return [cx + (st.dx * z) / 2 + st.dx * k, cy + (st.dy * z) / 2 + st.dy * k];
   };
+  // A hair past the meeting point, along the stream, so that the butt ends of two tiles overlap
+  // (anti-aliasing would otherwise show a faint seam, worst where the stretch crosses a corner).
+  const lap = lw * 0.75;
+  const lapPoint = (st: RiverStrand): [number, number] => {
+    const l = Math.hypot(st.ex - st.c2x, st.ey - st.c2y) || 1;
+    return [cx + st.ex * z + ((st.ex - st.c2x) / l) * lap, cy + st.ey * z + ((st.ey - st.c2y) / l) * lap];
+  };
   const outward = (st: RiverStrand, move: boolean) => {
     traceStrand(ctx, st, cx, cy, z, true, move);
     const o = overhang(st);
     if (o) ctx.lineTo(o[0], o[1]);
+    else if (!st.mouth) ctx.lineTo(...lapPoint(st));
   };
   const strokeOut = (st: RiverStrand) => {
     ctx.beginPath();
@@ -208,8 +216,13 @@ function drawRiver(ctx: Ctx, course: RiverCourse, px: number, py: number, z: num
     if (o) {
       ctx.moveTo(o[0], o[1]);
       ctx.lineTo(cx + (a.dx * z) / 2, cy + (a.dy * z) / 2);
+    } else if (!a.mouth) {
+      // The mirror of the lap past b's end: start a hair before a's meeting point, along the stream.
+      const l = Math.hypot(a.ex - a.c2x, a.ey - a.c2y) || 1;
+      ctx.moveTo(cx + a.ex * z + ((a.ex - a.c2x) / l) * lap, cy + a.ey * z + ((a.ey - a.c2y) / l) * lap);
+      ctx.lineTo(cx + a.ex * z, cy + a.ey * z);
     }
-    traceStrand(ctx, a, cx, cy, z, false, !o);
+    traceStrand(ctx, a, cx, cy, z, false, !o && a.mouth);
     outward(b, false);
     ctx.lineWidth = width(a);
     ctx.stroke();
@@ -244,19 +257,40 @@ function drawRoads(ctx: Ctx, s: Readonly<GameState>, x: number, y: number, px: n
   RIVER_DIRS.forEach(([dx, dy], dir) => {
     if (hasRoad(s, x + dx, y + dy)) mask |= 1 << dir;
   });
-  const segs = roadStrands(s, x, y, mask);
+  const { strands: segs, bridge } = roadDrawing(s, x, y, mask);
+  const onRiver = !!s.map.tiles[y * s.map.width + x].rv;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   for (const [color, width] of [[INK, lw * 3.4], [ROAD, lw * 1.6]] as const) {
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
     ctx.beginPath();
-    if (!segs.length) {
+    if (!segs.length && !onRiver) {
       ctx.moveTo(cx - z * 0.12, cy);
       ctx.lineTo(cx + z * 0.12, cy);
     }
     for (const st of segs) traceStrand(ctx, st, cx, cy, z, true);
     ctx.stroke();
+  }
+  if (bridge) {
+    // Two plank lines across the water, a little apart along the river, a bit wider than the stream.
+    const half = (riverWidth(bridge.size) * z) / 2 + lw * 1.6;
+    const gap = Math.max(lw * 1.6, z * 0.045);
+    const hx = cx + bridge.x * z;
+    const hy = cy + bridge.y * z;
+    ctx.lineCap = 'butt';
+    for (const [color, width] of [[INK, lw * 2.2], [ROAD, lw * 1.1]] as const) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      for (const side of [-1, 1]) {
+        const ox = hx + bridge.tx * gap * side;
+        const oy = hy + bridge.ty * gap * side;
+        ctx.moveTo(ox - bridge.ty * half, oy + bridge.tx * half);
+        ctx.lineTo(ox + bridge.ty * half, oy - bridge.tx * half);
+      }
+      ctx.stroke();
+    }
   }
 }
 

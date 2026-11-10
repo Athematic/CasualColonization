@@ -26,11 +26,13 @@ import {
   unitsAt,
 } from './queries.js';
 import { random, randInt } from './rng.js';
+import { riverLinked } from './rivers.js';
 import { isFavoured, onWar } from './relations.js';
 import { STOCKADE_DEFENCE } from './rules/buildings.js';
-import { AMBUSH_BONUS, BOMBARD_CHANCE, CAPTURE_CHANCE, REPAIR_COST } from './rules/combat.js';
+import { AMBUSH_BONUS, BOMBARD_CHANCE, CAPTURE_CHANCE, REPAIR_COST, RIVER_DEFENCE } from './rules/combat.js';
 import { NATIONS, TRIBES, type NationId, type TribeId } from './rules/nations.js';
 import { SURRENDER_CHANCE, SURRENDER_TRIBUTE } from './rules/natives.js';
+import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
 import type { Colony, GameState, Unit } from './types.js';
 
@@ -75,7 +77,19 @@ export function offencePower(s: GameState, u: Unit, target?: Unit): number {
   return power * 1.5 * (1 + ambush / 100); // attack bonus, and the bonus for attacking out of cover
 }
 
-export function defencePower(s: GameState, u: Unit): number {
+/**
+ * Whether an attack from `from` crosses a river to reach a unit in the open on tile `to`: the
+ * defender stands on a river tile and the attacker is on land that the river does not link to it.
+ */
+export function riverCrossing(s: GameState, from: { x: number; y: number }, to: { x: number; y: number }): boolean {
+  const target = tileAt(s, to.x, to.y);
+  const source = tileAt(s, from.x, from.y);
+  if (!target?.rv || !source || TERRAIN[source.t].water || colonyAt(s, to.x, to.y)) return false;
+  return !riverLinked(s.map, from.x, from.y, to.x, to.y);
+}
+
+/** `attackFrom`: where the attack comes from, for the river defence bonus (a unit in the open defending against a crossing attacker). */
+export function defencePower(s: GameState, u: Unit, attackFrom?: { x: number; y: number }): number {
   const def = UNIT_TYPES[u.type];
   let power = def.kind === 'colonist' ? ROLES[u.role].defence : def.defence;
   power *= troopBonus(u, false);
@@ -94,14 +108,15 @@ export function defencePower(s: GameState, u: Unit): number {
     if (player(s, colony.owner).independence === 'declared' && sonsOfLiberty(s, colony) >= 50) bonus += 50;
   } else {
     bonus = tileDefence(tileAt(s, pos.x, pos.y)!);
+    if (attackFrom && riverCrossing(s, attackFrom, pos)) bonus += RIVER_DEFENCE;
   }
   if (u.state === 'fortified') bonus += 50;
   return power * (1 + bonus / 100);
 }
 
 /** The unit that defends a tile: the strongest one. */
-export function chooseDefender(s: GameState, units: Unit[]): Unit | undefined {
-  return [...units].sort((a, b) => defencePower(s, b) - defencePower(s, a))[0];
+export function chooseDefender(s: GameState, units: Unit[], attackFrom?: { x: number; y: number }): Unit | undefined {
+  return [...units].sort((a, b) => defencePower(s, b, attackFrom) - defencePower(s, a, attackFrom))[0];
 }
 
 function colonyDefender(s: GameState, colony: Colony): Unit | undefined {
@@ -308,7 +323,7 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
     const t = s.units[target.unitId];
     const tp = t && unitPosition(s, t);
     if (!tp || distance(tp.x, tp.y, pos.x, pos.y) !== 1) fail('The target is not next to the unit.');
-    defender = chooseDefender(s, unitsAt(s, tp.x, tp.y).filter((o) => o.owner === t.owner));
+    defender = chooseDefender(s, unitsAt(s, tp.x, tp.y).filter((o) => o.owner === t.owner), pos);
   }
   if (!defender) fail('There is nothing to attack.');
   if (!player(s, u.owner).human && isFavoured(s, u.owner, defender.owner)) fail('Computer players never attack a Favoured Nation.');
@@ -316,7 +331,7 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
   if (u.type !== 'privateer') declareWar(s, u.owner, defender.owner);
 
   const off = offencePower(s, u, defender);
-  const def = defencePower(s, defender);
+  const def = defencePower(s, defender, target.colonyId ? undefined : pos);
   const won = random(s) < off / (off + def);
   const attackerName = unitName(u);
   const defenderAt = unitPosition(s, defender);

@@ -50,33 +50,33 @@ export function fleetReport(s: GameState, p: Player): FleetReport {
 }
 
 /** The cargo ship the nation should buy now, if any. */
-export function cargoShipWanted(r: FleetReport, spare: number): UnitTypeId | null {
+export function cargoShipWanted(r: FleetReport, spare: number, price: (type: UnitTypeId) => number = (type) => UNIT_TYPES[type].price!): UnitTypeId | null {
   if (r.coastal === 0) return null;
   // Room for every coastal colony's harvest, with one ship per two ports at most.
   const short = r.waiting > r.holds * 1.5 || r.holds < Math.ceil(r.coastal / 2) * 2;
   const room = r.cargoShips < 1 + Math.ceil(r.coastal / 2);
   if (!short || !room) return null;
-  const galleon = UNIT_TYPES.galleon.price!;
-  const merchantman = UNIT_TYPES.merchantman.price!;
+  const galleon = price('galleon');
+  const merchantman = price('merchantman');
   // A galleon pays for itself on a big treasure: the Crown would take half.
   if (r.galleons === 0 && r.treasure >= galleon && spare >= galleon) return 'galleon';
   if (spare >= galleon + 2500 && r.holds >= 4) return 'galleon';
   if (spare >= merchantman + 500) return 'merchantman';
   // Goods rotting on the quays: a caravel now beats a merchantman later.
-  if (r.waiting >= Math.max(2, r.holds * 2) && spare >= UNIT_TYPES.caravel.price! + 200) return 'caravel';
+  if (r.waiting >= Math.max(2, r.holds * 2) && spare >= price('caravel') + 200) return 'caravel';
   return null;
 }
 
 /** The warship an aggressive nation should buy now, if any. */
-export function warshipWanted(s: GameState, p: Player, prof: AiProfile, r: FleetReport, spare: number): UnitTypeId | null {
+export function warshipWanted(s: GameState, p: Player, prof: AiProfile, r: FleetReport, spare: number, price: (type: UnitTypeId) => number = (type) => UNIT_TYPES[type].price!): UnitTypeId | null {
   if (prof.aggression < 0.5 || s.turn < 60) return null;
   const atWar = Object.entries(p.stance).some(([o, st]) => st === 'war' && o !== 'crown');
   const colonies = ownColonies(s, p).length;
   const wanted = (prof.piracy ? 1 : 0) + (atWar ? 1 : 0) + Math.floor(colonies / 10);
   if (r.warships >= wanted) return null;
-  const frigate = UNIT_TYPES.frigate.price!;
+  const frigate = price('frigate');
   if (atWar && spare >= frigate + 2000) return 'frigate';
-  if (prof.piracy && spare >= UNIT_TYPES.privateer.price! + 1500) return 'privateer';
+  if (prof.piracy && spare >= price('privateer') + 1500) return 'privateer';
   return null;
 }
 
@@ -98,9 +98,10 @@ export function shipPort(s: GameState, p: Player, type: UnitTypeId): NationId | 
 /** Buys ships in Europe as the economy grows. Call with a ship in port in Europe. */
 export function buyShips(s: GameState, p: Player, prof: AiProfile): void {
   const r = fleetReport(s, p);
-  const cargo = cargoShipWanted(r, p.gold - prof.reserve);
+  const price = (type: UnitTypeId) => trainPrice(p, type);
+  const cargo = cargoShipWanted(r, p.gold - prof.reserve, price);
   if (cargo) safely(() => train(s, p.id, cargo, shipPort(s, p, cargo)));
-  const war = warshipWanted(s, p, prof, fleetReport(s, p), p.gold - prof.reserve);
+  const war = warshipWanted(s, p, prof, fleetReport(s, p), p.gold - prof.reserve, price);
   if (war) safely(() => train(s, p.id, war));
 }
 
@@ -110,8 +111,9 @@ export function shipToBuild(s: GameState, p: Player, c: Colony, prof: AiProfile)
   // One ship on the slips across the nation at a time.
   if (ownColonies(s, p).some((o) => o.id !== c.id && o.build?.kind === 'unit' && UNIT_TYPES[o.build.id].kind === 'ship')) return null;
   const r = fleetReport(s, p);
-  const war = warshipWanted(s, p, prof, r, Infinity);
+  const price = (type: UnitTypeId) => trainPrice(p, type);
+  const war = warshipWanted(s, p, prof, r, Infinity, price);
   if (war) return { kind: 'unit', id: war };
-  const cargo = cargoShipWanted(r, Infinity);
+  const cargo = cargoShipWanted(r, Infinity, price);
   return cargo ? { kind: 'unit', id: cargo === 'galleon' ? 'galleon' : 'merchantman' } : null;
 }

@@ -136,8 +136,11 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
         (!links.some((l, i) => l && i % 2 === 0) || painter.pick(road.spoke, z, dpr, true)) &&
         (!links.some((l, i) => l && i % 2 === 1) || painter.pick(road.diagonal, z, dpr, true));
       if (!ready) return false;
+      // On a river tile the road does not run along the water: spokes towards a neighbour the river
+      // links are left out, and the hub (the bridge) stays where the road meets the river.
+      const rd = t.tile.rd ?? 0;
       links.forEach((l, i) => {
-        if (!l) return;
+        if (!l || rd & (1 << i)) return;
         const { diagonal, turns } = roadTurns(i);
         painter.square(ctx, diagonal ? road.diagonal : road.spoke, t.px, t.py, z, dpr, { fill: true, rotate: turns });
       });

@@ -91,8 +91,8 @@ Closes the smaller items left from earlier releases while the classic game is co
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Difficulty follow-ups: scale hurry-buy costs; computer ship buying uses adjusted prices; tune values against the original | S | P3 | planned |
-| Rivers follow-ups: draw roads along rivers only as bridges, smooth diagonal seams, river defence bonus, Cooper Creek and the Yukon | S | P3 | planned |
+| Difficulty follow-ups: scale hurry-buy costs; computer ship buying uses adjusted prices; tune values against the original | S | P3 | done except tuning (`hurryCost` in `DIFFICULTY`: 0.7 to 1.3; `ai/fleet.ts` prices ships with `trainPrice`; identical at Conquistador; tuning the numbers against the original is left for later) |
+| Rivers follow-ups: draw roads along rivers only as bridges, smooth diagonal seams, river defence bonus, Cooper Creek and the Yukon | S | P3 | done except the Yukon (roads only cross or leave rivers, with plank bridges; river strokes overlap a hair at tile joins; +25% defence across a river; Cooper Creek ends in Lake Eyre, now a lake tile; the Yukon's mouth lies west of the North America map's edge, so it waits for a larger map) |
 | Port character: each home port gets its own starting prices, demand and ship prices (for example cheap trade goods in Amsterdam, furs dear in La Rochelle, silver in Seville, cheap ships in Lisbon), so Favoured Nation access and triangle trading pay off. Scenario data per nation | M | P2 | planned |
 | Find why Creative scores about 14 points less with Favoured Nation on | S | P2 | planned |
 | Trade routes may call at a favoured partner's port, not only the home port | S | P3 | planned |

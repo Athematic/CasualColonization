@@ -11,10 +11,14 @@
  * | Ambush: attacker in forest | +25% attack against a unit in the open |
  * | Ambush: attacker on hills | +25% |
  * | Ambush: attacker on mountains | +50% |
+ * | River defence           | +25% for a unit in the open on a river tile against an attacker that crosses the river (attacker on land the river does not link to the defender's tile) |
  * | Coastal bombardment       | fort 30%, fortress 50% per adjacent enemy ship, at the start of the owner's turn |
  * | Captured equipment        | the winner takes the loser's horses or muskets in the open with a 50% chance |
  */
 export const AMBUSH_BONUS = { forest: 25, hills: 25, mountains: 50 } as const;
+
+/** Percent defence of a unit in the open on a river tile against an attacker across the river (none in colonies). */
+export const RIVER_DEFENCE = 25;
 
 /** Per fort level (index 0 = stockade): the chance a coastal colony damages an adjacent enemy ship. */
 export const BOMBARD_CHANCE = [0, 0.3, 0.5];

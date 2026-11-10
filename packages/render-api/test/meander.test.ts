@@ -1,6 +1,6 @@
 import { createGame, deserialize, RIVER_DIRS, serialize, TERRAIN, type GameState } from '@cc/engine';
 import { describe, expect, it } from 'vitest';
-import { hubOffset, RIVER_MEANDER, riverCourse, ROAD_MEANDER, roadStrands, strandPoints, type Strand } from '../src/index.js';
+import { hubOffset, RIVER_MEANDER, riverCourse, ROAD_MEANDER, roadDrawing, roadStrands, strandPoints, type Strand } from '../src/index.js';
 
 const game = createGame({ seed: 7, mapSize: 'medium', map: 'north-america', nations: ['england'], humans: ['england'] });
 
@@ -128,5 +128,40 @@ describe('meandering rivers and roads', () => {
     // The same tile and links give the same road.
     const [x, y] = roads[0];
     expect(roadStrands(s, x, y, mask(x, y))).toBe(at(x, y));
+  });
+});
+
+describe('roads on river tiles', () => {
+  it('are drawn only where they leave the river, with a bridge, never along it', () => {
+    const s = deserialize(serialize(game));
+    let bridges = 0;
+    let skipped = 0;
+    for (const [x, y] of riverTiles(s)) {
+      const river = riverCourse(s, x, y);
+      const all = river.strands.filter((st) => !st.mouth);
+      // A road towards every neighbour, the river's own and others.
+      const mask = 0xff;
+      const drawn = roadDrawing(s, x, y, mask);
+      for (const st of drawn.strands) expect(river.strands.includes(st as never)).toBe(false);
+      skipped += all.length;
+      if (drawn.strands.length) {
+        bridges++;
+        expect(drawn.bridge).toBeDefined();
+        expect(Math.hypot(drawn.bridge!.tx, drawn.bridge!.ty)).toBeCloseTo(1);
+      } else {
+        expect(drawn.bridge).toBeUndefined();
+      }
+      // A road only along the river has nothing to draw.
+      const riverMask = all.reduce((m, st) => m | (1 << st.dir), 0);
+      if (riverMask) expect(roadDrawing(s, x, y, riverMask)).toEqual({ strands: [] });
+    }
+    expect(bridges).toBeGreaterThan(5);
+    expect(skipped).toBeGreaterThan(5);
+    // Without a river it is the plain road.
+    const dry = s.map.tiles.findIndex((t, i) => !t.rv && !TERRAIN[t.t].water && i % s.map.width > 1 && i % s.map.width < s.map.width - 2);
+    const dx = dry % s.map.width;
+    const dy = Math.floor(dry / s.map.width);
+    expect(roadDrawing(s, dx, dy, 0b101).strands).toBe(roadStrands(s, dx, dy, 0b101));
+    expect(roadDrawing(s, dx, dy, 0b101).bridge).toBeUndefined();
   });
 });
