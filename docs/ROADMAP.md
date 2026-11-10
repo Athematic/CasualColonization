@@ -59,7 +59,7 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Computer players reach a winnable War of Independence (they now only declare when their defence beats the grown royal army, and never get there: staff armories, build artillery, plan earlier) | M | P2 | idea |
 | Brave sprites (plain, armed, mounted) in SPRITE_PROMPTS.md | S | P3 | done (prompts in pull request #11) |
 
-## 0.6: A living world
+## 0.6: A living world (done)
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
@@ -73,7 +73,7 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Computer players space colonies and expand at a measured pace: sites that share work tiles with another colony count those tiles at a quarter, bonus resources, rivers, rich food and the coast are chased; a new colony only once the others average three colonists (2.5 Combative), at most one every 6 turns (4 Combative), with a defender or stockade for each colony beyond the first two, and the charter paid with the reserve kept | M | P1 | done ([audit note](AI_FEATURE_AUDIT.md#colony-spacing-and-pace-06); `ai/common.ts` `siteScore`, `keenSiteScore`, `bestColonySite`; `ai/advanced.ts` `expansionCheck`, `sendSettler`; `AiProfile.expansion`) |
 | Colony charter: founding costs gold (100 × colonies held, at most 2,000, times difficulty; free after independence; `GameConfig.colonyCharter`, on in new games and tournaments, `--no-charter`) | S | P1 | done (`charterCost`, `COLONY_CHARTER` and `DifficultyRules.colonyCharter` in `rules/difficulty.ts`) |
 
-## 0.7: The classic game, part 2 (in progress)
+## 0.7: The classic game, part 2 (done)
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
@@ -86,7 +86,7 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Performance pass: profile computer turns and the map renderer; a head start to 1700 currently takes about 100 seconds. Goal: under 30 seconds, with identical game outcomes | M | P1 | done for the computer turns: `npm run bench` (seed 2024, the web head start to 1700) went from 43–46 s to 12–14 s in Node and from 40 s to 14 s in Chromium (Skip ahead), with the same final state hash on four seeds (`npm run bench -- --verify`). Fixed: the worker optimiser's unit scans (one pass per colony, shared until a job changes), the path search (heap, reused buffers, per-search context, the first step reuses the route just found) and array-building lookups. The map renderer was not part of this pass (Skip ahead draws nothing); speed-ups that would change games are listed in the README's Performance section |
 | Scoring review: reward well-developed colonies (buildings, experts, production, liberty) and not only headcount, to fit the colony charter and the measured pace | S | P1 | done (`score.ts` `SCORE_WEIGHTS`, `scoreBreakdown`; breakdown table in Progress and on the game-over screen; the arena prints the split per level) |
 
-## 0.8: Polish and leftovers
+## 0.8: Polish and leftovers (done)
 
 Closes the smaller items left from earlier releases while the classic game is complete.
 
@@ -115,6 +115,18 @@ Done before Beta, so the cooperation rules are scenario data from the start. See
 | Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | in progress: the Rivals select on the New game screen works for the Americas (real rivals: England, France, the Netherlands, Spain); the tournament takes `--rivals real`; the engine reads each scenario's stored maps and generator settings (step 6); the New game screen offers the registered scenarios and takes the maps, sizes, nations and start years from the chosen one, and game codes carry a scenario other than the Americas (step 7) |
 | Proof scenario that exercises the framework with little new art (proposed: The Caribbean, 1650–1750: the lesser powers) | M | P1 | design (same note, section 7) |
 
+## 0.10: Faster turns
+
+Before Beta 1 (Simon, November 2026): the computer players' turns are slow, and that slows every head start, test run and tournament. Speed-ups may change game outcomes, so the bench and golden hashes are re-recorded once, deliberately, and a tournament before and after (8+ games) shows the computer players play as well as before. Sprite work waits: generating images through the OpenAI API has become too expensive for the expanded sprite set; locally run diffusion models on Simon's MacBook (M2) are an option later.
+
+| Item | Size | Prio | Status |
+| --- | --- | --- | --- |
+| Profile a computer turn and a head start (to 1600, 1700) and set targets (head start to 1700 well under the current ~12 s) | S | P1 | idea |
+| Speed-ups that keep outcomes: caches and cheaper queries, checked bit-identical by the golden test and `bench -- --verify` | M | P1 | idea |
+| Speed-ups that change outcomes (each 10–20%: follow a found route for the whole turn, sharper path estimate, re-plan colony workers less often, keep colony reports per computer turn), hashes re-recorded once, tournament before and after | M | P1 | idea (moved from Later) |
+| Faster tests and tournaments: the slowest test files and the tournament runner (parallel games where the machine allows) | S | P2 | idea |
+| Renderer performance pass (frame time on large maps, sprite pack drawing) | S–M | P2 | idea |
+
 ## Beta 1–2: Cooperation
 
 Builds on 0.4.
@@ -140,11 +152,10 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
 
 ## Later
 
-- Speed-ups that change outcomes (each 10–20%: follow a found route for the whole turn, sharper path estimate, re-plan colony workers less often, keep colony reports per computer turn); renderer performance pass. Moved out of 0.8: head starts already take about 12 s.
 - Triangle trading that actually happens: the computer players never have a free cargo hold for it (all ships run routes), so it needs a route-level triangle or a ship kept free for it, not price tuning.
 - Favoured Nation forms about a third as often since the 0.8 fix (partner trade must pay); a ties-building rule that doesn't cost detours would bring it back.
 - Interface redesign: one or two side branches that try a redesigned interface (panels, menus, screens) with a front-end design approach, compared side by side before choosing (Simon's idea).
-- More sprites in the interface: buttons, panel frames, icons and screen headers from the art set, through sprite pack interface CSS (Simon's idea).
+- More sprites in the interface: buttons, panel frames, icons and screen headers from the art set, through sprite pack interface CSS (Simon's idea). Waits for a cheaper way to generate images (locally run diffusion models later), as do the tessellated terrain tiles (the 12 trial pieces).
 
 - More graphical styles as plugins. Sprite-based styles are packs of data (art, mapping from the game to sprite ids, draw rules) loaded by one generic sprite style plugin. Ligne claire (painted) is the first pack, and scenarios can bring their own.
   - Done: packs and styles can bring their own interface CSS (`css`, `cssFiles`, `fallbackCss: false`).
