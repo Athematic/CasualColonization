@@ -3,7 +3,7 @@ import { track } from './telemetry.js';
 import { describeMove } from './movement.js';
 import { perfEnd, perfStart } from './perf.js';
 import { hasSubmitted, nativeUnitPrice, processBraves, settlementKind } from './braves.js';
-import { modifiers, mulOf } from './scenarios/modifiers.js';
+import { addOf, modifiers, mulOf } from './scenarios/modifiers.js';
 import { noteGoods, noteHistory } from './history.js';
 import { cargoRoomFor, colonyWorkers, createUnit, distance, message, player, reveal, tileAt, unitName, unitPosition } from './queries.js';
 import { random, randInt } from './rng.js';
@@ -73,7 +73,7 @@ export function speakToChief(s: GameState, unitId: string, settlementId: string)
     return text;
   }
   st.visited.push(u.owner);
-  const generous = u.owner === 'france' ? 0.15 : 0;
+  const generous = addOf(modifiers(s, u.owner, 'nativeGifts'));
   const r = random(s);
   let text: string;
   if (r < 0.4) {

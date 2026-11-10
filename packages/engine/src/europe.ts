@@ -1,7 +1,7 @@
 import { fail } from './errors.js';
 import { noteGoods } from './history.js';
 import { track } from './telemetry.js';
-import { addOf, hasModifier, modifiers, mulOf } from './scenarios/modifiers.js';
+import { addOf, hasModifier, modifiers, mulOf, setOr } from './scenarios/modifiers.js';
 import {
   cargoFree,
   cargoRoomFor,
@@ -338,7 +338,7 @@ export function processImmigration(s: GameState, p: Player): void {
   // The Crown (holding colonies it retook) has no docks to send immigrants to.
   if (p.crosses < p.crossesRequired || p.independence !== 'none' || p.id === 'crown' || !p.recruitPool.length) return;
   p.crosses -= p.crossesRequired;
-  p.crossesRequired += Math.round((p.id === 'england' ? 12 : 20) * difficultyRules(p).crosses);
+  p.crossesRequired += Math.round(setOr(modifiers(s, p.id, 'crossesStep'), 20) * difficultyRules(p).crosses);
   // Brewster lets the colony pick the best candidate; otherwise chance decides.
   const slot = hasModifier(s, p.id, 'chooseImmigrant')
     ? p.recruitPool.reduce((best, t, i) => (UNIT_TYPES[t].skill > UNIT_TYPES[p.recruitPool[best]].skill ? i : best), 0)
@@ -462,7 +462,8 @@ export function unboardInEurope(s: GameState, unitId: string): void {
 
 /** The chance each round that a good's price in the nation's home port drifts back a step. */
 export function priceRecoveryChance(s: GameState, p: Player): number {
-  return (p.id === 'netherlands' ? 0.2 : 0.1) * mulOf(modifiers(s, p.id, 'priceRecovery')) * difficultyRules(p).priceRecovery * (portCharacter(p.id).recovery ?? 1);
+  const mods = modifiers(s, p.id, 'priceRecovery');
+  return setOr(mods, 0.1) * mulOf(mods) * difficultyRules(p).priceRecovery * (portCharacter(p.id).recovery ?? 1);
 }
 
 /** Drifts prices back toward their starting value in each home port (its own, rules/ports.ts). */

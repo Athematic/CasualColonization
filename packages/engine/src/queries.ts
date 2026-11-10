@@ -102,7 +102,6 @@ export function isCarrier(u: Unit): boolean {
 export function maxMoves(u: Unit, s: GameState): number {
   const def = UNIT_TYPES[u.type];
   let moves = ROLES[u.role].moves ?? def.moves;
-  if (def.kind === 'ship' && u.owner === 'portugal') moves += 1;
   if (def.kind === 'ship') for (const m of modifiers(s, u.owner, 'shipMoves')) moves += m.add;
   return moves * 3;
 }
@@ -221,7 +220,6 @@ export function sightRadius(u: Unit, s: GameState): number {
   let r = 1;
   if (u.role === 'scout') r = 2;
   if (def.kind === 'ship' && def.offence > 0) r = 2;
-  if (u.owner === 'russia' && (u.role === 'scout' || u.role === 'dragoon')) r += 1;
   for (const m of modifiers(s, u.owner, 'sight')) if ((!m.roles || m.roles.includes(u.role)) && (!m.land || def.kind !== 'ship')) r += m.add;
   return r;
 }

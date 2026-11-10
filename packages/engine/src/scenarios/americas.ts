@@ -9,6 +9,7 @@ import { BUILDING_ORDER } from '../rules/buildings.js';
 import { DIFFICULTY } from '../rules/difficulty.js';
 import { FATHER_CATEGORIES, FATHERS, type FatherId } from '../rules/fathers.js';
 import { GOODS } from '../rules/goods.js';
+import type { Modifier } from '../rules/modifiers.js';
 import { NATION_ORDER, NATIONS, TRIBE_ORDER, type NationId } from '../rules/nations.js';
 import { NATIVE_PRODUCE } from '../rules/natives.js';
 import { PORT_CHARACTER } from '../rules/ports.js';
@@ -17,9 +18,21 @@ import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import { AMERICAS_CALENDAR } from './calendar.js';
 import type { NationEntry, Scenario } from './types.js';
 
+/** What each nation's bonus does (its text is NATIONS[id].bonus), read at the engine's hook points (rules/modifiers.ts). */
+const BONUSES: Partial<Record<NationId, Modifier[]>> = {
+  england: [{ hook: 'crossesStep', set: 12 }],
+  france: [{ hook: 'nativeGifts', add: 0.15 }],
+  netherlands: [{ hook: 'priceRecovery', set: 0.2 }],
+  spain: [{ hook: 'offenceVsSettlements', mul: 1.5 }],
+  portugal: [{ hook: 'shipMoves', add: 1 }],
+  sweden: [{ hook: 'startingDocks', units: ['expertLumberjack'] }],
+  denmark: [{ hook: 'foodToGrow', set: 160 }],
+  russia: [{ hook: 'sight', add: 1, roles: ['scout', 'dragoon'] }],
+};
+
 function entry(id: NationId): NationEntry {
   const def = NATIONS[id];
-  return { id, bonus: { text: def.bonus }, colonyNames: def.colonyNames, port: PORT_CHARACTER[id]! };
+  return { id, bonus: { text: def.bonus, modifiers: BONUSES[id] ?? [] }, colonyNames: def.colonyNames, port: PORT_CHARACTER[id]! };
 }
 
 /** The original game's four rivals (Q9). */

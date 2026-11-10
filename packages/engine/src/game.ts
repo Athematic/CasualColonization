@@ -12,6 +12,7 @@ import { initRelations } from './relations.js';
 import { initCrown } from './crown.js';
 import { entryPoints } from './mapgen.js';
 import { checkSavedScenario, checkScenarioConfig, goodsOf, peoplesOf } from './scenarios/index.js';
+import { modifiers } from './scenarios/modifiers.js';
 
 /** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
 export const SAVE_VERSION = 3;
@@ -115,7 +116,7 @@ function startingUnits(s: GameState, nation: NationId, at: { x: number; y: numbe
   pioneer.role = 'pioneer';
   pioneer.tools = 60;
   for (const u of [soldier, pioneer]) u.state = 'sentry';
-  if (nation === 'sweden') createUnit(s, nation, 'expertLumberjack', { kind: 'europe' });
+  for (const m of modifiers(s, nation, 'startingDocks')) for (const type of m.units) createUnit(s, nation, type, { kind: 'europe' });
 }
 
 export function serialize(s: GameState): string {

@@ -4,15 +4,16 @@ import { GOODS, type GoodId, type ProductId } from './rules/goods.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { yieldMultiplier } from './cheats.js';
-import { modifiers } from './scenarios/modifiers.js';
+import { modifiers, setOr } from './scenarios/modifiers.js';
 import { applyEventModifiers } from './events/modifiers.js';
 import { colonyWorkers, isWater, tileAt } from './queries.js';
 import type { Colony, GameState, Tile } from './types.js';
 
 export const FOOD_PER_COLONIST = 2;
 
-export function foodToGrow(colony: Colony): number {
-  return colony.owner === 'denmark' ? 160 : 200;
+/** Food a colony needs to grow a colonist (a nation's bonus may lower it). */
+export function foodToGrow(s: GameState, colony: Colony): number {
+  return setOr(modifiers(s, colony.owner, 'foodToGrow'), 200);
 }
 
 /** Sons of Liberty membership in percent. */

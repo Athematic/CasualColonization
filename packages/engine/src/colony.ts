@@ -460,8 +460,8 @@ export function processColony(s: GameState, colony: Colony): void {
     colony.goods.horses += gain;
   }
 
-  if (colony.goods.food >= foodToGrow(colony)) {
-    colony.goods.food -= foodToGrow(colony);
+  if (colony.goods.food >= foodToGrow(s, colony)) {
+    colony.goods.food -= foodToGrow(s, colony);
     createUnit(s, colony.owner, 'freeColonist', { kind: 'map', x: colony.x, y: colony.y });
     track(colony.owner, 'colony:colonist born');
     message(s, `A new colonist has been born in ${colony.name}.`, colony.owner, colony);

@@ -20,6 +20,8 @@ import {
   createUnit,
   defencePower,
   deserialize,
+  difficultyRules,
+  foodToGrow,
   foundColony,
   isCoastal,
   isExplored,
@@ -31,8 +33,10 @@ import {
   nativeLandOwner,
   neighbours,
   offencePower,
+  offenceVsSettlement,
   offerFathers,
   player,
+  portCharacter,
   priceRecoveryChance,
   processColony,
   processImmigration,
@@ -42,6 +46,7 @@ import {
   registerScenario,
   sailTurns,
   serialize,
+  speakToChief,
   sightRadius,
   TERRAIN,
   tileAt,
@@ -59,8 +64,8 @@ import {
 import { rumourOdds } from '../src/rumours.js';
 import { random } from '../src/rng.js';
 
-function game(seed = 7, scenario?: string): GameState {
-  return createGame({ seed, mapSize: 'small', nations: ['england', 'france'], humans: ['england'], ...(scenario ? { scenario } : {}) });
+function game(seed = 7, scenario?: string, nations: NationId[] = ['england', 'france']): GameState {
+  return createGame({ seed, mapSize: 'small', nations, humans: [nations[0]], ...(scenario ? { scenario } : {}) });
 }
 
 const join = (s: GameState, id: FatherId, nation: NationId = 'england'): void => void player(s, nation).fathers.push(id);
@@ -432,6 +437,97 @@ describe('Founding Fathers joining: one-off effects', () => {
   });
 });
 
+describe('national bonuses as modifiers', () => {
+  it('England: fewer crosses for the next immigrant (12 instead of 20)', () => {
+    const s = game(7, undefined, ['england', 'france']);
+    for (const p of s.players) {
+      p.crosses = p.crossesRequired;
+      const before = p.crossesRequired;
+      processImmigration(s, p);
+      expect(p.crossesRequired - before).toBe(Math.round((p.id === 'england' ? 12 : 20) * difficultyRules(p).crosses));
+    }
+  });
+
+  it('France: chiefs give gifts on a roll up to 0.95 instead of 0.8', () => {
+    const s = game(7, undefined, ['france', 'england']);
+    const st = Object.values(s.settlements)[0];
+    const at = neighbours(s, st.x, st.y).find(({ x, y }) => !isWater(tileAt(s, x, y)!) && !Object.values(s.settlements).some((o) => o.x === x && o.y === y))!;
+    rig(s, (r) => r >= 0.8 && r < 0.95);
+    const speak = (nation: NationId): string => {
+      const t = clone(s);
+      const u = createUnit(t, nation, 'seasonedScout', { kind: 'map', ...at });
+      u.role = 'scout';
+      u.moves = 3;
+      return speakToChief(t, u.id, st.id);
+    };
+    expect(speak('france')).toContain('gift');
+    expect(speak('england')).toContain('listens politely');
+  });
+
+  it('the Netherlands: prices recover twice as fast (0.2 instead of 0.1)', () => {
+    const s = game(7, undefined, ['netherlands', 'england']);
+    for (const p of s.players) {
+      const base = p.id === 'netherlands' ? 0.2 : 0.1;
+      expect(priceRecoveryChance(s, p)).toBe(base * 1 * difficultyRules(p).priceRecovery * (portCharacter(p.id).recovery ?? 1));
+    }
+    join(s, 'janDeWitt', 'netherlands');
+    const p = player(s, 'netherlands');
+    expect(priceRecoveryChance(s, p)).toBe(0.2 * 2 * difficultyRules(p).priceRecovery * (portCharacter(p.id).recovery ?? 1));
+  });
+
+  it('Spain: +50% offence against native settlements', () => {
+    const s = game(7, undefined, ['spain', 'england']);
+    const unit = (nation: NationId) => {
+      const u = createUnit(s, nation, 'veteranSoldier', { kind: 'europe' });
+      u.role = 'dragoon';
+      return u;
+    };
+    const [spanish, english] = [unit('spain'), unit('england')];
+    expect(offencePower(s, spanish)).toBe(offencePower(s, english));
+    expect(offenceVsSettlement(s, spanish)).toBe(offencePower(s, spanish) * 1.5);
+    expect(offenceVsSettlement(s, english)).toBe(offencePower(s, english));
+  });
+
+  it('Portugal: ships gain a move, and Magellan adds another', () => {
+    const s = game(7, undefined, ['portugal', 'england']);
+    const caravel = (nation: NationId) => Object.values(s.units).find((u) => u.owner === nation && u.type === 'caravel')!;
+    const soldier = (nation: NationId) => Object.values(s.units).find((u) => u.owner === nation && u.type === 'veteranSoldier')!;
+    expect(maxMoves(caravel('portugal'), s)).toBe(maxMoves(caravel('england'), s) + 3);
+    expect(maxMoves(soldier('portugal'), s)).toBe(maxMoves(soldier('england'), s));
+    join(s, 'ferdinandMagellan', 'portugal');
+    expect(maxMoves(caravel('portugal'), s)).toBe(maxMoves(caravel('england'), s) + 6);
+  });
+
+  it('Sweden: an expert lumberjack waits on the docks from the start', () => {
+    const s = game(7, undefined, ['sweden', 'england']);
+    const docks = (nation: NationId) => Object.values(s.units).filter((u) => u.owner === nation && u.loc.kind === 'europe').map((u) => u.type);
+    expect(docks('sweden')).toEqual(['expertLumberjack']);
+    expect(docks('england')).toEqual([]);
+  });
+
+  it('Denmark: colonies grow on 160 food instead of 200', () => {
+    const s = game(7, undefined, ['denmark', 'england']);
+    expect(foodToGrow(s, colonyAt(s, false, 'denmark'))).toBe(160);
+    expect(foodToGrow(s, colonyAt(s, false, 'england'))).toBe(200);
+  });
+
+  it('Russia: scouts and dragoons see one tile further', () => {
+    const s = game(7, undefined, ['russia', 'england']);
+    for (const role of ['scout', 'dragoon', 'soldier'] as const) {
+      const ru = onMap(s, 'russia', 'veteranSoldier', role);
+      const en = onMap(s, 'england', 'veteranSoldier', role);
+      expect(sightRadius(ru, s)).toBe(sightRadius(en, s) + (role === 'soldier' ? 0 : 1));
+    }
+  });
+
+  it('a nation without a bonus has no modifiers, and the crown none', () => {
+    const s = game(7, undefined, ['england', 'france']);
+    expect(modifiers(s, 'england', 'crossesStep')).toEqual([{ hook: 'crossesStep', set: 12 }]);
+    expect(modifiers(s, 'england', 'foodToGrow')).toEqual([]);
+    expect(modifiers(s, 'crown', 'shipMoves')).toEqual([]);
+  });
+});
+
 describe('the data drives the behaviour', () => {
   /** The Americas with Henry Hudson doubling ore instead of furs. */
   const HUDSON_ORE: Scenario = {
@@ -476,5 +572,31 @@ describe('the data drives the behaviour', () => {
     joinCongress(s, p, 'jakobFugger');
     expect(p.gold).toBe(gold + 1000);
     expect(p.boycotts).toEqual({ cloth: true });
+  });
+
+  /** The Americas with England's bonus turned into Denmark's (and nothing else). */
+  const ENGLISH_FARMERS: Scenario = {
+    ...AMERICAS,
+    id: 'test-english-farmers',
+    name: 'Test: English farmers',
+    nations: {
+      ...AMERICAS.nations,
+      sets: {
+        alternative: AMERICAS.nations.sets.alternative.map((e) =>
+          e.id === 'england' ? { ...e, bonus: { text: 'Farming: colonies grow on 100 food.', modifiers: [{ hook: 'foodToGrow', set: 100 }] } } : e,
+        ),
+      },
+    },
+  };
+  registerScenario(ENGLISH_FARMERS);
+
+  it('a scenario can give a nation a different bonus', () => {
+    const s = game(7, ENGLISH_FARMERS.id);
+    expect(foodToGrow(s, colonyAt(s))).toBe(100);
+    const p = player(s, 'england');
+    p.crosses = p.crossesRequired;
+    const before = p.crossesRequired;
+    processImmigration(s, p);
+    expect(p.crossesRequired - before).toBe(Math.round(20 * difficultyRules(p).crosses));
   });
 });

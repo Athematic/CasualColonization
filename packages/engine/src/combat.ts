@@ -428,14 +428,20 @@ function attackBrave(s: GameState, u: Unit, braveId: string): CombatResult {
   return { attackerWon: won, text };
 }
 
+/** A unit's offence against a native settlement (a nation's bonus may raise it: Spain × 1.5). */
+export function offenceVsSettlement(s: GameState, u: Unit): number {
+  let off = offencePower(s, u);
+  for (const m of modifiers(s, u.owner, 'offenceVsSettlements')) off *= m.mul;
+  return off;
+}
+
 function attackSettlement(s: GameState, u: Unit, settlementId: string): CombatResult {
   const st = s.settlements[settlementId];
   const pos = unitPosition(s, u)!;
   if (!st || distance(st.x, st.y, pos.x, pos.y) !== 1) fail('The settlement is not next to the unit.');
   hostile(s, st.tribe, u.owner, st, `an attack on the ${settlementName(st)}`);
   for (const other of Object.values(s.settlements)) if (other.tribe === st.tribe) addTension(other, u.owner, other.id === st.id ? 300 : 150);
-  let off = offencePower(s, u);
-  if (u.owner === 'spain') off *= 1.5;
+  const off = offenceVsSettlement(s, u);
   const def = 1 * (1 + (st.capital ? 100 : 50) / 100);
   const won = random(s) < off / (off + def);
   let text: string;
