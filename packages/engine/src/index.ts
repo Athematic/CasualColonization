@@ -11,6 +11,7 @@ export * from './rules/difficulty.js';
 export * from './rules/ports.js';
 export * from './queries.js';
 export { addColony, addUnit, forEachUnitNear, indexChecks, indexedUnitsOf, removeColony, removeUnit, setIndexChecks, setUnitLoc, setUnitOwner } from './unitindex.js';
+export { setJobSearchChecks } from './ai/advanced.js';
 export * from './production.js';
 export * from './colony.js';
 export * from './europe.js';

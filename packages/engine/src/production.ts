@@ -73,9 +73,23 @@ export function baseTileYield(tile: Tile, good: GoodId): number {
 /** `bonus` is the colony's liberty bonus, when the caller has already worked it out. */
 export function tileYield(s: GameState, colony: Colony, x: number, y: number, good: GoodId, unitType: UnitTypeId, bonus = libertyBonus(s, colony)): number {
   const tile = tileAt(s, x, y);
+  return workerTileYield(s, colony, tile, good, unitType, landYield(s, colony, tile, good), bonus);
+}
+
+/**
+ * The part of tileYield that is the same for every worker: the land's yield of the good for the
+ * colony, 0 where no worker can produce it there.
+ */
+export function landYield(s: GameState, colony: Colony, tile: Tile | undefined, good: GoodId): number {
   if (!tile) return 0;
   if (isWater(tile) && colony.buildings.docks === 0) return 0;
-  let amount = baseTileYield(tile, good) * yieldMultiplier(s);
+  return baseTileYield(tile, good) * yieldMultiplier(s);
+}
+
+/** tileYield for a worker, from the tile's `land` (landYield). */
+export function workerTileYield(s: GameState, colony: Colony, tile: Tile | undefined, good: GoodId, unitType: UnitTypeId, land: number, bonus: number): number {
+  if (!tile) return 0;
+  let amount = land;
   if (amount === 0) return 0;
   const def = UNIT_TYPES[unitType];
   const expert =
