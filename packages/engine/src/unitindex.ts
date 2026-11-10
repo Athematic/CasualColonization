@@ -222,6 +222,27 @@ export function indexedTileWorker(s: GameState, x: number, y: number): Unit | un
 }
 
 /**
+ * Calls `fn` for each unit on the map within `range` tiles (the larger of the two axis distances,
+ * as `distance` counts) of x, y: tile by tile, rows top to bottom and each row left to right, each
+ * tile's units in key order. For counts and other order-free tests near a tile, instead of a scan
+ * over every unit. Units off the map's bounds are not visited.
+ */
+export function forEachUnitNear(s: GameState, x: number, y: number, range: number, fn: (u: Unit) => void): void {
+  const tiles = unitTiles(s);
+  const w = s.map.width;
+  const x0 = Math.max(0, x - range);
+  const x1 = Math.min(w - 1, x + range);
+  const y0 = Math.max(0, y - range);
+  const y1 = Math.min(s.map.height - 1, y + range);
+  for (let ty = y0; ty <= y1; ty++) {
+    for (let tx = x0; tx <= x1; tx++) {
+      const list = tiles.get(ty * w + tx);
+      if (list) for (let i = 0; i < list.length; i++) fn(list[i]);
+    }
+  }
+}
+
+/**
  * Units on the map by tile (y * width + x), each list in record order, for path searches. Shared
  * with the index: read it, never change it. Units off the map's bounds are not in it.
  */

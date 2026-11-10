@@ -278,23 +278,24 @@ interface TileAround {
  */
 function tilesAround(s: GameState, x: number, y: number): (TileAround | undefined)[] {
   const out: (TileAround | undefined)[] = new Array(9);
-  const at = (tx: number, ty: number): TileAround | undefined => {
-    const dx = tx - x;
-    const dy = ty - y;
-    if (dx < -1 || dx > 1 || dy < -1 || dy > 1 || (dx === 0 && dy === 0)) return undefined;
-    const i = (dy + 1) * 3 + (dx + 1);
-    return (out[i] ??= { units: [], braves: [] });
-  };
-  for (const id in s.units) {
-    const o = s.units[id];
-    if (o.loc.kind === 'map') at(o.loc.x, o.loc.y)?.units.push(o);
+  // Units and colonies from the tile indexes (each list in record order, as unitsAt and colonyAt
+  // give them), braves in one pass.
+  for (const n of neighbours(s, x, y)) {
+    const units = unitsAt(s, n.x, n.y);
+    const colony = colonyAt(s, n.x, n.y);
+    if (units.length || colony) out[(n.y - y + 1) * 3 + (n.x - x + 1)] = { units, colony, braves: [] };
   }
-  for (const id in s.colonies) {
-    const c = s.colonies[id];
-    const t = at(c.x, c.y);
-    if (t && !t.colony) t.colony = c;
+  const braves = s.braves;
+  if (braves) {
+    for (const id in braves) {
+      const b = braves[id];
+      const dx = b.x - x;
+      const dy = b.y - y;
+      if (dx < -1 || dx > 1 || dy < -1 || dy > 1 || (dx === 0 && dy === 0)) continue;
+      const i = (dy + 1) * 3 + (dx + 1);
+      (out[i] ??= { units: [], braves: [] }).braves.push(b);
+    }
   }
-  for (const b of Object.values(s.braves ?? {})) at(b.x, b.y)?.braves.push(b);
   return out;
 }
 

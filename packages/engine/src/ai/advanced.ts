@@ -55,6 +55,7 @@ import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { stopPort } from '../routes.js';
+import { forEachUnitNear } from '../unitindex.js';
 import { maybeIncite } from './natives.js';
 import { armyForIndependence, colonyDefences, supportParts, rebelColonyDefence, rebelPower, crownAffairs, defenceShort, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
 import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './plan.js';
@@ -770,7 +771,9 @@ function warTurn(s: GameState, p: Player, u: Unit): void {
 /** Royal land units within `range` tiles of a colony (the War of Independence). */
 function royalsNear(s: GameState, p: Player, c: Colony, range = 2): number {
   let n = 0;
-  for (const o of Object.values(s.units)) if (o.owner === 'crown' && o.against === p.id && o.loc.kind === 'map' && !isShip(o) && distance(o.loc.x, o.loc.y, c.x, c.y) <= range) n++;
+  forEachUnitNear(s, c.x, c.y, range, (o) => {
+    if (o.owner === 'crown' && o.against === p.id && !isShip(o)) n++;
+  });
   return n;
 }
 
