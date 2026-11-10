@@ -62,3 +62,21 @@ A speed-up that changes game outcomes re-records the hashes on the branch. Its c
 ## Job 3: release check (at the end of 0.10)
 
 Do job 2 on the release candidate commit with all five steps, and compare with the baseline. The 0.10 target for a head start to 1700 is set from job 1's numbers and recorded in `docs/ROADMAP.md`.
+
+## Job 4: hill-climbing gate (each candidate speed-up)
+
+0.10 works by hill climbing: there is a current best commit, and candidate speed-ups from several branches are tried on top of it one at a time. A candidate is kept only if it passes the verification and is measurably faster. The gate is `npm run perf:gate` (`scripts/perf-gate.mjs`):
+
+- **Verification:** `bench --verify` for the Americas and the Caribbean must print "same" everywhere, and every timed run must end in the same state. If not, the candidate is rejected whatever its speed.
+- **Score:** the median of `--runs` timed head starts (default 5, after one warm-up), for each year in `--years` (default 1700).
+- **Verdict against `--baseline`:** ACCEPT only when every year is faster by more than the noise (2%, or the larger spread of the two runs). NEUTRAL when within the noise, REJECT when slower.
+
+```sh
+npm ci
+npm run perf:gate -- --runs 5 --years 1700,1750 --save /tmp/best.json   # on the current best commit
+git checkout --detach <candidate>
+npm ci                                                                  # only if package-lock.json changed
+npm run perf:gate -- --runs 5 --years 1700,1750 --baseline /tmp/best.json --save /tmp/cand.json
+```
+
+Report each candidate's verdict line and the "against" line. Copy an accepted candidate's JSON over `/tmp/best.json` so it becomes the baseline for the next candidate. Both sides must be measured on the Mac in the same sitting: the cloud container's timings vary by about 10% between identical runs, so they can't decide a close call.
