@@ -39,6 +39,12 @@ export interface GameConfig {
   randomEvents?: boolean;
   /** Id of the registered event set (events/index.ts); missing means 'americas'. Scenarios will set it. */
   eventSet?: string;
+  /**
+   * Colony charter: founding a colony after the first costs gold paid to the Crown (see
+   * COLONY_CHARTER in rules/difficulty.ts and charterCost). Missing means off, so older saves and
+   * games built without it are unchanged; the web game and tournaments switch it on.
+   */
+  colonyCharter?: boolean;
 }
 
 export interface Tile {

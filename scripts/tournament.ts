@@ -1,5 +1,5 @@
 // Plays computer-only games and compares AI levels.
-// Usage: npm run tournament -- [--games 8] [--turns 300] [--size medium] [--levels naive,competent,combative,creative] [--seed 1000] [--map id] [--difficulty conquistador] [--features] [--no-favoured] [--events] [--json]
+// Usage: npm run tournament -- [--games 8] [--turns 300] [--size medium] [--levels naive,competent,combative,creative] [--seed 1000] [--map id] [--difficulty conquistador] [--features] [--no-favoured] [--events] [--no-charter] [--json]
 // --difficulty plays every nation at that level's economics, as if each were a person (computer
 // players normally stay at Conquistador). Without it, games use the standard rules (Conquistador).
 // --features also counts how often each level uses each game feature and prints a table of
@@ -7,6 +7,7 @@
 // --no-favoured: computer players make no trade or Favoured Nation proposals, to measure what
 // Favoured Nation brings. Every run also prints relations and trade between the nations, and the
 // Crown: independence, the Royal Expeditionary Force against the old formula, demands and royal wars.
+// Games use the colony charter (founding costs gold), as new games do; --no-charter switches it off.
 import { AI_LEVELS, DIFFICULTY_LEVELS, formatArena, formatCrown, formatFeatures, formatRelations, formatRelationsLine, runArena, type AiLevel, type DifficultyId, type MapSize } from '../packages/engine/src/index.ts';
 
 const args = process.argv.slice(2);
@@ -31,10 +32,11 @@ const options = {
   noFavoured: args.includes('--no-favoured'),
   // Historical and random events (docs/design/events.md) are off in tournaments unless asked for.
   events: args.includes('--events'),
+  noCharter: args.includes('--no-charter'),
 };
 
 const started = Date.now();
-console.error(`Playing ${options.games} games of ${options.turns} turns: ${levels.join(' vs ')} on a ${options.mapSize} map${difficulty ? ` at ${difficulty}` : ''}${options.noFavoured ? ', without Favoured Nation proposals' : ''}${options.events ? ', with events' : ''}...`);
+console.error(`Playing ${options.games} games of ${options.turns} turns: ${levels.join(' vs ')} on a ${options.mapSize} map${difficulty ? ` at ${difficulty}` : ''}${options.noFavoured ? ', without Favoured Nation proposals' : ''}${options.events ? ', with events' : ''}${options.noCharter ? ', without the colony charter' : ''}...`);
 const result = runArena(options, (rows, g) => {
   const line = rows.map((r) => `${r.level}:${r.score}`).join('  ');
   const half = (k: 'agreements' | 'favoured') => rows.reduce((n, r) => n + (r.relations?.[k] ?? 0), 0) / 2;

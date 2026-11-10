@@ -25,9 +25,9 @@ function showLanding(): void {
     resume: resumeGame,
     newGame: showMenu,
     quickGame: () =>
-      startGame({ seed: randomSeed(), mapSize: 'medium', nations: ['england', 'france', 'netherlands', 'spain'], humans: ['england'], ai: { france: 'competent', netherlands: 'competent', spain: 'competent' }, historicalEvents: true, randomEvents: true }),
+      startGame({ seed: randomSeed(), mapSize: 'medium', nations: ['england', 'france', 'netherlands', 'spain'], humans: ['england'], ai: { france: 'competent', netherlands: 'competent', spain: 'competent' }, historicalEvents: true, randomEvents: true, colonyCharter: true }),
     watch: () =>
-      startGame({ seed: randomSeed(), mapSize: 'medium', nations: ['england', 'france', 'netherlands', 'spain'], humans: [], ai: { england: 'naive', france: 'competent', netherlands: 'combative', spain: 'creative' } }),
+      startGame({ seed: randomSeed(), mapSize: 'medium', nations: ['england', 'france', 'netherlands', 'spain'], humans: [], ai: { england: 'naive', france: 'competent', netherlands: 'combative', spain: 'creative' }, colonyCharter: true }),
     load: async () => {
       const loaded = await pickSaveFile();
       if (loaded?.state) resumeGame(loaded.state);

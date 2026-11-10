@@ -1,5 +1,6 @@
 import {
   canFoundColony,
+  charterCost,
   canImprove,
   canUseRoutes,
   routeStopName,
@@ -195,7 +196,7 @@ export class Sidebar {
     const btn = (label: string, key: string, onclick: () => void, enabled = true) =>
       actions.push(h('button', { class: 'btn small', onclick, disabled: !enabled, title: key ? `Shortcut: ${key}` : undefined }, label, key ? h('kbd', null, key) : null));
     if (mine && u.loc.kind === 'map') {
-      if (def.kind === 'colonist') btn('Found colony', 'B', () => void app.foundColony(), can(() => canFoundColony(s, u)));
+      if (def.kind === 'colonist') btn(charterCost(s, u.owner) > 0 ? `Found colony (${charterCost(s, u.owner)} gold)` : 'Found colony', 'B', () => void app.foundColony(), can(() => canFoundColony(s, u)));
       if (u.role === 'pioneer') {
         btn(terrain === 'clear' ? 'Clear forest' : 'Plow', 'P', () => app.improve(), can(() => canImprove(s, u, terrain)));
         btn('Build road', 'R', () => app.buildRoad(), can(() => canImprove(s, u, 'road')));
