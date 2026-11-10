@@ -1,6 +1,9 @@
 import {
   AI_LEVEL_INFO,
+  allTreaties,
+  bound,
   canDeclareIndependence,
+  describeTreaty,
   colonyWorkers,
   describeForce,
   FATHERS,
@@ -21,6 +24,7 @@ import {
   Term,
   tradeProblem,
   tradeTies,
+  treatyName,
   TRIBES,
   type NationId,
   type Player,
@@ -53,6 +57,8 @@ export class DiplomacyScreen implements Screen {
         ? h('ul', { class: 'nation-relations' }, nations.map((p) => this.nationRow(p)))
         : h('p', { class: 'muted small' }, `You are the only ${term(app.state, 'homelandAdjective')} nation in ${term(app.state, 'colonyLand')}.`),
       nations.length ? h('p', { class: 'muted small' }, 'A trade agreement lets your trade routes call at each other’s colonies. After years of peace and enough trade routes between you, Favoured Nations may trade, and buy merchant ships, in each other’s home ports. Cancelling it costs both sides dearly.') : null);
+
+    const treaties = this.treatyCard();
 
     const tribes = s.tribes
       .map((t) => {
@@ -123,7 +129,7 @@ export class DiplomacyScreen implements Screen {
         h('h2', null, 'Foreign affairs'),
         h('span', { class: 'muted' }, `Gold ${me.gold.toLocaleString()}`),
         h('button', { class: 'btn close', onclick: () => app.closeScreen(), 'aria-label': 'Close foreign affairs' }, 'Close')),
-      h('div', { class: 'diplomacy-grid' }, europe, natives, congress, independence),
+      h('div', { class: 'diplomacy-grid' }, europe, treaties, natives, congress, independence),
     );
   }
 
@@ -180,6 +186,28 @@ export class DiplomacyScreen implements Screen {
         h('button', { class: 'btn tiny primary', onclick: () => app.dispatch({ type: 'answerProposal', nation: p.id, accept: true }) }, 'Accept'),
         h('button', { class: 'btn tiny', onclick: () => app.dispatch({ type: 'answerProposal', nation: p.id, accept: false }) }, 'Turn down')) : null,
       h('div', { class: 'row wrap nation-actions' }, buttons));
+  }
+
+  /**
+   * Treaties: those in force between any European nations (they are public), yours first, then
+   * your past ones, most recent first.
+   */
+  private treatyCard(): HTMLElement | null {
+    const s = this.app.state;
+    const me = this.app.me.id;
+    const all = allTreaties(s);
+    if (!all.length) return null;
+    const current = all.filter((t) => !t.end);
+    const mine = current.filter((t) => bound(t, me));
+    const others = current.filter((t) => !bound(t, me));
+    const past = all.filter((t) => t.end && bound(t, me)).reverse().slice(0, 8);
+    const item = (t: (typeof all)[number]) =>
+      h('li', { class: `treaty treaty-${t.kind}${t.end ? ' past' : ''}`, 'data-treaty': t.id }, h('strong', null, treatyName(t)), ' ', h('span', { class: 'small' }, describeTreaty(s, t)));
+    return h('div', { class: 'card treaties' },
+      h('h3', null, 'Treaties'),
+      mine.length ? h('ul', { class: 'treaty-list' }, mine.map(item)) : h('p', { class: 'muted small' }, 'You have no treaties in force.'),
+      others.length ? h('details', null, h('summary', { class: 'small' }, `Between other nations (${others.length})`), h('ul', { class: 'treaty-list' }, others.map(item))) : null,
+      past.length ? h('details', null, h('summary', { class: 'small' }, `Your past treaties (${past.length})`), h('ul', { class: 'treaty-list muted' }, past.map(item))) : null);
   }
 
   private async cancelTrade(nation: NationId): Promise<void> {

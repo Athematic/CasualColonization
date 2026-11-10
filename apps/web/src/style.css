@@ -1119,6 +1119,18 @@ button.good:not(:disabled):hover {
   align-items: center;
 }
 
+.treaty-list {
+  list-style: none;
+  margin: 0.3rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.treaty-list .past {
+  opacity: 0.75;
+}
+
 .nation-actions .btn {
   white-space: normal;
 }

@@ -16,6 +16,7 @@ import { random } from './rng.js';
 import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, term, turnAfterYears, yearValue } from './scenarios/index.js';
 import type { NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
+import { addTreaty, endTreaty, treatyBetween } from './treaties.js';
 import type { GameState, ProposalKind, Relation, RouteCargo, Unit } from './types.js';
 
 /** Years of peace needed for Favoured Nation: 10, plus or minus up to 2. */
@@ -119,11 +120,11 @@ export function yearsOfPeace(s: GameState, a: NationId, b: NationId): number {
 }
 
 export function hasTradeAgreement(s: GameState, a: NationId, b: NationId): boolean {
-  return europeanPair(a, b) && !!s.relations?.[relationKey(a, b)]?.trade;
+  return europeanPair(a, b) && !!treatyBetween(s, 'trade', a, b);
 }
 
 export function isFavoured(s: GameState, a: NationId, b: NationId): boolean {
-  return europeanPair(a, b) && !!s.relations?.[relationKey(a, b)]?.favoured;
+  return europeanPair(a, b) && !!treatyBetween(s, 'favoured', a, b);
 }
 
 /** Whether the hostility after a cancellation still lasts. Hidden from players; computer players act on it. */
@@ -276,7 +277,8 @@ export function answerProposal(s: GameState, nation: NationId, from: NationId, a
 }
 
 export function makeTradeAgreement(s: GameState, a: NationId, b: NationId): string {
-  relation(s, a, b).trade = true;
+  const rel = relation(s, a, b);
+  if (!treatyBetween(s, 'trade', a, b)) addTreaty(s, 'trade', [rel.a, rel.b]);
   track(a, 'diplomacy:trade agreement made');
   track(b, 'diplomacy:trade agreement made');
   const text = `${nationTitle(s, a)} and ${nationOf(s, b).name} have signed a trade agreement. Their trade routes may now call at each other's colonies.`;
@@ -287,8 +289,8 @@ export function makeTradeAgreement(s: GameState, a: NationId, b: NationId): stri
 
 export function makeFavoured(s: GameState, a: NationId, b: NationId): string {
   const rel = relation(s, a, b);
-  rel.trade = true;
-  rel.favoured = true;
+  if (!treatyBetween(s, 'trade', a, b)) addTreaty(s, 'trade', [rel.a, rel.b]);
+  addTreaty(s, 'favoured', [rel.a, rel.b]);
   track(a, 'diplomacy:favoured nation made');
   track(b, 'diplomacy:favoured nation made');
   const text = `${nationTitle(s, a)} and ${nationOf(s, b).name} are now Favoured Nations: their ships may trade, and buy merchant ships, in each other's home ports.`;
@@ -306,7 +308,7 @@ export function cancelTrade(s: GameState, by: NationId, to: NationId): string {
   if (isFavoured(s, by, to)) fail('Cancel the Favoured Nation status instead; that ends the trade agreement too.');
   track(by, 'cmd:cancelTrade');
   const rel = relation(s, by, to);
-  delete rel.trade;
+  endTreaty(s, treatyBetween(s, 'trade', by, to)!, 'cancelled', by);
   delete rel.proposal;
   pruneRoutes(s, by, to);
   const text = `${nationTitle(s, by)} has ended its trade agreement with ${nationOf(s, to).name}.`;
@@ -326,8 +328,9 @@ export function cancelFavoured(s: GameState, by: NationId, to: NationId, why: 'c
   if (why === 'cancel') track(by, 'cmd:cancelFavoured');
   track(by, 'diplomacy:favoured nation cancelled');
   const rel = relation(s, by, to);
-  delete rel.favoured;
-  delete rel.trade;
+  endTreaty(s, treatyBetween(s, 'favoured', by, to)!, why === 'war' ? 'war' : 'cancelled', by);
+  const trade = treatyBetween(s, 'trade', by, to);
+  if (trade) endTreaty(s, trade, why === 'war' ? 'war' : 'cancelled', by);
   delete rel.proposal;
   pruneRoutes(s, by, to);
   sendShipsHome(s, by, to);
@@ -357,9 +360,11 @@ export function cancelFavoured(s: GameState, by: NationId, to: NationId, why: 'c
  */
 export function lapseFavoured(s: GameState, nation: NationId): void {
   for (const rel of Object.values(s.relations ?? {})) {
-    if (!rel.favoured || (rel.a !== nation && rel.b !== nation)) continue;
+    if (rel.a !== nation && rel.b !== nation) continue;
+    const favoured = treatyBetween(s, 'favoured', rel.a, rel.b);
+    if (!favoured) continue;
     const partner = other(rel, nation);
-    delete rel.favoured;
+    endTreaty(s, favoured, 'lapsed');
     if (rel.proposal?.kind === 'favoured') delete rel.proposal;
     sendShipsHome(s, nation, partner);
     closedRoutePorts(s, partner);
@@ -372,10 +377,12 @@ export function onWar(s: GameState, by: NationId, to: NationId): void {
   if (!europeanPair(by, to) || !s.relations?.[relationKey(by, to)]) return;
   const rel = relation(s, by, to);
   delete rel.proposal;
-  if (rel.trade) track(by, rel.favoured ? 'diplomacy:war on a Favoured Nation' : 'diplomacy:war on a trade partner');
-  if (rel.favoured) cancelFavoured(s, by, to, 'war');
-  else if (rel.trade) {
-    delete rel.trade;
+  const trade = treatyBetween(s, 'trade', by, to);
+  const favoured = treatyBetween(s, 'favoured', by, to);
+  if (trade) track(by, favoured ? 'diplomacy:war on a Favoured Nation' : 'diplomacy:war on a trade partner');
+  if (favoured) cancelFavoured(s, by, to, 'war');
+  else if (trade) {
+    endTreaty(s, trade, 'war', by);
     pruneRoutes(s, by, to);
     message(s, `The trade agreement between ${nationOf(s, by).name} and ${nationOf(s, to).name} ends with the war.`);
   }

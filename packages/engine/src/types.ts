@@ -400,7 +400,8 @@ export type ProposalKind = 'trade' | 'favoured';
 
 /**
  * Relations between two European nations (see relations.ts and docs/design/favoured-nation.md).
- * Turn numbers, not years; the thresholds are hidden from players.
+ * Turn numbers, not years; the thresholds are hidden from players. The agreements themselves (a
+ * trade agreement, Favoured Nation status) are treaties (`GameState.treaties`, treaties.ts).
  */
 export interface Relation {
   /** The pair, in the order of `GameConfig.nations`. */
@@ -412,10 +413,6 @@ export interface Relation {
   peaceNeeded: number;
   /** Hidden: active trade routes between the two needed for Favoured Nation (2–4, from the seed). */
   routesNeeded: number;
-  /** A trade agreement: route stops at each other's colonies are allowed. */
-  trade?: boolean;
-  /** Favoured Nation status (implies a trade agreement). */
-  favoured?: boolean;
   /** Gold that has changed hands at each other's colonies, both ways, over the game. */
   volume: number;
   /** After a cancellation: no new agreements or foreign stops before this turn. */
@@ -426,6 +423,44 @@ export interface Relation {
   cancels?: number;
   /** A proposal waiting for the other side (a person) to answer. */
   proposal?: { kind: ProposalKind; from: NationId; turn: number };
+}
+
+/**
+ * The kinds of treaty between European nations (docs/design/cooperation.md, C9): a trade
+ * agreement, Favoured Nation status and, from Beta 1, an alliance. Beta 2's treaties with native
+ * peoples are meant to reuse the record.
+ */
+export type TreatyKind = 'trade' | 'favoured';
+
+/** How a treaty ended. */
+export interface TreatyEnd {
+  turn: number;
+  /** cancelled by one side, ended by a war, lapsed (independence), or left by a member. */
+  why: 'cancelled' | 'war' | 'lapsed';
+  /** The nation that ended it, when one did. */
+  by?: NationId;
+}
+
+/**
+ * A party to a treaty. Only European nations for now; the shape leaves room for other kinds of
+ * party later (Beta 2's native peoples) without changing the record.
+ */
+export type TreatyParty = { kind: 'nation'; id: NationId };
+
+/**
+ * A treaty (treaties.ts). Treaties are kept after they end, with `end` set, so the diplomacy
+ * screen can show the past ones; at most one treaty of a kind is in force between two nations.
+ */
+export interface Treaty {
+  /** 't1', 't2', … in the order the treaties were made. */
+  id: string;
+  kind: TreatyKind;
+  /** Who is bound by it: for a trade agreement and Favoured Nation, the pair in the order of `GameConfig.nations`. */
+  parties: TreatyParty[];
+  /** Turn it was made. */
+  start: number;
+  /** Missing while it is in force. */
+  end?: TreatyEnd;
 }
 
 export interface GameState {
@@ -449,6 +484,8 @@ export interface GameState {
   difficulty?: DifficultyId;
   /** Relations between each pair of European nations, keyed by relationKey(a, b). */
   relations: Record<string, Relation>;
+  /** Treaties between European nations, in force and past, in the order made (treaties.ts). Missing until the first one. */
+  treaties?: Treaty[];
   /** Trade routes by id; missing means none. */
   routes?: Record<string, TradeRoute>;
   /** Native braves on the map, by id. Missing (older saves) means none yet; settlements send them out. */

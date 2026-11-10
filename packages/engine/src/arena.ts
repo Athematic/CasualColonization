@@ -14,6 +14,7 @@ import { nationSet, scenarioOf, type Rivals } from './scenarios/index.js';
 import { scoreBreakdown, type ScoreComponent } from './score.js';
 import { setFeatureSink } from './telemetry.js';
 import { royalForce } from './independence.js';
+import { isFavoured } from './relations.js';
 import type { GameState, MapSize, Player } from './types.js';
 
 export interface ArenaOptions {
@@ -262,7 +263,7 @@ function endRelations(s: GameState, nation: NationId, counted?: RelationsTally):
   for (const rel of Object.values(s.relations ?? {})) {
     if (rel.a !== nation && rel.b !== nation) continue;
     r.volume += rel.volume;
-    if (rel.favoured) r.favouredAtEnd++;
+    if (isFavoured(s, rel.a, rel.b)) r.favouredAtEnd++;
   }
   return r;
 }
