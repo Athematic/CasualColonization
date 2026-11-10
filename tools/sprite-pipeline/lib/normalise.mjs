@@ -60,7 +60,11 @@ export function coreBBox(img, t = 0.5, frac = 0.18) {
  *  base:    baseline (feet, wheels, waterline) for bottom-anchored layouts.
  *  margin:  minimum free border; the subject is shrunk if a protrusion would cross it.
  *           It is at least 1/16 so the 1-px pixel-art outline still fits at 16 px.
- *  whole:   scale by the full bounding box instead of the core (nothing counts as a protrusion).
+ *  fit 'frame' (Founding Father figures): a portrait canvas `aspect` (width / height) wide and 1 high.
+ *           The master's own frame sets the scale (its height maps to the canvas height), because the
+ *           prompt draws every figure at one scale (crown at 0.12, a hat up to 0.08, feet on 0.92): so a
+ *           tall hat adds height instead of shrinking the person. Only a figure drawn outside
+ *           hMin..hMax of the frame height (model drift) is rescaled to the nearest bound.
  * Horizontally, bottom-anchored subjects are centred on their core (so a
  * musket or sabre sticking out does not push the body off-centre).
  */
@@ -73,9 +77,9 @@ export const LAYOUTS = {
   overlay: { fit: 'contain', w: 0.84, h: 0.84, anchor: 'center', margin: 0.065 },
   building: { fit: 'contain', w: 0.86, h: 0.84, anchor: 'bottom', base: 0.93, margin: 0.065 },
   decor: { fit: 'contain', w: 0.88, h: 0.84, anchor: 'bottom', base: 0.93, margin: 0.065 },
-  // Founding Father portraits: an oval cameo, kept whole (the bust is cut by the oval, so there is no
-  // body box to normalise by). The oval's bounding box fits 0.86 x 0.86, centred, so all 25 share one scale.
-  portrait: { fit: 'contain', w: 0.86, h: 0.86, anchor: 'center', margin: 0.065, whole: true },
+  // Founding Father full figures (2:3 masters), placed together in the Continental Congress hall:
+  // a 2:3 canvas, feet on 0.92, the master's scale kept (see fit 'frame' above), centred on the body.
+  figure: { fit: 'frame', aspect: 2 / 3, anchor: 'bottom', base: 0.92, hMin: 0.74, hMax: 0.86, margin: 0.04 },
   // Full-bleed or edge-aligned art: scaled to the canvas as is.
   fullbleed: { fit: 'none' },
 };
@@ -100,7 +104,7 @@ export function classify(id) {
     case 'buildings':
     case 'colonies':
     case 'settlements': layout = 'building'; break;
-    case 'fathers': layout = 'portrait'; break;
+    case 'fathers': layout = 'figure'; break; // plus a head crop (headPlacement), made by build.mjs
     case 'decor': layout = name.startsWith('road__') ? 'fullbleed' : 'decor'; break;
     case 'terrain':
     case 'ui': layout = 'fullbleed'; break;
@@ -141,7 +145,8 @@ export function placement(img, layoutName, opts = {}) {
   }
   const bbox = alphaBBox(img, t);
   if (!bbox) throw new Error('empty image (nothing above the alpha threshold)');
-  const core = L.whole ? bbox : (coreBBox(img, t, opts.coreFrac ?? 0.18) ?? bbox);
+  const core = coreBBox(img, t, opts.coreFrac ?? 0.18) ?? bbox;
+  if (L.fit === 'frame') return framePlacement(img, bbox, core, L);
   const cw = core.x1 - core.x0, ch = core.y1 - core.y0;
   let s;
   if (L.fit === 'height') s = L.h / ch;
@@ -172,4 +177,57 @@ export function placement(img, layoutName, opts = {}) {
 /** Transform scaled to an N-pixel canvas, in the form `resample` wants. */
 export function transformFor(p, n) {
   return { scale: p.scale * n, offsetX: p.ox * n, offsetY: p.oy * n };
+}
+
+/**
+ * Fit 'frame' (layout `figure`): unit coordinates are shares of the canvas HEIGHT on both axes, so the
+ * canvas is `aspect` wide and 1 high, and `transformFor(p, h)` renders an h-high, round(h * aspect)-wide
+ * image. Feet (the bottom of the bounding box) go on `base`, the body (core) is centred horizontally.
+ */
+function framePlacement(img, bbox, core, L) {
+  const A = L.aspect ?? 1, m = L.margin ?? 0;
+  const bh = bbox.y1 - bbox.y0;
+  let s = 1 / img.h;
+  const hh = bh * s;
+  if (hh < L.hMin) s *= L.hMin / hh;
+  else if (hh > L.hMax) s *= L.hMax / hh;
+  const cx = (core.x0 + core.x1) / 2;
+  // shrink if anything would cross the margin (top, left or right)
+  s *= Math.min(1,
+    (L.base - m) / (bh * s),
+    (A / 2 - m) / Math.max(1e-9, (cx - bbox.x0) * s),
+    (A / 2 - m) / Math.max(1e-9, (bbox.x1 - cx) * s));
+  return { scale: s, ox: A / 2 - cx * s, oy: L.base - bbox.y1 * s, bbox, core, layout: L, aspect: A };
+}
+
+/**
+ * The small head-and-shoulders icon of a Founding Father, cropped from the full figure (no second
+ * image): a square whose side is `band` of the figure's height, starting `above` of that height over
+ * the top of the head (or hat), centred on the head (the mean x of the opaque pixels in the top `face`
+ * of the figure). Returns a placement for a square unit canvas, like `placement`, plus the crop box in
+ * master pixels. The prompt keeps the head unobstructed, so the crop shows only the head and shoulders.
+ */
+export const HEAD_CROP = { band: 0.3, above: 0.02, face: 0.14 };
+
+export function headPlacement(img, opts = {}) {
+  const t = opts.alphaThreshold ?? 0.5;
+  const C = { ...HEAD_CROP, ...(opts.crop ?? {}) };
+  const bbox = alphaBBox(img, t);
+  if (!bbox) throw new Error('empty image (nothing above the alpha threshold)');
+  const H = bbox.y1 - bbox.y0;
+  const yEnd = Math.min(bbox.y1, Math.ceil(bbox.y0 + C.face * H));
+  let sum = 0, cnt = 0;
+  for (let y = bbox.y0; y < yEnd; y++) {
+    for (let x = bbox.x0; x < bbox.x1; x++) {
+      if (img.data[(y * img.w + x) * 4 + 3] >= t) { sum += x + 0.5; cnt++; }
+    }
+  }
+  const cx = cnt ? sum / cnt : (bbox.x0 + bbox.x1) / 2;
+  const side = C.band * H;
+  const x0 = cx - side / 2, y0 = bbox.y0 - C.above * H;
+  const s = 1 / side;
+  return {
+    scale: s, ox: -x0 * s, oy: -y0 * s, bbox, core: null, layout: { fit: 'crop', ...C },
+    crop: { x0: +x0.toFixed(1), y0: +y0.toFixed(1), x1: +(x0 + side).toFixed(1), y1: +(y0 + side).toFixed(1) },
+  };
 }
