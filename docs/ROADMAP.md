@@ -84,8 +84,8 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | --- | --- | --- | --- |
 | Mercenaries; foreign intervention force; Tories after the declaration | M | P2 | in progress |
 | Damaged artillery, ambush bonus, fortresses and coastal forts, capturing equipment | M | P2 | in progress |
-| Mines running out | S | P3 | in progress |
-| Abandoning a colony; retiring early | S | P2 | in progress |
+| Mines running out | S | P3 | done |
+| Abandoning a colony; retiring early | S | P2 | done |
 | Performance pass: profile computer turns and the map renderer; a head start to 1700 currently takes about 100 seconds. Goal: under 30 seconds, with identical game outcomes | M | P1 | planned (after the other 0.7 items) |
 | Scoring review: reward well-developed colonies (buildings, experts, production, liberty) and not only headcount, to fit the colony charter and the measured pace | S | P1 | in progress |
 

@@ -54,6 +54,7 @@ export function baseTileYield(tile: Tile, good: GoodId): number {
   const bonusGood = tile.f ? 'furs' : def.bonusGood;
   if (tile.b && bonusGood === good) amount *= 2;
   if (tile.rv) amount += RIVER_YIELD_BONUS[tile.rv][good] ?? 0;
+  if (tile.d && good === 'silver') amount = Math.max(1, Math.floor(amount / 2));
   return amount;
 }
 

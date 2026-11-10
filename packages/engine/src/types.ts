@@ -66,6 +66,8 @@ export interface Tile {
    * sw 32, w 64, nw 128). A bit towards a water tile is the river's mouth.
    */
   rd?: number;
+  /** Worked out: the silver here has been mined thin (see mines.ts, rules/mines.ts). */
+  d?: boolean;
   /** European nation that bought or took this land from the natives. */
   claim?: NationId;
 }
@@ -384,7 +386,9 @@ export interface GameState {
   braves?: Record<string, Brave>;
   /** Native demands and offers waiting for a person's answer. Missing means none. */
   nativeDemands?: NativeDemand[];
-  gameOver?: { turn: number; reason: string; winner?: NationId; scores: Partial<Record<NationId, number>> };
+  gameOver?: { turn: number; reason: string; winner?: NationId; scores: Partial<Record<NationId, number>>; /** The person ended the game early (leaving.ts). */ retired?: boolean };
+  /** Silver and ore dug so far from mining tiles, by "x,y" (see mines.ts). Missing means none. */
+  mined?: Record<string, number>;
   /** Set the first time a cheat is used and never cleared. Missing means the game is not cheated. */
   cheated?: { turn: number; cheats: CheatId[] };
   /** Game-wide modifiers set by cheats. Missing fields mean the normal rules. */

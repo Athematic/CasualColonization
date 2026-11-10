@@ -29,6 +29,7 @@ import { NATIONS, TRIBES, type NationId } from './rules/nations.js';
 import { COLONY_BUILDS, PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
 import { runCustomHouse } from './europe.js';
 import { hasFather } from './fathers.js';
+import { noteMining } from './mines.js';
 import { noteProduction } from './stats.js';
 import { nativeLandOwner, onColonyFounded } from './natives.js';
 import type { BuildTarget, Colony, GameState, Job, Unit } from './types.js';
@@ -425,6 +426,7 @@ export function processColony(s: GameState, colony: Colony): void {
   p.fatherBells += report.produced.bells;
   p.crosses += report.produced.crosses;
   noteProduction(s, colony.owner, report.produced);
+  noteMining(s, colony, report.workers);
   colony.hammers += report.produced.hammers;
 
   if (colony.build) {

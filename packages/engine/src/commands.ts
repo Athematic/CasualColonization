@@ -22,6 +22,7 @@ import { buyFromSettlement, buyLand, denounceMission, establishMission, giftToTr
 import { chooseFather } from './fathers.js';
 import { proposePeace, startWar } from './diplomacy.js';
 import { answerProposal, cancelFavoured, cancelTrade, proposeFavoured, proposeTrade } from './relations.js';
+import { abandonColony, retire } from './leaving.js';
 import { declareIndependence } from './independence.js';
 import { answerDemand } from './crown.js';
 import { answerEvent, setEvents } from './events/index.js';
@@ -100,6 +101,10 @@ export type Command =
   | { type: 'cancelFavoured'; nation: NationId }
   | { type: 'giftTribe'; tribe: TribeId; gold: number }
   | { type: 'declareIndependence' }
+  /** Abandons a small colony without a stockade (leaving.ts). */
+  | { type: 'abandonColony'; colonyId: string }
+  /** Ends the game now with the current score. */
+  | { type: 'retire' }
   | { type: 'createRoute'; name: string; stops?: RouteStop[] }
   | { type: 'editRoute'; routeId: string; name?: string; stops?: RouteStop[] }
   | { type: 'deleteRoute'; routeId: string }
@@ -381,6 +386,13 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'giftTribe':
         text = giftToTribe(s, nation, cmd.tribe, cmd.gold);
+        break;
+      case 'abandonColony':
+        ownColony(s, nation, cmd.colonyId);
+        text = abandonColony(s, cmd.colonyId);
+        break;
+      case 'retire':
+        text = retire(s);
         break;
       case 'declareIndependence':
         text = declareIndependence(s, nation);
