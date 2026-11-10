@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AMERICAS,
   applyCommand,
   createGame,
   entryPoints,
@@ -9,6 +10,7 @@ import {
   serialize,
   STORED_MAPS,
   storedMap,
+  storedMapEntry,
   TERRAIN,
   type GameMap,
   type GameState,
@@ -32,7 +34,7 @@ describe('stored maps', () => {
   });
 
   it('rejects unknown terrain and ragged rows', () => {
-    const base = { id: 'test', name: 'Test', description: '', tribes: [] };
+    const base = { id: 'test', name: 'Test', description: '' };
     expect(parseStoredMap({ ...base, rows: '\n~p\n~P\n' })).toEqual({ width: 2, height: 2, tiles: [{ t: 'highSeas' }, { t: 'plains' }, { t: 'highSeas' }, { t: 'plains', f: true }] });
     expect(() => parseStoredMap({ ...base, rows: '~p\n~' })).toThrow(/row 1/);
     expect(() => parseStoredMap({ ...base, rows: '~x' })).toThrow(/unknown terrain/);
@@ -53,6 +55,8 @@ describe('stored maps', () => {
   for (const def of STORED_MAPS) {
     describe(def.name, () => {
       const map = parseStoredMap(def);
+      // The Americas scenario's peoples on this map.
+      const tribes = storedMapEntry(AMERICAS, def.id).peoples;
       const arrivalX = def.entrySide === 'west' ? 1 : map.width - 2;
 
       it('parses with consistent rows at about the large size or bigger', () => {
@@ -74,7 +78,7 @@ describe('stored maps', () => {
       });
 
       it('has region rectangles inside the map, with land in them', () => {
-        for (const { tribe, region: [x0, y0, x1, y1], count } of def.tribes) {
+        for (const { tribe, region: [x0, y0, x1, y1], count } of tribes) {
           expect(x0).toBeGreaterThanOrEqual(0);
           expect(y0).toBeGreaterThanOrEqual(0);
           expect(x1).toBeLessThan(map.width);
@@ -97,7 +101,7 @@ describe('stored maps', () => {
         for (const seed of [1, 2, 3]) {
           const s = play(def, 8, seed, 0);
           const settlements = Object.values(s.settlements);
-          for (const tribe of new Set(def.tribes.map((r) => r.tribe))) {
+          for (const tribe of new Set(tribes.map((r) => r.tribe))) {
             const own = settlements.filter((st) => st.tribe === tribe);
             expect(own.length, `${tribe} with seed ${seed}`).toBeGreaterThan(0);
             expect(own.filter((st) => st.capital)).toHaveLength(1);
@@ -112,7 +116,7 @@ describe('stored maps', () => {
             }
             for (const p of s.players) expect(Math.max(Math.abs(a.x - p.entry.x), Math.abs(a.y - p.entry.y))).toBeGreaterThanOrEqual(2);
           }
-          expect(settlements.length).toBeGreaterThanOrEqual(def.tribes.reduce((n, r) => n + r.count, 0) * 0.6);
+          expect(settlements.length).toBeGreaterThanOrEqual(tribes.reduce((n, r) => n + r.count, 0) * 0.6);
         }
       });
 

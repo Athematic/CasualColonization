@@ -26,6 +26,7 @@ import { lapseFavoured } from './relations.js';
 import { difficultyOf, mechanicsOf } from './scenarios/index.js';
 import { NATIONS, type NationId } from './rules/nations.js';
 import { checkVictory, finishNation } from './victory.js';
+import { crownSideOf } from './world.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
 
 /** Share of all colonists, across every colony, who support independence. */
@@ -56,7 +57,9 @@ export function canDeclareIndependence(s: GameState, nation: NationId): string |
 function ensureCrown(s: GameState): Player {
   let crown = s.players.find((p) => p.id === 'crown');
   if (!crown) {
-    crown = newPlayer(s, 'crown', false, { x: s.map.width - 2, y: Math.floor(s.map.height / 2) });
+    // The Crown's ships sail in on the scenario's side for it (the map's arrival edge in the Americas).
+    const x = crownSideOf(s) === 'west' ? 1 : s.map.width - 2;
+    crown = newPlayer(s, 'crown', false, { x, y: Math.floor(s.map.height / 2) });
     crown.explored.fill(1);
     crown.gold = 0;
     s.players.push(crown);

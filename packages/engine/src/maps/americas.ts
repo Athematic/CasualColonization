@@ -1,4 +1,4 @@
-import type { StoredMap } from './index.js';
+import type { StoredMap, TribeRegion } from './index.js';
 
 /** The Americas. The legend is in index.ts. */
 export const americas: StoredMap = {
@@ -6,19 +6,6 @@ export const americas: StoredMap = {
   name: 'The Americas',
   description: 'Both continents, joined by Central America around the Caribbean, with all eight tribes.',
   entryRows: [12, 85],
-  tribes: [
-    { tribe: 'iroquois', region: [32, 18, 42, 23], count: 4 },
-    { tribe: 'cherokee', region: [25, 24, 36, 32], count: 3 },
-    { tribe: 'sioux', region: [16, 12, 26, 25], count: 6 },
-    { tribe: 'apache', region: [9, 25, 21, 34], count: 4 },
-    { tribe: 'aztec', region: [16, 36, 27, 44], count: 3 },
-    { tribe: 'arawak', region: [29, 36, 46, 41], count: 3 },
-    { tribe: 'arawak', region: [33, 34, 38, 38], count: 1 },
-    { tribe: 'arawak', region: [35, 45, 51, 53], count: 4 },
-    { tribe: 'tupi', region: [51, 57, 63, 77], count: 7 },
-    { tribe: 'tupi', region: [42, 55, 51, 65], count: 4 },
-    { tribe: 'inca', region: [33, 54, 43, 83], count: 7 },
-  ],
   // Main rivers first, tributaries after the river they join. Format: parseRivers in rivers.ts.
   rivers: `
     Mississippi: m 25,18 26,23 M 26,27 26,31 26,32
@@ -145,3 +132,18 @@ G^^GGhh^^^pTTTTTTTppPTmmmmmmmMmm..TTTTTTTTTTttTT...~~~~~~~~~~~~~~~~
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~.........~~~~~~~~~~~~~~~~~~~~~~~
 `,
 };
+
+/** Where the Americas scenario's peoples live on the Americas map. */
+export const AMERICAS_PEOPLES: TribeRegion[] = [
+  { tribe: 'iroquois', region: [32, 18, 42, 23], count: 4 },
+  { tribe: 'cherokee', region: [25, 24, 36, 32], count: 3 },
+  { tribe: 'sioux', region: [16, 12, 26, 25], count: 6 },
+  { tribe: 'apache', region: [9, 25, 21, 34], count: 4 },
+  { tribe: 'aztec', region: [16, 36, 27, 44], count: 3 },
+  { tribe: 'arawak', region: [29, 36, 46, 41], count: 3 },
+  { tribe: 'arawak', region: [33, 34, 38, 38], count: 1 },
+  { tribe: 'arawak', region: [35, 45, 51, 53], count: 4 },
+  { tribe: 'tupi', region: [51, 57, 63, 77], count: 7 },
+  { tribe: 'tupi', region: [42, 55, 51, 65], count: 4 },
+  { tribe: 'inca', region: [33, 54, 43, 83], count: 7 },
+];

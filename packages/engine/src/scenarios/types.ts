@@ -19,7 +19,9 @@ import type { SettlementKindDef } from '../rules/natives.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { ScoreWeights } from '../rules/score.js';
 import type { UnitTypeId } from '../rules/units.js';
-import type { GameState } from '../types.js';
+import type { EntrySide } from '../mapgen.js';
+import type { TerrainId } from '../rules/terrain.js';
+import type { GameState, MapSize } from '../types.js';
 import type { Calendar } from './calendar.js';
 
 export type ScenarioId = string;
@@ -40,6 +42,8 @@ export interface Scenario {
   /** How turns map to years, when the game ends and where head starts can jump to. */
   calendar: Calendar;
   map: ScenarioMap;
+  /** Terrains in play (rules/terrain.ts): the generator and the scenario's stored maps use only these. */
+  terrain: readonly TerrainId[];
   nations: ScenarioNations;
   peoples: ScenarioPeoples;
   /** Goods in play; the order is the order of keys in markets and warehouses. */
@@ -142,12 +146,118 @@ export interface RumourEntry {
 }
 
 export interface ScenarioMap {
-  /** Ids of the stored maps (maps/index.ts) this scenario offers. */
-  stored: string[];
-  /** Whether a generated map can be played (the generator's settings come in step 6). */
-  generated: boolean;
+  /** The stored maps this scenario offers (maps/index.ts), each with the scenario's peoples on it. */
+  stored: StoredMapEntry[];
+  /** How a generated map is made; absent when the scenario has stored maps only. */
+  generator?: GeneratorSettings;
   /** 'generated', or the id of a stored map. */
   default: 'generated' | string;
+  /** Bonus resources and Lost City Rumours, on generated and stored maps alike. */
+  extras: MapExtras;
+  /** Where native settlements may stand, on generated and stored maps alike. */
+  settlements: {
+    /** Land terrains no settlement is placed on. */
+    avoid: TerrainId[];
+    /** Least distance between two settlements, in tiles (the larger of the two axes). */
+    spacing: number;
+  };
+  /**
+   * The edge the Crown's forces sail in from when a nation declares independence: the map's
+   * arrival edge ('entry', where the nations' expeditions arrive), or a fixed edge.
+   */
+  crown: 'entry' | EntrySide;
+}
+
+/** A stored map in a scenario, and where the scenario's peoples live on it. */
+export interface StoredMapEntry {
+  /** The id of a stored map (maps/index.ts STORED_MAPS). */
+  id: string;
+  /** Each people's regions and the number of settlements in each; only the scenario's peoples. */
+  peoples: PeopleRegion[];
+}
+
+/** Where a people lives on a stored map: an inclusive tile rectangle and the number of settlements in it. */
+export interface PeopleRegion {
+  tribe: TribeId;
+  /** [x0, y0, x1, y1], inclusive. */
+  region: [number, number, number, number];
+  count: number;
+}
+
+/** Bonus resources and Lost City Rumours scattered over a new map: the chance per tile. */
+export interface MapExtras {
+  /** A bonus resource on a land tile whose terrain has a bonus good. */
+  bonus: number;
+  /** A bonus resource (fish) on ocean next to land. */
+  coastalBonus: number;
+  /** A Lost City Rumour on a land tile. */
+  rumours: number;
+  /** Land terrains without rumours. */
+  noRumours: TerrainId[];
+}
+
+/**
+ * How mapgen.ts generates a world (docs/design/scenario-framework.md, row 26). Land is noise with a
+ * falloff away from a centre; the climate is a temperature (warm in the middle rows, cold at the
+ * poles, plus noise) that picks a zone, and within a zone the elevation and then the moisture pick
+ * the terrain. The Americas' values are the generator's old constants.
+ */
+export interface GeneratorSettings {
+  /** Width and height for each size on the New game screen. */
+  sizes: Record<MapSize, { width: number; height: number }>;
+  /** Cell sizes of each noise field's octaves, in tiles. */
+  noise: { land: number[]; heat: number[]; wet: number[]; elevation: number[]; wood: number[] };
+  land: {
+    /** The continent's centre, as shares of the width and height. */
+    centre: [number, number];
+    /** How far land reaches from the centre, as shares of the width and height. */
+    spread: [number, number];
+    /** How fast land thins out: weights of the horizontal (squared) and vertical (fourth power) distance, and the overall strength. */
+    falloff: { x: number; y: number; strength: number };
+    /** Noise above this (after the falloff) is land. */
+    threshold: number;
+    /** Columns and rows along each edge that stay sea. */
+    margin: { west: number; east: number; north: number; south: number };
+  };
+  climate: {
+    /** How much the heat noise moves the temperature. */
+    heatNoise: number;
+    /** Added to every tile's temperature (positive: a warmer world). */
+    warmth: number;
+    /** Rows at the top and bottom edge that are always this terrain. */
+    poles: { rows: number; terrain: TerrainId };
+    /** Temperature zones, coldest first; the last has no `below`. */
+    zones: ClimateZone[];
+  };
+  /** Wood noise above this puts forest on a terrain that can carry it. */
+  forest: number;
+  highSeas: {
+    /** Ocean this many tiles or more from land is high seas. */
+    distance: number;
+    /** Columns along the arrival edge that are always high seas. */
+    columns: number;
+  };
+  /** The edge European expeditions arrive at, and where Europe lies. */
+  entrySide: EntrySide;
+  /** Native settlements: the scenario's peoples in bands from north to south. */
+  peoples: {
+    /** One settlement per this many land tiles where settlements may stand. */
+    perTiles: number;
+    /** At least this many settlements. */
+    min: number;
+    /** Rows along the top and bottom edge without settlements. */
+    edgeRows: number;
+  };
+}
+
+/** One temperature zone of the generator's climate. */
+export interface ClimateZone {
+  /** The zone holds tiles colder than this; absent for the warmest zone. */
+  below?: number;
+  /** Checked first: elevation above `above` gives `terrain`, in order. */
+  heights?: { above: number; terrain: TerrainId }[];
+  /** Then moisture below `below` gives `terrain`, in order; the last has no `below`. */
+  moisture: { below?: number; terrain: TerrainId }[];
 }
 
 export interface ScenarioNations {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AMERICAS,
+  AMERICAS_GENERATOR,
   BUILDING_ORDER,
   BUILDINGS,
   checkSavedScenario,
@@ -14,6 +15,10 @@ import {
   hasEventSet,
   HOME_PORTS,
   listScenarios,
+  MAP_SIZES,
+  parseStoredMap,
+  storedMap,
+  TERRAIN,
   NATION_ORDER,
   NATIONS,
   NATIVE_PRODUCE,
@@ -85,8 +90,11 @@ describe('the Americas scenario is today’s tables', () => {
 
   it('events, maps, difficulty and score', () => {
     expect(AMERICAS.events).toBe('americas');
-    expect(AMERICAS.map.stored).toEqual(STORED_MAPS.map((m) => m.id));
-    expect(AMERICAS.map.generated).toBe(true);
+    expect(AMERICAS.map.stored.map((e) => e.id)).toEqual(STORED_MAPS.map((m) => m.id));
+    expect(AMERICAS.map.generator).toBe(AMERICAS_GENERATOR);
+    expect(AMERICAS_GENERATOR.sizes).toBe(MAP_SIZES);
+    expect(AMERICAS.map.crown).toBe('entry');
+    expect(AMERICAS.terrain).toEqual(Object.keys(TERRAIN));
     expect(AMERICAS.map.default).toBe('generated');
     // No overrides: the engine's own tables (test/overrides.test.ts).
     expect(difficultyTable(AMERICAS)).toBe(DIFFICULTY);
@@ -110,9 +118,37 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
     for (const t of sc.peoples.ids) expect(TRIBES[t]).toBeDefined();
     for (const t of sc.peoples.ids) expect(sc.peoples.settlements[TRIBES[t].lifeway], `a settlement kind for the ${TRIBES[t].lifeway} ${t}`).toBeDefined();
     for (const f of sc.council.members) expect(FATHERS[f]).toBeDefined();
-    for (const m of sc.map.stored) expect(STORED_MAPS.some((d) => d.id === m)).toBe(true);
-    expect(sc.map.default === 'generated' ? sc.map.generated : sc.map.stored.includes(sc.map.default)).toBe(true);
+    unique(sc.terrain);
+    unique(sc.map.stored.map((e) => e.id));
+    for (const t of sc.terrain) expect(TERRAIN[t]).toBeDefined();
+    for (const m of sc.map.stored) expect(STORED_MAPS.some((d) => d.id === m.id)).toBe(true);
+    expect(sc.map.default === 'generated' ? !!sc.map.generator : sc.map.stored.some((e) => e.id === sc.map.default)).toBe(true);
     expect(hasEventSet(sc.events)).toBe(true);
+  });
+
+  it('maps use only its terrains and place only its peoples', () => {
+    const terrain = new Set(sc.terrain);
+    for (const t of ['ocean', 'highSeas'] as const) expect(terrain.has(t)).toBe(true);
+    for (const t of [...sc.map.extras.noRumours, ...sc.map.settlements.avoid]) expect(terrain.has(t)).toBe(true);
+    for (const e of sc.map.stored) {
+      const map = parseStoredMap(storedMap(e.id));
+      for (const tile of map.tiles) expect(terrain.has(tile.t), `${tile.t} on ${e.id}`).toBe(true);
+      expect(e.peoples.length).toBeGreaterThan(0);
+      for (const r of e.peoples) expect(sc.peoples.ids, `${r.tribe} on ${e.id}`).toContain(r.tribe);
+    }
+    const gen = sc.map.generator;
+    if (gen) {
+      const { zones, poles } = gen.climate;
+      expect(terrain.has(poles.terrain)).toBe(true);
+      zones.forEach((z, i) => {
+        expect(z.below === undefined, `only the last zone is open-ended`).toBe(i === zones.length - 1);
+        for (const h of z.heights ?? []) expect(terrain.has(h.terrain)).toBe(true);
+        z.moisture.forEach((b, j) => {
+          expect(terrain.has(b.terrain)).toBe(true);
+          expect(b.below === undefined).toBe(j === z.moisture.length - 1);
+        });
+      });
+    }
   });
 
   it('nation sets fit the limit and name real nations', () => {

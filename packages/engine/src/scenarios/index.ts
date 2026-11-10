@@ -20,7 +20,7 @@ import type { Mechanics, NationEntry, Rivals, RumourEntry, Scenario, ScenarioAi 
 
 export * from './types.js';
 export * from './calendar.js';
-export { AMERICAS } from './americas.js';
+export { AMERICAS, AMERICAS_GENERATOR } from './americas.js';
 
 /** The scenario of games that do not name one. */
 export const DEFAULT_SCENARIO = 'americas';
@@ -210,6 +210,11 @@ export function checkScenarioConfig(config: GameConfig): Scenario {
   const set = nationSet(scenario, config.rivals);
   for (const nation of config.nations) {
     if (!set.some((e) => e.id === nation)) throw new Error(`${nation} is not one of the nations of ${scenario.name}.`);
+  }
+  if (config.map) {
+    if (!scenario.map.stored.some((e) => e.id === config.map)) throw new Error(`${scenario.name} has no map "${config.map}".`);
+  } else if (!scenario.map.generator) {
+    throw new Error(`${scenario.name} has no generated maps; choose one of its maps.`);
   }
   return scenario;
 }

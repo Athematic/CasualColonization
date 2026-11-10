@@ -5,15 +5,12 @@ import { FIRST_BRAVE_AFTER } from './rules/natives.js';
 import { random, randInt, pick } from './rng.js';
 import { generateRivers } from './rivers.js';
 import type { GameMap, MapSize, Settlement, Tile } from './types.js';
-import { AMERICAS } from './scenarios/americas.js';
+import { AMERICAS, AMERICAS_GENERATOR } from './scenarios/americas.js';
 import { settlementKindIn } from './scenarios/index.js';
-import type { Scenario } from './scenarios/types.js';
+import type { ClimateZone, GeneratorSettings, MapExtras, Scenario } from './scenarios/types.js';
 
-export const MAP_SIZES: Record<MapSize, { width: number; height: number }> = {
-  small: { width: 36, height: 44 },
-  medium: { width: 46, height: 58 },
-  large: { width: 58, height: 72 },
-};
+/** The Americas' generated map sizes (the New game screen's choice until it offers each scenario's). */
+export const MAP_SIZES: Record<MapSize, { width: number; height: number }> = AMERICAS_GENERATOR.sizes;
 
 /** Smooth value noise built from a coarse random lattice. */
 function noiseField(rng: { rng: number }, width: number, height: number, cell: number): (x: number, y: number) => number {
@@ -54,28 +51,49 @@ export interface GeneratedWorld {
 /** The map edge whose high seas European expeditions arrive at. */
 export type EntrySide = 'east' | 'west';
 
-/** A generated world for a scenario. Its peoples, north to south, each get a band of the map. */
-export function generateMap(rng: { rng: number }, size: MapSize, scenario: Scenario = AMERICAS): GeneratedWorld {
-  const { width, height } = MAP_SIZES[size];
-  const land = octaves(rng, width, height, [9, 4, 2]);
-  const heat = octaves(rng, width, height, [7, 3]);
-  const wet = octaves(rng, width, height, [6, 3]);
-  const elev = octaves(rng, width, height, [5, 2]);
-  const wood = octaves(rng, width, height, [4, 2]);
+/** The terrain of a temperature zone: by elevation first, then by moisture. */
+function zoneTerrain(zone: ClimateZone, m: number, e: number): TerrainId {
+  for (const h of zone.heights ?? []) if (e > h.above) return h.terrain;
+  for (const b of zone.moisture) if (b.below === undefined || m < b.below) return b.terrain;
+  throw new Error('A climate zone needs a last moisture band without `below`.');
+}
 
+/** The terrain a land tile gets from its temperature, moisture and elevation. */
+function climateTerrain(climate: GeneratorSettings['climate'], temp: number, m: number, e: number): TerrainId {
+  for (const zone of climate.zones) if (zone.below === undefined || temp < zone.below) return zoneTerrain(zone, m, e);
+  throw new Error('The climate needs a last zone without `below`.');
+}
+
+/**
+ * A generated world for a scenario, made by its generator settings (scenarios/types.ts
+ * GeneratorSettings). Its peoples, north to south, each get a band of the map.
+ */
+export function generateMap(rng: { rng: number }, size: MapSize, scenario: Scenario = AMERICAS): GeneratedWorld {
+  const gen = scenario.map.generator;
+  if (!gen) throw new Error(`${scenario.name} has no generated maps.`);
+  const { width, height } = gen.sizes[size];
+  const land = octaves(rng, width, height, gen.noise.land);
+  const heat = octaves(rng, width, height, gen.noise.heat);
+  const wet = octaves(rng, width, height, gen.noise.wet);
+  const elev = octaves(rng, width, height, gen.noise.elevation);
+  const wood = octaves(rng, width, height, gen.noise.wood);
+
+  const { centre, spread, falloff: fall, threshold, margin: edge } = gen.land;
   const isLand: boolean[] = new Array(width * height).fill(false);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      // The New World sits in the middle; Europe lies across the eastern high seas.
-      const cx = (x - width * 0.45) / (width * 0.3);
-      const cy = (y - height / 2) / (height * 0.47);
-      const falloff = cx * cx * 0.9 + Math.pow(Math.abs(cy), 4) * 0.6;
-      const v = land(x, y) - falloff * 0.55;
-      const margin = x < 3 || x >= width - 5 || y < 1 || y >= height - 1;
-      isLand[y * width + x] = !margin && v > 0.33;
+      // The New World sits around the centre; Europe lies across the high seas on the arrival edge.
+      const cx = (x - width * centre[0]) / (width * spread[0]);
+      const cy = (y - height * centre[1]) / (height * spread[1]);
+      const falloff = cx * cx * fall.x + Math.pow(Math.abs(cy), 4) * fall.y;
+      const v = land(x, y) - falloff * fall.strength;
+      const margin = x < edge.west || x >= width - edge.east || y < edge.north || y >= height - edge.south;
+      isLand[y * width + x] = !margin && v > threshold;
     }
   }
 
+  const { climate } = gen;
+  const poles = climate.poles.rows;
   const tiles: Tile[] = [];
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -84,18 +102,12 @@ export function generateMap(rng: { rng: number }, size: MapSize, scenario: Scena
         continue;
       }
       const lat = Math.abs(y - height / 2) / (height / 2);
-      const temp = 1 - lat + (heat(x, y) - 0.5) * 0.35;
+      const temp = 1 - lat + (heat(x, y) - 0.5) * climate.heatNoise + climate.warmth;
       const m = wet(x, y);
       const e = elev(x, y);
-      let t: TerrainId;
-      if (temp < 0.1 || y <= 1 || y >= height - 2) t = 'arctic';
-      else if (temp < 0.25) t = e > 0.68 ? 'hills' : 'tundra';
-      else if (e > 0.74) t = 'mountains';
-      else if (e > 0.64) t = 'hills';
-      else if (temp < 0.62) t = m < 0.36 ? 'prairie' : m < 0.52 ? 'plains' : m < 0.68 ? 'grassland' : 'marsh';
-      else t = m < 0.33 ? 'desert' : m < 0.6 ? 'savannah' : 'swamp';
+      const t = y < poles || y >= height - poles ? climate.poles.terrain : climateTerrain(climate, temp, m, e);
       const tile: Tile = { t };
-      if (TERRAIN[t].forest && wood(x, y) > 0.47) tile.f = true;
+      if (TERRAIN[t].forest && wood(x, y) > gen.forest) tile.f = true;
       tiles.push(tile);
     }
   }
@@ -116,24 +128,28 @@ export function generateMap(rng: { rng: number }, size: MapSize, scenario: Scena
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const tile = tiles[idx(x, y)];
-      if (tile.t === 'ocean' && !landNear(x, y, 2)) tile.t = 'highSeas';
+      if (tile.t === 'ocean' && !landNear(x, y, gen.highSeas.distance)) tile.t = 'highSeas';
     }
   }
+  // The columns along the arrival edge are always high seas.
+  const west = gen.entrySide === 'west';
+  const [x0, x1] = west ? [0, gen.highSeas.columns] : [width - gen.highSeas.columns, width];
   for (let y = 0; y < height; y++) {
-    for (let x = width - 2; x < width; x++) tiles[idx(x, y)].t = 'highSeas';
+    for (let x = x0; x < x1; x++) tiles[idx(x, y)].t = 'highSeas';
   }
 
   const map = { width, height, tiles };
   // Rivers draw on their own generator, seeded from this one without advancing it, so the rest of
   // the world (bonuses, rumours, settlements) stays what the seed has always made.
   generateRivers({ rng: (rng.rng ^ 0x2c1b3c6d) | 0 }, map, elev, wet);
-  sprinkleExtras(rng, map);
-  const settlements = placeSettlements(rng, tiles, width, height, scenario);
+  sprinkleExtras(rng, map, scenario.map.extras);
+  const settlements = placeSettlements(rng, tiles, width, height, scenario, gen.peoples);
   for (const st of settlements) {
     const tile = tiles[idx(st.x, st.y)];
     delete tile.lcr;
   }
-  return { map, settlements, entryRows: [0, height - 1] };
+  const entryRows: [number, number] = [0, height - 1];
+  return west ? { map, settlements, entryRows, entrySide: 'west' } : { map, settlements, entryRows };
 }
 
 /**
@@ -147,8 +163,8 @@ export function entryPoints(map: GameMap, n: number, rows: [number, number] = [0
   return Array.from({ length: n }, (_, i) => ({ x, y: top + Math.round(((i + 1) * span) / (n + 1)) }));
 }
 
-/** Scatters bonus resources (on land and on coastal ocean) and Lost City Rumours. */
-export function sprinkleExtras(rng: { rng: number }, map: GameMap): void {
+/** Scatters bonus resources (on land and on coastal ocean) and Lost City Rumours, at the scenario's odds. */
+export function sprinkleExtras(rng: { rng: number }, map: GameMap, extras: MapExtras = AMERICAS.map.extras): void {
   const { width, height, tiles } = map;
   const landNear = (x: number, y: number) => {
     for (let dy = -1; dy <= 1; dy++) {
@@ -164,8 +180,8 @@ export function sprinkleExtras(rng: { rng: number }, map: GameMap): void {
     for (let x = 0; x < width; x++) {
       const tile = tiles[y * width + x];
       const def = TERRAIN[tile.t];
-      if (def.bonusGood && random(rng) < (def.water ? (landNear(x, y) ? 0.06 : 0) : 0.05)) tile.b = true;
-      if (!def.water && tile.t !== 'arctic' && random(rng) < 0.03) tile.lcr = true;
+      if (def.bonusGood && random(rng) < (def.water ? (landNear(x, y) ? extras.coastalBonus : 0) : extras.bonus)) tile.b = true;
+      if (!def.water && !extras.noRumours.includes(tile.t) && random(rng) < extras.rumours) tile.lcr = true;
     }
   }
 }
@@ -188,13 +204,19 @@ export function newSettlement(rng: { rng: number }, id: string, tribe: TribeId, 
   };
 }
 
-function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, height: number, scenario: Scenario): Settlement[] {
+/** Whether a native settlement may stand on a terrain in a scenario. */
+export function settlementGround(scenario: Scenario, t: TerrainId): boolean {
+  return !TERRAIN[t].water && !scenario.map.settlements.avoid.includes(t);
+}
+
+function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, height: number, scenario: Scenario, rules: GeneratorSettings['peoples']): Settlement[] {
   const peoples = scenario.peoples.ids;
+  const { spacing } = scenario.map.settlements;
+  const edge = rules.edgeRows;
   const candidates: { x: number; y: number }[] = [];
-  for (let y = 2; y < height - 2; y++) {
+  for (let y = edge; y < height - edge; y++) {
     for (let x = 0; x < width; x++) {
-      const t = tiles[y * width + x].t;
-      if (!TERRAIN[t].water && t !== 'arctic' && t !== 'mountains') candidates.push({ x, y });
+      if (settlementGround(scenario, tiles[y * width + x].t)) candidates.push({ x, y });
     }
   }
   // Shuffle so placement is spread out.
@@ -202,13 +224,13 @@ function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, he
     const j = randInt(rng, i + 1);
     [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
   }
-  const target = Math.max(8, Math.round(candidates.length / 34));
+  const target = Math.max(rules.min, Math.round(candidates.length / rules.perTiles));
   const placed: Settlement[] = [];
   const capitals = new Set<TribeId>();
   for (const c of candidates) {
     if (placed.length >= target) break;
-    if (placed.some((p) => Math.max(Math.abs(p.x - c.x), Math.abs(p.y - c.y)) < 4)) continue;
-    const band = Math.min(peoples.length - 1, Math.floor(((c.y - 2) / (height - 4)) * peoples.length));
+    if (placed.some((p) => Math.max(Math.abs(p.x - c.x), Math.abs(p.y - c.y)) < spacing)) continue;
+    const band = Math.min(peoples.length - 1, Math.floor(((c.y - edge) / (height - 2 * edge)) * peoples.length));
     const tribe = peoples[band];
     const capital = !capitals.has(tribe);
     capitals.add(tribe);
