@@ -13,7 +13,7 @@
 // --play-on: a War of Independence won or lost does not end the game; that nation is finished with
 // the score it had then and the others play on, so every level is measured to --turns (use 609 for
 // the Americas' last turn, autumn 1850).
-import { AI_LEVELS, DIFFICULTY_LEVELS, formatArena, formatCrown, formatEvents, formatFeatures, formatRelations, formatScoreSplit, formatRelationsLine, runArena, type AiLevel, type DifficultyId, type MapSize, type Rivals } from '../packages/engine/src/index.ts';
+import { AI_LEVELS, DEFAULT_SCENARIO, DIFFICULTY_LEVELS, formatArena, getScenario, listScenarios, formatCrown, formatEvents, formatFeatures, formatRelations, formatScoreSplit, formatRelationsLine, runArena, type AiLevel, type DifficultyId, type MapSize, type Rivals } from '../packages/engine/src/index.ts';
 
 const args = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
@@ -43,9 +43,11 @@ const options = {
   playOn: args.includes('--play-on'),
 };
 if (options.rivals && options.rivals !== 'real' && options.rivals !== 'alternative') throw new Error(`Unknown rivals "${options.rivals}". Use real or alternative.`);
+const scenario = getScenario(options.scenario ?? DEFAULT_SCENARIO);
+if (!scenario) throw new Error(`Unknown scenario "${options.scenario}". Use ${listScenarios().map((sc) => sc.id).join(', ')}.`);
 
 const started = Date.now();
-console.error(`Playing ${options.games} games of ${options.turns} turns: ${levels.join(' vs ')} on a ${options.mapSize} map${difficulty ? ` at ${difficulty}` : ''}${options.noFavoured ? ', without Favoured Nation proposals' : ''}${options.events ? ', with events' : ''}${options.noCharter ? ', without the colony charter' : ''}${options.rivals === 'real' ? ', real rivals' : ''}${options.playOn ? ', playing on after independence' : ''}...`);
+console.error(`Playing ${options.games} games of ${options.turns} turns: ${levels.join(' vs ')} on a ${options.mapSize} map${scenario.id === DEFAULT_SCENARIO ? '' : ` in ${scenario.name}`}${difficulty ? ` at ${difficulty}` : ''}${options.noFavoured ? ', without Favoured Nation proposals' : ''}${options.events ? ', with events' : ''}${options.noCharter ? ', without the colony charter' : ''}${options.rivals === 'real' ? ', real rivals' : ''}${options.playOn ? ', playing on after independence' : ''}...`);
 const result = runArena(options, (rows, g) => {
   const line = rows.map((r) => `${r.level}:${r.score}`).join('  ');
   const half = (k: 'agreements' | 'favoured') => rows.reduce((n, r) => n + (r.relations?.[k] ?? 0), 0) / 2;

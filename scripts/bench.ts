@@ -4,15 +4,18 @@
 // Prints the total time, a breakdown per phase of the turn pipeline (packages/engine/src/perf.ts)
 // and a hash of the final saved state, which must not change when the engine only gets faster.
 //
-// Usage: npm run bench -- [--seed 2024] [--year 1700] [--quiet]
-//        npm run bench -- --verify [--write]
+// Usage: npm run bench -- [--seed 2024] [--year 1700] [--scenario id] [--quiet]
+//        npm run bench -- --verify [--write] [--scenario id]
 // npm test runs a shorter golden-hash test (packages/engine/test/golden.test.ts) in CI.
 // --verify plays 150 rounds on three more seeds and compares the state hashes with
 // scripts/bench-hashes.json (the benchmark game's hash too); --write stores them instead.
+// --scenario plays the same games in another registered scenario (the first four nations of its
+// default set, its default map, its calendar); its hashes are stored under "<id>: ..." keys, so
+// the Americas' keys stay as they are. Without it the games are the Americas', as before.
 // For a CPU profile: node --cpu-prof scripts/.bench.mjs (after one `npm run bench`).
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { AMERICAS_CALENDAR, createGame, handOver, headStartConfig, perfReport, playUntil, serialize, setPerf, turnOfYear as calendarTurn, type GameConfig, type GameState } from '../packages/engine/src/index.ts';
+import { createGame, DEFAULT_SCENARIO, getScenario, handOver, headStartConfig, listScenarios, nationSet, newGameOptions, perfReport, playUntil, serialize, setPerf, turnOfYear as calendarTurn, type GameConfig, type GameState } from '../packages/engine/src/index.ts';
 
 const args = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
@@ -20,23 +23,36 @@ const opt = (name: string, fallback: string) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 
-/** The first turn of a year in the Americas (the engine's calendar, packages/engine/src/scenarios/calendar.ts). */
-const turnOfYear = (year: number) => calendarTurn(year, AMERICAS_CALENDAR);
+const scenarioId = opt('scenario', DEFAULT_SCENARIO);
+const scenario = getScenario(scenarioId);
+if (!scenario) throw new Error(`Unknown scenario "${scenarioId}". Use ${listScenarios().map((sc) => sc.id).join(', ')}.`);
+const americas = scenario.id === DEFAULT_SCENARIO;
 
-/** The New game screen's defaults, with England as the player. */
+/** The first turn of a year in the scenario's calendar (packages/engine/src/scenarios/calendar.ts). */
+const turnOfYear = (year: number) => calendarTurn(year, scenario.calendar);
+
+/** The New game screen's defaults, with the first nation as the player (England in the Americas). */
 function webConfig(seed: number): GameConfig {
+  const [first, ...rest] = nationSet(scenario!, undefined).slice(0, 4).map((e) => e.id);
+  const map = newGameOptions(scenario!).defaultMap;
   return {
     seed,
     mapSize: 'medium',
-    nations: ['england', 'france', 'netherlands', 'spain'],
-    humans: ['england'],
-    ai: { france: 'competent', netherlands: 'competent', spain: 'competent' },
+    ...(map ? { map } : {}),
+    nations: [first, ...rest],
+    humans: [first],
+    ai: Object.fromEntries(rest.map((n) => [n, 'competent'])),
     difficulty: 'conquistador',
     historicalEvents: true,
     randomEvents: true,
     colonyCharter: true,
+    // Written only outside the Americas, so the Americas' games (and hashes) are as before.
+    ...(americas ? {} : { scenario: scenario!.id }),
   };
 }
+
+/** A hash file key: the Americas' keys as before, another scenario's prefixed with its id. */
+const key = (k: string) => (americas ? k : `${scenario.id}: ${k}`);
 
 const hash = (s: GameState) => createHash('sha256').update(serialize(s)).digest('hex').slice(0, 16);
 
@@ -52,22 +68,26 @@ const HASH_FILE = new URL('./bench-hashes.json', import.meta.url);
 const BENCH_SEED = 2024;
 const VERIFY_SEEDS = [7, 1492, 123456];
 const VERIFY_ROUNDS = 150;
+/** The benchmark game's year: 1700 in the Americas; elsewhere a head-start year of the scenario's calendar near the same share of it. */
+const BENCH_YEAR = americas ? 1700 : (scenario.calendar.headStartYears[Math.floor(scenario.calendar.headStartYears.length / 2)] ?? scenario.calendar.end.year);
 
 if (args.includes('--verify')) {
   const hashes: Record<string, string> = {};
   for (const seed of VERIFY_SEEDS) {
     const t = performance.now();
-    hashes[`seed ${seed}, ${VERIFY_ROUNDS} rounds`] = hash(headStart(seed, VERIFY_ROUNDS));
+    hashes[key(`seed ${seed}, ${VERIFY_ROUNDS} rounds`)] = hash(headStart(seed, VERIFY_ROUNDS));
     console.error(`  seed ${seed}: ${((performance.now() - t) / 1000).toFixed(1)}s`);
   }
   const t = performance.now();
-  hashes[`seed ${BENCH_SEED}, to 1700`] = hash(headStart(BENCH_SEED, turnOfYear(1700)));
-  console.error(`  seed ${BENCH_SEED} to 1700: ${((performance.now() - t) / 1000).toFixed(1)}s`);
+  // The benchmark game: to 1700 in the Americas, or the same share of another scenario's calendar.
+  hashes[key(`seed ${BENCH_SEED}, to ${BENCH_YEAR}`)] = hash(headStart(BENCH_SEED, turnOfYear(BENCH_YEAR)));
+  console.error(`  seed ${BENCH_SEED} to ${BENCH_YEAR}: ${((performance.now() - t) / 1000).toFixed(1)}s`);
+  const stored = JSON.parse(readFileSync(HASH_FILE, 'utf8')) as Record<string, string>;
   if (args.includes('--write')) {
-    writeFileSync(HASH_FILE, `${JSON.stringify(hashes, null, 2)}\n`);
+    // Other scenarios' hashes stay; this scenario's are replaced.
+    writeFileSync(HASH_FILE, `${JSON.stringify({ ...stored, ...hashes }, null, 2)}\n`);
     console.log(`Stored ${Object.keys(hashes).length} hashes in scripts/bench-hashes.json.`);
   } else {
-    const stored = JSON.parse(readFileSync(HASH_FILE, 'utf8')) as Record<string, string>;
     let ok = true;
     for (const [k, v] of Object.entries(hashes)) {
       const same = stored[k] === v;
@@ -78,7 +98,7 @@ if (args.includes('--verify')) {
   }
 } else {
   const seed = Number(opt('seed', String(BENCH_SEED)));
-  const year = Number(opt('year', '1700'));
+  const year = Number(opt('year', String(BENCH_YEAR)));
   const turn = turnOfYear(year);
   setPerf(true);
   const t0 = performance.now();
@@ -91,7 +111,7 @@ if (args.includes('--verify')) {
   const t1 = performance.now();
   const h = hash(s);
   const hashMs = performance.now() - t1;
-  console.log(`Head start to ${year} (turn ${turn}), seed ${seed}: ${(total / 1000).toFixed(1)}s (new game ${created.toFixed(0)} ms)`);
+  console.log(`Head start to ${year} (turn ${turn}), seed ${seed}${americas ? '' : `, ${scenario.name}`}: ${(total / 1000).toFixed(1)}s (new game ${created.toFixed(0)} ms)`);
   console.log(`Final state: turn ${s.turn}, ${Object.keys(s.colonies).length} colonies, ${Object.keys(s.units).length} units, hash ${h} (${(serialize(s).length / 1e6).toFixed(1)} MB, hashed in ${hashMs.toFixed(0)} ms)\n`);
   if (!args.includes('--quiet')) {
     console.log('Phase                                      seconds   share    calls   ms/call');
