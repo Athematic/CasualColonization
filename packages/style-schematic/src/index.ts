@@ -7,7 +7,10 @@ import {
   braveMarkers,
   isTileExplored,
   isTileVisible,
+  riverCourse,
+  roadStrands,
   tileToScreen,
+  traceStrand,
   unitStacks,
   visibleRange,
   type IconRequest,
@@ -81,18 +84,16 @@ class SchematicRenderer implements MapRenderer {
         ctx.strokeStyle = 'rgba(0,0,0,0.25)';
         ctx.strokeRect(p.x + 0.5, p.y + 0.5, z - 1, z - 1);
         if (tile.lcr) this.text('?', p.x + z / 2, p.y + z / 2, z * 0.5, '#ffe28a');
-        if (tile.r) {
-          ctx.fillStyle = '#5a4630';
-          ctx.fillRect(p.x + z * 0.44, p.y + z * 0.44, z * 0.12, z * 0.12);
-        }
         if (!isTileVisible(scene, x, y)) {
           ctx.fillStyle = 'rgba(17,20,24,0.35)';
           ctx.fillRect(p.x, p.y, z, z);
         }
       }
     }
-    // Rivers: plain blue lines from each tile's centre towards the neighbours the river links.
+    // Rivers: plain blue lines from each tile's centre towards the neighbours the river links,
+    // meandering a little (the shared curves of @cc/render-api, so every style agrees on them).
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     for (let y = r.y0; y <= r.y1; y++) {
       for (let x = r.x0; x <= r.x1; x++) {
         const tile = s.map.tiles[y * s.map.width + x];
@@ -101,12 +102,34 @@ class SchematicRenderer implements MapRenderer {
         ctx.strokeStyle = isTileVisible(scene, x, y) ? '#4aa3df' : '#3a7fae';
         ctx.lineWidth = Math.max(1.5, z * (tile.rv === 2 ? 0.16 : 0.08));
         ctx.beginPath();
-        RIVER_DIRS.forEach(([dx, dy], i) => {
-          if (!(tile.rd! & (1 << i))) return;
-          ctx.moveTo(p.x + z / 2, p.y + z / 2);
-          ctx.lineTo(p.x + z / 2 + (dx * z) / 2, p.y + z / 2 + (dy * z) / 2);
-        });
+        for (const st of riverCourse(s, x, y).strands) traceStrand(ctx, st, p.x + z / 2, p.y + z / 2, z, true);
         ctx.stroke();
+      }
+    }
+    // Roads: thin brown lines to neighbouring roads and colonies, over the rivers (bridges).
+    const towns = new Set(Object.values(s.colonies).map((c) => c.y * s.map.width + c.x));
+    const road = (x: number, y: number) =>
+      x >= 0 && y >= 0 && x < s.map.width && y < s.map.height && (!!s.map.tiles[y * s.map.width + x].r || towns.has(y * s.map.width + x));
+    ctx.lineWidth = Math.max(1, z * 0.05);
+    for (let y = r.y0; y <= r.y1; y++) {
+      for (let x = r.x0; x <= r.x1; x++) {
+        if (!s.map.tiles[y * s.map.width + x]?.r || !isTileExplored(scene, x, y)) continue;
+        const p = tileToScreen(scene, x, y);
+        const cx = p.x + z / 2;
+        const cy = p.y + z / 2;
+        const color = isTileVisible(scene, x, y) ? '#5a4630' : '#4a3a28';
+        ctx.strokeStyle = color;
+        let mask = 0;
+        RIVER_DIRS.forEach(([dx, dy], dir) => {
+          if (road(x + dx, y + dy)) mask |= 1 << dir;
+        });
+        const strands = roadStrands(s, x, y, mask);
+        ctx.beginPath();
+        for (const st of strands) traceStrand(ctx, st, cx, cy, z, true);
+        ctx.stroke();
+        const [hx, hy] = strands.length ? [cx + strands[0].sx * z, cy + strands[0].sy * z] : [cx, cy];
+        ctx.fillStyle = color;
+        ctx.fillRect(hx - z * 0.06, hy - z * 0.06, z * 0.12, z * 0.12);
       }
     }
     for (const st of Object.values(s.settlements)) {

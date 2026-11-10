@@ -72,7 +72,7 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Historical events (a starter set) | M | P1 | idea |
 | Random events in the Sim City spirit (a starter set) | M | P1 | idea |
 | Roads in the Civilization II style: auto-road along a path, later railroads | M | P3 | idea, needs scoping |
-| Rivers and roads meander a little instead of running straight between tile centres (drawn, with a fixed wobble per tile, so they don't move between frames) | S | P1 | in progress |
+| Rivers and roads meander a little instead of running straight between tile centres (drawn, with a fixed wobble per tile, so they don't move between frames) | S | P1 | done (shared curves in `@cc/render-api` `meander.ts`, used by Ligne claire, Schematic and the minimap) |
 | Title screen: add the new box covers once generated (F–K for the Americas; L–M and N–O later, with their scenarios) | S | P2 | planned |
 
 ## 0.7: The classic game, part 2

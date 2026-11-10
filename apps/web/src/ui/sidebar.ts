@@ -24,7 +24,6 @@ import {
   serialize,
   tileAt,
   tileDescription,
-  RIVER_DIRS,
   unitName,
   unitPosition,
   unitsAboard,
@@ -34,6 +33,7 @@ import {
   type NationId,
   type Unit,
 } from '@cc/engine';
+import { riverCourse, traceStrand } from '@cc/render-api';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
 import { downloadSave, saveManual } from '../save.js';
@@ -304,11 +304,7 @@ export class Sidebar {
       const cy = Math.floor(i / s.map.width) * scale + scale / 2;
       ctx.lineWidth = tile.rv === 2 ? 1.6 : 1;
       ctx.beginPath();
-      RIVER_DIRS.forEach(([dx, dy], d) => {
-        if (!(tile.rd! & (1 << d))) return;
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + (dx * scale) / 2, cy + (dy * scale) / 2);
-      });
+      for (const st of riverCourse(s, i % s.map.width, Math.floor(i / s.map.width)).strands) traceStrand(ctx, st, cx, cy, scale, true);
       ctx.stroke();
     }
     for (const col of Object.values(s.colonies)) {
