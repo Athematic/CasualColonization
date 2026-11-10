@@ -1,9 +1,9 @@
 # Design note: Events
 
-Status: **done (0.6)**: framework and starter set; rates and computer choices tuned in 0.8 (see Tuning). Engine in `packages/engine/src/events/`.
+Status: **done (0.6)**: framework and starter set; rates and computer choices tuned in 0.8 (see Tuning); per scenario since 0.9. Engine in `packages/engine/src/events/`.
 
 ## Goal
-A living world: dated **historical events** from the period, and **random events** in the Sim City spirit (storms, fires, bumper harvests). Both are switched on or off per game, and can be toggled during play. Events are data, so a scenario can later bring its own set (see [scenarios.md](scenarios.md)).
+A living world: dated **historical events** from the period, and **random events** in the Sim City spirit (storms, fires, bumper harvests). Both are switched on or off per game, and can be toggled during play. Events are data, and each scenario brings its own set (see [scenarios.md](scenarios.md)).
 
 ## Model
 An **event definition** (`EventDef`, `events/types.ts`) is a plain object:
@@ -22,7 +22,7 @@ An **event definition** (`EventDef`, `events/types.ts`) is a plain object:
 | `choices` | Optional. Each has a label and effects; a choice with a gold `cost` is offered only when it can be paid. |
 | `endText` | Message when a temporary modifier the event set runs out. |
 
-**Effects** are tagged data (`events/effects.ts`): gold, goods in a colony, a production modifier for N turns (a colony or the whole nation; any products, bells included), native tension with a tribe, prices in the home port, crosses (immigration), tax, a unit gained (in a colony or on the docks), a ship laid up with cargo lost, a building damaged, goods lost, a new bonus resource, a chance (a sub-list applied with probability p) and a follow-up event N turns later (it picks its own target again then). Numbers may name a variable (`'$cost'`). A production modifier runs for N rounds of production: from the next turn when the event fires at the end of a round, from the current turn when a person's answer sets it.
+**Effects** are tagged data (`events/effects.ts`): gold, goods in a colony, a production modifier for N turns (a colony or the whole nation; any products, bells included), native tension with a tribe, prices in the home port, crosses (immigration), tax, a unit gained (in a colony or on the docks), a ship laid up with cargo lost, a building damaged, goods lost, a new bonus resource, a chance (a sub-list applied with probability p) and a follow-up event N turns later (it picks its own target again then). The kinds added in 0.9 (step 4) so that a Founding Father's joining effect and an event share one vocabulary: `peaceWithPeoples` (tension towards the nation forgotten, every people at peace), `stockades` (a stockade in each of the nation's colonies of at least `minColonists` colonists), `revealColonies` (the land within a `radius` of every colony is revealed to the nation), `liberty` (each colony gains a `share` of its colonists as Sons of Liberty), `convertUnits` (the nation's units of one type become another) and `liftBoycotts` (all boycotts end without arrears). The `unit` effect has an `always` flag: the unit still reaches the docks after independence, which an event's unit does not. Numbers may name a variable (`'$cost'`). A production modifier runs for N rounds of production: from the next turn when the event fires at the end of a round, from the current turn when a person's answer sets it.
 
 **Historical** events are world events: when one fires, every European nation still loyal to the Crown gets its own target and, if the event has choices, its own choice. They are public history. **Random** events strike one nation: each round, each nation has `RANDOM_EVENT_RATE` (1.2% since 0.8, was 4%) chance of one, picked by weight among the events that have a target and are off cooldown. They are that nation's secret history.
 
@@ -42,8 +42,10 @@ An **event definition** (`EventDef`, `events/types.ts`) is a plain object:
 ## Content
 About 9 historical and 12 random events for the Americas, 1492–1850 (`events/americas.ts`), written to be period-appropriate and respectful: no events that make light of slavery, of the epidemics that devastated Indigenous peoples, or of violence for flavour. A sickness event affects colonists' work for a few turns; no one dies.
 
+## Per scenario (0.9)
+`Scenario.events` names an event set (`events/index.ts`: `registerEventSet(id, defs)`, `hasEventSet`). The Americas' set is `events/americas.ts` and the Caribbean's `events/caribbean.ts` (the hurricane of 1666, the Huguenots, the Port Royal earthquake of 1692, Brazilian gold, the end of Darien, the War of the Spanish Succession, the Great Frost of 1709, the bubbles of 1719–20, and random events with the islands' staples). `eventDefs(s)` reads `config.eventSet` (tests) or else the game's scenario's set. Historical windows are years, read through the scenario's calendar. The conformance test checks that every scenario's set exists. The New game screen's descriptions of the event switches still describe the Americas' events.
+
 ## Later
-- A scenario supplies its own set (`registerEventSet`); the game state then names the set.
 - Chains of events, events between nations, and events that react to the player's own history.
 
 ## Tuning (0.8)

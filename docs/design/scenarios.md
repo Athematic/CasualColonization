@@ -1,6 +1,6 @@
 # Design note: Scenario framework
 
-Status: **idea, agreed in principle**. To be designed in detail before work starts. The detailed design for 0.9 is [scenario-framework.md](scenario-framework.md) (status: design).
+Status: **framework built in 0.9**. The Americas (1492–1850) and the Caribbean (1650–1750, the proof scenario) are playable; Australia and Vinland are still to come, as content on the framework (see "Scenario ideas"). The design and what was built are in [scenario-framework.md](scenario-framework.md); how to write a scenario is in [../SCENARIOS.md](../SCENARIOS.md).
 
 ## Goal
 Every setting the game can be played in is a **scenario**: a data package the engine loads. The engine provides the mechanics (colonies, production, markets, movement, diplomacy). The scenario provides the world they run in. Today's game becomes the first scenario, *The Americas, 1492–1850*.
@@ -24,7 +24,8 @@ Every setting the game can be played in is a **scenario**: a data package the en
 ## Scenario ideas
 | Scenario | Focus |
 | --- | --- |
-| **The Americas, 1492–1850** | The current game. Real rivals or alternative history; dedicated or generated map. |
+| **The Americas, 1492–1850** | The current game. Real rivals or alternative history; dedicated or generated map. Built: the first scenario. |
+| **The Caribbean, 1650–1750** | The lesser powers among the sugar islands. Built in 0.9 as the proof that the framework works. |
 | **Australia, 1788–1901** | Convicts, distance, drought, wool and gold; Federation by negotiation. See [australia.md](australia.md). |
 | **Vinland, around 1000** | Norse settlers sailing from Greenland. Survival with poor resources and a fragile supply line, not competition between nations. Few colonists, long winters, iron and timber scarce, relations with the Skrælings decide the outcome. Winning means a colony that still stands after N years. |
 
@@ -34,6 +35,8 @@ Every setting the game can be played in is a **scenario**: a data package the en
 - **In the Americas:** a limited, late-game version for British colonies. This is historical: under the Transportation Act of 1718, tens of thousands of convicts were sent to the American colonies until 1776.
 
 ## Engine work
+Done in 0.9 (the list below is what the framework now covers; Australia and Vinland still need their own content and the new rules named in [scenario-framework.md](scenario-framework.md), section 7.2):
+
 - Move the hard-coded tables (`TRIBES`, the goods, `NATIONS`, years, Founding Fathers, independence rules, `mapgen` settings) behind a `Scenario` interface.
 - Store the scenario's id (and version) in the `GameState`.
 - Let a scenario adjust or replace the difficulty table (`DIFFICULTY` in `rules/difficulty.ts`: named multipliers and values per level).

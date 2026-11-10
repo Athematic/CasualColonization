@@ -60,6 +60,16 @@ A style that loads images in the background can implement the optional `onAssets
 
 `theme` covers the shell's colours, fonts, line width and corner radius. A style that wants a different interface beyond that (framed panels, painted buttons, no hand-drawn look at all) can also provide `css` (a string) and `cssUrls` (stylesheet files). The shell adds them while the style is active and removes them when another style is chosen. `stylesheets` (web fonts) stay loaded. Scope the rules to the style, for example `:root[data-style="my-style"] .panel { … }`. The shell sets `data-style` on the root element.
 
+## Scenarios and styles
+
+A game is played in a scenario (see [SCENARIOS.md](SCENARIOS.md)), and nations are defined per scenario. Three things follow for a style:
+
+- **Colours come from the game, not from a nation id.** A unit icon request is `{ kind: 'unit', type, role, color }`: `color` is the owner's colour in this game, not a nation id as before 0.9. Get a nation's colour with `nationColor(s, id)` from `@cc/render-api`, where `s` is the game state (or a scenario). The tribe colours still come from `tribeColor`.
+- **Settlement and colony map hooks receive the state.** `MapLayerHooks.settlement(ctx, settlement, px, py, z, state)` and `MapLayerHooks.colony(ctx, colony, size, px, py, z, state)` take the `GameState` as a last argument, so a hook can read the owner's colour (`nationColor(state, colony.owner)`) in the game's own scenario. Hooks that ignore it keep working.
+- **A scenario can bring its own art.** `Scenario.art.covers` names the title screen's covers by id (`COVERS` in `apps/web/src/ui/landing.ts`), and `Scenario.art.councilHall` is the sprite id of the council hall's backdrop. The web game passes the id to `drawBackdrop(ctx, 'congress-hall', width, height, sprite)`; a style that lacks the sprite falls back to its own hall, then to the procedural one. Sprite packs for a scenario can be built with `extendPack` (below).
+
+Sprites for the scenario's new peoples, council members and units are named like the Americas' (a council member's portrait is `fathers/<id>`); a missing one falls back to the procedural drawing.
+
 ## Rules for styles
 
 - Do not import anything from the web shell. Depend only on `@cc/engine` (for types and rule tables) and `@cc/render-api`.
