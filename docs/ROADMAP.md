@@ -75,6 +75,8 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Railroads (from about 1830, needs a Founding Father or a building): faster than roads, built on top of a road | M | P3 | idea (later release) |
 | Rivers and roads meander a little instead of running straight between tile centres (drawn, with a fixed wobble per tile, so they don't move between frames) | S | P1 | done (shared curves in `@cc/render-api` `meander.ts`, used by Ligne claire, Schematic and the minimap) |
 | Title screen: add the new box covers once generated (F–K for the Americas; L–M and N–O later, with their scenarios) | S | P2 | done for F–K (L–O wait for their scenarios) |
+| Computer players space colonies and expand at a measured pace: sites that share work tiles with another colony count those tiles at a quarter, bonus resources, rivers, rich food and the coast are chased; a new colony only once the others average three colonists (2.5 Combative), at most one every 6 turns (4 Combative), with a defender or stockade for each colony beyond the first two, and the charter paid with the reserve kept | M | P1 | done ([audit note](AI_FEATURE_AUDIT.md#colony-spacing-and-pace-06); `ai/common.ts` `siteScore`, `keenSiteScore`, `bestColonySite`; `ai/advanced.ts` `expansionCheck`, `sendSettler`; `AiProfile.expansion`) |
+| Colony charter: founding costs gold (100 × colonies held, at most 2,000, times difficulty; free after independence; `GameConfig.colonyCharter`, on in new games and tournaments, `--no-charter`) | S | P1 | done (`charterCost`, `COLONY_CHARTER` and `DifficultyRules.colonyCharter` in `rules/difficulty.ts`) |
 
 ## 0.7: The classic game, part 2
 

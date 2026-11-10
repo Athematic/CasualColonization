@@ -30,22 +30,37 @@ export function safely(fn: () => void): void {
   }
 }
 
+/**
+ * Share of a tile's value a site counts when the tile is already next to a colony (any nation's):
+ * that colony works it, so the tile is mostly unavailable. Colonies two tiles apart share up to
+ * three tiles; from three tiles apart they share none, so the best sites end up there.
+ */
+export const SHARED_TILE_VALUE = 0.25;
+
+/** Colonies close enough to share a work tile with a colony at x, y. */
+function neighbourColonies(s: GameState, x: number, y: number): Colony[] {
+  return Object.values(s.colonies).filter((c) => distance(c.x, c.y, x, y) <= 2);
+}
+
+const shared = (near: Colony[], x: number, y: number) => near.some((c) => distance(c.x, c.y, x, y) <= 1);
+
 export function siteScore(s: GameState, x: number, y: number): number {
   if (colonySiteProblem(s, x, y)) return -Infinity;
+  const near = neighbourColonies(s, x, y);
   let score = 0;
   let water = 0;
   for (const p of [{ x, y }, ...neighbours(s, x, y)]) {
     const tile = tileAt(s, p.x, p.y)!;
+    const weight = shared(near, p.x, p.y) ? SHARED_TILE_VALUE : 1;
     if (isWater(tile)) {
       water++;
-      score += 1.5;
+      score += 1.5 * weight;
       continue;
     }
     if (colonyAt(s, p.x, p.y)) continue;
-    score += baseTileYield(tile, 'food') * 1.2;
     let best = 0;
     for (const g of GOODS) if (g !== 'food') best = Math.max(best, baseTileYield(tile, g));
-    score += best * 0.6;
+    score += (baseTileYield(tile, 'food') * 1.2 + best * 0.6) * weight;
   }
   // A river through the centre: road-speed travel inland, and its yield bonus counted above.
   const centre = tileAt(s, x, y)!;
@@ -53,6 +68,76 @@ export function siteScore(s: GameState, x: number, y: number): number {
   if (water > 0 && water < 6) score += 8;
   if (water >= 6) score -= 10;
   return score;
+}
+
+/**
+ * The advanced levels' view of a site: siteScore plus a clear premium for what makes a colony
+ * worth the investment (bonus resources, rivers, rich food tiles, sea access), on the tiles no
+ * other colony works. Chasing these spreads colonies out irregularly instead of in a grid.
+ */
+export function keenSiteScore(s: GameState, x: number, y: number): number {
+  const base = siteScore(s, x, y);
+  if (base === -Infinity) return base;
+  const near = neighbourColonies(s, x, y);
+  let extra = 0;
+  let water = 0;
+  for (const p of [{ x, y }, ...neighbours(s, x, y)]) {
+    const tile = tileAt(s, p.x, p.y)!;
+    const weight = shared(near, p.x, p.y) ? SHARED_TILE_VALUE : 1;
+    if (tile.b) extra += 5 * weight;
+    if (isWater(tile)) {
+      water++;
+      continue;
+    }
+    if (tile.rv) extra += 1.5 * weight;
+    if (baseTileYield(tile, 'food') >= 4) extra += 1.5 * weight;
+  }
+  if (water > 0 && water < 6) extra += 2;
+  return base + extra;
+}
+
+/**
+ * The best place within `radius` of x, y to found a colony: the site's score less `perTile` for
+ * every tile of the way and any `penalty`. With `stay`, the tile the unit stands on is the first
+ * candidate (at its plain score) and wins ties; after that ties go to the first site found, row by
+ * row, so the choice is deterministic.
+ */
+export function bestColonySite(
+  s: GameState,
+  x: number,
+  y: number,
+  opts: { radius: number; score: (x: number, y: number) => number; perTile: number; stay: boolean; penalty?: (x: number, y: number) => number; overLand?: boolean },
+): { x: number; y: number; score: number } {
+  let best = { x, y, score: opts.stay ? opts.score(x, y) : -Infinity };
+  const reach = opts.overLand ? landReach(s, x, y, opts.radius) : undefined;
+  for (let dy = -opts.radius; dy <= opts.radius; dy++) {
+    for (let dx = -opts.radius; dx <= opts.radius; dx++) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!tileAt(s, nx, ny)) continue;
+      if (reach && !reach.has(ny * s.map.width + nx)) continue;
+      const score = opts.score(nx, ny) - distance(x, y, nx, ny) * opts.perTile - (opts.penalty?.(nx, ny) ?? 0);
+      if (score > best.score) best = { x: nx, y: ny, score };
+    }
+  }
+  return best;
+}
+
+/** Land tiles (as y × width + x) a colonist at x, y can walk to without leaving the square of the given radius. */
+export function landReach(s: GameState, x: number, y: number, radius: number): Set<number> {
+  const w = s.map.width;
+  const seen = new Set([y * w + x]);
+  const queue = [{ x, y }];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    for (const n of neighbours(s, cur.x, cur.y)) {
+      const i = n.y * w + n.x;
+      if (seen.has(i) || distance(n.x, n.y, x, y) > radius || isWater(tileAt(s, n.x, n.y)!)) continue;
+      seen.add(i);
+      queue.push(n);
+    }
+  }
+  return seen;
 }
 
 export function directionTo(fx: number, fy: number, tx: number, ty: number): Direction | undefined {
