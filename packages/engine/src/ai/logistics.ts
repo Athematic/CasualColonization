@@ -26,7 +26,11 @@ export const TRADE_GOODS: GoodId[] = ['silver', 'furs', 'sugar', 'tobacco', 'cot
 
 /** Turns between reviews of the computer's routes. */
 const REVIEW_EVERY = 10;
-/** No wagon train is built for, or put on, a route to a partner's colony before this turn. */
+/** Gold a ship route's detour costs per tile to a partner's colony stop (a turn of a loaded ship is worth more than the stop usually gains). */
+const DETOUR_COST = 40;
+/** Gold a stop that builds ties towards Favoured Nation is worth on top of its gain: a detour of two tiles at most. */
+const TIES_BONUS = 100;
+/** No wagon train is put on a route to a partner's colony before this turn. */
 const FOREIGN_WAGON_FROM = 80;
 
 /** A ship route to Europe calls at a Favoured Nation partner's port when its goods fetch this share more there after tax... */
@@ -111,13 +115,6 @@ function needsCarting(s: GameState, c: Colony, report: ColonyReport = colonyRepo
  * (one wagon train serves up to three neighbouring colonies).
  */
 export function wantsWagon(s: GameState, p: Player, c: Colony): boolean {
-  // A wagon train for a trade route to a partner's colony (see planForeignWagon).
-  const fw = p.aiMemory?.foreignWagon;
-  if (fw && fw.colony === c.id && fw.until > s.turn) {
-    const idle = Object.values(s.units).some((u) => u.owner === p.id && isWagon(u) && !u.route);
-    const building = ownColonies(s, p).some((o) => o.id !== c.id && o.build?.kind === 'unit' && o.build.id === 'wagonTrain');
-    if (!idle && !building) return true;
-  }
   const { waiting, yard } = cartingNeeds(s, p);
   // The colony with the most hammers builds wagon trains for its neighbours; failing one, a colony builds its own.
   if (yard ? yard !== c.id : !waiting.has(c.id)) return false;
@@ -170,7 +167,6 @@ export function manageLogistics(s: GameState, p: Player): void {
     if (isWagon(u) && u.loc.kind === 'map') safely(() => routeWagon(s, p, u));
   }
   if (p.independence === 'none') safely(() => routeShips(s, p));
-  if (review) safely(() => planForeignWagon(s, p));
 }
 
 /** A route name like "Port to Europe", numbered if the nation already has one by that name. */
@@ -200,8 +196,8 @@ function refreshRoute(s: GameState, p: Player, r: TradeRoute, users: Unit[]): vo
     // A wagon train's route to a partner's colony: kept while it still pays (or builds ties).
     const f = s.colonies[foreign.at];
     const own = s.colonies[stops[0].at];
-    // Once ties are built, a wagon train with natives nearby to sell to goes back to them.
-    const rules = f && own && partnerBeforeNatives(s, p, own, f.owner) ? wagonForeignRules(s, p, own, f) : null;
+    // A wagon train with natives nearby to sell to goes back to them.
+    const rules = f && own && partnerBeforeNatives(s, p, own) ? wagonForeignRules(s, p, own, f) : null;
     if (!rules) {
       deleteRoute(s, p.id, r.id);
       return;
@@ -378,7 +374,7 @@ function withForeignShipStop(s: GameState, p: Player, stops: RouteStop[]): Route
     if (d > 6) continue;
     const plan = foreignStop(s, p, f, goods);
     if (!plan) continue;
-    const score = plan.gain + (buildingTies(s, p, f.owner) ? 200 : 0) - d * 10;
+    const score = plan.gain + (buildingTies(s, p, f.owner) ? TIES_BONUS : 0) - d * DETOUR_COST;
     if (score > 0 && (!best || score > best.score)) best = { stop: plan.stop, score };
   }
   if (!best) return stops;
@@ -419,15 +415,14 @@ function nativeBuyers(s: GameState, p: Player, pos: { x: number; y: number }) {
 }
 
 /**
- * Whether a wagon train near `pos` should trade with a partner's colony rather than with the
- * natives: always while the nation is building ties with that partner (the route counts towards
- * Favoured Nation), otherwise only when no settlement nearby buys. Selling to the natives pays
- * several times what a partner's colony pays (it gives its owner's home price, at most about 1
- * gold above shipping home): tournaments showed Creative losing about 40% of its native sales,
- * some 1,600 gold a game, to wagon trains on routes to partners' colonies.
+ * Whether a wagon train near `pos` may trade with a partner's colony rather than with the natives:
+ * only when no settlement nearby buys. Selling to the natives pays several times what a partner's
+ * colony pays (its owner's home price, at most about 1 gold above shipping home), even while the
+ * nation is building ties towards Favoured Nation: tournaments (0.8) showed that wagon trains
+ * built for, or moved to, routes to partners' colonies cost Creative about 20 points a game.
  */
-function partnerBeforeNatives(s: GameState, p: Player, pos: { x: number; y: number }, partner: NationId): boolean {
-  return buildingTies(s, p, partner) || !nativeBuyers(s, p, pos).length;
+function partnerBeforeNatives(s: GameState, p: Player, pos: { x: number; y: number }): boolean {
+  return !nativeBuyers(s, p, pos).length;
 }
 
 /** Partners' colonies already served by one of the nation's wagon train routes. */
@@ -457,10 +452,10 @@ function routeWagonForeign(s: GameState, p: Player, wagon: Unit): boolean {
   for (const own of ownColonies(s, p)) {
     if (distance(own.x, own.y, pos.x, pos.y) > 8) continue;
     for (const f of partners) {
-      if (taken.has(f.id) || distance(own.x, own.y, f.x, f.y) > 8 || !partnerBeforeNatives(s, p, own, f.owner) || checks++ > 6) continue;
+      if (taken.has(f.id) || distance(own.x, own.y, f.x, f.y) > 8 || !partnerBeforeNatives(s, p, own) || checks++ > 6) continue;
       const rules = wagonForeignRules(s, p, own, f);
       if (!rules) continue;
-      const score = rules.gain + (buildingTies(s, p, f.owner) ? 200 : 0) - distance(own.x, own.y, pos.x, pos.y) * 10;
+      const score = rules.gain - distance(own.x, own.y, pos.x, pos.y) * 10;
       if (score <= 0 || (best && score <= best.score)) continue;
       if (wagonSteps(s, p, own, f) === null) continue;
       best = { own, f, score };
@@ -472,34 +467,6 @@ function routeWagonForeign(s: GameState, p: Player, wagon: Unit): boolean {
   assignRoute(s, wagon.id, route.id);
   track(p.id, 'route:foreign route created');
   return true;
-}
-
-/**
- * Asks a colony near a partner to build a wagon train when the nation is building ties with that
- * partner and has no wagon train route to it yet: the colony within reach with the most hammers.
- * Worked out at route reviews; the choice is kept in the nation's memory until the next one.
- */
-function planForeignWagon(s: GameState, p: Player): void {
-  const memory = (p.aiMemory = p.aiMemory ?? {});
-  delete memory.foreignWagon;
-  // Not while the nation is young: early hammers go into growing.
-  if (s.turn < FOREIGN_WAGON_FROM || ownColonies(s, p).length < 5) return;
-  const partners = partnerColonies(s, p).filter((f) => buildingTies(s, p, f.owner));
-  if (!partners.length) return;
-  const served = new Set([...wagonForeignStops(s, p)].map((id) => s.colonies[id]?.owner));
-  let best: { c: Colony; hammers: number } | null = null;
-  let checks = 0;
-  for (const f of partners) {
-    if (served.has(f.owner)) continue;
-    for (const c of ownColonies(s, p)) {
-      if (distance(c.x, c.y, f.x, f.y) > 6 || checks++ > 6) continue;
-      const hammers = colonyReport(s, c).produced.hammers;
-      if (hammers < 3 || (best && hammers <= best.hammers)) continue;
-      if (!wagonForeignRules(s, p, c, f) || wagonSteps(s, p, c, f) === null) continue;
-      best = { c, hammers };
-    }
-  }
-  if (best) memory.foreignWagon = { colony: best.c.id, until: s.turn + REVIEW_EVERY };
 }
 
 /** Puts an idle wagon train on a route from up to three inland colonies to a port, or sends it to trade with natives. */

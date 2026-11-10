@@ -194,6 +194,8 @@ describe('trade routes to partners’ colonies', () => {
     expect(good).toBeDefined();
     quebec.goods[good] = 200;
     home.goods[good] = 0;
+    // No settlement nearby buys (natives come first: see the next test).
+    for (const st of Object.values(s.settlements)) st.gold = 0;
     const wagon = createUnit(s, 'france', 'wagonTrain', { kind: 'map', x: quebec.x, y: quebec.y });
     wagon.moves = 6;
     const seen = counting(() => manageLogistics(s, fr));
@@ -206,7 +208,7 @@ describe('trade routes to partners’ colonies', () => {
     expect(routesBetween(s, 'england', 'france')).toBe(1);
   });
 
-  it('but trades with natives instead once ties are built, when a settlement nearby buys', () => {
+  it('but trades with natives instead when a settlement nearby buys, even while building ties', () => {
     const s = game();
     const [home, quebec] = neighbours(s);
     const fr = s.players[1];
