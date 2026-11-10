@@ -43,7 +43,7 @@ import { UNIT_TYPES } from '../rules/units.js';
 import type { NationId } from '../rules/nations.js';
 import { track } from '../telemetry.js';
 import type { Colony, GameState, Player, ProposalKind, Unit } from '../types.js';
-import { alliancesOn, allianceOf, allianceProblem, alliesOf, cooperationOf, isAllied, LEVEL_COOPERATION, leaveAlliance, warOnFriend } from '../alliances.js';
+import { allianceRules, alliancesOn, allianceOf, allianceProblem, alliesOf, cooperationOf, isAllied, LEVEL_COOPERATION, leaveAlliance, warOnFriend } from '../alliances.js';
 import { proposeAlliance } from '../relations.js';
 import { startWar } from '../diplomacy.js';
 import { companies, companiesOn, companyCharters, companyRules } from '../companies.js';
@@ -183,13 +183,21 @@ function makeProposals(s: GameState, p: Player, prof: AiProfile, strength: numbe
       if (coolingDown(s, p, 'trade', o.id) || tradeProblem(s, p.id, o.id) || !tradeNeighbours(s, p, o.id)) continue;
       safely(() => proposeTrade(s, p.id, o.id));
       if (!hasTradeAgreement(s, p.id, o.id)) startCooldown(s, p, 'trade', o.id);
-    } else if (!isFavoured(s, p.id, o.id)) {
-      // favouredProblem includes the hidden thresholds: like a person, the computer only learns
-      // whether relations are close enough, never the numbers.
-      if (coolingDown(s, p, 'favoured', o.id) || favouredProblem(s, p.id, o.id) || !favouredPays(s, p, prof, o.id, strength)) continue;
-      safely(() => proposeFavoured(s, p.id, o.id));
-      if (!isFavoured(s, p.id, o.id)) startCooldown(s, p, 'favoured', o.id);
-    } else if (alliancesOn(s) && !isAllied(s, p.id, o.id)) {
+    } else {
+      // In a scenario whose alliances need only a trade agreement (Scenario.alliances.requires),
+      // an alliance is weighed even where Favoured Nation is not reached.
+      const favoured = isFavoured(s, p.id, o.id);
+      if (!favoured) {
+        // favouredProblem includes the hidden thresholds: like a person, the computer only learns
+        // whether relations are close enough, never the numbers.
+        if (!coolingDown(s, p, 'favoured', o.id) && !favouredProblem(s, p.id, o.id) && favouredPays(s, p, prof, o.id, strength)) {
+          safely(() => proposeFavoured(s, p.id, o.id));
+          if (!isFavoured(s, p.id, o.id)) startCooldown(s, p, 'favoured', o.id);
+          continue;
+        }
+        if (!alliancesOn(s) || allianceRules(s).requires !== 'trade') continue;
+      }
+      if (!alliancesOn(s) || isAllied(s, p.id, o.id)) continue;
       if (coolingDown(s, p, 'alliance', o.id) || allianceProblem(s, p.id, o.id) || !wantsAlliance(s, p, prof, o.id, strength)) continue;
       safely(() => proposeAlliance(s, p.id, o.id));
       if (!isAllied(s, p.id, o.id)) startCooldown(s, p, 'alliance', o.id);
@@ -218,7 +226,7 @@ export const LEVEL_COMPANIES: Record<AiLevel, number> = { naive: 0, competent: 0
 
 /**
  * Chartered companies (companies.ts): a nation with gold to spare founds a company it may charter
- * (the capital, plus its reserve and 1,000 more), or buys five shares in one that exists (their
+ * (half as much again as the capital, plus its reserve), or buys five shares in one that exists (their
  * price, plus its reserve and 1,500 more), each at a seeded chance per review: the scenario's
  * `foundCompany` and `buyShares` times the level's share. Not before the turn it would start wars,
  * nor once it has declared independence.
@@ -229,7 +237,8 @@ function companyAffairs(s: GameState, p: Player, prof: AiProfile): void {
   const share = LEVEL_COMPANIES[p.ai ?? 'naive'];
   if (!share) return;
   for (const entry of companyCharters(s)) {
-    if (foundProblem(s, p.id, entry.id) || p.gold < companyRules(s).capital + prof.reserve + 1000) continue;
+    const capital = companyRules(s).capital;
+    if (foundProblem(s, p.id, entry.id) || p.gold < capital * 1.5 + prof.reserve) continue;
     if (pairRandom(s, p.id, entry.id, `found ${s.turn}`) >= coop.foundCompany * share) continue;
     foundCompany(s, p.id, entry.id);
     return;

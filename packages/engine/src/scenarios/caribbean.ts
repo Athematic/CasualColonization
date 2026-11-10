@@ -337,6 +337,7 @@ export const CARIBBEAN: Scenario = {
     pace: 0.35,
     // Settlers sail to other islands when theirs is full.
     islands: true,
+    cooperation: { proposeAlliance: 0.03, foundCompany: 0.12, buyShares: 0.25 },
     goods: {
       trade: ['silver', 'sugar', 'tobacco', 'cotton', 'ore', 'rum', 'cigars', 'cloth', 'horses'],
       export: ['sugar', 'tobacco', 'cotton', 'ore', 'silver', 'rum', 'cigars', 'cloth'],
@@ -359,7 +360,13 @@ export const CARIBBEAN: Scenario = {
     customHouse: true,
     missions: true,
     alliances: true,
+    companies: true,
   },
+  // A century of trading companies and small powers: alliances need only a trade agreement (no
+  // Favoured Nation forms between the computer players here) and half a century of peace, and
+  // companies are cheaper and founded more readily than in the Americas.
+  alliances: { requires: 'trade', peaceYears: { base: 50, spread: 10 }, volume: { min: 0, max: 0 } },
+  companyRules: { capital: 1000, reserve: 400 },
   victory: [{ id: 'concord' }, { id: 'time' }],
   rumours: AMERICAS.rumours,
   // A century of trade: wealth and trade agreements weigh more than in the Americas (1/800, 3, 4).

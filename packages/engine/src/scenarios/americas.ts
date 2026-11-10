@@ -174,6 +174,7 @@ export const AMERICAS: Scenario = {
     customHouse: true,
     missions: true,
     alliances: true,
+    companies: true,
   },
   // Winning the War of Independence ends the game; otherwise it ends after autumn 1850, won by an
   // alliance holding most of the score together, or else by the highest score.

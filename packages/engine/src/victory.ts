@@ -118,7 +118,8 @@ export function concordWinners(s: GameState, scores: Partial<Record<NationId, nu
   for (const t of s.treaties ?? []) {
     if (t.end || t.kind !== 'alliance') continue;
     const members = treatyNations(t).filter((n) => scores[n] !== undefined);
-    if (members.length < 2) continue;
+    // Winning together needs someone left outside: an alliance of every nation wins nothing.
+    if (members.length < 2 || members.length >= Object.keys(scores).length) continue;
     const part = members.reduce((n, m) => n + (scores[m] ?? 0), 0) / total;
     if (part > share && (!best || part > best.part)) best = { members, part };
   }

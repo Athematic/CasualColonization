@@ -32,6 +32,7 @@ import { foreignAffairs } from '../src/ai/foreign.js';
 const WITH: Scenario = { ...AMERICAS, id: 'test-companies', name: 'test-companies', hidden: true, mechanics: { ...AMERICAS.mechanics, companies: true } };
 const EAGER: Scenario = { ...WITH, id: 'test-companies-eager', name: 'test-companies-eager', ai: { ...AMERICAS.ai, cooperation: { foundCompany: 1, buyShares: 1 } } };
 registerScenario(WITH);
+registerScenario({ ...AMERICAS, id: 'test-no-companies', name: 'test-no-companies', hidden: true, mechanics: { ...AMERICAS.mechanics, companies: false } });
 registerScenario(EAGER);
 
 function game(opts: { humans?: NationId[]; scenario?: string; nations?: NationId[]; seed?: number } = {}): GameState {
@@ -57,8 +58,7 @@ function ok(s: GameState, nation: NationId, cmd: Parameters<typeof applyCommand>
 
 describe('chartered companies: founding and shares', () => {
   it('are refused when the scenario has none', () => {
-    const s = game({ scenario: 'americas' });
-    s.config.scenario = undefined;
+    const s = game({ scenario: 'test-no-companies' });
     expect(foundProblem(s, 'england', 'hudsonsBay')).toMatch(/no chartered companies/);
   });
 

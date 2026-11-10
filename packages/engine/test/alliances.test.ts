@@ -57,12 +57,12 @@ registerScenario(EAGER);
 
 type Seat = 'england' | 'france' | 'spain';
 
-function game(opts: { humans?: Seat[]; scenario?: string; seed?: number; ai?: 'competent' | 'creative' | 'naive' | 'combative' } = {}): GameState {
+function game(opts: { humans?: NationId[]; scenario?: string; seed?: number; ai?: 'competent' | 'creative' | 'naive' | 'combative'; more?: NationId[] } = {}): GameState {
   const level = opts.ai ?? 'creative';
   const s = createGame({
     seed: opts.seed ?? 42,
     mapSize: 'small',
-    nations: ['england', 'france', 'spain'],
+    nations: ['england', 'france', 'spain', ...(opts.more ?? [])],
     humans: opts.humans ?? ['england', 'france', 'spain'],
     ai: { england: level, france: level, spain: level },
     scenario: opts.scenario ?? 'test-alliances',
@@ -164,7 +164,8 @@ describe('alliances: unlocking and proposals', () => {
   });
 
   it('between two people can be made at any time, by proposal and answer', () => {
-    const s = game();
+    // Six nations, so an alliance may hold three (at most half of them).
+    const s = game({ more: ['portugal', 'sweden', 'denmark'], humans: ['england', 'france', 'spain', 'portugal'] });
     ok(s, 'england', { type: 'proposeAlliance', nation: 'france' });
     expect(relation(s, 'england', 'france').proposal).toMatchObject({ kind: 'alliance', from: 'england' });
     ok(s, 'france', { type: 'answerProposal', nation: 'england', accept: true });
@@ -177,6 +178,8 @@ describe('alliances: unlocking and proposals', () => {
     ok(s, 'spain', { type: 'answerProposal', nation: 'france', accept: true });
     expect(alliesOf(s, 'england').sort()).toEqual(['france', 'spain']);
     expect((s.treaties ?? []).filter((x) => x.kind === 'alliance')).toHaveLength(1);
+    // A fourth would make it more than half the nations.
+    expect(refused(s, 'france', { type: 'proposeAlliance', nation: 'portugal' })).toMatch(/at most half/);
   });
 
   it('a computer player accepts an unlocked alliance at the scenario’s rate, and turns one down at none', () => {
@@ -424,10 +427,12 @@ describe('concord: winning together', () => {
     const s = ending({});
     makeAlliance(s, 'england', 'france');
     makeAlliance(s, 'england', 'spain');
-    expect(concordWinners(s, { england: 10, france: 30, spain: 20 }, 0.5)).toEqual(['france', 'spain', 'england']);
-    expect(concordWinners(s, { england: 10, france: 30 }, 0.5)).toEqual(['france', 'england']);
-    expect(concordWinners(s, { england: 10, france: 0, spain: 0 }, 0.5)).toEqual(['england', 'france', 'spain']);
-    expect(concordWinners(s, { england: 0, france: 0, spain: 0 }, 0.5)).toBeNull();
+    expect(concordWinners(s, { england: 10, france: 30, spain: 20, portugal: 5 }, 0.5)).toEqual(['france', 'spain', 'england']);
+    expect(concordWinners(s, { england: 10, france: 30, portugal: 5 }, 0.5)).toEqual(['france', 'england']);
+    expect(concordWinners(s, { england: 10, france: 0, spain: 0, portugal: 1 }, 0.5)).toEqual(['england', 'france', 'spain']);
+    expect(concordWinners(s, { england: 0, france: 0, spain: 0, portugal: 0 }, 0.5)).toBeNull();
+    // An alliance of every nation wins nothing: someone must be left outside.
+    expect(concordWinners(s, { england: 10, france: 30, spain: 20 }, 0.5)).toBeNull();
   });
 
   it('a game ended otherwise names its single winner, or none', () => {

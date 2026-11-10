@@ -166,6 +166,11 @@ export interface AllianceRules {
   waitingYears: YearsAround;
   /** After leaving: computer players on both sides treat the other as a target for these years. */
   hostilityYears: YearsAround;
+  /**
+   * The rung an alliance builds on: Favoured Nation (the engine's), or only a trade agreement, for
+   * a scenario where Favoured Nation is rare. Leaving then ends the trade agreement.
+   */
+  requires: 'favoured' | 'trade';
 }
 
 /**

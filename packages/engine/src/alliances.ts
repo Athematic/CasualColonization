@@ -21,7 +21,7 @@
 import { fail } from './errors.js';
 import { noteHistory } from './history.js';
 import { cargoRoomFor, colonyAt, isShip, isWater, message, neighbours, player, tileAt, unitName, unitsAboard, unitsAt } from './queries.js';
-import { atPeace, cancelFavoured, FOREIGN_KEEP, inWaitingPeriod, isFavoured, isHostile, pairRandom, relation, tradeAtForeignColony, yearsOfPeace } from './relations.js';
+import { atPeace, cancelFavoured, cancelTrade, FOREIGN_KEEP, hasTradeAgreement, inWaitingPeriod, isFavoured, isHostile, pairRandom, relation, tradeAtForeignColony, yearsOfPeace } from './relations.js';
 import type { NationId } from './rules/nations.js';
 import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, scenarioOf, turnAfterYears } from './scenarios/index.js';
 import type { AllianceRules, Cooperation, YearsAround } from './scenarios/types.js';
@@ -41,6 +41,7 @@ export const ALLIANCE_RULES: AllianceRules = {
   // Cancelling Favoured Nation: waiting 7–13 years, hostility 10–20.
   waitingYears: { base: 15, spread: 3 },
   hostilityYears: { base: 25, spread: 5 },
+  requires: 'favoured',
 };
 
 /**
@@ -150,7 +151,7 @@ export function allianceThresholds(s: GameState, a: NationId, b: NationId): { ye
 
 /** Whether two Favoured Nations' years of peace and trade both reach the hidden thresholds for an alliance. */
 export function allianceUnlocked(s: GameState, a: NationId, b: NationId): boolean {
-  if (!isFavoured(s, a, b)) return false;
+  if (!(allianceRules(s).requires === 'trade' ? hasTradeAgreement(s, a, b) : isFavoured(s, a, b))) return false;
   const need = allianceThresholds(s, a, b);
   return yearsOfPeace(s, a, b) >= need.years && relation(s, a, b).volume >= need.volume;
 }
@@ -172,6 +173,10 @@ export function allianceProblem(s: GameState, from: NationId, to: NationId): str
   if (!atPeace(s, from, to)) return `You are at war with ${name}.`;
   if (isAllied(s, from, to)) return `${nationTitle(s, to)} is already your ally.`;
   if (allianceOf(s, to)) return `${nationTitle(s, to)} already belongs to another alliance.`;
+  // An alliance is a bloc, not the whole table: at most half the nations taking part (at least two).
+  const members = alliesOf(s, from).length + 1;
+  const nations = s.players.filter((p) => p.id !== 'crown' && p.kind !== 'company').length;
+  if (members >= 2 && members + 1 > Math.max(2, Math.floor(nations / 2))) return `An alliance may hold at most half the nations; yours is full.`;
   for (const m of alliesOf(s, from)) {
     if (!atPeace(s, m, to)) return `Your ally ${nationOf(s, m).name} is at war with ${name}.`;
     if (!bothHuman(s, m, to) && isHostile(s, m, to)) return `Your ally ${nationOf(s, m).name} does not trust ${name}.`;
@@ -181,7 +186,9 @@ export function allianceProblem(s: GameState, from: NationId, to: NationId): str
   // Two people can ally at any time; otherwise Favoured Nation, and more peace and trade.
   if (bothHuman(s, from, to)) return null;
   if (isHostile(s, from, to) || inWaitingPeriod(s, from, to)) return `${nationTitle(s, to)} does not trust you again yet.`;
-  if (!isFavoured(s, from, to)) return `You must be each other's Favoured Nation first.`;
+  if (allianceRules(s).requires === 'trade') {
+    if (!hasTradeAgreement(s, from, to)) return `You need a trade agreement with ${name} first.`;
+  } else if (!isFavoured(s, from, to)) return `You must be each other's Favoured Nation first.`;
   if (!allianceUnlocked(s, from, to)) return `Relations with ${name} are not yet close enough for an alliance: they need more years of peace and more trade between you.`;
   return null;
 }
@@ -255,6 +262,7 @@ export function leaveAlliance(s: GameState, by: NationId, war?: NationId): strin
   const rules = allianceRules(s);
   for (const o of former) {
     if (isFavoured(s, by, o)) cancelFavoured(s, by, o, o === war ? 'war' : 'cancel');
+    else if (hasTradeAgreement(s, by, o) && o !== war) cancelTrade(s, by, o);
     expelUnits(s, by, o);
     expelUnits(s, o, by);
     if (bothHuman(s, by, o)) continue;
