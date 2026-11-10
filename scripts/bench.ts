@@ -4,7 +4,7 @@
 // Prints the total time, a breakdown per phase of the turn pipeline (packages/engine/src/perf.ts)
 // and a hash of the final saved state, which must not change when the engine only gets faster.
 //
-// Usage: npm run bench -- [--seed 2024] [--year 1700] [--scenario id] [--no-independence] [--quiet]
+// Usage: npm run bench -- [--seed 2024] [--year 1700] [--scenario id] [--keep-playing] [--quiet]
 //        npm run bench -- --verify [--write] [--scenario id]
 // npm test runs a shorter golden-hash test (packages/engine/test/golden.test.ts) in CI.
 // --verify plays 150 rounds on three more seeds and compares the state hashes with
@@ -28,13 +28,14 @@ const opt = (name: string, fallback: string) => {
 const scenarioId = opt('scenario', DEFAULT_SCENARIO);
 const chosen = getScenario(scenarioId);
 if (!chosen) throw new Error(`Unknown scenario "${scenarioId}". Use ${listScenarios().map((sc) => sc.id).join(', ')}.`);
-// --no-independence (timing only): the same scenario with independence switched off, so no War of
-// Independence ends a timing game early and every game runs to its year. It plays other games than
-// the recorded ones, so it can't be combined with --verify.
-const noIndependence = args.includes('--no-independence');
-if (noIndependence && args.includes('--verify')) throw new Error('--no-independence is for timing; --verify checks the recorded games.');
-if (noIndependence) registerScenario({ ...chosen, id: `${chosen.id}-no-independence`, name: `${chosen.name} (no independence)`, hidden: true, mechanics: { ...chosen.mechanics, independence: false } });
-const scenario = noIndependence ? getScenario(`${chosen.id}-no-independence`)! : chosen;
+// --keep-playing (timing only): the same scenario and rules, but the only way the game ends is the
+// calendar: a War of Independence is fought as usual, and when it is won or lost the game goes on
+// (the nation plays on, independent or not), so every timing game runs to its year with all of its
+// work. It plays other games than the recorded ones, so it can't be combined with --verify.
+const keepPlaying = args.includes('--keep-playing');
+if (keepPlaying && args.includes('--verify')) throw new Error('--keep-playing is for timing; --verify checks the recorded games.');
+if (keepPlaying) registerScenario({ ...chosen, id: `${chosen.id}-keep-playing`, name: `${chosen.name} (keep playing)`, hidden: true, victory: [{ id: 'time' }] });
+const scenario = keepPlaying ? getScenario(`${chosen.id}-keep-playing`)! : chosen;
 const americas = scenario.id === DEFAULT_SCENARIO;
 
 /** The first turn of a year in the scenario's calendar (packages/engine/src/scenarios/calendar.ts). */

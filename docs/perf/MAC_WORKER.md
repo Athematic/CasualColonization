@@ -47,7 +47,8 @@ Newest last. Each entry has an id; acknowledge it in your next report.
   - `1700` and `1750` as recorded (the 1750 game includes a War of Independence and ends at turn 354);
   - `1850:noind`, a full game with independence switched off.
 
-  The default is `--years 1700,1750,1850:noind`, and this file's commands now use it. Re-baseline the best at this commit before gating, then gate the candidate when it updates.
+  The default is `--years 1700,1750,1850:keep`, and this file's commands now use it. Re-baseline the best at this commit before gating, then gate the candidate when it updates.
+- **M6 (2026-11-10), replaces the `:noind` games of M4/M5:** Simon's better idea. The full game no longer switches independence off. `bench --keep-playing` keeps the scenario's rules and only removes the victory by war: wars of independence are fought as usual, a nation that wins plays on as independent, and only the calendar ends the game. The gate's default is now `--years 1700,1750,1850:keep`, and this file's commands use it. Re-baseline the best at this commit, then gate the candidate when it updates.
 
 What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
 
@@ -122,10 +123,10 @@ Do job 2 on the release candidate commit with all five steps, and compare with t
 
 ```sh
 npm ci
-npm run perf:gate -- --runs 5 --years 1700,1750,1850:noind --save /tmp/best.json   # on the current best commit
+npm run perf:gate -- --runs 5 --years 1700,1750,1850:keep --save /tmp/best.json   # on the current best commit
 git checkout --detach <candidate>
 npm ci                                                                  # only if package-lock.json changed
-npm run perf:gate -- --runs 5 --years 1700,1750,1850:noind --baseline /tmp/best.json --save /tmp/cand.json
+npm run perf:gate -- --runs 5 --years 1700,1750,1850:keep --baseline /tmp/best.json --save /tmp/cand.json
 ```
 
 Report each candidate's verdict line and the "against" line. Copy an accepted candidate's JSON over `/tmp/best.json` so it becomes the baseline for the next candidate. Both sides must be measured on the Mac in the same sitting: the cloud container's timings vary by about 10% between identical runs, so they can't decide a close call.
@@ -139,10 +140,10 @@ Simon's Mac pulls every 10 minutes. This section says what to do on each pull, s
 - `claude/0.10-candidate` is **the next candidate**: the current best plus one speed-up. The cloud session force-pushes it for every new candidate.
 
 **On each pull:**
-1. **New best:** if `claude/0.10-faster-turns` has a new commit, check whether any file outside `docs/` changed since the last commit you measured. If so, run the gate on it (job 4, `--runs 5 --years 1700,1750,1850:noind`) and `--save ~/cc-perf/best.json`. Keep `~/cc-perf/` outside the repo. If only docs changed, do nothing.
+1. **New best:** if `claude/0.10-faster-turns` has a new commit, check whether any file outside `docs/` changed since the last commit you measured. If so, run the gate on it (job 4, `--runs 5 --years 1700,1750,1850:keep`) and `--save ~/cc-perf/best.json`. Keep `~/cc-perf/` outside the repo. If only docs changed, do nothing.
 2. **New candidate:** if `claude/0.10-candidate` points at a commit you haven't gated, do two things in the same sitting:
    - re-measure the best into `best.json`, unless that was done in the last hour;
-   - run `npm run perf:gate -- --runs 5 --years 1700,1750,1850:noind --baseline ~/cc-perf/best.json --save ~/cc-perf/cand-<commit>.json`.
+   - run `npm run perf:gate -- --runs 5 --years 1700,1750,1850:keep --baseline ~/cc-perf/best.json --save ~/cc-perf/cand-<commit>.json`.
 3. **Tournaments:** only when the candidate's commit message contains `[outcomes]`. That marks a speed-up that changes games and re-records the hashes. Also run job 1 step 5's two tournaments on both the best and the candidate.
 4. **Record:** write each result to `docs/perf/results/<date>-gate-<commit>.md`. Include the verdict line, the "against" line, the per-run times, and the commit's subject line. Commit to `claude/0.10-mac-results` and push.
 5. **Report:** message the cloud session `session_01Vgy9QYBpiHxzmYr17Ez8zF` with one line per result, in the form `<commit> <verdict> <the against line>`.
