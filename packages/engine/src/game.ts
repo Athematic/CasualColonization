@@ -11,6 +11,7 @@ import { createWorld } from './world.js';
 import { initRelations } from './relations.js';
 import { initCrown } from './crown.js';
 import { entryPoints } from './mapgen.js';
+import { checkSavedScenario, checkScenarioConfig } from './scenarios/index.js';
 
 /** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
 export const SAVE_VERSION = 3;
@@ -18,16 +19,12 @@ export const SAVE_VERSION = 3;
 /** Shown when a save from before Alpha 0.4 is loaded. */
 export const OLD_SAVE_MESSAGE = "Saves from before version 0.4 can't be loaded.";
 
-/** Thrown by deserialize for a save in a format this version cannot read. */
-export class SaveVersionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'SaveVersionError';
-  }
-}
+import { SaveVersionError } from './errors.js';
+
+export { SaveVersionError };
 
 export function createGame(config: GameConfig): GameState {
-  if (config.nations.length < 1 || config.nations.length > 8) throw new Error('Between 1 and 8 nations can take part.');
+  checkScenarioConfig(config);
   if (new Set(config.nations).size !== config.nations.length) throw new Error('Each nation can only take part once.');
   for (const h of config.humans) if (!config.nations.includes(h)) throw new Error(`${h} is not taking part.`);
 
@@ -131,7 +128,8 @@ export function deserialize(json: string): GameState {
 
 /**
  * Checks a loaded save. Alpha 0.4 changed the state for Favoured Nation, and older saves are not
- * converted (agreed in docs/design/favoured-nation.md): they fail with OLD_SAVE_MESSAGE.
+ * converted (agreed in docs/design/favoured-nation.md): they fail with OLD_SAVE_MESSAGE. Saves
+ * from a scenario this version does not have, or from a newer version of it, fail too.
  */
 export function migrate(raw: { version: number }): GameState {
   const s = raw as GameState;
@@ -141,6 +139,8 @@ export function migrate(raw: { version: number }): GameState {
   // Saves from before difficulty levels played by the standard rules.
   s.difficulty = s.difficulty ?? DEFAULT_DIFFICULTY;
   s.relations = s.relations ?? {};
+  // A missing scenario means the Americas; an unknown one or a newer version is refused.
+  checkSavedScenario(s);
   return s;
 }
 

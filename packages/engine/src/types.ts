@@ -47,6 +47,15 @@ export interface GameConfig {
    * games built without it are unchanged; the web game and tournaments switch it on.
    */
   colonyCharter?: boolean;
+  /**
+   * Id of the registered scenario (scenarios/index.ts); missing means 'americas', so older saves
+   * and the golden hashes stay valid. New Americas games do not write it.
+   */
+  scenario?: string;
+  /** The scenario's version when the game was created; missing means 1. */
+  scenarioVersion?: number;
+  /** Which nation set the setup offered (real rivals or alternative history); missing means the scenario's default. */
+  rivals?: 'real' | 'alternative';
 }
 
 export interface Tile {

@@ -111,7 +111,7 @@ Done before Beta, so the cooperation rules are scenario data from the start. See
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | in progress: plan step 0 (golden-hash test in `npm test`) done ([scenario-framework.md](design/scenario-framework.md), section 8; proposed size XL) |
+| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | in progress: plan steps 0 (golden-hash test in `npm test`) and 1 (the `Scenario` type, registry and the Americas as the first scenario) done ([scenario-framework.md](design/scenario-framework.md), section 8; proposed size XL) |
 | Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | design (same note) |
 | Proof scenario that exercises the framework with little new art (proposed: The Caribbean, 1650–1750: the lesser powers) | M | P1 | design (same note, section 7) |
 

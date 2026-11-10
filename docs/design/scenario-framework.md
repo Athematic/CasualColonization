@@ -1,6 +1,21 @@
 # Design note: Scenario framework (0.9)
 
-Status: **design**, to be agreed with Simon before work starts. Builds on [scenarios.md](scenarios.md) (agreed in principle), [australia.md](australia.md), [events.md](events.md) and [favoured-nation.md](favoured-nation.md).
+## Decisions taken provisionally (pending Simon)
+
+Simon was away when work started and said the open questions roll into 0.9. Steps 0–2 follow the recommendations of section 9 where they touch them; each can still be changed.
+
+- **Q2 (nations per scenario or global):** global identities, per-scenario roles. `NationEntry` (scenarios/types.ts) holds the bonus text, colony names and home port with its character; name, adjective and colour stay in `NATIONS`.
+- **Q3 (saves across scenario versions):** a missing `config.scenario` means the Americas and a missing `scenarioVersion` means 1. Loading refuses an unknown scenario and a newer version with a clear message (`SaveVersionError`); an older version loads only through the scenario's `migrate`. The Americas stay at version 1.
+- **Q7 (files and mods later):** the `Scenario` is JSON-shaped except `migrate`.
+- **Q8 (no hidden global):** a registry of scenarios plus `scenarioOf(s)`, which reads `s.config.scenario`. There is no "current scenario" variable.
+- **Q9 (real rivals for the Americas):** yes, England, France, the Netherlands and Spain; alternative history (all eight) is the default. `config.rivals: 'real'` limits a new game to that set.
+- **Q10 (port character):** built in 0.8 with the shape of `NationEntry.port`; the Americas' entries point at `PORT_CHARACTER` as it is.
+
+Implementation choices that differ from the sketch below:
+- The Americas list all four stored maps, the Australia map included: it is a preview played with the Americas' rules until the Australia scenario exists, and leaving it out would change what the New game screen offers.
+- Step 2 does not yet add `ai.pace`, `aiTurn` or the council's late-offer turn (120): the turn thresholds stay as they are and are listed in section 2.1, row 6, for a later step.
+
+Status: **design**, to be agreed with Simon before work starts; steps 0 and 1 of the plan are done (section 8). Builds on [scenarios.md](scenarios.md) (agreed in principle), [australia.md](australia.md), [events.md](events.md) and [favoured-nation.md](favoured-nation.md).
 
 This note turns "the Americas become the first scenario" into a plan: what is hard-wired today, what a scenario looks like as code and data, how it is stored, how we keep games identical while we move things, and what to build first. The questions that need a decision are collected at the end.
 
@@ -564,7 +579,7 @@ Every step keeps the Americas games identical (bench hashes and the golden-hash 
 | Step | What | Size | Status |
 | --- | --- | --- | --- |
 | 0 | **Guard rails.** The golden-hash test in `npm test`; `bench -- --verify` documented as required for every 0.9 pull request | S | done: `packages/engine/test/golden.test.ts` (re-record with `npm run test:golden:write`); README, Performance |
-| 1 | **Skeleton.** `scenario/` with the `Scenario` type, the registry, `scenarioOf(s)`, and an Americas scenario that only points at today's tables; `config.scenario`, `scenarioVersion` and `rivals` (optional); loading checks; the conformance test | M | |
+| 1 | **Skeleton.** `scenario/` with the `Scenario` type, the registry, `scenarioOf(s)`, and an Americas scenario that only points at today's tables; `config.scenario`, `scenarioVersion` and `rivals` (optional); loading checks; the conformance test | M | done: `packages/engine/src/scenarios/` (`types.ts`, `americas.ts`, registry in `index.ts`); checks in `createGame` and `migrate`; `test/scenarios.test.ts` |
 | 2 | **Calendar.** `yearOf`, `formatDate`, `yearValue`, `turnAfterYears`, `LAST_YEAR` and the three `turnOfYear` copies read the calendar; `ai.pace` with `aiTurn`; `offerFathers`' late turn | S–M | |
 | 3 | **Selections.** Goods (23 files), peoples order, nation sets (arena, web), terrain and units lists, buildings, council members, AI goods tags; nation entries with port name, colony names and starting kit; port character's data shape | M–L | |
 | 4 | **Effects as data.** The modifier hooks and their cache; 8 nation bonuses and 25 fathers' passive effects; `onJoin` effects; `unlockBuilding`. The step most likely to break identity, so it lands in two or three pull requests (production and Europe; combat and natives; the rest) | L | |

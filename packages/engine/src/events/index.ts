@@ -45,6 +45,11 @@ export function registerEventSet(id: string, defs: EventDef[]): void {
   SETS[id] = defs;
 }
 
+/** Whether an event set with this id is registered (scenarios name theirs). */
+export function hasEventSet(id: string): boolean {
+  return id in SETS;
+}
+
 /** The events of the game's set. */
 export function eventDefs(s: GameState): EventDef[] {
   return SETS[s.config.eventSet ?? 'americas'] ?? AMERICAS_EVENTS;

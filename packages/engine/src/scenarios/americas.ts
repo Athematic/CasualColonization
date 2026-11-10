@@ -1,0 +1,48 @@
+/**
+ * The Americas, 1492–1850: the first scenario, built from today's tables so that nothing about
+ * a game changes (docs/design/scenario-framework.md, section 3.3). Later steps move each table's
+ * home here; the values stay the same, which test/scenarios.test.ts checks.
+ *
+ * Imports only the leaf rule tables, so any engine module can import the registry.
+ */
+import { DIFFICULTY } from '../rules/difficulty.js';
+import { FATHER_CATEGORIES, FATHERS, type FatherId } from '../rules/fathers.js';
+import { GOODS } from '../rules/goods.js';
+import { NATION_ORDER, NATIONS, TRIBE_ORDER, type NationId } from '../rules/nations.js';
+import { NATIVE_PRODUCE } from '../rules/natives.js';
+import { PORT_CHARACTER } from '../rules/ports.js';
+import { SCORE_WEIGHTS } from '../rules/score.js';
+import type { NationEntry, Scenario } from './types.js';
+
+function entry(id: NationId): NationEntry {
+  const def = NATIONS[id];
+  return { id, bonus: { text: def.bonus }, colonyNames: def.colonyNames, port: PORT_CHARACTER[id]! };
+}
+
+/** The original game's four rivals (Q9). */
+const REAL_RIVALS: NationId[] = ['england', 'france', 'netherlands', 'spain'];
+
+export const AMERICAS: Scenario = {
+  id: 'americas',
+  version: 1,
+  name: 'The Americas, 1492–1850',
+  description: 'Found colonies in the New World, trade with Europe and the native peoples, and win independence from the Crown.',
+  map: {
+    // The Australia map is a geography preview played with the Americas' rules until its scenario exists.
+    stored: ['north-america', 'south-america', 'americas', 'australia'],
+    generated: true,
+    default: 'generated',
+  },
+  nations: {
+    sets: { alternative: NATION_ORDER.map(entry), real: REAL_RIVALS.map(entry) },
+    default: 'alternative',
+    max: 8,
+  },
+  peoples: { ids: [...TRIBE_ORDER], produce: [...NATIVE_PRODUCE] },
+  goods: [...GOODS],
+  council: { categories: [...FATHER_CATEGORIES], members: Object.keys(FATHERS) as FatherId[] },
+  events: 'americas',
+  // The engine's own tables: the Americas override nothing.
+  difficulty: DIFFICULTY,
+  score: SCORE_WEIGHTS,
+};
