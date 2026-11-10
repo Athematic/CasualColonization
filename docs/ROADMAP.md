@@ -83,7 +83,7 @@ Design: [design/favoured-nation.md](design/favoured-nation.md)
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
 | Mercenaries; foreign intervention force; Tories after the declaration | M | P2 | in progress |
-| Damaged artillery, ambush bonus, fortresses and coastal forts, capturing equipment | M | P2 | in progress |
+| Damaged artillery, ambush bonus, fortresses and coastal forts, capturing equipment | M | P2 | done |
 | Mines running out | S | P3 | in progress |
 | Abandoning a colony; retiring early | S | P2 | in progress |
 | Performance pass: profile computer turns and the map renderer; a head start to 1700 currently takes about 100 seconds. Goal: under 30 seconds, with identical game outcomes | M | P1 | planned (after the other 0.7 items) |

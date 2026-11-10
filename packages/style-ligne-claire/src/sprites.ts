@@ -161,6 +161,18 @@ export function flag(ctx: Ctx, x: number, y: number, h: number, color: string, l
 
 export function colonySprite(ctx: Ctx, x: number, y: number, s: number, nation: NationId, size: number, stockade: number, lw: number): void {
   const base = y + s * 0.3;
+  if (stockade > 2) {
+    // Fortress: corner towers with a pennant-less cap, above the stone curtain.
+    for (const sx of [-0.45, 0.45]) {
+      inked(ctx, STONE, lw, () => ctx.rect(x + sx * s - s * 0.07, base - s * 0.55, s * 0.14, s * 0.55));
+      inked(ctx, '#7a3b2e', lw * 0.8, () => {
+        ctx.moveTo(x + sx * s - s * 0.1, base - s * 0.55);
+        ctx.lineTo(x + sx * s, base - s * 0.7);
+        ctx.lineTo(x + sx * s + s * 0.1, base - s * 0.55);
+        ctx.closePath();
+      });
+    }
+  }
   if (stockade > 0) {
     // Palisade behind the houses.
     for (let i = -4; i <= 4; i++) {
@@ -373,14 +385,24 @@ function wagon(ctx: Ctx, x: number, y: number, s: number, lw: number): void {
   }
 }
 
-function cannon(ctx: Ctx, x: number, y: number, s: number, lw: number): void {
+function cannon(ctx: Ctx, x: number, y: number, s: number, lw: number, damaged = false): void {
   ctx.save();
   ctx.translate(x, y + s * 0.02);
-  ctx.rotate(-0.35);
+  ctx.rotate(damaged ? 0.25 : -0.35); // a damaged gun droops
   inked(ctx, '#55585c', lw, () => ctx.roundRect(-s * 0.32, -s * 0.07, s * 0.58, s * 0.14, s * 0.05));
   ctx.restore();
   inked(ctx, WOOD, lw, () => ctx.arc(x - s * 0.06, y + s * 0.16, s * 0.14, 0, Math.PI * 2));
   inked(ctx, null, lw * 0.7, () => ctx.arc(x - s * 0.06, y + s * 0.16, s * 0.03, 0, Math.PI * 2));
+  if (damaged) {
+    // A crack across the barrel and a splintered wheel.
+    inked(ctx, null, lw * 0.9, () => {
+      ctx.moveTo(x - s * 0.1, y - s * 0.12);
+      ctx.lineTo(x - s * 0.04, y - s * 0.02);
+      ctx.lineTo(x - s * 0.1, y + s * 0.04);
+      ctx.moveTo(x - s * 0.06, y + s * 0.02);
+      ctx.lineTo(x + s * 0.04, y + s * 0.26);
+    });
+  }
 }
 
 function chest(ctx: Ctx, x: number, y: number, s: number, lw: number): void {
@@ -399,7 +421,7 @@ export function unitSprite(ctx: Ctx, x: number, y: number, s: number, type: Unit
   const def = UNIT_TYPES[type];
   if (def.kind === 'ship') return ship(ctx, x, y, s, type, nation, lw);
   if (def.kind === 'wagon') return wagon(ctx, x, y, s, lw);
-  if (def.kind === 'artillery') return cannon(ctx, x, y, s, lw);
+  if (def.kind === 'artillery') return cannon(ctx, x, y, s, lw, type === 'damagedArtillery');
   if (def.kind === 'treasure') return chest(ctx, x, y, s, lw);
   if (role === 'missionary') {
     person(ctx, x, y, s, '#2a2a2a', 'none', lw);

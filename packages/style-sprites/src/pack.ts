@@ -58,7 +58,7 @@ export interface SpriteMapping {
   colonies: {
     /** By population: the entry with the largest `min` not above the colony's size. */
     sizes: readonly { min: number; id: IdSlot }[];
-    /** Enclosures by stockade level (1 stockade, 2 fort), drawn split into back and front walls. */
+    /** Enclosures by stockade level (1 stockade, 2 fort, 3 fortress), drawn split into back and front walls. */
     defences: Partial<Record<number, IdSlot>>;
   };
   settlements: {
@@ -161,6 +161,8 @@ export const DEFAULT_MAPPING: SpriteMapping = {
     plain: 'units/{type}__none',
     // An expert's own role variant, else a free colonist in that role: the role always shows.
     role: ['units/{type}__{role}', 'units/free-colonist__{role}'],
+    // Damaged artillery has its own sprite when a pack draws one, else the whole gun.
+    types: { damagedArtillery: ['units/damaged-artillery__none', 'units/artillery__none'] },
     // No brave sprites exist yet (the image tool's manifest has none); the native convert's
     // poses stand in for them, and without those the renderer draws braves itself.
     braves: {
@@ -206,7 +208,7 @@ export const DEFAULT_MAPPING: SpriteMapping = {
       { min: 4, id: 'colonies/colony__medium' },
       { min: 8, id: 'colonies/colony__large' },
     ],
-    defences: { 1: 'colonies/stockade', 2: 'colonies/fort' },
+    defences: { 1: 'colonies/stockade', 2: 'colonies/fort', 3: ['colonies/fortress', 'colonies/fort'] },
   },
   settlements: {
     camp: 'settlements/{tribe}',

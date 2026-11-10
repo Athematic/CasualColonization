@@ -53,6 +53,7 @@ const UNIT_LETTERS: Record<string, string> = { ship: '⛵', wagon: 'W', artiller
 
 function unitLabel(type: keyof typeof UNIT_TYPES, role: string): string {
   const kind = UNIT_TYPES[type].kind;
+  if (type === 'damagedArtillery') return 'a';
   if (kind !== 'colonist') return UNIT_LETTERS[kind];
   return { soldier: 'S', dragoon: 'D', pioneer: 'P', scout: 'Sc', missionary: 'M' }[role] ?? 'C';
 }
@@ -146,6 +147,14 @@ class SchematicRenderer implements MapRenderer {
       const p = tileToScreen(scene, c.x, c.y);
       ctx.fillStyle = NATIONS[c.owner].color;
       ctx.fillRect(p.x + z * 0.12, p.y + z * 0.12, z * 0.76, z * 0.76);
+      // Walls: one frame for a stockade, a thicker one for a fort, a double frame for a fortress.
+      const walls = c.buildings.stockade;
+      if (walls > 0) {
+        ctx.strokeStyle = '#e8e0c8';
+        ctx.lineWidth = Math.max(1, z * 0.04 * Math.min(walls, 2));
+        ctx.strokeRect(p.x + z * 0.06, p.y + z * 0.06, z * 0.88, z * 0.88);
+        if (walls > 2) ctx.strokeRect(p.x + z * 0.02, p.y + z * 0.02, z * 0.96, z * 0.96);
+      }
       this.text(String(colonyWorkers(s, c).length), p.x + z / 2, p.y + z / 2, z * 0.4, '#fff');
       if (scene.labels !== false) this.text(c.name, p.x + z / 2, p.y + z * 1.1, Math.max(10, z * 0.22), '#fff');
     }
