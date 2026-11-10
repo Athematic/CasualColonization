@@ -325,6 +325,58 @@ span.chip {
   border-radius: var(--radius);
 }
 
+/* Shown over the map while the computer players move (in the engine worker); the map stays usable. */
+.turn-progress {
+  position: absolute;
+  top: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: calc(100% - 1.2rem);
+  background: var(--panel);
+  color: var(--panel-ink);
+  border: var(--line-width) solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.75rem;
+  font-weight: 700;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.turn-progress[hidden] {
+  display: none;
+}
+
+.turn-progress .bar {
+  width: 6rem;
+  margin: 0;
+  flex: none;
+}
+
+.turn-progress .spinner {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: none;
+  border: 2px solid var(--line);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn-progress .spinner {
+    animation: none;
+  }
+}
+
 .map {
   display: block;
   width: 100%;

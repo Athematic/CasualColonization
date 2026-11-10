@@ -486,6 +486,20 @@ export interface AllianceTerms {
   sharedSight: boolean;
 }
 
+/**
+ * The whole game, as saved. Invariant: a save and load (serialize, then deserialize) gives a state
+ * that plays exactly as this one, and saves to the same text. To keep it so, the state is a plain
+ * JSON tree:
+ * - no object or array appears twice in it (an object held in two places stays one object while
+ *   playing, but becomes two after a load, so changing one would no longer change the other):
+ *   store a copy, or an id, never an object the state already holds;
+ * - only JSON values: no Map, Set, Date, class instance, function, NaN, Infinity or -0;
+ * - `undefined` only where an absent key means the same (JSON drops it);
+ * - nothing decided by the order of a record's keys unless that order survives JSON (it does:
+ *   JSON.parse adds keys in the saved order, so integer-like keys are the only catch).
+ * Caches beside the state (unitindex.ts) are rebuilt from a loaded state in the same order.
+ * test/roundtrip.test.ts plays games with a save and load after every round and checks this.
+ */
 export interface GameState {
   version: 3;
   config: GameConfig;

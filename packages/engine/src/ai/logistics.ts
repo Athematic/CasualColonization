@@ -5,9 +5,10 @@
  * wagon trains with no port to go to sell surplus to native settlements instead.
  */
 import { buyPrice, portsFor, sellPrice } from '../europe.js';
-import { findPath, setDestination } from '../movement.js';
+import { findPath, goTo, setDestination } from '../movement.js';
 import { nativeOffer, tensionOf, tradeWithSettlement } from '../natives.js';
-import { colonyReport, type ColonyReport } from '../production.js';
+import { type ColonyReport } from '../production.js';
+import { aiColonyReport } from './reports.js';
 import { cargoRoomFor, colonyAt, distance, isCoastal, isShip, player, unitPosition, unitsAboard, warehouseCapacity } from '../queries.js';
 import { favouredPartners, favouredUnlocked, FOREIGN_KEEP, hasTradeAgreement, inWaitingPeriod, isFavoured, routesBetween, ROUTES_NEEDED } from '../relations.js';
 import { assignRoute, createRoute, deleteRoute, editRoute, EUROPE_STOP, foreignStopColonies, isForeignStop, routesOf, routeUnits, stopPort } from '../routes.js';
@@ -41,7 +42,7 @@ export const ROUTE_PORT_MARGIN = 0.15;
 export const ROUTE_PORT_GAIN = 150;
 
 /** Goods a colony will lose to its full warehouse within the given number of turns. */
-export function overflowSoon(s: GameState, c: Colony, turns = 4, report: ColonyReport = colonyReport(s, c)): number {
+export function overflowSoon(s: GameState, c: Colony, turns = 4, report: ColonyReport = aiColonyReport(s, c)): number {
   const cap = warehouseCapacity(c);
   let lost = 0;
   for (const g of tradeGoods(s)) {
@@ -62,7 +63,7 @@ function keepFor(c: Colony, report: ColonyReport, g: GoodId): number {
 }
 
 function loadRules(s: GameState, c: Colony, skip: (g: GoodId) => boolean = () => false): RouteCargo[] {
-  const report = colonyReport(s, c);
+  const report = aiColonyReport(s, c);
   return tradeGoods(s).filter((g) => !skip(g)).map((g) => {
     const keep = keepFor(c, report, g);
     return keep > 0 ? { good: g, amount: keep } : { good: g };
@@ -94,8 +95,14 @@ const isCargoShip = (u: Unit) => isShip(u) && UNIT_TYPES[u.type].offence === 0 &
 /** Inland colonies a wagon train route already serves. */
 function wagonServed(s: GameState, p: Player): Set<string> {
   const out = new Set<string>();
+  // The routes a wagon train follows, in one pass over the units (as routeUnits per route would find).
+  const carted = new Set<string>();
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (u.route && isWagon(u)) carted.add(u.route.id);
+  }
   for (const r of routesOf(s, p.id)) {
-    if (!routeUnits(s, r.id).some(isWagon)) continue;
+    if (!carted.has(r.id)) continue;
     for (const st of r.stops) {
       const c = s.colonies[st.at];
       if (c && !isCoastal(s, c.x, c.y)) out.add(c.id);
@@ -105,8 +112,10 @@ function wagonServed(s: GameState, p: Player): Set<string> {
 }
 
 /** Inland colonies with goods to carry away. */
-function needsCarting(s: GameState, c: Colony, report: ColonyReport = colonyReport(s, c)): boolean {
+function needsCarting(s: GameState, c: Colony, given?: ColonyReport): boolean {
   if (isCoastal(s, c.x, c.y)) return false;
+  // The report only for an inland colony: most are on the coast.
+  const report = given ?? aiColonyReport(s, c);
   const surplus = tradeGoods(s).reduce((n, g) => n + Math.max(0, report.net[g]), 0);
   return surplus >= 3 || overflowSoon(s, c, 8, report) > 0;
 }
@@ -140,13 +149,26 @@ function cartingNeeds(s: GameState, p: Player): { served: Set<string>; waiting: 
   if (waiting.size) {
     for (const c of colonies) {
       if (![...waiting].some((id) => distance(s.colonies[id].x, s.colonies[id].y, c.x, c.y) <= 10)) continue;
-      const hammers = colonyReport(s, c).produced.hammers;
+      const hammers = aiColonyReport(s, c).produced.hammers;
       if (hammers >= 3 && (!yard || hammers > yard.hammers)) yard = { id: c.id, hammers };
     }
   }
   const entry = { key, served, waiting, yard: yard?.id };
   cartingCache.set(s, entry);
   return entry;
+}
+
+/** The units following each route (as routeUnits gives them, in the units' order). */
+function unitsByRoute(s: GameState): Map<string, Unit[]> {
+  const out = new Map<string, Unit[]>();
+  for (const id in s.units) {
+    const u = s.units[id];
+    if (!u.route) continue;
+    const list = out.get(u.route.id);
+    if (list) list.push(u);
+    else out.set(u.route.id, [u]);
+  }
+  return out;
 }
 
 /** Plays the nation's logistics for one turn. */
@@ -156,8 +178,11 @@ export function manageLogistics(s: GameState, p: Player): void {
   if (p.independence !== 'none') {
     for (const r of routesOf(s, p.id)) if (r.stops.some((st) => st.at === EUROPE_STOP)) deleteRoute(s, p.id, r.id);
   }
+  // Outside a review, each route's units come from one pass over the units: deleting a route
+  // without units changes no other route's. A review can reassign units, so it asks per route.
+  const following = review ? undefined : unitsByRoute(s);
   for (const r of routesOf(s, p.id)) {
-    const users = routeUnits(s, r.id);
+    const users = following ? (following.get(r.id) ?? []) : routeUnits(s, r.id);
     if (!users.length) {
       deleteRoute(s, p.id, r.id);
       continue;
@@ -231,7 +256,7 @@ export function routePort(s: GameState, p: Player, stops: RouteStop[], current?:
   for (const st of stops) {
     const c = st.at === EUROPE_STOP ? undefined : s.colonies[st.at];
     if (!c || c.owner !== p.id) continue;
-    const report = colonyReport(s, c);
+    const report = aiColonyReport(s, c);
     for (const r of st.load) cargo.set(r.good, (cargo.get(r.good) ?? 0) + Math.max(0, c.goods[r.good] - (r.amount ?? 0)) + Math.max(0, report.net[r.good]) * 8);
   }
   const value = (port: NationId) => [...cargo].reduce((v, [g, n]) => v + n * portNet(s, p, port, g), 0);
@@ -337,7 +362,7 @@ function workshopDemand(report: ColonyReport, g: GoodId): number {
  */
 function foreignStop(s: GameState, p: Player, f: Colony, goods: GoodId[]): { stop: RouteStop; gain: number; sells: GoodId[]; buys: GoodId[] } | null {
   const ties = buildingTies(s, p, f.owner);
-  const report = colonyReport(s, f);
+  const report = aiColonyReport(s, f);
   const cap = warehouseCapacity(f);
   const rich = player(s, f.owner).gold >= RICH_PARTNER;
   const unload: RouteCargo[] = [];
@@ -393,7 +418,7 @@ function withForeignShipStop(s: GameState, p: Player, stops: RouteStop[]): Route
  * keeps, or 3 or more to spare every turn.
  */
 function spareGoods(s: GameState, c: Colony): GoodId[] {
-  const report = colonyReport(s, c);
+  const report = aiColonyReport(s, c);
   return foreignGoods(s).filter((g) => report.produced[g] > 0 && (c.goods[g] - keepFor(c, report, g) >= 30 || report.net[g] >= 3));
 }
 
@@ -402,7 +427,7 @@ function wagonForeignRules(s: GameState, p: Player, own: Colony, f: Colony): { h
   if (!partnerColonies(s, p).some((o) => o.id === f.id)) return null;
   const plan = foreignStop(s, p, f, spareGoods(s, own));
   if (!plan || !plan.sells.length) return null;
-  const report = colonyReport(s, own);
+  const report = aiColonyReport(s, own);
   const load = plan.sells.map((g) => {
     const keep = keepFor(own, report, g);
     return keep > 0 ? { good: g, amount: keep } : { good: g };
@@ -564,7 +589,7 @@ function nativeTrade(s: GameState, p: Player, wagon: Unit): void {
   // Empty: load surplus at the colony it is in, or go to the fullest colony nearby.
   const here = colonyAt(s, pos.x, pos.y);
   if (here && here.owner === p.id && buyers.length) {
-    const report = colonyReport(s, here);
+    const report = aiColonyReport(s, here);
     const spare = tradeGoods(s).map((g) => ({ g, n: here.goods[g] - keepFor(here, report, g) })).filter((r) => r.n >= 50).sort((a, b) => b.n - a.n);
     for (const { g, n } of spare) {
       const amount = Math.min(n, cargoRoomFor(s, wagon, g));
@@ -580,7 +605,7 @@ function nativeTrade(s: GameState, p: Player, wagon: Unit): void {
     .map((c) => ({ c, n: tradeGoods(s).reduce((m, g) => m + Math.max(0, c.goods[g] - 50), 0) }))
     .filter((r) => r.n >= 80)
     .sort((a, b) => b.n - a.n)[0];
-  if (fullest && findPath(s, wagon, fullest.c.x, fullest.c.y)) setDestination(s, wagon.id, { x: fullest.c.x, y: fullest.c.y });
+  if (fullest) goTo(s, wagon, fullest.c.x, fullest.c.y);
 }
 
 function besideSettlement(s: GameState, u: Unit, x: number, y: number): { x: number; y: number } | null {
@@ -610,7 +635,7 @@ function busiestPorts(s: GameState, p: Player, skip: Set<string>): Colony[] {
   const ranked = ownColonies(s, p)
     .filter((c) => isCoastal(s, c.x, c.y) && !skip.has(c.id))
     .map((c) => {
-      const report = colonyReport(s, c);
+      const report = aiColonyReport(s, c);
       const score = tradeGoods(s).reduce((n, g) => n + Math.max(0, c.goods[g] - keepFor(c, report, g)) + Math.max(0, report.net[g]) * 8, 0);
       return { c, score };
     })

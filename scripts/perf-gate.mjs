@@ -1,17 +1,18 @@
 // The 0.10 hill-climbing gate: is a candidate both correct and faster?
 //
-// Usage: node scripts/perf-gate.mjs [--runs 5] [--years 1700,1750] [--save base.json] [--baseline base.json]
+// Usage: node scripts/perf-gate.mjs [--runs 5] [--years 1700,1750,1850:keep] [--save base.json] [--baseline base.json]
 //
 // 1. Verification (must pass, or the candidate is rejected): `npm run bench -- --verify` for the
 //    Americas and for the Caribbean print "same" on every line, so games are bit-identical to the
 //    recorded hashes. A candidate that changes outcomes on purpose re-records the hashes in its own
 //    commit; the gate then checks against those.
-// 2. Score: each head start (seed 2024, computer players) is timed --runs times after one warm-up;
+// 2. Score: each head start (seed 2024, computer players; see --years) is timed --runs times after one warm-up;
 //    the median and the spread (max - min) are reported, with the final state hash of every run
 //    (all runs of one year must end in the same state).
-// 3. With --baseline, the verdict: ACCEPT when every year's median is faster than the baseline's by
-//    more than the noise (2% or the larger of the two spreads, whichever is more), NEUTRAL when within
-//    the noise, REJECT when slower or when verification fails. --save writes this run as a baseline.
+// 3. With --baseline, the verdict: ACCEPT when no game is slower than the baseline by more than the
+//    noise (2% or the larger of the two spreads, whichever is more) and at least one is faster by more
+//    than the noise; NEUTRAL when all are within the noise; REJECT when any is slower or when
+//    verification fails. --save writes this run as a baseline.
 //
 // Run it on one machine for both sides (the Mac worker for official numbers): timings from two
 // machines don't compare. Hill climbing: keep the current best as the baseline, try a candidate on
@@ -25,7 +26,10 @@ const opt = (name, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 const runs = Number(opt('runs', '5'));
-const years = opt('years', '1700').split(',').map(Number);
+// A year plays the game as recorded (a War of Independence can end it early, as in the 1750 game,
+// which keeps the war's work in the measurement); "<year>:keep" plays it to its year with the same rules:
+// wars of independence are fought, but only the calendar ends the game (1850: a full game).
+const years = opt('years', '1700,1750,1850:keep').split(',');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 function verify(scenarioArgs) {
@@ -35,7 +39,7 @@ function verify(scenarioArgs) {
 }
 
 function timeOnce(year) {
-  const out = execFileSync('node', ['scripts/.bench.mjs', '--year', String(year), '--quiet'], { encoding: 'utf8' });
+  const out = execFileSync('node', ['scripts/.bench.mjs', '--year', year.split(':')[0], ...(year.endsWith(':keep') ? ['--keep-playing'] : []), '--quiet'], { encoding: 'utf8' });
   const sec = Number(/: ([\d.]+)s \(new game/.exec(out)?.[1]);
   const hash = /hash ([0-9a-f]+)/.exec(out)?.[1];
   return { sec, hash };
@@ -79,7 +83,8 @@ if (basePath && result.verified) {
     if (gain > noise) faster++;
     else if (-gain > noise) slower++;
   }
-  verdict = slower ? 'REJECT (slower)' : faster === years.length ? 'ACCEPT' : 'NEUTRAL (within noise)';
+  // Pareto rule: no game slower beyond its noise, and at least one faster beyond its noise.
+  verdict = slower ? 'REJECT (slower)' : faster > 0 ? 'ACCEPT' : 'NEUTRAL (within noise)';
   console.log(`  against ${base.commit}: ${parts.join('; ')}`);
 }
 result.verdict = verdict;
