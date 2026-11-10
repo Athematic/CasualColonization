@@ -5,10 +5,10 @@ This file is the inbox for new ideas. Once we have discussed an idea, it moves t
 ## Tweaks
 
 - (On the roadmap: 0.8, tessellated terrain tiles.) Update tiles with tessellation (https://www.sandromaglione.com/articles/how-to-create-a-pixel-art-tileset-complete-guide + https://www.sandromaglione.com/articles/pixel-art-game-tileset-made-easier)
-- Consider adding one ore two branches for UI redesigns using Anthopics frontend-design skills
-- Consider adding more sprites to the UI
-- Terrain tesselation
-- Terrain variants (generate several sprite variants and either randomize or random+prevent-same-neighbors)
+- (On the roadmap: Later, interface redesign.) Consider adding one ore two branches for UI redesigns using Anthopics frontend-design skills
+- (On the roadmap: Later, more sprites in the interface.) Consider adding more sprites to the UI
+- (On the roadmap: 0.8, tessellated terrain tiles.) Terrain tesselation
+- (On the roadmap: 0.8, terrain variants.) Terrain variants (generate several sprite variants and either randomize or random+prevent-same-neighbors)
 
 ### AI intelligence too low
 

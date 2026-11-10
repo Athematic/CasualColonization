@@ -103,6 +103,7 @@ Closes the smaller items left from earlier releases while the classic game is co
 | Tune event rates and the computer players' event choices (one tournament with `--events`) | S | P2 | planned |
 | Tessellated terrain tiles: edge and corner pieces that blend neighbouring terrains, as a sprite-pack feature (Simon's idea, see CHANGE_SUGGESTIONS.md). Design and the `rules.transitions: 'overlay'` pack option are in ([design/tessellated-tiles.md](design/tessellated-tiles.md)), off by default; left: generate the 12 trial images (SPRITE_PROMPTS 4.8a), look at them on a map, then the other terrains | M | P2 | trial |
 | Seed phrases: the Game seed field also accepts text ("Peters Game"), hashed to a seed number, so a game is easy to share by name. Numbers keep working; the phrase is shown with the game and in saves. The same phrase gives the same world only with the same settings (map, nations, difficulty, options) and game version, so a share link or code could carry those too | S | P3 | idea (Simon) |
+| Terrain variants: several sprite variants per terrain (`terrain/<id>__v2` …), chosen per tile from the map position so neighbours rarely repeat (Simon's idea) | S | P2 | in progress |
 | Speed-ups that change outcomes (each 10–20%: follow a found route for the whole turn, sharper path estimate, re-plan colony workers less often, keep colony reports per computer turn); renderer performance pass | M | P3 | idea |
 
 ## 0.9: Scenario framework
@@ -138,6 +139,9 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
 | Specialised councils per scenario: each scenario has its own Founding Fathers counterpart (Australia: Legislative Council and Federation figures; Vinland: the Thing, with saga figures), with effects suited to the scenario and portraits in the same cameo prompt style (see design/scenarios.md, Specialised councils) | M | P1 | idea |
 
 ## Later
+
+- Interface redesign: one or two side branches that try a redesigned interface (panels, menus, screens) with a front-end design approach, compared side by side before choosing (Simon's idea).
+- More sprites in the interface: buttons, panel frames, icons and screen headers from the art set, through sprite pack interface CSS (Simon's idea).
 
 - More graphical styles as plugins. Sprite-based styles are packs of data (art, mapping from the game to sprite ids, draw rules) loaded by one generic sprite style plugin. Ligne claire (painted) is the first pack, and scenarios can bring their own.
   - Done: packs and styles can bring their own interface CSS (`css`, `cssFiles`, `fallbackCss: false`).
