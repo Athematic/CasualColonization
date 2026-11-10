@@ -137,6 +137,18 @@ Builds on 0.4.
 
 Each beta gets design notes first.
 
+Beta 1, cooperation between Europeans: design in [design/cooperation.md](design/cooperation.md) (C1–C11 decided by Simon, November 2026).
+
+| Item | Size | Prio | Status |
+| --- | --- | --- | --- |
+| Step 0: the `Treaty` record (kind, parties, terms, start, end); trade agreements and Favoured Nation moved into it (C9); the treaty list in Foreign Affairs | M | P1 | done: games behaviour-identical, hashes re-recorded for the new state layout only |
+| Step 1: alliances (unlocking after Favoured Nation, proposals and invitations, defensive pact, open colonies with garrisons and trade, shared sight, leaving with longer hostility; computer rules per level); `mechanics.alliances`, `Scenario.alliances`, `Scenario.ai.cooperation` | L | P1 | done; on in the Americas and the Caribbean (re-recorded once, `[outcomes]`). Shared bells wait for step 4 |
+| Step 2: `gameOver.winners`, the `concord` victory; game-over screen, arena and tournament tables | M | P1 | done: Americas 24 games, an alliance in 5, concord in 1; no alliance in the Caribbean yet (no Favoured Nation forms there) |
+| Step 3: chartered companies (`kind: 'company'` players, shares, dividends, company AI) | L | P1 | idea |
+| Step 4: joint expeditions and shared bells | S–M | P2 | idea |
+| Step 5: confederation, declaring independence together | M | P2 | idea |
+| Step 6: tuning with tournaments on the Mac (alliances, companies, concord's share, the Caribbean's cooperation), docs | M | P1 | idea |
+
 ## Scenarios (content)
 
 Scenario content, built on the 0.9 framework.

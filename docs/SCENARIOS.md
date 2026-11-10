@@ -35,7 +35,8 @@ If a change is meant to change games, re-record with `npm run test:golden:write`
 | `council` | The scenario's council (the Americas: the Continental Congress). `categories`, `members` (ids from the catalogue's `FATHERS`) and optional `effects` that replace a member's effects in this scenario. |
 | `ai` | What the computer players need to know: `pace`, `islands` and four goods lists. See [Computer players](#computer-players). |
 | `events` | The id of a registered event set. See [Events](#events). |
-| `mechanics` | Ten switches. See [Mechanics switches](#mechanics-switches). |
+| `mechanics` | Eleven switches. See [Mechanics switches](#mechanics-switches). |
+| `alliances` | Optional overrides of the alliance rules (`ALLIANCE_RULES` in `alliances.ts`): `peaceYears` and `volume`, the hidden thresholds that unlock an alliance between two Favoured Nations, and `waitingYears` and `hostilityYears` after leaving one. See [Alliances](#alliances). |
 | `victory` | The ways the game can end, in the order they are checked. See [Victory](#victory). |
 | `rumours` | The outcomes of a Lost City Rumour and their odds, in the order they are drawn. The Caribbean reuses the Americas' table. |
 | `difficulty`, `score` | Optional overrides, merged over the engine's `DIFFICULTY` table and `SCORE_WEIGHTS`. Fields and levels you leave out keep the engine's values. |
@@ -116,7 +117,7 @@ A council member's catalogue entry (`FATHERS`) carries its `modifiers` and `onJo
 
 ## Mechanics switches
 
-`Scenario.mechanics` has ten switches. A system that is off is skipped where it would run, draws no random numbers, has its commands refused with a reason, is left out of the computer players' plans and is hidden in the web game.
+`Scenario.mechanics` has eleven switches. A system that is off is skipped where it would run, draws no random numbers, has its commands refused with a reason, is left out of the computer players' plans and is hidden in the web game.
 
 | Switch | Meaning |
 | --- | --- |
@@ -130,6 +131,7 @@ A council member's catalogue entry (`FATHERS`) carries its `modifiers` and `onJo
 | `charter` | `false`, or the colony charter's `{ base, cap }`. It applies when the game uses the charter (`GameConfig.colonyCharter`). |
 | `customHouse` | The custom house can be built. |
 | `missions` | Missions and denouncing. |
+| `alliances` | Alliances between European nations: the rung after Favoured Nation, with a defensive pact, open colonies and shared sight. Absent means off. See [Alliances](#alliances). |
 
 The numbers of the Crown and the war (REF growth, demands, royal wars, mercenaries, intervention) are still code. Burial grounds and surrender are not switched.
 
@@ -140,7 +142,11 @@ The numbers of the Crown and the war (REF growth, demands, royal wars, mercenari
 - `time`: the game ends after the calendar's last turn; the highest score wins.
 - `independence-war`: winning the war ends the game with that winner; losing it ends the game once no person is left to play. With `GameConfig.playOn` the nation is finished instead and the others play on.
 
-A kind is a pure function of the state. The Americas use `[independence-war, time]`, the Caribbean `[time]`. `newGameOptions` shows the names on the New game screen. A new kind (Federation, survival) is registered in `victory.ts`; its texts come from `gameOver.*` terms.
+- `concord`: at the end of the calendar, an alliance whose members together hold more than `params.share` of the total score (default 0.65, `CONCORD_SHARE`) wins together; its members are the winners, ranked by their own score. List it before `time`.
+
+`gameOver.winners` lists every winner, best first (several after `concord`, none when nobody won); `gameOver.winner` is the first of them. A kind may return `winners`; otherwise they are its `winner`.
+
+A kind is a pure function of the state. The Americas use `[independence-war, concord, time]`, the Caribbean `[concord, time]`. `newGameOptions` shows the names on the New game screen. A new kind (Federation, survival) is registered in `victory.ts`; its texts come from `gameOver.*` terms.
 
 ## Computer players
 
@@ -148,11 +154,16 @@ A kind is a pure function of the state. The Americas use `[independence-war, tim
 
 - `pace` (absent means 1): how fast the game's arc runs against the Americas' 609 turns. The computer players' turn thresholds (when to explore, arm, start wars, plan independence) and the council's late-offer turn are scaled with `aiTurn(s, turn)`. Durations in turns (cooldowns, patience, war weariness) are not scaled, because a turn is the same half-year in every scenario that has seasons. The Caribbean uses 0.35.
 - `islands`: the land is islands, so when no good site is within walking distance the advanced levels send a settler by ship to another island.
+- `cooperation`: how readily the computer players cooperate, merged over `COOPERATION` in `alliances.ts`: `proposeAlliance` (0.5) and `acceptAlliance` (0.8), chances per review (every five turns) for the most cooperative level (Creative; the others take a share, Naive never proposes), and `joinWar` (0.8), how good a target an ally's enemy must be before a computer ally joins the war. The defaults aim at the targets in [design/cooperation.md](design/cooperation.md), C11: an alliance in about one computer-only game in four and a `concord` victory about once in 30–40. A scenario that wants more cooperation raises them (and may lower the thresholds in `Scenario.alliances`, or concord's `share`).
 - `goods`: four ordered lists, `trade`, `export`, `road` and `farm`. The order decides ties, so keep it deliberate. Name only goods in play.
 
 ## The arena and the tournament
 
 The arena (`packages/engine/src/arena.ts`) and `npm run tournament` play a scenario with `--scenario <id>`; nations rotate over the scenario's chosen set (`--rivals real|alternative`). Give `--turns` the length of the calendar (202 for the Caribbean), or the game ends early. `--play-on` lets the other nations finish the calendar after a War of Independence. Record a tournament reference in the design note when you add a scenario, as the Caribbean's is in [design/scenario-framework.md](design/scenario-framework.md), section 7.1.
+
+## Alliances
+
+With `mechanics.alliances` on, two nations that are each other's Favoured Nation can ally once they have had more years of peace and more trade between them (hidden thresholds drawn per pair from the seed, `Scenario.alliances`). An alliance is a treaty (`GameState.treaties`, `treaties.ts`) with two or more members: war on one member is war with all of them, allied units may enter, garrison and trade in each other's colonies, and allies share their sight. Leaving costs more than cancelling Favoured Nation. Two people can ally and leave at any time. The rules and their reasons are in [design/cooperation.md](design/cooperation.md), section 6. With the switch off nothing of it runs, the commands are refused and the web game hides the buttons; with it on, the `concord` victory can end the game with an alliance as the winners.
 
 ## Map settings and settlement kinds
 
