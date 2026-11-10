@@ -255,7 +255,7 @@ try {
         Assert-Equal 2 @($changed | Where-Object PromptChanged).Count 'the rewritten road prompts re-queue'
         $plan = @($all | Where-Object { $m['jobs'].Contains($_.Job.Key) -and $_.Job.Key -notin $rewritten })
         Assert-Equal 300 $plan.Count 'every other committed job is still in the list'
-        Assert-Equal 10 @($all | Where-Object { $_.Action -eq 'run' -and $_.Reason -eq 'new' }).Count 'the ten new covers are new jobs'
+        Assert-Equal 22 @($all | Where-Object { $_.Action -eq 'run' -and $_.Reason -eq 'new' }).Count 'the ten new covers and the twelve trial transition pieces are new jobs'
         foreach ($p in $plan) {
             Assert-Equal $m['jobs'][$p.Job.Key]['promptHash'] $p.Hash "$($p.Job.Key) prompt hash"
             Assert-True (-not $p.PromptChanged) "$($p.Job.Key) not changed"
