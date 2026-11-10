@@ -399,6 +399,7 @@ export class LigneClaireMapRenderer implements MapRenderer {
         if (nx >= s.map.width || ny >= s.map.height) continue;
         const n = s.map.tiles[ny * s.map.width + nx];
         if (TERRAIN[n.t].water || n.t === t.tile.t) continue;
+        if (this.hooks.hideBorder?.(t.x, t.y, nx, ny, z, s)) continue;
         if (edge === 'e') {
           ctx.moveTo(t.px + z, t.py);
           ctx.lineTo(t.px + z, t.py + z);

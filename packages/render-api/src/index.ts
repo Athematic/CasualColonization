@@ -108,6 +108,11 @@ export interface MapLayerHooks {
   water?(ctx: Ctx2D, t: LayerTile, z: number): boolean;
   /** The ground of a land tile. `shape` traces the renderer's outline of the tile (rounded towards water) as a path. */
   land?(ctx: Ctx2D, t: LayerTile, z: number, shape: () => void, state: Readonly<GameState>): boolean;
+  /**
+   * Whether the faint straight border line on the edge between two neighbouring land tiles (map coordinates) of different
+   * terrain is left out (true when the style draws its own blend there, so no grey line sits where the ground no longer changes).
+   */
+  hideBorder?(ax: number, ay: number, bx: number, by: number, z: number, state: Readonly<GameState>): boolean;
   /** Extra shore detail on the water, under the coastline. */
   shore?(ctx: Ctx2D, tiles: readonly LayerTile[], z: number, state: Readonly<GameState>): void;
   /** Plowed fields on a land tile (true also when `land` already showed them). */
