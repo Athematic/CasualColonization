@@ -110,7 +110,7 @@ export function classify(id) {
  * they would hide the tile underneath. (The image model sometimes returns them opaque.)
  */
 export function isGroundOverlay(id) {
-  return /^terrain\/coast__/.test(id) || /^decor\/road__/.test(id);
+  return /^terrain\/(coast|blend)__/.test(id) || /^decor\/road__/.test(id);
 }
 
 /**

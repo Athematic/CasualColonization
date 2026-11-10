@@ -623,6 +623,31 @@ FORMAT: A transparent square overlay for a top-down map tile, seen from DIRECTLY
 
 The renderer rotates `coast__*` and `road__spoke*` in 90° steps to cover all directions, using the same neighbour tests as `coastPath` and `drawRoads`.
 
+<!-- BEGIN trial: terrain transition pieces (tessellated tiles); delimited so it merges cleanly -->
+#### 4.8a Terrain transition pieces (TRIAL SET, 12 images)
+
+Trial set for the sprite pack option `rules.transitions: 'overlay'` (design: `docs/design/tessellated-tiles.md`). Where a terrain meets a lower-ranked one (order, lowest first: desert, tundra, savannah, plains, prairie, grassland, marsh, swamp), the higher one bleeds a band onto the lower tile. Each bleeding terrain needs the same three pieces as a coast band: edge, inner corner, outer corner, rotated in 90° steps. This trial covers savannah, plains, prairie and grassland (12 images, about $0.48 at $0.04 each). The art is not generated yet; packs fall back to the plain hard boundary until the files exist. The band's fill must be exactly the terrain's base colour so it merges with a full tile of that terrain.
+
+```category terrain-blend
+FORMAT: A transparent square overlay for a top-down map tile, seen from DIRECTLY ABOVE (orthographic). It is the bleed of a neighbouring terrain onto this tile, so it is only ever a flat band of that neighbour's base colour along one or two edges, or in one corner; everything else is fully transparent. No ink outline and no frame: the band's inner boundary is a single thin stroke in the darker motif colour, and the band's outer sides are cut perfectly straight along the image edges. Where a band reaches an image edge it must be exactly 20 percent deep there, so neighbouring tiles join without gaps or steps. No motifs, trees, units or shading.
+```
+
+| File | Size | BG | Prompt |
+| --- | --- | --- | --- |
+| `terrain/blend__savannah__edge` | 1024x1024 | transparent | Savannah band for a neighbouring tile with savannah to the NORTH: a straight band of flat #e4cd6e running the full width along the TOP edge, 20 percent of the tile deep at the left edge and at the right edge, exactly the same depth at both, so neighbouring pieces join; between them its lower boundary is a gentle, irregular, softly wavy line that stays within 16 to 25 percent of the tile depth, drawn as a thin stroke in #c9b461. Plain flat colour inside the band. The rest is transparent. |
+| `terrain/blend__savannah__inner` | 1024x1024 | transparent | Savannah band for a neighbouring tile with savannah to the NORTH and the WEST: an L-shaped band of flat #e4cd6e running along the full TOP edge and the full LEFT edge, 20 percent of the tile deep where it meets the far edges, the inner corner smoothly rounded; its inner boundary is a gentle, irregular, softly wavy line within 16 to 25 percent depth, drawn as a thin stroke in #c9b461. Plain flat colour inside the band. The rest is transparent. |
+| `terrain/blend__savannah__outer` | 1024x1024 | transparent | Savannah patch for a neighbouring tile with savannah only diagonally to the NORTH-WEST: a quarter-disc of flat #e4cd6e filling the TOP-LEFT corner, radius about 28 percent of the tile, its curved boundary a gentle, softly wavy thin stroke in #c9b461. Plain flat colour inside. The rest is transparent. |
+| `terrain/blend__plains__edge` | 1024x1024 | transparent | Plains band for a neighbouring tile with plains to the NORTH: a straight band of flat #cfe39a running the full width along the TOP edge, 20 percent of the tile deep at the left edge and at the right edge, exactly the same depth at both, so neighbouring pieces join; between them its lower boundary is a gentle, irregular, softly wavy line that stays within 16 to 25 percent of the tile depth, drawn as a thin stroke in #b6c888. Plain flat colour inside the band. The rest is transparent. |
+| `terrain/blend__plains__inner` | 1024x1024 | transparent | Plains band for a neighbouring tile with plains to the NORTH and the WEST: an L-shaped band of flat #cfe39a running along the full TOP edge and the full LEFT edge, 20 percent of the tile deep where it meets the far edges, the inner corner smoothly rounded; its inner boundary is a gentle, irregular, softly wavy line within 16 to 25 percent depth, drawn as a thin stroke in #b6c888. Plain flat colour inside the band. The rest is transparent. |
+| `terrain/blend__plains__outer` | 1024x1024 | transparent | Plains patch for a neighbouring tile with plains only diagonally to the NORTH-WEST: a quarter-disc of flat #cfe39a filling the TOP-LEFT corner, radius about 28 percent of the tile, its curved boundary a gentle, softly wavy thin stroke in #b6c888. Plain flat colour inside. The rest is transparent. |
+| `terrain/blend__prairie__edge` | 1024x1024 | transparent | Prairie band for a neighbouring tile with prairie to the NORTH: a straight band of flat #ecdc8e running the full width along the TOP edge, 20 percent of the tile deep at the left edge and at the right edge, exactly the same depth at both, so neighbouring pieces join; between them its lower boundary is a gentle, irregular, softly wavy line that stays within 16 to 25 percent of the tile depth, drawn as a thin stroke in #d0c27d. Plain flat colour inside the band. The rest is transparent. |
+| `terrain/blend__prairie__inner` | 1024x1024 | transparent | Prairie band for a neighbouring tile with prairie to the NORTH and the WEST: an L-shaped band of flat #ecdc8e running along the full TOP edge and the full LEFT edge, 20 percent of the tile deep where it meets the far edges, the inner corner smoothly rounded; its inner boundary is a gentle, irregular, softly wavy line within 16 to 25 percent depth, drawn as a thin stroke in #d0c27d. Plain flat colour inside the band. The rest is transparent. |
+| `terrain/blend__prairie__outer` | 1024x1024 | transparent | Prairie patch for a neighbouring tile with prairie only diagonally to the NORTH-WEST: a quarter-disc of flat #ecdc8e filling the TOP-LEFT corner, radius about 28 percent of the tile, its curved boundary a gentle, softly wavy thin stroke in #d0c27d. Plain flat colour inside. The rest is transparent. |
+| `terrain/blend__grassland__edge` | 1024x1024 | transparent | Grassland band for a neighbouring tile with grassland to the NORTH: a straight band of flat #a6d878 running the full width along the TOP edge, 20 percent of the tile deep at the left edge and at the right edge, exactly the same depth at both, so neighbouring pieces join; between them its lower boundary is a gentle, irregular, softly wavy line that stays within 16 to 25 percent of the tile depth, drawn as a thin stroke in #92be6a. Plain flat colour inside the band. The rest is transparent. |
+| `terrain/blend__grassland__inner` | 1024x1024 | transparent | Grassland band for a neighbouring tile with grassland to the NORTH and the WEST: an L-shaped band of flat #a6d878 running along the full TOP edge and the full LEFT edge, 20 percent of the tile deep where it meets the far edges, the inner corner smoothly rounded; its inner boundary is a gentle, irregular, softly wavy line within 16 to 25 percent depth, drawn as a thin stroke in #92be6a. Plain flat colour inside the band. The rest is transparent. |
+| `terrain/blend__grassland__outer` | 1024x1024 | transparent | Grassland patch for a neighbouring tile with grassland only diagonally to the NORTH-WEST: a quarter-disc of flat #a6d878 filling the TOP-LEFT corner, radius about 28 percent of the tile, its curved boundary a gentle, softly wavy thin stroke in #92be6a. Plain flat colour inside. The rest is transparent. |
+<!-- END trial: terrain transition pieces -->
+
 ### 4.9 Landscape decorations
 
 ```category decor
@@ -803,7 +828,7 @@ The game sets its own text in HTML over `caption-frame` and `title-emblem`. The 
 | Overlays | 1024×1024 | 128, @64, @32 | pennant about 0.24 × tile; flag about 0.3 × tile | 0.70 × 0.70, centred |
 | Goods and products | 1024×1024 | 128, @64, @32 | 18–30 px (colony and cargo), up to 56 px | 0.80 × 0.80, centred |
 | Terrain base tiles | 1024×1024 opaque | 256, @128, @64, @32 | 20–128 px per tile | none (full-bleed) |
-| Coast and road overlays | 1024×1024 | 256, @128, @64, @32 | 20–128 px per tile | none (edge-aligned) |
+| Coast, road and terrain-blend overlays | 1024×1024 | 256, @128, @64, @32 | 20–128 px per tile | none (edge-aligned) |
 | Decorations | 1024×1024 | 256, @128, @64, @32 | 0.7–0.95 × tile | 0.88 × 0.80, bottom at 0.90 |
 | Colonies | 1024×1024 | 256, @128, @64, @32 | 0.95 × tile | 0.80 × 0.80, bottom at 0.88 |
 | Stockade and fort | 1024×1024 | `__back` and `__front`, 256 and smaller | 0.95 × tile | none (keep aligned with colonies) |
@@ -818,7 +843,7 @@ Normalising means trimming the transparent margin, scaling uniformly so the subj
 - Names are engine ids in kebab-case: `id.replace(/[A-Z]/g, c => '-' + c.toLowerCase())`. Variants follow `__`.
 - Units: `units/<unit-type>__<role>.png`. Every unit type has `__none`; colonists also have `__soldier`, `__dragoon`, `__pioneer`, `__scout` and `__missionary` (none for `native-convert__missionary`).
 - Goods: `goods/<product-id>.png`, including `hammers`, `bells` and `crosses`.
-- Terrain: `terrain/<terrain-id>.png`, `terrain/<terrain-id>__plowed.png`, `terrain/coast__edge|inner|outer.png`.
+- Terrain: `terrain/<terrain-id>.png`, `terrain/<terrain-id>__plowed.png`, `terrain/coast__edge|inner|outer.png`, `terrain/blend__<terrain-id>__edge|inner|outer.png` (transition trial set, section 4.8a).
 - Decorations: `decor/forest__<terrain-id>.png`, `decor/hills.png`, `decor/mountains.png`, `decor/ruins.png`, `decor/bonus__<kind>.png`, `decor/road__hub|spoke|spoke-diagonal.png`.
 - Colonies: `colonies/colony__small|medium|large.png`, `colonies/stockade__back|front.png`, `colonies/fort__back|front.png`.
 - Settlements: `settlements/<tribe-id>.png`, `settlements/<tribe-id>__capital.png`.
