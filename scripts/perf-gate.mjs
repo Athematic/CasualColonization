@@ -1,12 +1,13 @@
 // The 0.10 hill-climbing gate: is a candidate both correct and faster?
 //
-// Usage: node scripts/perf-gate.mjs [--runs 5] [--years 1700,1750] [--save base.json] [--baseline base.json]
+// Usage: node scripts/perf-gate.mjs [--runs 5] [--years 1700,1850] [--save base.json] [--baseline base.json]
 //
 // 1. Verification (must pass, or the candidate is rejected): `npm run bench -- --verify` for the
 //    Americas and for the Caribbean print "same" on every line, so games are bit-identical to the
 //    recorded hashes. A candidate that changes outcomes on purpose re-records the hashes in its own
 //    commit; the gate then checks against those.
-// 2. Score: each head start (seed 2024, computer players) is timed --runs times after one warm-up;
+// 2. Score: each head start (seed 2024, computer players, with independence switched off so every
+//    game runs to its year: `bench --no-independence`) is timed --runs times after one warm-up;
 //    the median and the spread (max - min) are reported, with the final state hash of every run
 //    (all runs of one year must end in the same state).
 // 3. With --baseline, the verdict: ACCEPT when every year's median is faster than the baseline's by
@@ -25,7 +26,7 @@ const opt = (name, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 const runs = Number(opt('runs', '5'));
-const years = opt('years', '1700').split(',').map(Number);
+const years = opt('years', '1700,1850').split(',').map(Number);
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 function verify(scenarioArgs) {
@@ -35,7 +36,7 @@ function verify(scenarioArgs) {
 }
 
 function timeOnce(year) {
-  const out = execFileSync('node', ['scripts/.bench.mjs', '--year', String(year), '--quiet'], { encoding: 'utf8' });
+  const out = execFileSync('node', ['scripts/.bench.mjs', '--year', String(year), '--no-independence', '--quiet'], { encoding: 'utf8' });
   const sec = Number(/: ([\d.]+)s \(new game/.exec(out)?.[1]);
   const hash = /hash ([0-9a-f]+)/.exec(out)?.[1];
   return { sec, hash };
