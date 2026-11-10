@@ -268,9 +268,9 @@ TOMAH: The crab was very clear.
 
 **Panel 4.** Close on Fenwick, rueful, beginning to smile at himself despite everything.
 
-FENWICK: I have been an ass, Tomah.
+FENWICK: I have been a fool, Tomah.
 
-TOMAH: A wet one. That is the best kind. A wet ass learns quickly.
+TOMAH: A wet one. That is the best kind. A wet fool learns quickly.
 
 **Panel 5.** Fenwick stands and walks to Kahentinetha by the fire, hat in hand, crate under his arm. She watches him come with polite interest.
 
