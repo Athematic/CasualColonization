@@ -25,7 +25,7 @@ import { alliesGoHome, isToryColony, offerMercenaries, processRebellion, startRe
 import { lapseFavoured } from './relations.js';
 import { difficultyOf, mechanicsOf } from './scenarios/index.js';
 import { NATIONS, type NationId } from './rules/nations.js';
-import { finalScores } from './score.js';
+import { checkVictory, finishNation } from './victory.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
 
 /** Share of all colonists, across every colony, who support independence. */
@@ -216,7 +216,7 @@ function checkOutcome(s: GameState, p: Player): void {
     const text = `${NATIONS[p.id].name} has won the War of Independence! A new nation is born.`;
     message(s, text);
     noteHistory(s, 'independence', [p.id], text);
-    if (!s.gameOver) s.gameOver = { turn: s.turn, reason: text, winner: p.id, scores: finalScores(s) };
+    warEnded(s, p, 'won', text);
     return;
   }
   const held = Object.values(s.colonies).filter((c) => c.owner === p.id).length;
@@ -228,9 +228,17 @@ function checkOutcome(s: GameState, p: Player): void {
     const text = `The rebellion in ${NATIONS[p.id].name}'s colonies has been crushed.`;
     message(s, text);
     noteHistory(s, 'independence', [p.id], text);
-    const humansLeft = s.players.some((o) => o.human && o.independence !== 'lost');
-    if (!humansLeft && !s.gameOver) s.gameOver = { turn: s.turn, reason: text, scores: finalScores(s) };
+    warEnded(s, p, 'lost', text);
   }
+}
+
+/**
+ * A War of Independence is over: in arena play-on the nation is finished and the others play on;
+ * then the scenario's victory rules decide whether the game ends (victory.ts).
+ */
+function warEnded(s: GameState, p: Player, outcome: 'won' | 'lost', text: string): void {
+  if (s.config.playOn) finishNation(s, p);
+  checkVictory(s, { kind: 'warEnded', nation: p.id, outcome, text });
 }
 
 /** Once per round, for every nation at war with the Crown. */

@@ -1,6 +1,6 @@
 import { sellPrice } from './europe.js';
 import { sonsOfLiberty } from './production.js';
-import { AMERICAS_CALENDAR, buildingsOf, calendarOf, goodsOf, lastTurn, scoreWeightsOf } from './scenarios/index.js';
+import { AMERICAS_CALENDAR, buildingsOf, goodsOf, scoreWeightsOf } from './scenarios/index.js';
 import { hasTradeAgreement, isFavoured } from './relations.js';
 import { BUILDINGS } from './rules/buildings.js';
 import { UNIT_TYPES } from './rules/units.js';
@@ -110,18 +110,12 @@ export function score(s: GameState, p: Player, w: ScoreWeights = scoreWeightsOf(
   return scoreBreakdown(s, p, w).total;
 }
 
+/**
+ * Every European nation's score at the end: its score now, or, for a nation finished in arena
+ * play-on (victory.ts), the score it had when its War of Independence ended.
+ */
 export function finalScores(s: GameState): Partial<Record<Player['id'], number>> {
   const out: Partial<Record<Player['id'], number>> = {};
-  for (const p of s.players) if (p.id !== 'crown') out[p.id] = score(s, p);
+  for (const p of s.players) if (p.id !== 'crown') out[p.id] = p.finished ? p.finished.score : score(s, p);
   return out;
-}
-
-/** Ends the game when time runs out: after the last turn of the scenario's calendar. */
-export function checkTimeLimit(s: GameState): void {
-  if (s.gameOver) return;
-  const cal = calendarOf(s);
-  if (s.turn < lastTurn(cal)) return;
-  const scores = finalScores(s);
-  const winner = (Object.entries(scores) as [Player['id'], number][]).sort((a, b) => b[1] - a[1])[0]?.[0];
-  s.gameOver = { turn: s.turn, reason: `The year ${cal.end.year} has come and the age of colonization is over.`, winner, scores };
 }
