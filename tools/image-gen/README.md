@@ -85,6 +85,8 @@ pwsh ./tools/image-gen/Generate-Images.ps1 -Only 'units/free-colonist*'
 # 3. covers: explore cheaply, then the finals
 pwsh ./tools/image-gen/Generate-Images.ps1 -Doc boxart -Only 'front-*' -Quality low -Variants 3
 pwsh ./tools/image-gen/Generate-Images.ps1 -Doc boxart -Quality high -OutDir ./tools/image-gen/output-final
+# terrain variants: three takes of every ground tile (terrain/plains, terrain/plains__v2, __v3, ...); the sprite pack picks one per tile
+pwsh ./tools/image-gen/Generate-Images.ps1 -Variants 3 -Only 'terrain/*'
 # everything
 pwsh ./tools/image-gen/Generate-Images.ps1
 ```

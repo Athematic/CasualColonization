@@ -21,6 +21,7 @@ export * from './combat.js';
 export * from './turn.js';
 export * from './commands.js';
 export * from './game.js';
+export * from './seedphrase.js';
 export * from './fathers.js';
 export * from './diplomacy.js';
 export * from './independence.js';

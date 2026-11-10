@@ -13,6 +13,8 @@ export type MapSize = 'small' | 'medium' | 'large';
 
 export interface GameConfig {
   seed: number;
+  /** The text the seed was made from (seedFromPhrase), kept for display; the seed number is what counts. */
+  seedPhrase?: string;
   mapSize: MapSize;
   /** Id of a stored map (see STORED_MAPS); absent means a generated map. `mapSize` is then ignored. */
   map?: string;

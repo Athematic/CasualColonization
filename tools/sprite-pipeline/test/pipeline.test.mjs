@@ -109,6 +109,14 @@ test('classify picks the layout from the id', () => {
   assert.equal(classify('bible/style-bible').layout, null);
 });
 
+test('terrain variants (__v2, __v3 ...) are ordinary ids with the layout of their base', () => {
+  assert.equal(classify('terrain/plains__v2').layout, 'fullbleed');
+  assert.equal(classify('terrain/plains__plowed__v3').layout, 'fullbleed');
+  assert.equal(classify('decor/forest__plains__v2').layout, classify('decor/forest__plains').layout);
+  assert.equal(classify('decor/hills__v2').layout, classify('decor/hills').layout);
+  assert.equal(isGroundOverlay('terrain/plains__v2'), false);
+});
+
 // A Founding Father master on a 2:3 canvas: a head (or hat) from `top`, a body below it, feet at `feet`,
 // centred on `cx`, ink-outlined like the masters; `hat` adds a wider block on top of the head.
 function fatherImage({ w = 200, h = 300, top = 36, feet = 276, cx = 100, hat = 0 } = {}) {

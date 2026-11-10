@@ -102,16 +102,19 @@ Closes the smaller items left from earlier releases while the classic game is co
 | Wire in the new brave, damaged artillery and fortress sprites (once generated) | S | P2 | done (sprites appear once uploaded) |
 | Tune event rates and the computer players' event choices (one tournament with `--events`) | S | P2 | planned |
 | Tessellated terrain tiles: edge and corner pieces that blend neighbouring terrains, as a sprite-pack feature (Simon's idea, see CHANGE_SUGGESTIONS.md). Design and the `rules.transitions: 'overlay'` pack option are in ([design/tessellated-tiles.md](design/tessellated-tiles.md)), off by default; left: generate the 12 trial images (SPRITE_PROMPTS 4.8a), look at them on a map, then the other terrains | M | P2 | trial |
+| Seed phrases: the Game seed field also accepts text ("Peters Game"), hashed to a seed number, so a game is easy to share by name. Numbers keep working; the phrase is shown with the game and in saves. The same phrase gives the same world only with the same settings (map, nations, difficulty, options) and game version, so a share link or code could carry those too | S | P3 | done (seed phrases, game codes, share links and a QR code; Simon's idea) |
+| Terrain variants: several sprite variants per terrain (`terrain/<id>__v2` …), chosen per tile from the map position so neighbours rarely repeat (Simon's idea); `rules.variants` | S | P2 | done |
 | Speed-ups that change outcomes (each 10–20%: follow a found route for the whole turn, sharper path estimate, re-plan colony workers less often, keep colony reports per computer turn); renderer performance pass | M | P3 | idea |
 
 ## 0.9: Scenario framework
 
-Done before Beta, so the cooperation rules are scenario data from the start. See [design/scenarios.md](design/scenarios.md).
+Done before Beta, so the cooperation rules are scenario data from the start. See [design/scenarios.md](design/scenarios.md), and the detailed design for this release, [design/scenario-framework.md](design/scenario-framework.md) (status: design, to be agreed): an inventory of everything hard-wired to the Americas, the `Scenario` definition, games kept bit-identical, a proof scenario and a phased plan.
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | idea, agreed |
-| Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | idea, agreed |
+| Scenario framework: map, nations, peoples, goods, units, Congress figures, era, events and victory as a data package; the Americas become the first scenario | L | P1 | design ([scenario-framework.md](design/scenario-framework.md); proposed size XL) |
+| Each scenario offers a dedicated map or a generated one, and real rivals or alternative history | M | P1 | design (same note) |
+| Proof scenario that exercises the framework with little new art (proposed: The Caribbean, 1650–1750: the lesser powers) | M | P1 | design (same note, section 7) |
 
 ## Beta 1–2: Cooperation
 
@@ -137,6 +140,9 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
 | Specialised councils per scenario: each scenario has its own Founding Fathers counterpart (Australia: Legislative Council and Federation figures; Vinland: the Thing, with saga figures), with effects suited to the scenario and portraits in the same cameo prompt style (see design/scenarios.md, Specialised councils) | M | P1 | idea |
 
 ## Later
+
+- Interface redesign: one or two side branches that try a redesigned interface (panels, menus, screens) with a front-end design approach, compared side by side before choosing (Simon's idea).
+- More sprites in the interface: buttons, panel frames, icons and screen headers from the art set, through sprite pack interface CSS (Simon's idea).
 
 - More graphical styles as plugins. Sprite-based styles are packs of data (art, mapping from the game to sprite ids, draw rules) loaded by one generic sprite style plugin. Ligne claire (painted) is the first pack, and scenarios can bring their own.
   - Done: packs and styles can bring their own interface CSS (`css`, `cssFiles`, `fallbackCss: false`).
