@@ -121,7 +121,7 @@ Before Beta 1 (Simon, November 2026): the computer players' turns are slow, and 
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Profile a computer turn and a head start (to 1600, 1700) and set targets (head start to 1700 well under the current ~12 s). All timings run on the Mac worker (Simon's M2), from the jobs in [perf/MAC_WORKER.md](perf/MAC_WORKER.md) | S | P1 | in progress: jobs written, baseline next |
+| Profile a computer turn and a head start (to 1600, 1700) and set targets (head start to 1700 well under the current ~12 s). All timings run on the Mac worker (Simon's M2), from the jobs in [perf/MAC_WORKER.md](perf/MAC_WORKER.md) | S | P1 | done: baseline on the Mac worker ([results](perf/results/2026-11-10-job1-2270076.md)): head start to 1600 0.7 s, to 1700 6.6 s, to 1750 10.8 s; Caribbean to 1725 0.7 s; `npm test` 9.2 s; Americas tournament (8 × 609 turns, play-on) 318 s. Targets on the Mac: head start to 1700 at most 3.5 s, `npm test` at most 6 s, the same tournament at most 90 s. Hot spots: `colonyWorkers`, `unitsAt`, `findPath`, `optimiseWorkers` (26% together) |
 | Speed-ups that keep outcomes: caches and cheaper queries, checked bit-identical by the golden test and `bench -- --verify` | M | P1 | idea |
 | Speed-ups that change outcomes (each 10–20%: follow a found route for the whole turn, sharper path estimate, re-plan colony workers less often, keep colony reports per computer turn), hashes re-recorded once, tournament before and after | M | P1 | idea (moved from Later) |
 | Faster tests and tournaments: the slowest test files and the tournament runner (parallel games where the machine allows) | S | P2 | idea |
