@@ -61,6 +61,7 @@ Newest last. Each entry has an id; acknowledge it in your next report.
   - **Recorded hashes:** the fix changed the save text, so `scripts/bench-hashes.json` and the golden snapshots were re-recorded on purpose. The games themselves are unchanged. Don't compare hashes with older results.
   - **What to do:** re-baseline the best at this commit.
   - **The candidate:** `claude/0.10-candidate` is round 2 rebuilt on this best (all tests and both `bench --verify` pass), so gate it as in M8.
+- **M10 (2026-11-11):** round 2 (`8cc9e99`) is **accepted** and merged into the best. The next candidates are round 3 (colony worker planning and path search, bit-identical) and the grid abstraction (bit-identical). Gate them as usual when they appear.
 
 What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
 
