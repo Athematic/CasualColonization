@@ -31,6 +31,7 @@ import {
   type HistoryKind,
   type NationId,
   type ProductId,
+  goodsOf,
 } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h, type Child } from '../dom.js';
@@ -164,8 +165,8 @@ export function sortableTable<T>(id: string, columns: Column<T>[], rows: T[], re
 
 const KEY_PRODUCTS: ProductId[] = ['hammers', 'bells', 'crosses'];
 
-function topGoods(o: ColonyOverview, n: number): GoodId[] {
-  return (Object.keys(GOOD_DEFS) as GoodId[])
+function topGoods(o: ColonyOverview, n: number, goods: readonly GoodId[]): GoodId[] {
+  return goods
     .filter((g) => g !== 'food' && o.report.produced[g] > 0)
     .sort((a, b) => o.report.produced[b] - o.report.produced[a])
     .slice(0, n);
@@ -185,7 +186,7 @@ function coloniesTab(ctx: ReportContext): Child[] {
       cell: (r) => h('span', { class: r.food.net < 0 ? 'bad-text' : undefined }, signed(r.food.net), h('span', { class: 'muted small' }, r.food.turnsToGrow ? ` · grows in ${r.food.turnsToGrow}` : r.food.starving ? ' · starving' : '')) },
     { key: 'make', label: 'Production', title: 'Goods made per turn (top three), hammers, bells and crosses',
       cell: (r) => h('div', { class: 'report-chips' },
-        topGoods(r, 3).map((g) => goodChip(g, String(r.report.produced[g]))),
+        topGoods(r, 3, goodsOf(app.state)).map((g) => goodChip(g, String(r.report.produced[g]))),
         KEY_PRODUCTS.filter((p) => r.report.produced[p] > 0).map((p) => h('span', { class: 'report-chip', title: PRODUCT_NAMES[p] }, goodIcon(p, 18), String(r.report.produced[p])))) },
     { key: 'build', label: 'Building', title: 'What is being built and turns until it is done', sort: (r) => r.build?.turns ?? 9999,
       cell: (r) => r.build
@@ -256,7 +257,7 @@ function tradeTab(ctx: ReportContext): Child[] {
       sortableTable('trade', cols, rows, ctx.rerender, (r) => (r.boycotted ? 'boycott' : undefined)),
       h('p', { class: 'muted small' }, `Prices are sell / buy per unit before tax. ${partners.length ? 'Favoured Nation ports are shown at their own prices; green means they pay more than home. ' : ''}Sales are counted from the moment this report was added; games saved before start counting when loaded.`),
       // Each home port has its own character (rules/ports.ts): what it pays more for, what is cheap there.
-      [nation, ...partners].map((port) => h('p', { class: 'muted small port-character' }, portSummary(port) + '.'))),
+      [nation, ...partners].map((port) => h('p', { class: 'muted small port-character' }, portSummary(port, goodsOf(app.state)) + '.'))),
   ];
 }
 

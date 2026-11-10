@@ -1,7 +1,6 @@
 import {
   cargoRoomFor,
   GOOD_DEFS,
-  GOODS,
   incitePrice,
   NATIONS,
   nationTitle,
@@ -14,6 +13,7 @@ import {
   type GoodId,
   type NationId,
   type Unit,
+  goodsOf,
 } from '@cc/engine';
 import type { App } from '../app.js';
 import { h } from '../dom.js';
@@ -36,7 +36,7 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
     const visit = unit.trade && unit.trade.at === st.id && unit.trade.turn === s.turn ? unit.trade : undefined;
     const gold = app.me.gold;
     const options: Choice<Deal>[] = [];
-    for (const g of GOODS) {
+    for (const g of goodsOf(s)) {
       const n = Math.min(100, unit.cargo?.[g] ?? 0);
       if (n <= 0) continue;
       const offer = nativeOffer(st, g, n);
@@ -47,7 +47,7 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
         hint: visit?.sold ? 'You have already sold here this turn.' : offer <= 0 ? 'The natives have no gold left.' : undefined,
       });
     }
-    for (const r of settlementForSale(st).filter((o) => o.amount >= 10)) {
+    for (const r of settlementForSale(s, st).filter((o) => o.amount >= 10)) {
       const n = Math.min(100, r.amount, cargoRoomFor(s, unit, r.good));
       const each = nativeUnitPrice(st, r.good, unit.owner);
       const price = each * Math.max(1, n);

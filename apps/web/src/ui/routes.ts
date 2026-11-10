@@ -4,7 +4,6 @@ import {
   EUROPE_STOP,
   foreignStopColonies,
   GOOD_DEFS,
-  GOODS,
   isCoastal,
   isForeignStop,
   isShip,
@@ -27,6 +26,7 @@ import {
   type RouteStop,
   type TradeRoute,
   type Unit,
+  goodsOf,
 } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -191,7 +191,7 @@ export class RoutesScreen implements Screen {
           const v = (e.target as HTMLSelectElement).value as RouteStop['port'];
           set(v === owner ? undefined : v);
         } }, ports.map((port) => h('option', { value: port, selected: port === current }, `${portName(port)}${port === owner ? ' (home)' : ` (${NATIONS[port].adjective}, Favoured Nation)`}`)))),
-      h('span', { class: 'muted' }, ` ${portSummary(current)}.${current !== owner ? ` Sold and bought at ${NATIONS[current].adjective} prices and tax; colonists board only at home. If the partnership ends, the stop falls back to ${portName(owner)}.` : ''}`));
+      h('span', { class: 'muted' }, ` ${portSummary(current, goodsOf(s))}.${current !== owner ? ` Sold and bought at ${NATIONS[current].adjective} prices and tax; colonists board only at home. If the partnership ends, the stop falls back to ${portName(owner)}.` : ''}`));
   }
 
   /** One list of cargo rules with an amount each, and a picker to add more. */
@@ -216,12 +216,12 @@ export class RoutesScreen implements Screen {
               set(rules.map((o, j) => (j === k ? (v === '' ? { good: o.good } : { good: o.good, amount: Math.max(0, Math.floor(Number(v))) }) : o)));
             } })) : null,
         h('button', { class: 'btn tiny', disabled: !my, 'aria-label': `Stop ${label.toLowerCase()}ing ${GOOD_DEFS[r.good].name}`, onclick: () => set(rules.filter((_, j) => j !== k)) }, '✕'))),
-      h('select', { 'aria-label': `${label} a good`, disabled: !my || used.size === GOODS.length, onchange: (e: Event) => {
+      h('select', { 'aria-label': `${label} a good`, disabled: !my || used.size === goodsOf(this.app.state).length, onchange: (e: Event) => {
         const g = (e.target as HTMLSelectElement).value as GoodId;
         if (g) set([...rules, { good: g }]);
       } },
         h('option', { value: '' }, '+ good'),
-        GOODS.filter((g) => !used.has(g)).map((g) => h('option', { value: g }, GOOD_DEFS[g].name))));
+        goodsOf(this.app.state).filter((g) => !used.has(g)).map((g) => h('option', { value: g }, GOOD_DEFS[g].name))));
   }
 
   private pick(routeId: string): void {

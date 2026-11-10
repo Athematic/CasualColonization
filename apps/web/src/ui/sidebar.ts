@@ -18,7 +18,6 @@ import {
   score,
   nextFatherCost,
   GOOD_DEFS,
-  GOODS,
   isShip,
   maxMoves,
   NATIONS,
@@ -35,6 +34,7 @@ import {
   type GameState,
   type NationId,
   type Unit,
+  goodsOf,
 } from '@cc/engine';
 import { riverCourse, traceStrand } from '@cc/render-api';
 import type { App } from '../app.js';
@@ -191,7 +191,7 @@ export class Sidebar {
     const tile = pos && tileAt(s, pos.x, pos.y);
     const def = UNIT_TYPES[u.type];
     const aboard = unitsAboard(s, u);
-    const cargo = GOODS.filter((g) => (u.cargo?.[g] ?? 0) > 0);
+    const cargo = goodsOf(s).filter((g) => (u.cargo?.[g] ?? 0) > 0);
     const route = u.route && s.routes?.[u.route.id];
     const orders = u.repair ? `Under repair (${u.repair} turns)` : route ? `Trade route: ${route.name}${route.stops.length ? `, next ${routeStopName(s, route.stops[u.route!.stop % route.stops.length], route.owner)}` : ''}` : u.roadTo ? `Building a road to ${u.roadTo.x},${u.roadTo.y}` : u.work ? `Working (${u.work.kind}, ${u.work.turnsLeft} turns)` : u.dest ? ('europe' in u.dest ? (u.dest.port ? `Sailing for ${portName(u.dest.port)}` : 'Sailing for Europe') : `Going to ${u.dest.x},${u.dest.y}`) : u.state === 'fortified' ? 'Fortified' : u.state === 'sentry' ? 'Sentry' : 'Awaiting orders';
     const mine = u.owner === app.viewer;

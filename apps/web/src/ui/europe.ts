@@ -10,15 +10,12 @@ import {
   cargoFree,
   describeForce,
   GOOD_DEFS,
-  GOODS,
   isShip,
   NATIONS,
-  PURCHASABLE,
   recruitPrice,
   trainPrice,
   ROLES,
   sellPrice,
-  TRAINABLE,
   unitName,
   unitsAboard,
   UNIT_TYPES,
@@ -27,6 +24,8 @@ import {
   type Player,
   type RoleId,
   type Unit,
+  goodsOf,
+  unitsOf,
 } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -88,7 +87,7 @@ export class EuropeScreen implements Screen {
           : `${NATIONS[port].adjective} home port (Favoured Nation) · Gold ${me.gold.toLocaleString()} · ${NATIONS[port].adjective} tax ${host.tax}%`),
         me.pendingTax ? h('button', { class: 'btn small', onclick: () => void this.app.answerPending() }, 'Answer the tax raise') : null,
         h('button', { class: 'btn close', onclick: () => this.app.closeScreen(), 'aria-label': 'Close Europe' }, 'Close')),
-      h('p', { class: 'muted small port-character', title: 'Each home port has its own prices, depth of market and ship prices.' }, `${portSummary(port)}.`),
+      h('p', { class: 'muted small port-character', title: 'Each home port has its own prices, depth of market and ship prices.' }, `${portSummary(port, goodsOf(this.app.state))}.`),
       h('p', { class: 'muted small royal-forces', title: 'The Royal Expeditionary Force the Crown holds against a rebellion. It grows during the game, faster as your colonies ring more liberty bells, and sails if you declare independence.' },
         `Royal forces: ${describeForce(me.ref)}.`),
       views.length > 1 ? h('div', { class: 'port-tabs', role: 'tablist', 'aria-label': 'Ports' }, views.map((p) =>
@@ -114,7 +113,7 @@ export class EuropeScreen implements Screen {
     const home = host.id === me.id;
     return h('div', { class: 'card market' },
       h('h3', null, ship ? `Market — buying for ${unitName(ship)}` : 'Market'),
-      h('div', { class: 'goods market-goods' }, GOODS.map((g) => {
+      h('div', { class: 'goods market-goods' }, goodsOf(this.app.state).map((g) => {
         const carried = ship?.cargo?.[g] ?? 0;
         if (home && me.boycotts[g]) {
           const owed = arrears(me, g);
@@ -137,7 +136,7 @@ export class EuropeScreen implements Screen {
 
   /** In a Favoured Nation partner's port: merchant ships at its prices (no warships, artillery or colonists). */
   private partnerShipyard(host: Player): HTMLElement {
-    const list = PURCHASABLE.filter(buyableInPartnerPort);
+    const list = unitsOf(this.app.state).purchasable.filter(buyableInPartnerPort);
     return h('div', { class: 'card recruit' },
       h('h3', null, `Shipyard of ${portName(host.id)}`),
       h('div', { class: 'offers' }, list.map((type) => this.offer(type, trainPrice(host, type), () => this.dispatch({ type: 'train', unitType: type, port: host.id })))),
@@ -157,7 +156,7 @@ export class EuropeScreen implements Screen {
         icon({ kind: 'unit', type: ship.type, role: 'none', nation: ship.owner }, 40), `${unitName(ship)} (${ship.repair ? `repairing, ${ship.repair} turns` : `${cargoFree(s, ship)} free`})`),
       h('div', { class: 'chips' },
         unitsAboard(s, ship).map((u) => this.unitChip(u)),
-        GOODS.filter((g) => (ship.cargo?.[g] ?? 0) > 0).map((g) => h('span', { class: 'chip' }, icon({ kind: 'product', product: g }, 22), ship.cargo![g]))),
+        goodsOf(s).filter((g) => (ship.cargo?.[g] ?? 0) > 0).map((g) => h('span', { class: 'chip' }, icon({ kind: 'product', product: g }, 22), ship.cargo![g]))),
       h('button', { class: 'btn small primary', disabled: !!ship.repair, onclick: () => this.dispatch({ type: 'sailToAmerica', unitId: ship.id }) }, 'Sail to the New World'));
   }
 
@@ -194,7 +193,8 @@ export class EuropeScreen implements Screen {
         h('p', { class: 'muted small' }, `Crosses ${me.crosses}/${me.crossesRequired}: when full, the next immigrant comes for free. Recruiting now costs ${price}.`),
         me.recruitPool.map((type, slot) => this.offer(type, price, () => this.dispatch({ type: 'recruit', slot }))));
     } else {
-      const list = this.tab === 'train' ? TRAINABLE : PURCHASABLE;
+      const offer = unitsOf(this.app.state);
+      const list = this.tab === 'train' ? offer.trainable : offer.purchasable;
       content = h('div', { class: 'offers' }, list.map((type) => this.offer(type, trainPrice(me, type), () => this.dispatch({ type: 'train', unitType: type }))));
     }
     return h('div', { class: 'card recruit' }, tabs, content);
