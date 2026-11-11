@@ -252,7 +252,7 @@ export function peopleTreatyProblem(s: GameState, nation: NationId, people: Trib
   if (peopleTreatyBetween(s, kind, nation, people)) return `You already have ${KIND_TEXT[kind]} with the ${name}.`;
   if (pendingOffer(s, nation, people)) return `The ${name} are waiting for your answer to their own offer.`;
   if (peopleWaiting(s, nation, people) || peopleHostile(s, nation, people)) return `The ${name} do not trust you again yet.`;
-  if (!peopleTradeUnlocked(s, nation, people)) return `The ${name} do not know you well enough yet: it takes more years of good relations and more trade with them.`;
+  if (!peopleTradeUnlocked(s, nation, people)) return `The ${name} do not know you well enough yet: it takes more years of good relations${peopleTreatyRules(s).trade.volume.max > 0 ? ' and more trade with them' : ''}.`;
   return null;
 }
 

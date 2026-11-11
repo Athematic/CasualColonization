@@ -1245,6 +1245,10 @@ button.good:not(:disabled):hover {
   overflow-y: auto;
 }
 
+.card.natives td:first-child {
+  white-space: nowrap;
+}
+
 .fathers {
   margin: 0.4rem 0 0;
   padding-left: 1.1rem;

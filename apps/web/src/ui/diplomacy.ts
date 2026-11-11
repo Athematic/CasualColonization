@@ -39,6 +39,7 @@ import {
   peopleTradeBenefits,
   peopleTreatiesOn,
   peopleTreatyProblem,
+  peopleTreatyRules,
   tensionLabel,
   tensionSeverity,
   term,
@@ -247,7 +248,7 @@ export class DiplomacyScreen implements Screen {
         treaties ? h('td', { class: 'small' },
           inForce.length ? inForce.map((x) => treatyName(x)).join(', ') : null,
           !inForce.length && contact && !war
-            ? h('button', { class: 'btn tiny', 'data-action': 'propose-people-trade', disabled: !!why || !app.isMyTurn(), title: why ?? `Offer the ${name} a trade treaty: ${peopleTradeBenefits(s)}.`, onclick: () => app.dispatch({ type: 'proposePeopleTreaty', people: t.id }) }, 'Propose trade treaty')
+            ? h('button', { class: 'btn tiny', 'data-action': 'propose-people-trade', disabled: !!why || !app.isMyTurn(), title: why ?? `Offer the ${name} a trade treaty: ${peopleTradeBenefits(s)}.`, 'aria-label': `Propose a trade treaty to the ${name}`, onclick: () => app.dispatch({ type: 'proposePeopleTreaty', people: t.id }) }, 'Propose')
             : !inForce.length ? '—' : null) : null,
         h('td', null, String(missions)),
         h('td', null, h('div', { class: 'row' }, [100, 500].map((gold) =>
@@ -262,7 +263,7 @@ export class DiplomacyScreen implements Screen {
       folded.length ? h('details', null, h('summary', { class: 'small' }, `Seen, not yet met (${folded.length})`), h('div', { class: 'table-scroll' }, h('table', { class: 'table' }, head(), folded.map(row)))) : null,
       !rows.length ? h('p', { class: 'muted small' }, 'You have not met any native peoples yet.') : null,
       h('p', { class: 'muted small' }, 'Colonies near native land raise tension, especially as they grow. Trade, gifts and missions calm it; uneasy tribes demand tribute, angry ones raid and furious ones go to war.'),
-      treaties ? h('p', { class: 'muted small' }, `After years of good relations and trade, a people you have met (a scout’s visit, a mission or trade) may agree to a trade treaty, or offer one through a visiting brave: ${peopleTradeBenefits(s)}. Taking a partner’s land, attacking it or paying it to make war breaks faith: every treaty with that people ends, and it will not trust you again for many years.`) : null);
+      treaties ? h('p', { class: 'muted small' }, `After years of good relations${peopleTreatyRules(s).trade.volume.max > 0 ? ' and trade' : ''}, a people you have met (a scout’s visit, a mission or trade) may agree to a trade treaty, or offer one through a visiting brave: ${peopleTradeBenefits(s)}. Taking a partner’s land, attacking it or paying it to make war breaks faith: every treaty with that people ends, and it will not trust you again for many years.`) : null);
   }
 
   /**
