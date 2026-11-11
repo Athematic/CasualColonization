@@ -216,7 +216,8 @@ export type ImprovementKind = 'plow' | 'road' | 'clear';
 
 export interface Unit {
   id: string;
-  owner: NationId;
+  /** Who owns the unit. Read-only: change it with setUnitOwner (unitindex.ts), which keeps the unit index up to date. */
+  readonly owner: NationId;
   type: UnitTypeId;
   role: RoleId;
   /** Tools carried by a pioneer. */

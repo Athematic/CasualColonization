@@ -23,6 +23,7 @@ import type { Colony, GameState, Player, RouteCargo, RouteStop, TradeRoute, Unit
 import { ownColonies, safely } from './common.js';
 import { portNet, wagonSteps } from './foreign.js';
 import { buyFromNatives } from './natives.js';
+import { indexedUnitsOf, ownedUnitsView } from '../unitindex.js';
 
 /** Goods worth carrying away from a colony to sell. */
 /** Goods ships move between colonies and sell, most valuable first (the scenario's `ai.goods.trade`). */
@@ -132,7 +133,7 @@ export function wantsWagon(s: GameState, p: Player, c: Colony): boolean {
   // The colony with the most hammers builds wagon trains for its neighbours; failing one, a colony builds its own.
   if (yard ? yard !== c.id : !waiting.has(c.id)) return false;
   const colonies = ownColonies(s, p);
-  const idle = Object.values(s.units).filter((u) => u.owner === p.id && isWagon(u) && !u.route).length;
+  const idle = ownedUnitsView(s, p.id).filter((u) => isWagon(u) && !u.route).length;
   const building = colonies.filter((o) => o.id !== c.id && o.build?.kind === 'unit' && o.build.id === 'wagonTrain').length;
   return idle + building < Math.ceil(waiting.size / 2);
 }
@@ -192,7 +193,7 @@ export function manageLogistics(s: GameState, p: Player): void {
     }
     if (review) safely(() => refreshRoute(s, p, r, users));
   }
-  for (const u of Object.values(s.units)) {
+  for (const u of indexedUnitsOf(s, p.id)) {
     if (u.owner !== p.id || u.route) continue;
     if (isWagon(u) && u.loc.kind === 'map') safely(() => routeWagon(s, p, u));
   }
@@ -669,7 +670,7 @@ function busiestPorts(s: GameState, p: Player, skip: Set<string>): Colony[] {
  * colonists and supplies and picks up wherever goods are waiting.
  */
 function routeShips(s: GameState, p: Player): void {
-  const ships = Object.values(s.units).filter((u) => u.owner === p.id && isCargoShip(u) && !u.repair);
+  const ships = ownedUnitsView(s, p.id).filter((u) => isCargoShip(u) && !u.repair);
   const free = ships.filter((u) => !u.route);
   if (free.length < 2) return;
   const candidate = free.find((u) => (u.loc.kind === 'map' || u.loc.kind === 'europe') && !unitsAboard(s, u).length && !u.dest && !p.aiMemory?.triangle?.[u.id]);
