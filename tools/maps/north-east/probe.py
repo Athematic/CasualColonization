@@ -1,5 +1,5 @@
 import json, math, sys
-D = '/tmp/claude-0/-home-user-CasualColonization/b9a40597-a79c-5e47-82fb-9e655e0414a5/scratchpad/ne/'
+D = __import__('os').path.dirname(__import__('os').path.abspath(__file__)) + '/'
 rows = json.load(open(D + 'terrain.json'))['rows']
 COL = 0.25 / math.cos(math.radians(49.25))
 pts = [(-63.6, 58.4), (-73.93, 44.11), (-71.3, 44.27), (-65.95, 48.95), (-68.92, 45.9),

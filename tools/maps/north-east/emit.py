@@ -1,6 +1,6 @@
 """Step 5: writes packages/engine/src/maps/north-east.ts from the steps before."""
 import json, math, sys
-D = '/tmp/claude-0/-home-user-CasualColonization/b9a40597-a79c-5e47-82fb-9e655e0414a5/scratchpad/ne/'
+D = __import__('os').path.dirname(__import__('os').path.abspath(__file__)) + '/'
 OUT = sys.argv[1]
 rows = json.load(open(D + 'terrain.json'))['rows']
 reg = json.load(open(D + 'regions.json'))

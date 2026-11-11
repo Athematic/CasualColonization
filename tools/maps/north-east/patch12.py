@@ -1,4 +1,4 @@
-D = '/tmp/claude-0/-home-user-CasualColonization/b9a40597-a79c-5e47-82fb-9e655e0414a5/scratchpad/ne/'
+D = __import__('os').path.dirname(__import__('os').path.abspath(__file__)) + '/'
 p = '/home/user/CasualColonization/.claude/worktrees/agent-a6bf0b8e558ac5fa7/docs/design/native-nations.md'
 s = open(p).read()
 sec = open(D + 'section13.md').read().replace('(measured: 27 of 27 colonies in one game)', '(measured: 16 of 16 colonies in one game)')

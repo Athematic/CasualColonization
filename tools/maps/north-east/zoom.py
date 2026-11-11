@@ -1,6 +1,6 @@
 import json, sys, math
 import numpy as np
-D = '/tmp/claude-0/-home-user-CasualColonization/b9a40597-a79c-5e47-82fb-9e655e0414a5/scratchpad/ne/'
+D = __import__('os').path.dirname(__import__('os').path.abspath(__file__)) + '/'
 rows = json.load(open(D + 'terrain.json'))['rows']
 f = np.load(D + 'frac.npy')
 x0, x1, y0, y1 = map(int, sys.argv[1:5])

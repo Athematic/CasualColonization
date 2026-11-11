@@ -5,7 +5,7 @@ from shapely.geometry import shape, box
 from shapely.ops import unary_union
 import shapely
 
-D = '/tmp/claude-0/-home-user-CasualColonization/b9a40597-a79c-5e47-82fb-9e655e0414a5/scratchpad/ne/'
+D = __import__('os').path.dirname(__import__('os').path.abspath(__file__)) + '/'
 LON0, LAT0 = -82.0, 58.5
 ROW = 0.25
 COL = ROW / math.cos(math.radians(49.25))
