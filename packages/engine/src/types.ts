@@ -388,11 +388,14 @@ export interface Colony {
 
 /**
  * The land's regions (land.ts). A region is a square of `size` tiles (the map cut in `cols`
- * columns) until step 8's map brings regions of its own; arrays are indexed by region.
+ * columns), or, on a stored map with regions of its own (the North-east), the region its grid
+ * names (`map`); arrays are indexed by region.
  */
 export interface LandState {
   size: number;
   cols: number;
+  /** The stored map whose regions these are (`StoredMap.regions`); missing means squares. */
+  map?: string;
   /** Health per region, 0–100, starting at 100; only with land health. */
   health?: number[];
   /** Furs and game taken in each region so far this year; only with land health. */

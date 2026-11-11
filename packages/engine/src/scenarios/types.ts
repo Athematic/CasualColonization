@@ -524,6 +524,11 @@ export interface StoredMapEntry {
   id: string;
   /** Each people's regions and the number of settlements in each; only the scenario's peoples. */
   peoples: PeopleRegion[];
+  /**
+   * Land health (native-nations.md T10): furs and game each of the map's regions (`StoredMap.regions`,
+   * by id) gives back in a year without wearing. A region not listed has `landHealth.renewal`.
+   */
+  renewal?: Record<string, number>;
 }
 
 /** Where a people lives on a stored map: an inclusive tile rectangle and the number of settlements in it. */
@@ -532,6 +537,18 @@ export interface PeopleRegion {
   /** [x0, y0, x1, y1], inclusive. */
   region: [number, number, number, number];
   count: number;
+  /**
+   * The year the people comes to this region (native-nations.md T20: the Inuit reaching Labrador),
+   * if after the game's first: its settlements are placed at the start of that year
+   * (peoplemoves.ts). Missing means from the start.
+   */
+  from?: number;
+  /**
+   * The year the people is no longer found in this region (the Dorset in Labrador, the St. Lawrence
+   * Iroquoians): at the start of that year its settlements there leave the map, unless the people
+   * plays (its towns are its player's). Missing means it stays.
+   */
+  until?: number;
 }
 
 /** Bonus resources and Lost City Rumours scattered over a new map: the chance per tile. */
@@ -748,7 +765,7 @@ export interface PlayablePeople {
  * score weights over the scenario's (`score`) and its own params for the peoples' victory kinds
  * (`victory`, by kind id: `continuity`, `good-life`), over the scenario's victory entry.
  */
-export type PeopleOverride = Partial<Pick<PeopleDef, 'skills' | 'wants' | 'temperament'>> & {
+export type PeopleOverride = Partial<Pick<PeopleDef, 'skills' | 'wants' | 'temperament' | 'storeYears'>> & {
   score?: Partial<ScoreWeights>;
   victory?: Partial<Record<string, Record<string, number>>>;
 };
@@ -838,6 +855,13 @@ export interface ScenarioAi {
    * turns (cooldowns, patience, war weariness) are not. Absent means 1.
    */
   pace?: number;
+  /**
+   * The thresholds are dates (Beta 3 step 8): a threshold tuned for the Americas is read as the
+   * Americas' year of that turn, and becomes the turn of the same year in this scenario's calendar
+   * (`aiTurn`), whatever its first year. For a game that starts long before the Europeans arrive
+   * (the North-east, from 1000), so their plans keep to the Americas' dates. `pace` is then not read.
+   */
+  dates?: boolean;
   /**
    * The land is islands: when no good site lies within walking distance, the advanced computer
    * players send a settler by ship to a site on another island (ai/advanced.ts). Absent: settlers

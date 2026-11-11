@@ -54,7 +54,10 @@ export type FatherId =
   | 'warLeaders'
   | 'speakers'
   | 'garakontie'
-  | 'thayendanegea';
+  | 'thayendanegea'
+  // The North-east's people's council (scenarios/north-east.ts; native-nations.md section 13).
+  | 'membertou'
+  | 'kondiaronk';
 
 export interface FatherDef {
   id: FatherId;
@@ -209,7 +212,7 @@ Object.assign(FATHERS, {
   // fields, and named (and could remove) the clans' chiefs.
   clanMothers: role('clanMothers', 'The Clan Mothers', 'household', 'A town needs 160 food above its reserve for a birth, not 200.',
     'Dean R. Snow, The Iroquois (Blackwell, 1994); National Museum of the American Indian, Haudenosaunee Guide for Educators (Smithsonian Institution, 2009)', {
-      peoples: ['iroquois'],
+      peoples: ['iroquois', 'haudenosaunee'],
       modifiers: [{ hook: 'foodToGrow', set: 160 }],
     }),
   // Food dried, smoked and put by in pits and bark-lined stores for winter and hard years (T10).
@@ -266,17 +269,34 @@ Object.assign(FATHERS, {
   // Garakontié (d. 1676), Onondaga leader who worked for peace between the Haudenosaunee and New
   // France in the 1660s and 1670s.
   garakontie: f('garakontie', 'Garakontié', 'peace', 'Every war you are in ends in peace.', 3, {
-    peoples: ['iroquois'],
+    peoples: ['iroquois', 'haudenosaunee'],
     portrait: 'emblem',
     source: 'Dictionary of Canadian Biography, vol. 1 (University of Toronto Press, 1966), "Garakontié, Daniel"',
     onJoin: [{ kind: 'makePeace' }],
   }),
   // Thayendanegea (Joseph Brant, 1743–1807), Mohawk leader in the American Revolution and after.
   thayendanegea: f('thayendanegea', 'Thayendanegea (Joseph Brant)', 'defence', 'Warriors fight 50% harder.', 3, {
-    peoples: ['iroquois'],
+    peoples: ['iroquois', 'haudenosaunee'],
     portrait: 'emblem',
     source: 'Isabel Thompson Kelsay, Joseph Brant, 1743–1807: Man of Two Worlds (Syracuse University Press, 1984)',
     modifiers: [{ hook: 'unitOffence', unit: 'warrior', mul: 1.5 }],
+  }),
+  // ---- The North-east, 1000–1850 (Beta 3 step 8), each offered only to its own people ----
+  // Membertou (d. 1611), Mi'kmaw sakmow (chief) at Port-Royal, who welcomed the French settlement of
+  // 1605 and kept peace with it until his death.
+  membertou: f('membertou', 'Membertou', 'peace', 'Players at war with you always accept peace.', 3, {
+    peoples: ['mikmaq'],
+    portrait: 'emblem',
+    source: 'Dictionary of Canadian Biography, vol. 1 (University of Toronto Press, 1966), "Membertou"',
+    modifiers: [{ hook: 'peaceAccepted' }],
+  }),
+  // Kondiaronk (d. 1701), Wendat leader at Michilimackinac, who worked for the Great Peace of
+  // Montreal (1701) and died during its council.
+  kondiaronk: f('kondiaronk', 'Kondiaronk', 'peace', 'Every war you are in ends in peace.', 3, {
+    peoples: ['wendat'],
+    portrait: 'emblem',
+    source: 'Dictionary of Canadian Biography, vol. 2 (University of Toronto Press, 1969), "Kondiaronk"; Gilles Havard, The Great Peace of Montreal of 1701 (McGill-Queen\'s University Press, 2001)',
+    onJoin: [{ kind: 'makePeace' }],
   }),
 } satisfies Partial<Record<FatherId, FatherDef>>);
 

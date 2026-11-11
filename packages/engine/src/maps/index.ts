@@ -30,6 +30,7 @@ import { randInt } from '../rng.js';
 import { gridIn } from '../grid.js';
 import { parseRivers } from '../rivers.js';
 import { entryPoints, newSettlement, settlementGround, sprinkleExtras, type EntrySide, type GeneratedWorld } from '../mapgen.js';
+import { firstYear } from '../scenarios/calendar.js';
 import type { GameMap, Settlement, Tile } from '../types.js';
 import { AMERICAS } from '../scenarios/americas.js';
 import { nativeRulesIn, peopleIn, settlementKindIn } from '../scenarios/index.js';
@@ -38,6 +39,7 @@ import { americas } from './americas.js';
 import { australia } from './australia.js';
 import { caribbean } from './caribbean.js';
 import { northAmerica } from './north-america.js';
+import { northEast } from './north-east.js';
 import { southAmerica } from './south-america.js';
 
 /** Where a people lives on a stored map (scenarios/types.ts PeopleRegion). */
@@ -58,9 +60,27 @@ export interface StoredMap {
    * Ships can sail to Europe from any high seas tile either way.
    */
   entrySide?: EntrySide;
+  /**
+   * The land's regions (native-nations.md T10 and T19: land health, hard years, epidemics), drawn
+   * as a second grid of the same size, one character per tile naming its region in `list`. Every
+   * tile belongs to one, water included (a coast's waters share its land's years). Optional: a map
+   * without regions is cut into squares (land.ts). Renewal rates are the scenario's
+   * (`StoredMapEntry.renewal`).
+   */
+  regions?: { rows: string; list: MapRegion[] };
 }
 
-export const STORED_MAPS: StoredMap[] = [northAmerica, southAmerica, americas, australia, caribbean];
+/** A region of a stored map (`StoredMap.regions`). */
+export interface MapRegion {
+  /** Its character in the region grid. */
+  char: string;
+  /** Stable id, the key of a scenario's renewal rates. */
+  id: string;
+  /** Its name, for the interface (land health in words, T10). */
+  name: string;
+}
+
+export const STORED_MAPS: StoredMap[] = [northAmerica, southAmerica, americas, australia, caribbean, northEast];
 
 export function storedMap(id: string): StoredMap {
   const def = STORED_MAPS.find((m) => m.id === id);
@@ -92,6 +112,39 @@ export function parseStoredMap(def: StoredMap): GameMap {
   return map;
 }
 
+/** The characters a region grid may use, in order (a map has at most 62 regions). */
+const REGION_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+const REGION_GRIDS = new Map<string, Int16Array>();
+
+/**
+ * A stored map's region grid (`StoredMap.regions`): each tile's region index in `regions.list`,
+ * row by row; undefined for a map without regions. Throws on ragged rows, a grid of another size or
+ * a character no region has. Parsed once per map.
+ */
+export function mapRegionGrid(id: string): Int16Array | undefined {
+  const cached = REGION_GRIDS.get(id);
+  if (cached) return cached;
+  const def = storedMap(id);
+  if (!def.regions) return undefined;
+  const map = parseStoredMap(def);
+  const lines = def.regions.rows.split('\n').map((l) => l.trim()).filter((l) => l);
+  if (lines.length !== map.height) throw new Error(`${id}: the region grid has ${lines.length} rows, the map ${map.height}.`);
+  const index = new Map(def.regions.list.map((r, i) => [r.char, i]));
+  if (def.regions.list.some((r) => !REGION_CHARS.includes(r.char) || r.char.length !== 1)) throw new Error(`${id}: a region's character must be one of ${REGION_CHARS}.`);
+  const grid = new Int16Array(map.width * map.height);
+  lines.forEach((line, y) => {
+    if (line.length !== map.width) throw new Error(`${id}: region row ${y} has ${line.length} tiles, expected ${map.width}.`);
+    for (let x = 0; x < line.length; x++) {
+      const r = index.get(line[x]);
+      if (r === undefined) throw new Error(`${id}: unknown region "${line[x]}" in row ${y}.`);
+      grid[y * map.width + x] = r;
+    }
+  });
+  REGION_GRIDS.set(id, grid);
+  return grid;
+}
+
 /** A scenario's entry for a stored map: the map is one it offers, with its peoples on it. */
 export function storedMapEntry(scenario: Scenario, id: string): StoredMapEntry {
   const entry = scenario.map.stored.find((e) => e.id === id);
@@ -111,7 +164,10 @@ export function storedWorld(rng: { rng: number }, id: string, scenario: Scenario
   const entryRows = def.entryRows ?? [0, map.height - 1];
   // Keep clear of every arrival point any number of nations could use.
   const arrivals = Array.from({ length: 8 }, (_, i) => entryPoints(map, i + 1, entryRows, def.entrySide)).flat();
-  const settlements = placeRegionSettlements(rng, map, peoples, arrivals, scenario);
+  // A people that comes to a region later (`from`, native-nations.md T20) is placed when its year comes (peoplemoves.ts).
+  const start = firstYear(scenario.calendar);
+  const now = peoples.some((r) => r.from !== undefined) ? peoples.filter((r) => r.from === undefined || r.from <= start) : peoples;
+  const settlements = placeRegionSettlements(rng, map, now, arrivals, scenario);
   for (const st of settlements) delete map.tiles[st.y * map.width + st.x].lcr;
   return def.entrySide ? { map, settlements, entryRows, entrySide: def.entrySide } : { map, settlements, entryRows };
 }

@@ -3,10 +3,12 @@
  * Beta 3 step 2). Both are switches (`mechanics.hardYears`, `mechanics.landHealth`), off in the
  * Americas and the Caribbean: there `GameState.land` is never written and nothing here runs.
  *
- * **Regions.** Until step 8's North-east map brings regions of its own, the map is cut into
- * squares of `landHealth.regionSize` tiles (8 by default), numbered row by row from the north-west:
- * a simple partition that every map has, deterministic and cheap. A region is the same for every
- * player: the people's towns and the Europeans' colonies in it share its years and its game.
+ * **Regions.** A stored map may draw regions of its own (`StoredMap.regions`: the North-east's
+ * fifty, from Beta 3 step 8), each with the scenario's renewal rate (`StoredMapEntry.renewal`);
+ * otherwise the map is cut into squares of `landHealth.regionSize` tiles (8 by default), numbered
+ * row by row from the north-west: a simple partition that every map has, deterministic and cheap.
+ * A region is the same for every player: the people's towns and the Europeans' colonies in it
+ * share its years and its game.
  *
  * **Hard years.** At the start of each year each region has a hard year with `hardYears.chance`
  * (1 in 8), drawn from the game seed for that region and year (relations.ts `regionRandom`; never
@@ -20,11 +22,12 @@
  * regains `recovery`. Fur and game yields there are multiplied by its health (at least `floor`).
  * Fish and gardens are not touched (T10: tired soils are a later idea).
  */
+import { mapRegionGrid, storedMap, storedMapEntry } from './maps/index.js';
 import { regionRandom } from './relations.js';
 import { message } from './queries.js';
 import { wayOf } from './rules/peoples.js';
 import type { GoodId } from './rules/goods.js';
-import { calendarOf, mechanicsOf, peopleEconomyOf, turnOfYear, yearOf } from './scenarios/index.js';
+import { calendarOf, mechanicsOf, peopleEconomyOf, scenarioOf, turnOfYear, yearOf } from './scenarios/index.js';
 import { addOf, modifiers } from './scenarios/modifiers.js';
 import type { Colony, GameState, LandState, Tile } from './types.js';
 import { colonyList } from './unitindex.js';
@@ -38,8 +41,10 @@ export function newLandState(s: GameState): LandState | undefined {
   if (!m.hardYears && !m.landHealth) return undefined;
   const size = m.landHealth ? m.landHealth.regionSize : DEFAULT_REGION_SIZE;
   const cols = Math.ceil(s.map.width / size);
-  const count = cols * Math.ceil(s.map.height / size);
-  const land: LandState = { size, cols };
+  // A stored map with regions of its own (the North-east) uses them instead of squares.
+  const regions = s.config.map ? storedMap(s.config.map).regions : undefined;
+  const count = regions ? regions.list.length : cols * Math.ceil(s.map.height / size);
+  const land: LandState = regions ? { size, cols, map: s.config.map } : { size, cols };
   if (m.landHealth) {
     land.health = new Array<number>(count).fill(100);
     land.taken = new Array<number>(count).fill(0);
@@ -58,12 +63,46 @@ export function initLand(s: GameState): void {
 
 /** Number of regions. */
 export function regionCount(land: LandState, s: GameState): number {
+  if (land.map) return storedMap(land.map).regions!.list.length;
   return land.cols * Math.ceil(s.map.height / land.size);
 }
 
 /** The region a tile lies in. */
 export function regionOf(land: LandState, x: number, y: number): number {
+  if (land.map) {
+    const grid = mapRegionGrid(land.map)!;
+    return grid[y * (grid.length / mapHeight(land.map)) + x];
+  }
   return Math.floor(y / land.size) * land.cols + Math.floor(x / land.size);
+}
+
+const HEIGHTS = new Map<string, number>();
+
+/** The height of a stored map in tiles (its rows), cached. */
+function mapHeight(id: string): number {
+  let h = HEIGHTS.get(id);
+  if (h === undefined) HEIGHTS.set(id, (h = storedMap(id).rows.split('\n').filter((l) => l.trim()).length));
+  return h;
+}
+
+/** The name of a region, for the interface: a stored map's region name, or a square's place on the map. */
+export function regionName(s: GameState, region: number): string {
+  const land = s.land;
+  if (land?.map) return storedMap(land.map).regions!.list[region].name;
+  return `Region ${region + 1}`;
+}
+
+/**
+ * Furs and game a region gives back in a year without wearing: the scenario's rate for a stored
+ * map's region (`StoredMapEntry.renewal`), or `landHealth.renewal`.
+ */
+export function regionRenewal(s: GameState, region: number): number {
+  const rules = mechanicsOf(s).landHealth;
+  const base = rules ? rules.renewal : 0;
+  const land = s.land;
+  if (!land?.map) return base;
+  const id = storedMap(land.map).regions!.list[region].id;
+  return storedMapEntry(scenarioOf(s), land.map).renewal?.[id] ?? base;
 }
 
 /** Whether a region has a hard year this year. */
@@ -133,7 +172,8 @@ export function processLand(s: GameState): void {
     for (let r = 0; r < land.health.length; r++) {
       const taken = land.taken[r];
       const h = land.health[r];
-      land.health[r] = taken > rules.renewal ? Math.max(0, h - (taken - rules.renewal)) : Math.min(100, h + rules.recovery + (extra.get(r) ?? 0));
+      const renewal = land.map ? regionRenewal(s, r) : rules.renewal;
+      land.health[r] = taken > renewal ? Math.max(0, h - (taken - renewal)) : Math.min(100, h + rules.recovery + (extra.get(r) ?? 0));
       land.taken[r] = 0;
     }
   }

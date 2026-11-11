@@ -20,6 +20,7 @@ import { track, tracking } from '../telemetry.js';
 import type { GameState, Player } from '../types.js';
 import { AMERICAS_EVENTS } from './americas.js';
 import { CARIBBEAN_EVENTS } from './caribbean.js';
+import { NORTH_EAST_EVENTS } from './north-east.js';
 import { applyEffects, atRoundEnd, eventsState, num, valueEffects } from './effects.js';
 import type { EventChoice, EventDef, EventKind, EventVars, PendingEvent } from './types.js';
 import { colonyList } from '../unitindex.js';
@@ -28,6 +29,7 @@ export * from './types.js';
 export { eventProductionPct } from './modifiers.js';
 export { HISTORICAL_EVENTS, RANDOM_EVENTS, AMERICAS_EVENTS } from './americas.js';
 export { CARIBBEAN_EVENTS } from './caribbean.js';
+export { NORTH_EAST_EVENTS } from './north-east.js';
 export { applyEffects, valueEffects, tensionCost, tensionValue, TAX_POINT_VALUE } from './effects.js';
 
 /** Chance per round that a nation has a random event (if one has a target). */
@@ -38,7 +40,7 @@ export const RANDOM_COOLDOWN = 40;
 // ---------------------------------------------------------------------------
 // Registry
 
-const SETS: Record<string, EventDef[]> = { americas: AMERICAS_EVENTS, caribbean: CARIBBEAN_EVENTS };
+const SETS: Record<string, EventDef[]> = { americas: AMERICAS_EVENTS, caribbean: CARIBBEAN_EVENTS, 'north-east': NORTH_EAST_EVENTS };
 
 /** Registers an event set (a scenario's), replacing one with the same id. */
 export function registerEventSet(id: string, defs: EventDef[]): void {

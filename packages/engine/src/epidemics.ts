@@ -24,6 +24,7 @@
 import { gridOf } from './grid.js';
 import { colonyWorkers, message } from './queries.js';
 import { kindOfId } from './playerkind.js';
+import { regionOf } from './land.js';
 import { regionRandom } from './relations.js';
 import { calendarOf, mechanicsOf, turnAfterYears, yearOf } from './scenarios/index.js';
 import type { EpidemicRules } from './scenarios/types.js';
@@ -64,6 +65,8 @@ export function exposedColonies(s: GameState, rules: EpidemicRules): Colony[] {
 }
 
 function regionOfTile(s: GameState, x: number, y: number): number {
+  // A stored map's own regions (the North-east), as hard years and land health read them.
+  if (s.land?.map) return regionOf(s.land, x, y);
   const size = s.land?.size ?? REGION_SIZE;
   const cols = s.land?.cols ?? Math.ceil(s.map.width / size);
   return Math.floor(y / size) * cols + Math.floor(x / size);

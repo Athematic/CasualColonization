@@ -105,7 +105,40 @@ export const NATION_ORDER: AmericasNationId[] = ['england', 'france', 'netherlan
  */
 export type PlayerId = NationId | TribeId;
 
-export type TribeId = 'iroquois' | 'cherokee' | 'sioux' | 'apache' | 'aztec' | 'arawak' | 'tupi' | 'inca' | 'kalinago';
+export type TribeId =
+  | 'iroquois'
+  | 'cherokee'
+  | 'sioux'
+  | 'apache'
+  | 'aztec'
+  | 'arawak'
+  | 'tupi'
+  | 'inca'
+  | 'kalinago'
+  // The North-east, 1000–1850 (scenarios/north-east.ts; native-nations.md T20, section 13).
+  | NorthEastPeopleId;
+
+/** The peoples of the North-east scenario (native-nations.md T20), north to south. */
+export type NorthEastPeopleId =
+  | 'dorset'
+  | 'inuit'
+  | 'eeyou'
+  | 'innu'
+  | 'beothuk'
+  | 'algonquin'
+  | 'mikmaq'
+  | 'wolastoqiyik'
+  | 'penobscot'
+  | 'abenaki'
+  | 'wendat'
+  | 'stLawrenceIroquoians'
+  | 'attawandaron'
+  | 'haudenosaunee'
+  | 'mohican'
+  | 'massachusett'
+  | 'wampanoag'
+  | 'narragansett'
+  | 'munsee';
 
 /**
  * How a people lives on the land. A scenario's settlement-kind table (`Scenario.peoples.settlements`)
@@ -164,6 +197,95 @@ export const TRIBES: Record<TribeId, PeopleDef> = {
    * colour is the red of roucou (annatto), with which they painted themselves. Not in the Americas' set.
    */
   kalinago: { id: 'kalinago', name: 'Kalinago', color: '#a64b2a', lifeway: 'agricultural', skills: ['expertFisherman', 'masterCottonPlanter', 'masterTobaccoPlanter', 'seasonedScout'], wants: ['tools', 'muskets', 'tradeGoods'] },
+  // The North-east, 1000–1850 (native-nations.md T20; the research, its sources and what is drafted
+  // for Simon's review are in section 13 of the note). Not in the Americas' or the Caribbean's sets.
+  // Lifeways are today's fixed-settlement ones: the seasonal round many of these peoples lived
+  // (Australia's `seasonal` lifeway, later) is drawn as camps. Skills are what a European colonist
+  // may learn among them; wants are what they sought in trade (iron tools, kettles and cloth, later
+  // muskets). Drafted for Simon's review, like everything of this scenario.
+  /**
+   * The Dorset: an archaeologists' name (from Cape Dorset, where the culture was first described);
+   * Inuit tradition remembers a people before them as the Tuniit. Around 1000 they lived on the
+   * northern Labrador coast and in Nunavik, hunting seals and walrus from the sea ice; they are no
+   * longer found in Labrador after about the 14th century (the scenario's `until`).
+   */
+  dorset: { id: 'dorset', name: 'Dorset', color: '#8c8a7a', lifeway: 'nomadic', skills: ['expertFisherman', 'seasonedScout'], wants: ['tools', 'tradeGoods', 'cloth'] },
+  /**
+   * The Inuit of Labrador and Nunavik, whose ancestors (the archaeologists' Thule culture) came east
+   * across the Arctic and reached the northern Labrador coast in the 15th century (the scenario's
+   * `from`): sea-mammal hunters with kayaks and the large umiak, wintering in sod houses.
+   */
+  inuit: { id: 'inuit', name: 'Inuit', color: '#5b7f95', lifeway: 'nomadic', skills: ['expertFisherman', 'seasonedScout', 'expertFurTrapper'], wants: ['tools', 'tradeGoods', 'muskets'] },
+  /** The Eeyou (James Bay Cree) of Eeyou Istchee, hunters of the rivers and lakes east of James Bay. */
+  eeyou: { id: 'eeyou', name: 'Eeyou', color: '#6e8b3d', lifeway: 'nomadic', skills: ['expertFurTrapper', 'seasonedScout', 'expertFisherman'], wants: ['tools', 'muskets', 'tradeGoods'] },
+  /**
+   * The Innu (once called Montagnais and Naskapi by Europeans) of Nitassinan, the Quebec–Labrador
+   * peninsula from the north shore of the Gulf to the interior: caribou and moose hunters who came
+   * to the coast in summer. Tadoussac at the Saguenay's mouth was their great trading place.
+   */
+  innu: { id: 'innu', name: 'Innu', color: '#9a6b3f', lifeway: 'nomadic', skills: ['expertFurTrapper', 'seasonedScout', 'masterFurTrader'], wants: ['tools', 'tradeGoods', 'cloth'] },
+  /**
+   * The Beothuk of Newfoundland (whose ancestors archaeologists call the Little Passage culture):
+   * they moved between the coast in summer and the Exploits valley in winter, and kept away from
+   * the European fishing stations. The last known Beothuk, Shanawdithit, died in 1829.
+   */
+  beothuk: { id: 'beothuk', name: 'Beothuk', color: '#b5532f', lifeway: 'nomadic', skills: ['expertFisherman', 'expertFurTrapper'], wants: ['tools', 'tradeGoods', 'cloth'] },
+  /**
+   * The Algonquin of the Ottawa valley (Anishinaabeg, as they call themselves with their Ojibwe and
+   * Odawa kin): hunters and traders who held the river route to the interior; the Kichesipirini of
+   * Morrison Island took tolls from those who passed.
+   */
+  algonquin: { id: 'algonquin', name: 'Algonquin', color: '#4f7a5a', lifeway: 'nomadic', skills: ['expertFurTrapper', 'masterFurTrader', 'seasonedScout'], wants: ['tools', 'tradeGoods', 'muskets'] },
+  /**
+   * The Mi'kmaq of Mi'kma'ki: Nova Scotia, Cape Breton (Unama'ki), Prince Edward Island (Epekwitk),
+   * eastern New Brunswick and the Gaspé. Fishing and shellfish on the coast in the warm months,
+   * moose and caribou inland in winter; skilled in sea-going canoes. Among the first to trade with
+   * European fishermen in the 16th century.
+   */
+  mikmaq: { id: 'mikmaq', name: "Mi'kmaq", color: '#2f6f8f', lifeway: 'nomadic', skills: ['expertFisherman', 'expertFurTrapper', 'seasonedScout'], wants: ['tools', 'tradeGoods', 'cloth'] },
+  /** The Wolastoqiyik ("people of the beautiful river", the Saint John; Maliseet to the English). */
+  wolastoqiyik: { id: 'wolastoqiyik', name: 'Wolastoqiyik', color: '#3f7f7a', lifeway: 'nomadic', skills: ['expertFurTrapper', 'expertFisherman', 'expertFarmer'], wants: ['tools', 'tradeGoods', 'muskets'] },
+  /** The Penobscot (Penawahpskewi), Eastern Abenaki of the Penobscot River and Penobscot Bay. */
+  penobscot: { id: 'penobscot', name: 'Penobscot', color: '#557a8f', lifeway: 'nomadic', skills: ['expertFisherman', 'expertFurTrapper'], wants: ['tools', 'tradeGoods', 'cloth'] },
+  /** The Western Abenaki (Alnôbak) of the Connecticut and Lake Champlain valleys, hunters who also grew maize. */
+  abenaki: { id: 'abenaki', name: 'Abenaki', color: '#6b8f4e', lifeway: 'agricultural', skills: ['expertFurTrapper', 'expertFarmer', 'seasonedScout'], wants: ['tools', 'muskets', 'tradeGoods'] },
+  /**
+   * The Wendat (Huron to the French), a confederacy of four nations in towns of longhouses between
+   * Georgian Bay and Lake Simcoe: farmers of maize, beans and squash and the great traders of the
+   * region, exchanging corn for furs with the Algonquian peoples to the north. Dispersed by war with
+   * the Haudenosaunee in 1649; the Wendat of Wendake near Quebec and the Wyandot descend from them.
+   */
+  wendat: { id: 'wendat', name: 'Wendat', color: '#a0522d', lifeway: 'agricultural', skills: ['expertFarmer', 'masterFurTrader', 'masterTobaccoPlanter'], wants: ['tools', 'tradeGoods', 'cloth'] },
+  /**
+   * The St. Lawrence Iroquoians: a scholars' name; their own is not known. Farmers in palisaded towns
+   * from Lake Ontario to the estuary, among them Stadacona (Quebec) and Hochelaga (Montreal), where
+   * Cartier came in 1535. By Champlain's voyage of 1603 their towns were gone; why is still debated
+   * (war, disease, peoples moving away). They leave in the scenario's `until` year.
+   */
+  stLawrenceIroquoians: { id: 'stLawrenceIroquoians', name: 'St. Lawrence Iroquoians', color: '#8a5a44', lifeway: 'agricultural', skills: ['expertFarmer', 'expertFisherman', 'masterTobaccoPlanter'], wants: ['tools', 'tradeGoods', 'cloth'] },
+  /**
+   * The Attawandaron: the Wendat name for them; the French called them the Neutral, for they kept out
+   * of the wars between the Wendat and the Haudenosaunee. A confederacy of farming towns between the
+   * Grand River and the Niagara, dispersed in the 1650s.
+   */
+  attawandaron: { id: 'attawandaron', name: 'Attawandaron', color: '#b07a3a', lifeway: 'agricultural', skills: ['expertFarmer', 'masterTobaccoPlanter', 'expertFurTrapper'], wants: ['tools', 'tradeGoods', 'cloth'] },
+  /**
+   * The Haudenosaunee ("people of the longhouse"; the Iroquois to Europeans), the Mohawk, Oneida,
+   * Onondaga, Cayuga and Seneca of today's upstate New York, joined in their League; the Tuscarora
+   * joined in the 1720s. A catalogue entry of its own beside the Americas' "Iroquois", so that
+   * sentences name them as they name themselves without changing the Americas' games.
+   */
+  haudenosaunee: { id: 'haudenosaunee', name: 'Haudenosaunee', color: '#7a4b2a', lifeway: 'agricultural', skills: ['expertFarmer', 'expertFurTrapper', 'masterTobaccoPlanter', 'expertFisherman'], wants: ['muskets', 'cloth', 'tools'] },
+  /** The Mohican (Muhheaconneok) of the upper Hudson valley; the Stockbridge-Munsee Community descends from them. */
+  mohican: { id: 'mohican', name: 'Mohican', color: '#7f6a3a', lifeway: 'agricultural', skills: ['expertFurTrapper', 'expertFarmer', 'expertFisherman'], wants: ['tools', 'tradeGoods', 'muskets'] },
+  /** The Massachusett of Massachusetts Bay, farming and fishing peoples of the coast. */
+  massachusett: { id: 'massachusett', name: 'Massachusett', color: '#a3763d', lifeway: 'agricultural', skills: ['expertFarmer', 'expertFisherman'], wants: ['tools', 'tradeGoods', 'cloth'] },
+  /** The Wampanoag (Wôpanâak) of Cape Cod, the islands and the land east of Narragansett Bay. */
+  wampanoag: { id: 'wampanoag', name: 'Wampanoag', color: '#9c5b3b', lifeway: 'agricultural', skills: ['expertFisherman', 'expertFarmer'], wants: ['tools', 'cloth', 'tradeGoods'] },
+  /** The Narragansett of the west shore of Narragansett Bay, one of the most numerous peoples of southern New England. */
+  narragansett: { id: 'narragansett', name: 'Narragansett', color: '#7d4f2f', lifeway: 'agricultural', skills: ['expertFarmer', 'expertFisherman', 'masterFurTrader'], wants: ['tools', 'cloth', 'tradeGoods'] },
+  /** The Munsee, the northern Lenape of the lower Hudson, Manhattan and the Delaware's upper reaches. */
+  munsee: { id: 'munsee', name: 'Munsee', color: '#6f5a3a', lifeway: 'agricultural', skills: ['expertFarmer', 'expertFisherman', 'expertFurTrapper'], wants: ['tools', 'tradeGoods', 'cloth'] },
 };
 
 /** North to south. */

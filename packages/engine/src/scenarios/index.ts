@@ -19,7 +19,8 @@ import { COLONY_BUILDS, IMMIGRANT_WEIGHTS, PEOPLE_UNIT_TYPES, PURCHASABLE, TRAIN
 import type { GameConfig, GameState } from '../types.js';
 import { AMERICAS } from './americas.js';
 import { CARIBBEAN } from './caribbean.js';
-import type { Calendar } from './calendar.js';
+import { NORTH_EAST } from './north-east.js';
+import { turnOfYear, yearOf, type Calendar } from './calendar.js';
 import { AMERICAS_TEXT, capitalise, fillTemplate, type TermKey } from './terms.js';
 import type { Council, CouncilId, CouncilTextKey, Mechanics, NationEntry, NationTypeSelection, PlayerEntry, PlayablePeople, Rivals, RumourEntry, Scenario, ScenarioAi } from './types.js';
 
@@ -28,6 +29,7 @@ export * from './calendar.js';
 export * from './terms.js';
 export { AMERICAS, AMERICAS_GENERATOR } from './americas.js';
 export { CARIBBEAN, CARIBBEAN_CALENDAR, CARIBBEAN_GENERATOR } from './caribbean.js';
+export { NORTH_EAST, NORTH_EAST_CALENDAR } from './north-east.js';
 
 /** The scenario of games that do not name one. */
 export const DEFAULT_SCENARIO = 'americas';
@@ -365,7 +367,9 @@ export function CouncilText(x: ScenarioLike, player: PlayerId, key: CouncilTextK
  * a turn is half a year in every scenario so far, so a cooldown takes as long in game time.
  */
 export function aiTurn(s: HasScenario, turn: number): number {
-  const pace = scenarioOf(s).ai.pace ?? 1;
+  const scenario = scenarioOf(s);
+  if (scenario.ai.dates) return turnOfYear(yearOf(turn).year, scenario.calendar);
+  const pace = scenario.ai.pace ?? 1;
   return pace === 1 ? turn : Math.round(turn * pace);
 }
 
@@ -548,3 +552,4 @@ export function checkSavedScenario(s: GameState): Scenario {
 
 registerScenario(AMERICAS);
 registerScenario(CARIBBEAN);
+registerScenario(NORTH_EAST);
