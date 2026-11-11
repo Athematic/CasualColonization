@@ -11,6 +11,7 @@ import { ROLES, UNIT_TYPES } from './rules/units.js';
 import { score } from './score.js';
 import type { GameState, StatsHistory } from './types.js';
 import { goodsOf } from './scenarios/index.js';
+import { colonyList, unitList } from './unitindex.js';
 
 /** What each snapshot holds, in order. Per-turn values are rates; the rest are levels. */
 export const STAT_KEYS = [
@@ -130,8 +131,7 @@ function census(s: GameState): StatsCensus {
   for (const t of s.map.tiles) if (!TERRAIN[t.t].water) land++;
   const pop = new Map<string, number>();
   const forces = new Map<NationId, { military: number; ships: number; holds: number }>();
-  for (const id in s.units) {
-    const u = s.units[id];
+  for (const u of unitList(s)) {
     if (u.loc.kind === 'colony') pop.set(u.loc.colonyId, (pop.get(u.loc.colonyId) ?? 0) + 1);
     let f = forces.get(u.owner);
     if (!f) forces.set(u.owner, (f = { military: 0, ships: 0, holds: 0 }));
@@ -152,7 +152,7 @@ export function statsSnapshot(s: GameState, nation: NationId, c: StatsCensus = c
   let colonies = 0;
   let population = 0;
   let rebels = 0;
-  for (const col of Object.values(s.colonies)) {
+  for (const col of colonyList(s)) {
     if (col.owner !== nation) continue;
     const n = c.pop.get(col.id) ?? 0;
     colonies++;
@@ -216,6 +216,13 @@ export function recentProduction(s: GameState, nation: NationId, turns: number):
   return recent.length ? recent.reduce((a, b) => a + b, 0) / recent.length : 0;
 }
 
+/**
+ * Each nation's column sums (its values at the last snapshot) by history array, as recordStats
+ * left them: valid while the array has the length it had then (only recordStats appends to it;
+ * thinning, loading and old saves give new arrays). Beside the state, so saves are unchanged.
+ */
+const columnSums = new WeakMap<number[], { length: number; sums: number[] }>();
+
 /** Records one snapshot per European nation for the current turn. Called once per round. */
 export function recordStats(s: GameState): void {
   const st = ensureStats(s);
@@ -228,9 +235,22 @@ export function recordStats(s: GameState): void {
     const row = statsSnapshot(s, p.id, c);
     // A nation without earlier rows (it joined later) is padded with zeros.
     const flat = (st.data[p.id] ??= new Array(index * width).fill(0));
-    const prev = new Array(width).fill(0);
-    for (let i = 0; i < flat.length; i++) prev[i % width] += flat[i];
-    STAT_KEYS.forEach((k, j) => flat.push(row[k] - prev[j]));
+    // The previous values: each column's sum, added up row by row. The sums kept from the last
+    // call go on with the same additions in the same order, so they are the very same numbers.
+    const known = columnSums.get(flat);
+    let prev: number[];
+    if (known && known.length === flat.length) prev = known.sums;
+    else {
+      prev = new Array(width).fill(0);
+      for (let i = 0; i < flat.length; i++) prev[i % width] += flat[i];
+    }
+    const sums = prev.slice();
+    STAT_KEYS.forEach((k, j) => {
+      const delta = row[k] - prev[j];
+      flat.push(delta);
+      sums[j] += delta;
+    });
+    columnSums.set(flat, { length: flat.length, sums });
   }
   st.turns.push(s.turn);
   delete st.flows;

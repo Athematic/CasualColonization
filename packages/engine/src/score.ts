@@ -8,7 +8,7 @@ import { recentProduction } from './stats.js';
 import type { ScoreWeights } from './rules/score.js';
 import type { GameState, Player } from './types.js';
 import { companyScoreShare, sharesIn } from './companies.js';
-import { ownedUnitsView } from './unitindex.js';
+import { ownedUnitsView, colonyList } from './unitindex.js';
 
 /** The Americas end after the autumn turn of this year (other scenarios: their calendar's `end`). */
 export const LAST_YEAR = AMERICAS_CALENDAR.end.year;
@@ -67,7 +67,7 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreW
   let halfColonies = 0;
   let fullColonies = 0;
   let goods = 0;
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner !== p.id) continue;
     for (const kind of buildingsOf(s)) levels += Math.max(0, (c.buildings[kind] ?? 0) - BUILDINGS[kind].initialLevel);
     const pop = workers.get(c.id) ?? 0;

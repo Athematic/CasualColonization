@@ -22,7 +22,7 @@ import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import { PIONEER_MAX_TOOLS, PURCHASABLE, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
 import type { GameState, MarketEntry, Player, Unit, UnitLocation } from './types.js';
 import { difficultyOf, goodsOf, mechanicsOf, nationOf, portMarketOf, term, Term, unitsOf, type ScenarioLike } from './scenarios/index.js';
-import { setUnitLoc, removeUnit } from './unitindex.js';
+import { setUnitLoc, removeUnit, colonyList, unitList } from './unitindex.js';
 
 export const SAIL_TURNS = 3;
 
@@ -196,7 +196,7 @@ export function answerTax(s: GameState, nation: Player['id'], accept: boolean): 
   }
   p.boycotts[pending.good] = true;
   const name = GOOD_DEFS[pending.good].name.toLowerCase();
-  const colony = Object.values(s.colonies)
+  const colony = colonyList(s)
     .filter((c) => c.owner === nation)
     .sort((a, b) => b.goods[pending.good] - a.goods[pending.good])[0];
   let text = `You refuse the tax. ${GOOD_DEFS[pending.good].name} is now boycotted in ${term(s, 'homeland')}.`;
@@ -319,7 +319,7 @@ export function train(s: GameState, nation: Player['id'], type: UnitTypeId, port
     const problem = portProblem(s, nation, port);
     if (problem) fail(problem);
     if (!buyableInPartnerPort(type) || !unitsOf(s).units.has(type)) fail(`Only merchant ships can be bought in ${portName(s, port)}. Warships, artillery and colonists come from your own port.`);
-    if (!Object.values(s.units).some((u) => u.owner === nation && u.loc.kind === 'europe' && u.loc.port === port)) fail(`You need a ship in ${portName(s, port)} to buy there.`);
+    if (!unitList(s).some((u) => u.owner === nation && u.loc.kind === 'europe' && u.loc.port === port)) fail(`You need a ship in ${portName(s, port)} to buy there.`);
     const price = trainPrice(s, player(s, port), type);
     if (p.gold < price) fail(`${def.name} costs ${price} gold in ${portName(s, port)}.`);
     p.gold -= price;

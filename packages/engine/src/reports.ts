@@ -22,6 +22,7 @@ import { ROLES, UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { ledgerFor } from './history.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
 import { goodsOf, peopleOf, term } from './scenarios/index.js';
+import { colonyList, unitList } from './unitindex.js';
 
 // ---- Colonies ----
 
@@ -115,7 +116,7 @@ export function colonyOverview(s: GameState, colony: Colony): ColonyOverview {
 
 /** Every colony of a nation, with its overview, in founding order. */
 export function coloniesOverview(s: GameState, nation: NationId): ColonyOverview[] {
-  return Object.values(s.colonies)
+  return colonyList(s)
     .filter((c) => c.owner === nation)
     .sort((a, b) => a.founded - b.founded || a.id.localeCompare(b.id))
     .map((c) => colonyOverview(s, c));
@@ -145,7 +146,7 @@ export function tradeOverview(s: GameState, nation: NationId): TradeRow[] {
   const p = player(s, nation);
   const ports = [p, ...favouredPartners(s, nation).map((n) => player(s, n))];
   const ledger = ledgerFor(s, nation);
-  const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
+  const colonies = colonyList(s).filter((c) => c.owner === nation);
   return goodsOf(s).map((g) => ({
     good: g,
     prices: ports.map((q) => ({ port: q.id, sell: sellPrice(q, g), buy: buyPrice(s, q, g), tax: q.tax })),
@@ -205,7 +206,7 @@ function whereIs(s: GameState, u: Unit): { where: string; colonyId?: string; at?
 
 /** A nation's land units outside colony work (soldiers, pioneers, scouts, wagon trains and the rest). */
 export function landForces(s: GameState, nation: NationId): ForceUnit[] {
-  return Object.values(s.units)
+  return unitList(s)
     .filter((u) => u.owner === nation && !isShip(u) && u.loc.kind !== 'colony')
     .map((u) => ({ unit: u, name: unitName(u), kind: forceKind(u), ...whereIs(s, u) }));
 }
@@ -222,7 +223,7 @@ export function militaryStrength(units: Unit[]): number {
 export function royalForces(s: GameState, nation: NationId): { regulars: number; dragoons: number; artillery: number; menOfWar: number; landed: number } | null {
   const ref = player(s, nation).ref as Partial<Record<'regulars' | 'dragoons' | 'artillery' | 'menOfWar', number>> | undefined;
   if (!ref) return null;
-  const landed = Object.values(s.units).filter((u) => u.owner === 'crown' && u.against === nation).length;
+  const landed = unitList(s).filter((u) => u.owner === 'crown' && u.against === nation).length;
   return { regulars: ref.regulars ?? 0, dragoons: ref.dragoons ?? 0, artillery: ref.artillery ?? 0, menOfWar: ref.menOfWar ?? 0, landed };
 }
 
@@ -241,7 +242,7 @@ export interface ShipOverview {
 }
 
 export function navalOverview(s: GameState, nation: NationId): ShipOverview[] {
-  return Object.values(s.units)
+  return unitList(s)
     .filter((u) => u.owner === nation && isShip(u))
     .map((u) => {
       const passengers = unitsAboard(s, u);
@@ -279,7 +280,7 @@ export interface ReligionOverview {
 
 export function religionOverview(s: GameState, nation: NationId): ReligionOverview {
   const p = player(s, nation);
-  const colonies = Object.values(s.colonies)
+  const colonies = colonyList(s)
     .filter((c) => c.owner === nation)
     .map((c) => ({ colony: c, crosses: colonyReport(s, c).produced.crosses }))
     .filter((r) => r.crosses > 0)
@@ -301,7 +302,7 @@ export function religionOverview(s: GameState, nation: NationId): ReligionOvervi
     turnsToImmigrant: left === 0 ? 1 : perTurn > 0 ? Math.ceil(left / perTurn) : null,
     colonies,
     missions: [...byTribe.values()],
-    converts: Object.values(s.units).filter((u) => u.owner === nation && u.type === 'nativeConvert').length,
+    converts: unitList(s).filter((u) => u.owner === nation && u.type === 'nativeConvert').length,
     closed: p.independence !== 'none',
   };
 }
@@ -347,7 +348,7 @@ export interface TribeOverview {
 export function nativesOverview(s: GameState, nation: NationId): TribeOverview[] {
   const grid = gridOf(s);
   const known = knownSettlementList(s, nation);
-  const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
+  const colonies = colonyList(s).filter((c) => c.owner === nation);
   const out: TribeOverview[] = [];
   for (const tribe of s.tribes) {
     const mine = known.filter((st) => st.tribe === tribe.id);
@@ -408,7 +409,7 @@ export interface CongressOverview {
 
 export function congressOverview(s: GameState, nation: NationId): CongressOverview {
   const p = player(s, nation);
-  const colonies = Object.values(s.colonies)
+  const colonies = colonyList(s)
     .filter((c) => c.owner === nation)
     .map((c) => {
       const pop = colonyWorkers(s, c).length;

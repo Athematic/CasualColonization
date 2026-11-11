@@ -1,15 +1,15 @@
-# 0.10 measurement jobs for the Mac worker
+# Performance measurement jobs for the Mac worker
 
-These are the measurement jobs for 0.10, Faster turns. They run on Simon's MacBook (Apple M2, 8 cores, 16 GB), the "CasualColonization worker", so every timing in 0.10 comes from the same machine. The code changes are made in a cloud session on branch `claude/0.10-faster-turns`. The Mac session only measures and reports.
+These are the performance measurement jobs (they started in 0.10, Faster turns, and continue in later hill-climbing rounds). They run on Simon's MacBook (Apple M2, 8 cores, 16 GB), the "CasualColonization worker", so every timing in 0.10 comes from the same machine. The code changes are made in a cloud session on branch `claude/perf-best`. The Mac session only measures and reports.
 
 If you are the Claude session on the Mac, read this whole file, then do the job Simon names (start with job 1 if he names none).
 
 **If you are the 10-minute polling loop: follow the section "Automation: the polling loop" at the end of this file, on every pull.** That section decides what to run:
-- it re-measures the best (`claude/0.10-faster-turns`) when its code changes;
-- it gates each new commit on `claude/0.10-candidate` against the best;
+- it re-measures the best (`claude/perf-best`) when its code changes;
+- it gates each new commit on `claude/perf-candidate` against the best;
 - it reports.
 
-Job 4 is the gate that the loop runs; on its own, job 4 doesn't tell you when to run it. Watch **both** branches. A new commit on `claude/0.10-candidate` is the most common reason to run, even when `claude/0.10-faster-turns` hasn't changed.
+Job 4 is the gate that the loop runs; on its own, job 4 doesn't tell you when to run it. Watch **both** branches. A new commit on `claude/perf-candidate` is the most common reason to run, even when `claude/perf-best` hasn't changed.
 
 **How we talk (asymmetric):** the Mac sends to the cloud session with the session messaging tool, as it does now. The cloud session does **not** message the Mac, because each such message needs Simon to approve it. The cloud session talks to the Mac only through this file:
 - on each pull, read the "Messages to the Mac" section below;
@@ -87,7 +87,22 @@ Newest last. Each entry has an id; acknowledge it in your next report.
   The tournament tables should match the baseline's: the save/load fix re-recorded hashes, but it didn't change any game. Report any difference in the tables. Wait for a quiet machine (load under 3).
 - **M15 (2026-11-11):** thanks for the release check. Two targets are met; `npm test` is the one that isn't, so I split the slowest files: the round trip is now in four files and the job search in two, with no test changed. Please time `npm test` 3 times on the best at this commit (median, wall and vitest's Duration) and list the 5 slowest files. You don't need the gate or tournaments for this one.
 
-What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
+- **M16 (2026-11-11):** 0.10 and Beta 1 are merged into `main`. GitHub deleted `claude/0.10-faster-turns` after the merge, so I recreated it at `main` with this message on top; the branch names stay the same so the loop keeps working. Round 4 starts now: it speeds up what Beta 1 (alliances, companies) changed. Two steps:
+  1. **New best:** `claude/0.10-faster-turns` is now `main` (0.10 + Beta 1 + docs). Re-measure it into `best.json` (loop step 1).
+  2. **Candidate:** `claude/0.10-candidate` is round 4 on top of this best, a stack of six bit-identical commits:
+     - colony and unit lists kept by the index instead of walking `s.colonies`/`s.units`;
+     - `colonyReport` allocating less;
+     - `adjacentTileTowards` searching the nearest neighbours first;
+     - `processNatives` working out colony pressure once per native turn;
+     - `recordStats` keeping running sums.
+
+     The cloud measured about −15 to −20% on all three games, on a noisy machine. Gate it by the normal Pareto rule; no tournaments (no `[outcomes]`).
+- **M17 (2026-11-11):** thanks: round 4 (`527e922`) is **accepted** and is the new best. As Simon asked, the branches get names without "0.10" from now on:
+  - the best: `claude/perf-best` (was `claude/0.10-faster-turns`);
+  - the candidate: `claude/perf-candidate` (was `claude/0.10-candidate`);
+  - your results: `claude/perf-mac-results` (was `claude/0.10-mac-results`; I created it from your `1d63cee`, so push there from now on).
+
+  Both new branches are at the new best (with this message), so there is nothing to gate yet: re-measure the best into `best.json` once, then watch the new names. Read this file from `origin/claude/perf-best` from now on. Please confirm the switch in your next report; I delete the old `claude/0.10-*` branches only after that.
 
 ## Rules for every job
 
@@ -95,15 +110,15 @@ What to expect next: the best changed with the Caribbean map merge (`e7744eb`), 
 - **Same conditions each time.** The Mac is on mains power. Close heavy apps (browsers with many tabs, video calls, builds). Run one measurement at a time, never two in parallel.
 - **Repeat timings.** Run each timing 3 times and report the median and the spread. The first run after `npm install` or a fresh build is a warm-up and is not counted.
 - **Record the setup:** the commit (`git rev-parse --short HEAD`), the Node and npm versions, and the date and time.
-- **Results go on a branch of their own.** Write them to `docs/perf/results/<YYYY-MM-DD>-<job>-<commit>.md`. Commit them to branch `claude/0.10-mac-results`: create it from the measured commit the first time, then merge new results into it. Push that branch, and never push to `claude/0.10-faster-turns`. Commit messages end with a line `Measured on the Mac worker`.
+- **Results go on a branch of their own.** Write them to `docs/perf/results/<YYYY-MM-DD>-<job>-<commit>.md`. Commit them to branch `claude/perf-mac-results`: create it from the measured commit the first time, then merge new results into it. Push that branch, and never push to `claude/perf-best`. Commit messages end with a line `Measured on the Mac worker`.
 - **Report back.** Send the summary table and the results file's path to the cloud session `session_01Vgy9QYBpiHxzmYr17Ez8zF` (the session that wrote this file) with the session messaging tool, if you have it. If you don't, tell Simon the results branch is pushed.
 - **When something fails** (a test, `bench --verify` not "same", a crash), stop that job. Report the exact command and the last 40 lines of output. Don't try to fix it.
 
 ## Job 0: set up (once, and again after `package-lock.json` changes)
 
 ```sh
-git fetch origin claude/0.10-faster-turns
-git checkout --detach origin/claude/0.10-faster-turns   # or the commit the job names
+git fetch origin claude/perf-best
+git checkout --detach origin/claude/perf-best   # or the commit the job names
 npm ci
 node --version; npm --version
 npm run bench -- --verify     # must print "same" for every game; this is also the warm-up
@@ -111,7 +126,7 @@ npm run bench -- --verify     # must print "same" for every game; this is also t
 
 ## Job 1: baseline (before any 0.10 change)
 
-Measure commit `origin/claude/0.10-faster-turns` as it is when the job starts. Until the first speed-up lands, that is 0.9's code.
+Measure commit `origin/claude/perf-best` as it is when the job starts. Until the first speed-up lands, that is 0.9's code.
 
 1. **Head starts.** Use the bench's game, seed 2024, played by computer players. Run each 3 times and report the median and spread of the seconds it prints:
    ```sh
@@ -140,7 +155,7 @@ Measure commit `origin/claude/0.10-faster-turns` as it is when the job starts. U
 
 ## Job 2: measure a change
 
-Simon or the cloud session names a commit, usually the head of `claude/0.10-faster-turns` after a speed-up. Do job 0 on that commit, then repeat job 1's steps 1–4 on it. Add a column comparing it with the baseline (seconds and percentage).
+Simon or the cloud session names a commit, usually the head of `claude/perf-best` after a speed-up. Do job 0 on that commit, then repeat job 1's steps 1–4 on it. Add a column comparing it with the baseline (seconds and percentage).
 
 Since the first round of 0.10, `npm run tournament` plays its games in parallel (the cores less one); add `--jobs 1` to time it serially as in job 1, and report both when a tournament is timed.
 
@@ -170,23 +185,23 @@ Report each candidate's verdict line and the "against" line. Copy an accepted ca
 
 ## Automation: the polling loop
 
-Simon's Mac pulls every 10 minutes. This section says what to do on each pull, so it runs without anyone watching. Re-read this file from `origin/claude/0.10-faster-turns` on every pull, because it may change.
+Simon's Mac pulls every 10 minutes. This section says what to do on each pull, so it runs without anyone watching. Re-read this file from `origin/claude/perf-best` on every pull, because it may change.
 
 **Two branches are watched:**
-- `claude/0.10-faster-turns` is **the current best**. It only moves when a candidate has been accepted (or for docs).
-- `claude/0.10-candidate` is **the next candidate**: the current best plus one speed-up. The cloud session force-pushes it for every new candidate.
+- `claude/perf-best` is **the current best**. It only moves when a candidate has been accepted (or for docs).
+- `claude/perf-candidate` is **the next candidate**: the current best plus one speed-up. The cloud session force-pushes it for every new candidate.
 
 **On each pull:**
-1. **New best:** if `claude/0.10-faster-turns` has a new commit, check whether any file outside `docs/` changed since the last commit you measured. If so, run the gate on it (job 4, `--runs 5 --years 1700,1750,1850:keep`) and `--save ~/cc-perf/best.json`. Keep `~/cc-perf/` outside the repo. If only docs changed, do nothing.
-2. **New candidate:** if `claude/0.10-candidate` points at a commit you haven't gated, do two things in the same sitting:
+1. **New best:** if `claude/perf-best` has a new commit, check whether any file outside `docs/` changed since the last commit you measured. If so, run the gate on it (job 4, `--runs 5 --years 1700,1750,1850:keep`) and `--save ~/cc-perf/best.json`. Keep `~/cc-perf/` outside the repo. If only docs changed, do nothing.
+2. **New candidate:** if `claude/perf-candidate` points at a commit you haven't gated, do two things in the same sitting:
    - re-measure the best into `best.json`, unless that was done in the last hour;
    - run `npm run perf:gate -- --runs 5 --years 1700,1750,1850:keep --baseline ~/cc-perf/best.json --save ~/cc-perf/cand-<commit>.json`.
 3. **Tournaments:** only when the candidate's commit message contains `[outcomes]`. That marks a speed-up that changes games and re-records the hashes. Also run job 1 step 5's two tournaments on both the best and the candidate.
-4. **Record:** write each result to `docs/perf/results/<date>-gate-<commit>.md`. Include the verdict line, the "against" line, the per-run times, and the commit's subject line. Commit to `claude/0.10-mac-results` and push.
+4. **Record:** write each result to `docs/perf/results/<date>-gate-<commit>.md`. Include the verdict line, the "against" line, the per-run times, and the commit's subject line. Commit to `claude/perf-mac-results` and push.
 5. **Report:** message the cloud session `session_01Vgy9QYBpiHxzmYr17Ez8zF` with one line per result, in the form `<commit> <verdict> <the against line>`.
 
 **Ground rules:**
 - Never run two jobs at once.
 - If a job is still running at the next pull, skip that pull.
 - If the Mac is busy with Simon's own work (load average above 3 before a run), wait for the next pull and say so in the report. Don't measure on a busy machine.
-- Never push to `claude/0.10-faster-turns` or `claude/0.10-candidate`.
+- Never push to `claude/perf-best` or `claude/perf-candidate`.

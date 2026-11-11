@@ -21,6 +21,7 @@ import { AMERICAS_EVENTS } from './americas.js';
 import { CARIBBEAN_EVENTS } from './caribbean.js';
 import { applyEffects, atRoundEnd, eventsState, num, valueEffects } from './effects.js';
 import type { EventChoice, EventDef, EventKind, EventVars, PendingEvent } from './types.js';
+import { colonyList } from '../unitindex.js';
 
 export * from './types.js';
 export { eventProductionPct } from './modifiers.js';
@@ -312,7 +313,7 @@ function drawHistorical(s: GameState): void {
 function drawRandom(s: GameState): void {
   const defs = eventDefs(s).filter((d) => d.kind === 'random' && !d.hidden);
   for (const p of s.players) {
-    if (p.id === 'crown' || p.kind === 'company' || !Object.values(s.colonies).some((c) => c.owner === p.id)) continue;
+    if (p.id === 'crown' || p.kind === 'company' || !colonyList(s).some((c) => c.owner === p.id)) continue;
     if (eventRandom(s, `random ${s.turn} ${p.id}`) >= RANDOM_EVENT_RATE) continue;
     const options: { def: EventDef; vars: EventVars; weight: number }[] = [];
     for (const def of defs) {

@@ -57,11 +57,16 @@ export const RIVER_YIELD_BONUS: Record<1 | 2, Partial<Record<GoodId, number>>> =
 
 /** Raw yield of a tile for a good before colonist skill. */
 export function baseTileYield(tile: Tile, good: GoodId): number {
+  return tileYieldOf(tile, good, !!tile.p);
+}
+
+/** baseTileYield with the tile taken as plowed or not (`plowed`), whatever `tile.p` says. */
+function tileYieldOf(tile: Tile, good: GoodId, plowed: boolean): number {
   const def = TERRAIN[tile.t];
   const yields = tile.f && def.forest ? def.forest.yields : def.yields;
   let amount = yields[good] ?? 0;
   if (amount === 0) return 0;
-  if (tile.p && !tile.f && (good === 'food' || good === 'sugar' || good === 'tobacco' || good === 'cotton')) amount += 1;
+  if (plowed && !tile.f && (good === 'food' || good === 'sugar' || good === 'tobacco' || good === 'cotton')) amount += 1;
   if (tile.r && (good === 'lumber' || good === 'ore' || good === 'silver' || good === 'furs')) amount += 1;
   const bonusGood = tile.f ? 'furs' : def.bonusGood;
   if (tile.b && bonusGood === good) amount *= 2;
@@ -104,22 +109,42 @@ export function workerTileYield(s: GameState, colony: Colony, tile: Tile | undef
 
 /** Goods produced by the colony's centre tile without a worker. */
 export function centreProduction(s: GameState, colony: Colony): Partial<Record<GoodId, number>> {
-  const tile = tileAt(s, colony.x, colony.y);
-  if (!tile) return {};
-  const def = TERRAIN[tile.t];
-  const yields = tile.f && def.forest ? def.forest.yields : def.yields;
+  const centre = centreGoods(s, colony);
+  if (!centre) return {};
   const out: Partial<Record<GoodId, number>> = {};
-  const food = baseTileYield({ ...tile, p: true }, 'food');
-  if (food > 0) out.food = food;
-  let best: GoodId | undefined;
-  for (const g of Object.keys(yields) as GoodId[]) {
-    if (g === 'food' || g === 'lumber') continue;
-    if (!best || baseTileYield(tile, g) > baseTileYield(tile, best)) best = g;
-  }
-  if (best) out[best] = baseTileYield({ ...tile, p: true }, best);
+  if (centre.food > 0) out.food = centre.food;
+  if (centre.best) out[centre.best] = centre.bestAmount;
   const mult = yieldMultiplier(s);
   if (mult !== 1) for (const g of Object.keys(out) as GoodId[]) out[g]! *= mult;
   return out;
+}
+
+/** The goods of a terrain's yields table, in key order, by table (the tables never change). */
+const yieldGoods = new WeakMap<object, GoodId[]>();
+
+/**
+ * centreProduction before the yield multiplier, without building objects: the centre's food (the
+ * tile taken as plowed) and its best other good but lumber (the first in the terrain's yields with
+ * the highest yield as the tile is), at its yield as plowed. Null off the map.
+ */
+function centreGoods(s: GameState, colony: Colony): { food: number; best: GoodId | undefined; bestAmount: number } | null {
+  const tile = tileAt(s, colony.x, colony.y);
+  if (!tile) return null;
+  const def = TERRAIN[tile.t];
+  const yields = tile.f && def.forest ? def.forest.yields : def.yields;
+  let goods = yieldGoods.get(yields);
+  if (!goods) yieldGoods.set(yields, (goods = Object.keys(yields) as GoodId[]));
+  let best: GoodId | undefined;
+  let bestYield = 0;
+  for (const g of goods) {
+    if (g === 'food' || g === 'lumber') continue;
+    const y = baseTileYield(tile, g);
+    if (!best || y > bestYield) {
+      best = g;
+      bestYield = y;
+    }
+  }
+  return { food: tileYieldOf(tile, 'food', true), best, bestAmount: best ? tileYieldOf(tile, best, true) : 0 };
 }
 
 export function buildingCapacityPerWorker(s: GameState, colony: Colony, kind: BuildingKind, unitType: UnitTypeId, bonus = libertyBonus(s, colony)): number {
@@ -162,15 +187,37 @@ function zero(): Record<ProductId, number> {
   return { ...ZERO };
 }
 
+/** The products of a report in ZERO's key order, which is the key order of every zero(). */
+const PRODUCTS = Object.keys(ZERO) as ProductId[];
+
+/**
+ * An empty record for keys that come and go, such as unit ids. It starts in V8's dictionary mode
+ * (deleting a property other than the last one puts it there), which fills with ever-new keys
+ * several times faster than `{}`, whose hidden classes grow a new branch for every new key. In
+ * every other way it is `{}`: the same prototype, the same key order.
+ */
+function idRecord<T>(): Record<string, T> {
+  const out: Record<string, unknown> = { a: 0, b: 0 };
+  delete out.a;
+  delete out.b;
+  return out as Record<string, T>;
+}
+
 export function colonyReport(s: GameState, colony: Colony): ColonyReport {
   const produced = zero();
   const consumed = zero();
-  const workers: Record<string, number> = {};
+  const workers = idRecord<number>();
   const buildings: ColonyReport['buildings'] = {};
   const units = colonyWorkers(s, colony);
   const bonus = libertyBonus(s, colony, units.length);
 
-  for (const [g, n] of Object.entries(centreProduction(s, colony)) as [GoodId, number][]) produced[g] += n;
+  // The centre tile's goods, as centreProduction gives them: two different goods, each added to a zero.
+  const centre = centreGoods(s, colony);
+  if (centre) {
+    const mult = yieldMultiplier(s);
+    if (centre.food > 0) produced.food += mult !== 1 ? centre.food * mult : centre.food;
+    if (centre.best) produced[centre.best] += mult !== 1 ? centre.bestAmount * mult : centre.bestAmount;
+  }
 
   // Workers in buildings, by building, each list in the workers' order.
   let inBuilding: Map<BuildingKind, Unit[]> | undefined;
@@ -226,6 +273,6 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
   applyEventModifiers(s, colony, produced);
 
   const net = zero();
-  for (const key of Object.keys(net) as ProductId[]) net[key] = produced[key] - consumed[key];
+  for (const key of PRODUCTS) net[key] = produced[key] - consumed[key];
   return { produced, consumed, net, buildings, workers, population: units.length, sonsOfLiberty: sonsOfLiberty(s, colony, units.length) };
 }

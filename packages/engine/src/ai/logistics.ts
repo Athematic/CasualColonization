@@ -23,7 +23,7 @@ import type { Colony, GameState, Player, RouteCargo, RouteStop, TradeRoute, Unit
 import { ownColonies, safely } from './common.js';
 import { portNet, wagonSteps } from './foreign.js';
 import { buyFromNatives } from './natives.js';
-import { indexedUnitsOf, ownedUnitsView } from '../unitindex.js';
+import { indexedUnitsOf, ownedUnitsView, unitList } from '../unitindex.js';
 
 /** Goods worth carrying away from a colony to sell. */
 /** Goods ships move between colonies and sell, most valuable first (the scenario's `ai.goods.trade`). */
@@ -100,10 +100,7 @@ function wagonServed(s: GameState, p: Player): Set<string> {
   const out = new Set<string>();
   // The routes a wagon train follows, in one pass over the units (as routeUnits per route would find).
   const carted = new Set<string>();
-  for (const id in s.units) {
-    const u = s.units[id];
-    if (u.route && isWagon(u)) carted.add(u.route.id);
-  }
+  for (const u of unitList(s)) if (u.route && isWagon(u)) carted.add(u.route.id);
   for (const r of routesOf(s, p.id)) {
     if (!carted.has(r.id)) continue;
     for (const st of r.stops) {
@@ -165,8 +162,7 @@ function cartingNeeds(s: GameState, p: Player): { served: Set<string>; waiting: 
 /** The units following each route (as routeUnits gives them, in the units' order). */
 function unitsByRoute(s: GameState): Map<string, Unit[]> {
   const out = new Map<string, Unit[]>();
-  for (const id in s.units) {
-    const u = s.units[id];
+  for (const u of unitList(s)) {
     if (!u.route) continue;
     const list = out.get(u.route.id);
     if (list) list.push(u);
