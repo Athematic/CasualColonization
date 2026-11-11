@@ -63,6 +63,7 @@ Newest last. Each entry has an id; acknowledge it in your next report.
   - **The candidate:** `claude/0.10-candidate` is round 2 rebuilt on this best (all tests and both `bench --verify` pass), so gate it as in M8.
 - **M10 (2026-11-11):** round 2 (`8cc9e99`) is **accepted** and merged into the best. The next candidates are round 3 (colony worker planning and path search, bit-identical) and the grid abstraction (bit-identical). Gate them as usual when they appear.
 - **M11 (2026-11-11):** a new candidate is on `claude/0.10-candidate`: the grid abstraction (hex maps step 1). It is bit-identical, and its purpose is structure, not speed. Gate it as usual. For this candidate only, **NEUTRAL counts as a pass**: it only has to be no slower. Report the verdict as usual and I'll merge it on NEUTRAL or ACCEPT. Round 3 (speed) comes later and is judged by the normal Pareto rule.
+- **M12 (2026-11-11):** the grid abstraction (`db4ca13`) is **accepted** and merged into the best. Re-baseline the best. Round 3 comes next on `claude/0.10-candidate`.
 
 What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
 
