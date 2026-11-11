@@ -194,20 +194,33 @@ export function barter(s: GameState, by: PlayerId, unitId: string, at: { colonyI
 }
 
 // ---------------------------------------------------------------------------
-// A computer people's trade visits (simple rules until step 9)
+// A computer people's trade visits and barter (ai/people.ts, Beta 3 step 9)
 
 /** Furs a computer people's town takes to a European colony on a trade visit, at most. */
 export const TRADE_VISIT_FURS = 100;
 
+/** Food a Naive people's town sells to a European colony short of it on a trade visit, at most. */
+export const TRADE_VISIT_FOOD = 50;
+
+/** What a computer people's town wants to hold of each good it buys: muskets and horses for its warriors, tools for its builds, cloth and trade goods for barter. */
+const WANTS: Partial<Record<GoodId, number>> = { muskets: 100, horses: 50, tools: 100, cloth: 50, tradeGoods: 50 };
+
+/** What a computer European colony keeps of a good before it sells any to a people (its own builds and soldiers). */
+const KEEP: Partial<Record<GoodId, number>> = { muskets: 50, horses: 50, tools: 50 };
+
 /**
- * A computer people trades as the braves of Beta 2 do, once a year (ai/index.ts): each of its towns
- * with spare furs takes up to `TRADE_VISIT_FURS` to the nearest colony, within its braves' reach
- * (`visitRange`), of a computer European nation at peace with it, which buys them when they fetch
- * more in Europe than they cost and it can pay (as a computer nation buys what a brave offers). The
- * people comes to trade, so a trade treaty gives it the treaty's price. Colonies of nations a person
- * plays are left to the person (trade by hand, `tradeWithPeople`).
+ * A computer people trades as the braves of Beta 2 do, once a year (ai/people.ts): each of its
+ * towns visits the nearest colony, within its braves' reach (`visitRange`), of a computer European
+ * nation at peace with it. It sells up to `TRADE_VISIT_FURS` spare furs, which the nation buys when
+ * they fetch more in Europe than they cost and it can pay (as a computer nation buys what a brave
+ * offers); a people whose profile sells food (Naive) sells food above its reserve to a colony short
+ * of it; and it buys the European goods its profile names (ai/profiles.ts `buys`) that the colony
+ * can spare, as far as its gold goes, at the prices of Beta 2's settlement trade (a people pays
+ * more for the goods it wants most), when they fetch the nation at least what they would in
+ * Europe. The people comes to trade, so a trade treaty gives it the treaty's prices. Colonies of
+ * nations a person plays are left to the person (`tradeWithPeople`).
  */
-export function computerTradeVisits(s: GameState, people: PlayerId): void {
+export function computerTradeVisits(s: GameState, people: PlayerId, prof?: { sellsFood: boolean; buys: readonly GoodId[] }): void {
   const grid = gridOf(s);
   const range = nativeRulesOf(s).visitRange;
   const colonies = colonyList(s).filter((c) => {
@@ -216,10 +229,9 @@ export function computerTradeVisits(s: GameState, people: PlayerId): void {
     return !o.human && !pairAtWar(s, c.owner, people);
   });
   if (!colonies.length) return;
+  const me = player(s, people);
   for (const town of colonyList(s)) {
     if (town.owner !== people) continue;
-    const furs = Math.min(TRADE_VISIT_FURS, spare(s, town, 'furs'));
-    if (furs <= 0) continue;
     let best: Colony | undefined;
     let bestD = Infinity;
     for (const c of colonies) {
@@ -231,20 +243,143 @@ export function computerTradeVisits(s: GameState, people: PlayerId): void {
     }
     if (!best) continue;
     const buyer = player(s, best.owner);
-    const price = pairPrice(s, people, best.owner, 'furs', people);
-    const worth = sellPrice(buyer, 'furs') * (1 - buyer.tax / 100);
-    if (worth <= price) continue;
-    let n = Math.min(furs, Math.max(0, warehouseCapacity(best) - best.goods.furs));
-    while (n > 0 && dealGold(n, price) > buyer.gold) n--;
-    if (n <= 0) continue;
-    const gold = dealGold(n, price);
-    town.goods.furs -= n;
-    best.goods.furs += n;
-    buyer.gold -= gold;
-    player(s, people).gold += gold;
-    notePeopleTrade(s, best.owner, people as TribeId, gold);
-    track(people, 'trade:people sold', gold);
-    message(s, `${sideName(s, people).replace(/^the /, 'The ')} bring ${n} furs from ${town.name} to ${best.name} and sell them for ${gold} gold.`, people, best);
-    message(s, `${sideName(s, people).replace(/^the /, 'The ')} bring ${n} furs from ${town.name} to ${best.name} and sell them for ${gold} gold.`, best.owner, best);
+    const furs = Math.min(TRADE_VISIT_FURS, spare(s, town, 'furs'));
+    if (furs > 0) {
+      const price = pairPrice(s, people, best.owner, 'furs', people);
+      const worth = sellPrice(buyer, 'furs') * (1 - buyer.tax / 100);
+      if (worth > price) {
+        let n = Math.min(furs, Math.max(0, warehouseCapacity(best) - best.goods.furs));
+        while (n > 0 && dealGold(n, price) > buyer.gold) n--;
+        if (n > 0) sellTo(s, people, town, best, 'furs', n, dealGold(n, price));
+      }
+    }
+    // Food to a colony short of it (Naive): the price is high where food is scarce.
+    if (prof?.sellsFood && best.goods.food < TRADE_VISIT_FOOD) {
+      const price = pairPrice(s, people, best.owner, 'food', people);
+      let n = Math.min(TRADE_VISIT_FOOD, spare(s, town, 'food'));
+      while (n > 0 && dealGold(n, price) > buyer.gold) n--;
+      if (n > 0) sellTo(s, people, town, best, 'food', n, dealGold(n, price));
+    }
+    for (const good of prof?.buys ?? []) {
+      if (!goodsOf(s).includes(good)) continue;
+      const want = Math.min(WANTS[good] ?? 50, warehouseCapacity(town)) - (town.goods[good] ?? 0);
+      const stock = (best.goods[good] ?? 0) - (KEEP[good] ?? 0);
+      if (want <= 0 || stock <= 0) continue;
+      const price = pairPrice(s, best.owner, people, good, people);
+      // The nation sells when the people pays at least what the good fetches in Europe.
+      if (price < sellPrice(buyer, good) * (1 - buyer.tax / 100)) continue;
+      let n = Math.min(want, stock);
+      while (n > 0 && dealGold(n, price) > me.gold) n--;
+      if (n <= 0) continue;
+      const gold = dealGold(n, price);
+      best.goods[good] -= n;
+      town.goods[good] += n;
+      me.gold -= gold;
+      buyer.gold += gold;
+      notePeopleTrade(s, best.owner, people as TribeId, gold);
+      track(people, 'trade:people bought', gold);
+      track(people, `trade:people bought ${good}`, n);
+      const text = `${sideName(s, people).replace(/^the /, 'The ')} buy ${n} ${GOOD_DEFS[good].name.toLowerCase()} at ${best.name} for ${gold} gold and take them to ${town.name}.`;
+      message(s, text, people, best);
+      message(s, text, best.owner, best);
+    }
   }
+}
+
+/** A people's town sells goods to a colony on a trade visit: the goods move, the gold the other way, the trade counts for their standing. */
+function sellTo(s: GameState, people: PlayerId, town: Colony, colony: Colony, good: GoodId, n: number, gold: number): void {
+  town.goods[good] -= n;
+  colony.goods[good] += n;
+  player(s, colony.owner).gold -= gold;
+  player(s, people).gold += gold;
+  notePeopleTrade(s, colony.owner, people as TribeId, gold);
+  track(people, 'trade:people sold', gold);
+  const text = `${sideName(s, people).replace(/^the /, 'The ')} bring ${n} ${GOOD_DEFS[good].name.toLowerCase()} from ${town.name} to ${colony.name} and sell them for ${gold} gold.`;
+  message(s, text, people, colony);
+  message(s, text, colony.owner, colony);
+}
+
+/** The worth a computer people's barter visit trades at most, in `nativeValue` (furs 1, food 0.5, cloth 3). */
+export const BARTER_WORTH = 60;
+
+/** Goods a town gives in barter, in order: European goods others want, then food above its reserve, then furs. */
+const BARTER_GIVES: readonly GoodId[] = ['cloth', 'tradeGoods', 'tools', 'food', 'furs'];
+
+/**
+ * A computer people's barter visits, once a year (ai/people.ts): its towns visit up to `visits`
+ * other peoples (playing or nobody's) whose town or settlement lies within its braves' reach, at
+ * peace with it and not distrusting it, nearest first, each people once. A visit gives up to
+ * `BARTER_WORTH` of the town's goods (European goods others want, food above its reserve, furs)
+ * for goods of the same worth the other side can spare (a town's food above its reserve and furs,
+ * a settlement's goods), as `barter` does, a trade treaty adding its `sell` to what is brought.
+ * What is traded counts for the pair's standing (`volume`), so trade treaties, pacts and leagues
+ * can follow between peoples.
+ */
+export function computerBarter(s: GameState, people: PlayerId, visits: number): void {
+  if (visits <= 0) return;
+  const grid = gridOf(s);
+  const range = nativeRulesOf(s).visitRange;
+  const done = new Set<PlayerId>();
+  const places: { owner: PlayerId; town?: Colony; st?: Settlement; d: number; from: Colony }[] = [];
+  for (const from of colonyList(s)) {
+    if (from.owner !== people) continue;
+    for (const c of colonyList(s)) {
+      if (c.owner === people || kindOfId(c.owner) !== 'people') continue;
+      const d = grid.distance(c.x, c.y, from.x, from.y);
+      if (d <= range) places.push({ owner: c.owner, town: c, d, from });
+    }
+    for (const k in s.settlements) {
+      const st = s.settlements[k];
+      const d = grid.distance(st.x, st.y, from.x, from.y);
+      if (d <= range) places.push({ owner: st.tribe, st, d, from });
+    }
+  }
+  // Nearest first; ties in the order found.
+  places.sort((a, b) => a.d - b.d);
+  for (const place of places) {
+    if (done.size >= visits) break;
+    if (done.has(place.owner) || pairAtWar(s, people, place.owner)) continue;
+    const rel = standingWith(s, people, place.owner);
+    if (rel.hostileUntil !== undefined && s.turn < rel.hostileUntil) continue;
+    if (barterVisit(s, people, place.from, place.owner, place.town, place.st)) done.add(place.owner);
+  }
+}
+
+/** One barter visit from a town to another people's town or settlement; returns whether anything changed hands. */
+function barterVisit(s: GameState, people: PlayerId, from: Colony, other: PlayerId, town?: Colony, st?: Settlement): boolean {
+  const bonus = pairTreaty(s, 'people-trade', people, other) ? peopleTreatyRules(s).trade.sell : 1;
+  const theirs = (g: GoodId) => (town ? spare(s, town, g) : Math.max(0, st!.goods?.[g] ?? 0));
+  const takes: GoodId[] = town ? ['food', 'furs', 'tobacco'] : (Object.keys(st!.goods ?? {}) as GoodId[]);
+  for (const give of BARTER_GIVES) {
+    const have = spare(s, from, give);
+    if (have <= 0) continue;
+    for (const take of takes) {
+      if (take === give || !goodsOf(s).includes(take)) continue;
+      const stock = theirs(take);
+      if (stock <= 0) continue;
+      const room = Math.max(0, warehouseCapacity(from) - (from.goods[take] ?? 0));
+      const giveN = Math.min(have, Math.floor(BARTER_WORTH / GOOD_DEFS[give].nativeValue));
+      const n = Math.min(stock, room, Math.floor((giveN * GOOD_DEFS[give].nativeValue * bonus) / GOOD_DEFS[take].nativeValue));
+      if (n <= 0) continue;
+      const given = Math.min(giveN, Math.ceil((n * GOOD_DEFS[take].nativeValue) / (GOOD_DEFS[give].nativeValue * bonus)));
+      from.goods[give] -= given;
+      from.goods[take] += n;
+      if (town) {
+        town.goods[take] -= n;
+        town.goods[give] += given;
+      } else {
+        const goods = (st!.goods ??= {});
+        goods[take] = (goods[take] ?? 0) - n;
+        if (give === 'muskets' || give === 'horses') goods[give] = (goods[give] ?? 0) + given;
+      }
+      standingWith(s, people, other).volume += Math.round(n * GOOD_DEFS[take].nativeValue);
+      track(people, 'trade:people barter');
+      const where = town ? town.name : settlementName(s, st!);
+      const text = `At ${where}, ${sideName(s, people)} give ${given} ${GOOD_DEFS[give].name.toLowerCase()} from ${from.name} for ${n} ${GOOD_DEFS[take].name.toLowerCase()} of ${sideName(s, other)}.`;
+      message(s, text, people, from);
+      if (town) message(s, text, town.owner, town);
+      return true;
+    }
+  }
+  return false;
 }

@@ -51,7 +51,7 @@ import { peoplePairRandom } from './relations.js';
 import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { cooperationOf, LEVEL_COOPERATION } from './alliances.js';
-import { calendarOf, nationOf, peopleOf, scenarioOf, settlementKindIn, turnAfterYears, yearOf, yearValue } from './scenarios/index.js';
+import { calendarOf, nationOf, peopleOf, scenarioOf, settlementKindIn, turnAfterYears, yearValue } from './scenarios/index.js';
 import type { YearsAround } from './scenarios/types.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, nationParty, peopleParty } from './treaties.js';
@@ -59,6 +59,7 @@ import type { Colony, GameState, PeopleRelation, PeopleTreatyKind, Player, Treat
 import { colonyList, setUnitLoc } from './unitindex.js';
 import { gridOf } from './grid.js';
 import { computerLeague, leagueWar, processLeagues } from './peopleleague.js';
+import { peopleProfileOf, type PeopleProfile } from './ai/profiles.js';
 
 // ---------------------------------------------------------------------------
 // Who is who
@@ -315,9 +316,10 @@ function computerAccepts(s: GameState, from: PlayerId, to: PlayerId, kind: Peopl
     const share = kind === 'land-use' ? level.land : kind === 'exchange' ? level.exchange : kind === 'defence' ? level.defence : 1;
     return r < cooperationOf(s).acceptPeopleOffer * level.peopleAccept * share;
   }
-  // A people, playing by the computer or nobody plays: Beta 2's answer (N8).
+  // A people, playing by the computer or nobody plays: Beta 2's answer (N8), a computer people's
+  // times its profile's `accept` (ai/profiles.ts).
   if (peopleRefuses(s, to, from)) return false;
-  return r < peopleTreatyRules(s).accept * temperamentOf(s, to as TribeId).accept;
+  return r < peopleTreatyRules(s).accept * temperamentOf(s, to as TribeId).accept * (peopleProfileOf(s.players, to)?.accept ?? 1);
 }
 
 /** A people's own reason to say no: it has not forgotten land taken from it lately (N8). */
@@ -703,32 +705,28 @@ export function processPeopleDiplomacy(s: GameState): void {
 }
 
 // ---------------------------------------------------------------------------
-// A computer people's simple rules (until step 9)
+// A computer people's proposals (ai/people.ts, by its profile)
 
 /**
- * A computer people's diplomacy, once a turn (ai/index.ts): it settles wars it is tired of, as a
- * computer nation does, makes its trade visits once a year (peopletrade.ts `computerTradeVisits`,
- * passed in as `trade`), and every fifth turn offers a trade treaty to each side it may make one
- * with (and a defence pact to a people it trades with), at Beta 2's `offer` chance times its
- * temperament, drawn from the pair's own stream.
+ * A computer people's proposals, every fifth turn (ai/people.ts): to each side it has met it offers
+ * the next treaty its profile proposes (ai/profiles.ts: `nationKinds` to European nations; trade,
+ * and with `peoplePacts` a mutual defence pact, to other peoples), at Beta 2's `offer` chance times
+ * its temperament and its profile's `offer`, drawn from the pair's own stream; and a profile that
+ * leads leagues (`league` 'lead') proposes one to its pact partners and theirs, or invites a pact
+ * partner into its own (peopleleague.ts `computerLeague`).
  */
-export function peopleComputerDiplomacy(s: GameState, p: Player, peace: (s: GameState, id: PlayerId) => void, trade?: (s: GameState, id: PlayerId) => void): void {
-  peace(s, p.id);
-  // Trade visits once a year, on the year's first turn.
-  const cal = calendarOf(s);
-  if (trade && (s.turn === 0 || yearOf(s.turn, cal).year !== yearOf(s.turn - 1, cal).year)) trade(s, p.id);
+export function peopleProposals(s: GameState, p: Player, prof: PeopleProfile): void {
   if (!peopleTreatiesOn(s) || s.turn % 5 !== 0) return;
-  const chance = peopleTreatyRules(s).offer * temperamentOf(s, p.id as TribeId).offer;
+  const chance = peopleTreatyRules(s).offer * temperamentOf(s, p.id as TribeId).offer * prof.offer;
+  const peopleKinds: PeopleTreatyKind[] = prof.peoplePacts ? ['people-trade', 'defence'] : ['people-trade'];
   for (const other of counterparts(s, p.id)) {
     if (!standingOf(s, p.id, other)) continue;
-    for (const kind of ['people-trade', 'defence'] as const) {
-      if (kind === 'defence' && sideOf(s, other) === 'nation') continue;
+    for (const kind of sideOf(s, other) === 'nation' ? prof.nationKinds : peopleKinds) {
       if (pairTreatyProblem(s, p.id, other, kind)) continue;
       const [n, q] = standingPair(p.id, other);
       if (peoplePairRandom(s, n, q, `offer ${kind} ${s.turn}`) >= chance) continue;
       proposePairTreaty(s, p.id, other, kind);
     }
   }
-  // A league with its pact partners (T14's confederacy, peopleleague.ts).
-  computerLeague(s, p.id, chance);
+  if (prof.league === 'lead') computerLeague(s, p.id, chance);
 }

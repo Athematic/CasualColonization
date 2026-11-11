@@ -32,6 +32,7 @@ import type { PlayerId, TribeId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, peopleParty, treatyPeoples } from './treaties.js';
 import type { GameState, LeagueProposal, Treaty } from './types.js';
+import { peopleProfileOf } from './ai/profiles.js';
 
 /** The fewest peoples a new league is made with. */
 export const LEAGUE_MIN = 3;
@@ -110,10 +111,13 @@ export function leagueProblem(s: GameState, from: PlayerId, peoples: readonly Pl
 
 /** A computer people's, or a people nobody plays, answer to a league: Beta 2's rule for a people's answer, from the pair's own stream. */
 function computerJoins(s: GameState, from: PlayerId, to: PlayerId): boolean {
+  // A computer people joins as its profile says (T14: Creative leads, Competent joins, Combative and Naive keep out).
+  const prof = peopleProfileOf(s.players, to);
+  if (prof?.league === 'none') return false;
   const took = standingOf(s, to, from)?.tookLand;
   if (took !== undefined && s.turn < turnAfterYears(took, peopleTreatyRules(s).landYears, calendarOf(s))) return false;
   const [n, p] = standingPair(from, to);
-  return peoplePairRandom(s, n, p, `league answer ${from} ${s.turn}`) < peopleTreatyRules(s).accept * temperamentOf(s, to as TribeId).accept;
+  return peoplePairRandom(s, n, p, `league answer ${from} ${s.turn}`) < peopleTreatyRules(s).accept * temperamentOf(s, to as TribeId).accept * (prof?.accept ?? 1);
 }
 
 /**
@@ -243,8 +247,8 @@ export function processLeagues(s: GameState): void {
 }
 
 /**
- * A computer people's league diplomacy (until step 9's profiles), every fifth turn with its other
- * proposals: outside a league, it proposes one to the peoples it holds defence pacts with and
+ * A computer people's league diplomacy (a profile that leads leagues, ai/profiles.ts), every
+ * fifth turn with its other proposals: outside a league, it proposes one to the peoples it holds defence pacts with and
  * their own pact partners, when they are enough; inside one, it invites a pact partner outside any
  * league. At Beta 2's `offer` chance times its temperament, drawn from the pair's own stream.
  */
