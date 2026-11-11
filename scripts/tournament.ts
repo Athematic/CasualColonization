@@ -18,7 +18,7 @@
 // way and the results are gathered in game order, so the tables are identical.
 import { availableParallelism } from 'node:os';
 import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads';
-import { AI_LEVELS, arenaGames, DEFAULT_SCENARIO, DIFFICULTY_LEVELS, formatArena, getScenario, listScenarios, formatCrown, formatEvents, formatFeatures, formatRelations, formatScoreSplit, formatRelationsLine, playArenaRound, runArena, summarise, type AiLevel, type ArenaEntry, type ArenaOptions, type DifficultyId, type MapSize, type Rivals } from '../packages/engine/src/index.ts';
+import { AI_LEVELS, arenaGames, DEFAULT_SCENARIO, DIFFICULTY_LEVELS, formatArena, getScenario, listScenarios, formatCrown, formatEvents, formatFeatures, formatProsperity, formatRelations, formatScoreSplit, formatRelationsLine, playArenaRound, runArena, summarise, type AiLevel, type ArenaEntry, type ArenaOptions, type DifficultyId, type MapSize, type Rivals } from '../packages/engine/src/index.ts';
 
 if (!isMainThread) {
   // A worker: plays the games it is sent (by number) and sends back their rows.
@@ -106,6 +106,8 @@ async function main(): Promise<void> {
     console.log(`Relations and trade between the Europeans, average per nation per game:\n\n${formatRelations(result.summary)}\n\n${formatRelationsLine(result.entries)}\n`);
     console.log(`The Crown: independence, the Royal Expeditionary Force (land units) against the old formula, demands and royal wars, average per nation per game:\n\n${formatCrown(result.entries)}\n`);
     if (options.events) console.log(`${formatEvents(result.entries)}\n`);
+    const prosperity = formatProsperity(result.entries);
+    if (prosperity) console.log(`Prosperity at the end, per level (every nation judged, whatever ended the game):\n\n${prosperity}\n`);
     if (features) {
       // Columns in the order the levels were listed, so tables from different runs line up.
       const byLevel = [...new Set(levels)].map((level) => ({ level, features: result.summary.find((r) => r.level === level)?.features ?? {} }));
