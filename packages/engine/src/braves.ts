@@ -987,5 +987,14 @@ export function braveDefence(s: GameState, b: Brave): number {
 
 /** Whether a tile holds a brave of a tribe at war with the nation. */
 export function hostileBraveAt(s: GameState, nation: NationId, x: number, y: number): Brave | undefined {
+  // Usually no tribe is at war with the nation, and then no brave is hostile: the braves are not scanned.
+  let war = false;
+  for (const t of s.tribes) {
+    if (t.stance[nation] === 'war') {
+      war = true;
+      break;
+    }
+  }
+  if (!war) return undefined;
   return bravesAt(s, x, y).find((b) => s.tribes.find((t) => t.id === b.tribe)?.stance[nation] === 'war');
 }
