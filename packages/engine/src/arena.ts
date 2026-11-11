@@ -380,7 +380,8 @@ export function playArenaGame(
   const rule = scenarioOf(s).victory.find((v) => v.id === 'prosperity');
   // Judged on the scores the game ended with (the round's next turn has begun since), as the victory was.
   const finals = rule ? (s.gameOver?.scores ?? finalScores(s)) : undefined;
-  const entries = line.map((l) => {
+  // A nation that had not arrived when the game stopped (arrivals.ts) has no standing to report.
+  const entries = line.filter((l) => s.players.some((p) => p.id === l.nation)).map((l) => {
     const standingThen = rule ? prosperityStanding(s, l.nation, finals!, prosperityParams(rule.params)) : undefined;
     const fails = standingThen
       ? { prosperityFails: standingThen.fails, prosperityCounts: { met: standingThen.met.length, unpeaceful: standingThen.notAtPeace.length, partners: standingThen.partners.length, needed: standingThen.needed } }
