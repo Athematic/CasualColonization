@@ -32,9 +32,9 @@ If a change is meant to change games, re-record with `npm run test:golden:write`
 | `goods` | Goods in play. The order is the order of keys in markets and warehouses. |
 | `units` | Unit types in play. Europe offers, colonies build and immigrants arrive only from this list. The engine's named slots (treasure, the King's regulars, the starting ship) must be on it. |
 | `buildings` | Buildings in play, in production order (tools are made before the armory uses them). |
-| `nationTypes` | Optional selections per nation type ([design/native-nations.md](design/native-nations.md) T6, T7): `nationTypes.people` gives the `units` and `buildings` a people playing as a nation uses, from the same catalogues; `units[0]` is the unit its towns are peopled and grow with. `units` and `buildings` above are the European nations' selection. Absent: the catalogue's people's entries (`PEOPLE_UNIT_TYPES`, `PEOPLE_BUILDINGS`). See [Peoples playing as nations](#peoples-playing-as-nations). |
+| `nationTypes` | Optional selections per nation type ([design/native-nations.md](design/native-nations.md) T6, T7, T8): `nationTypes.people` gives the `units` and `buildings` a people playing as a nation uses, from the same catalogues, and its `council` (an id in `councils`; absent: `people`); `units[0]` is the unit its towns are peopled and grow with. `units` and `buildings` above are the European nations' selection; `nationTypes.european.council` names their council (absent: `congress`). Absent: the catalogue's people's entries (`PEOPLE_UNIT_TYPES`, `PEOPLE_BUILDINGS`). See [Peoples playing as nations](#peoples-playing-as-nations). |
 | `peopleEconomy` | Optional overrides of a playing people's stores and gardens (`PEOPLE_ECONOMY` in `rules/peoples.ts`): `storeYears` (1), `storeBase` (50) and `gardens` (the terrains where maize, beans and squash grow). A people may have its own `storeYears` through `peoples.overrides`. |
-| `council` | The scenario's council (the Americas: the Continental Congress). `categories`, `members` (ids from the catalogue's `FATHERS`) and optional `effects` that replace a member's effects in this scenario. |
+| `councils` | The scenario's councils keyed by id ([design/native-nations.md](design/native-nations.md) T8): the Americas' and the Caribbean's `congress`, the Continental Congress (the Caribbean calls it the Colonial Council through its terms). Each nation type sits the council its `nationTypes` entry names. See [Councils](#councils). |
 | `ai` | What the computer players need to know: `pace`, `islands` and four goods lists. See [Computer players](#computer-players). |
 | `events` | The id of a registered event set. See [Events](#events). |
 | `mechanics` | Eighteen switches. See [Mechanics switches](#mechanics-switches). |
@@ -66,7 +66,7 @@ If a change is meant to change games, re-record with `npm run test:golden:write`
 - the generator and every stored map use only the scenario's terrains, and every stored map places only the scenario's peoples;
 - the nation sets fit `nations.max`, have no repeated or `crown` ids, and every entry has a name, adjective, colour, port and colony names;
 - every people's lifeway has a settlement kind, and goods references are closed: the goods natives produce and want, the goods and units that buildings, experts and the AI lists need are all in play, and a people's overrides name only its own people;
-- the council has members in its categories;
+- the European nations' council is the scenario's own, and each nation type's council (a people's may be the engine's) has members in its categories;
 - the mechanics are consistent: independence needs the REF, boycotts need taxes, a charter has a positive base, the REF needs the King's regulars, artillery and men-of-war, the custom house needs its building;
 - the rumour table has odds, and free colonists are in play if a rumour can give them.
 
@@ -113,11 +113,29 @@ The hooks:
 | Exploration | `sight`, `rumourOutcome` |
 | Natives | `landPrice`, `nativeGifts`, `nativesTeach`, `conversionChance`, `convertsBecome` |
 | Combat | `unitOffence`, `offenceVsSettlements`, `armedFromStock`, `alwaysPromote`, `conquestTreasure`, `treasureFee`, `conquestConverts` |
+| A people's economy | `wayYield`, `townStore`, `teachTurns`, `landRecovery` |
 | Diplomacy | `peaceAccepted` |
 
 The helpers `mulOf`, `addOf` and `setOr` combine the numbers a hook returns. A new hook is added to the `Modifier` union and read where the rule runs, with the engine's old constant as its default, so the Americas stay identical.
 
 A council member's catalogue entry (`FATHERS`) carries its `modifiers` and `onJoin` effects. `Council.effects` replaces them per member for a scenario. `onJoin` is a list of the events' `Effect`s (see [Events](#events)), applied once when the member joins.
+
+A people's economy (step 3 of Beta 3) adds the hooks `wayYield` (a way of getting food or furs, `rules/peoples.ts`, multiplied and rounded), `townStore` (food a town keeps, added), `teachTurns` (an elder's teaching turns, added) and `landRecovery` (health a region with one of the player's towns regains in a year it is not over-hunted, added). `alwaysPromote` also makes a people's townsperson who wins a fight a warrior. The `makePeace` effect ends every war a player is in, but with the Crown.
+
+## Councils
+
+`Scenario.councils` keys the scenario's councils by id (`rules/councils.ts`, [design/native-nations.md](design/native-nations.md) T8). A `Council` has:
+
+- `categories`: open strings; one candidate of each is offered at a time, in this order. The Congress's are `FATHER_CATEGORIES` (trade, exploration, military, political, religious).
+- `members`: ids in the catalogue's `FATHERS`, in catalogue order. A member's entry has its `name`, `category`, `effect` text, `weight`, `modifiers` and `onJoin`, and optionally `plural` (a collective figure: "The Elders join"), `peoples` (offered only to these players: a named person sits only in his or her own people's council), `portrait: 'emblem'` (drawn as a neutral emblem, never a likeness; no sprite is looked up) and `source` (where the member is documented).
+- `effects`: optional per-member replacements, as before.
+- `text`: its words where they differ from the scenario's terms (`council`, `councilShort`, `member`, `members`, `product`); read with `councilText(s, player, key)`. The Congress has none, so the Americas' and the Caribbean's terms apply; its product is "bells".
+- `late`: a category whose members grow likelier late in the game (`{ category, turn, add }`; the Congress: political +2 after turn 120, scaled by `ai.pace`).
+- `aiPreference`: the order computer players choose candidates in (otherwise the first offered).
+- `cost`: the next member's price (`{ base, step, square }`; absent: the Congress's 60, 50, 12).
+- `hall`: the sprite id of its hall (absent: `art.councilHall`).
+
+`congress(members)` builds the Continental Congress with today's rules; both shipped scenarios use it. Which council a player sits is `councilOf(s, player)`: the systems table (`playerkind.ts`) gives each kind of player a council type (`european` for nations, `people` for a playing people, none for companies and the Crown), and the scenario's `nationTypes` names the council for the type. A council id the scenario does not define is looked up in the engine's `ENGINE_COUNCILS`, which holds `PEOPLE_COUNCIL`, a playing people's council (drafted for Simon's review): household, land, knowledge, defence and peace, with roles and collective figures and two named Haudenosaunee leaders. Its product is the council house's bells, called counsel. The engine still keeps the product in `Player.bells` and `fatherBells` and the members in `Player.fathers` whatever the council.
 
 ## Mechanics switches
 
@@ -231,6 +249,8 @@ Chartered companies (`Player.kind: 'company'`) stand outside all of this: the pe
 **The land** (`land.ts`): with `mechanics.hardYears` or `landHealth`, `GameState.land` holds the regions (squares of `regionSize` tiles until a stored map brings regions of its own), each region's health and what was taken in it this year, and this year's hard regions. Absent otherwise.
 
 **A people's land**: each town claims the unclaimed land within its people's `landRadius` (`Tile.claim` the people's id), never a settlement's land; the `claimLand` command claims more next to it. Other players' colonies do not work it or found colonies on it.
+
+**Its council**: a playing people sits its own council, not the Congress (`nationTypes.people.council`, absent `people`: the engine's `PEOPLE_COUNCIL` unless the scenario defines `councils.people`). Its towns' council houses produce its product (bells in the engine, counsel in its words), and its first candidates are drawn at setup. See [Councils](#councils).
 
 ## Treaties with peoples
 

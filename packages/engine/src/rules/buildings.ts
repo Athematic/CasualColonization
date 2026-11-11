@@ -153,7 +153,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     kind: 'palisade', levels: [lvl('Palisade', 64, 0, 3), lvl('Double Palisade', 120, 0, 6), lvl('Triple Palisade', 200, 0, 10)],
     initialLevel: 0, workplaces: 0, people: true, defence: [50, 100, 150],
   },
-  /** Where the town's council meets; its product pays council members (step 3; bells until then). */
+  /** Where the town's council meets: its product (bells in the engine, counsel in the people's council's words) pays for council members (rules/councils.ts). */
   councilHouse: { kind: 'councilHouse', levels: [lvl('Council House', 0, 0, 1)], initialLevel: 1, workplaces: 3, output: 'bells', baseOutput: [1], people: true },
 };
 
