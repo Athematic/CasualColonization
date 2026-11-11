@@ -28,8 +28,8 @@ export function activeStyle(): StylePlugin {
 }
 
 /**
- * The style that draws the map of a game on this grid: the chosen one when it can (the schematic and
- * placeholder styles draw hexes), else the schematic style, which draws every grid (hex-maps.md H14).
+ * The style that draws the map of a game on this grid: the chosen one when it can (every built-in style
+ * draws hexes since Beta 4 step 6), else the schematic style, which draws every grid (hex-maps.md H14).
  * Panels and icons keep the chosen style.
  */
 export function mapStyleFor(grid: GridKind): StylePlugin {

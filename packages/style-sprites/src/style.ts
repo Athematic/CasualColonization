@@ -6,8 +6,8 @@
  * hand anything else to the fallback's drawIcon. Nothing is fetched until the style is used; the
  * manifest and images then load in the background, and views redraw as they arrive.
  *
- * The style draws the grids its fallback's renderer draws (`grids`): over Ligne claire squares only, over the
- * schematic style squares and hexes. With `fallback: 'placeholder'` missing sprites and icons are plain
+ * The style draws the grids its fallback's renderer draws (`grids`): over Ligne claire and over the schematic
+ * style, squares and hexes. With `fallback: 'placeholder'` missing sprites and icons are plain
  * placeholders (placeholder.ts) instead of the fallback's drawing.
  */
 import { UNIT_TYPES } from '@cc/engine';

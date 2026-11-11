@@ -3,8 +3,8 @@
  * false when its sprite is missing or not loaded yet, and the fallback draws that piece instead; with
  * `fallback: 'placeholder'` the hook draws a plain placeholder (placeholder.ts) and returns true.
  *
- * On hexes (a fallback renderer that draws them: the schematic style) square sprites are clipped to the
- * hex the renderer traces, and the square-only pieces (coast bands, terrain transitions, road spokes in
+ * On hexes (a fallback renderer that draws them: the schematic style, Ligne claire) square sprites cover the
+ * hex's bounding square and are clipped to the hex the renderer traces, and the square-only pieces (coast bands, terrain transitions, road spokes in
  * quarter turns) are not used (hex-maps.md H15): roads are drawn through the centres as placeholders, or
  * left to the renderer.
  */
