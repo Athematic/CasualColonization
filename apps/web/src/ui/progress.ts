@@ -1,4 +1,4 @@
-import { calendarOf, DIFFICULTY, formatDate, nationOf, nationTitle, resolveDifficulty, withTerms, scoreBreakdown, STAT_INFO, STAT_KEYS, statsHistory, turnOfYear, yearOf, type GameState, type NationId, type StatKey, type StatsSeries } from '@cc/engine';
+import { calendarOf, DIFFICULTY, formatDate, nationOf, nationTitle, resolveDifficulty, withTerms, scoreBreakdown, STAT_INFO, STAT_KEYS, statsHistory, turnOfYear, yearOf, type GameState, type NationId, type StatKey, type StatsSeries, type TribeId, peopleList } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
 import { activeStyle } from '../styles.js';
@@ -89,6 +89,8 @@ export interface GameOverInfo {
   winner?: NationId;
   /** Every winner, best first (several when an alliance wins together). */
   winners?: NationId[];
+  /** The winners' partner peoples, after a prosperity victory. */
+  partners?: TribeId[];
   scores: Partial<Record<NationId, number>>;
   /** The nation of the person looking, if any. */
   viewer?: NationId;
@@ -184,7 +186,8 @@ export class ProgressScreen implements Screen {
     const players = s.players.filter((p) => p.id !== 'crown');
     const parts = players.map((p) => scoreBreakdown(s, p));
     const best = Math.max(...parts.map((b) => b.total));
-    const lines = parts[0]?.lines ?? [];
+    // Lines by key, in order of first appearance: some lines are only some nations' (shares in companies).
+    const lines = [...new Map(parts.flatMap((b) => b.lines).map((l) => [l.key, l] as const)).values()];
     return h('div', { class: 'card progress-breakdown' },
       h('h3', null, 'Score breakdown'),
       h('div', { class: 'table-scroll' },
@@ -193,9 +196,12 @@ export class ProgressScreen implements Screen {
             h('th', null, 'Component'),
             players.map((p) => h('th', { title: nationTitle(this.app.state, p.id) }, h('span', { class: 'flag', style: `background:${nationOf(this.app.state, p.id).color}` }), ' ', nationOf(this.app.state, p.id).name)))),
           h('tbody', null,
-            lines.map((line, i) => h('tr', null,
+            lines.map((line) => h('tr', null,
               h('td', { title: line.unit }, line.label),
-              parts.map((b) => h('td', { title: `${b.lines[i].value} ${b.lines[i].unit}` }, `${b.lines[i].points}`)))),
+              parts.map((b) => {
+                const mine = b.lines.find((l) => l.key === line.key);
+                return h('td', { title: `${mine?.value ?? 0} ${line.unit}` }, `${mine?.points ?? 0}`);
+              }))),
             h('tr', { class: 'total' },
               h('th', null, 'Total'),
               parts.map((b) => h('th', null, b.total === best ? h('strong', null, String(b.total)) : String(b.total))))))),
@@ -215,12 +221,17 @@ export class ProgressScreen implements Screen {
         h('td', null, String(score))))));
   }
 
-  /** "England wins.", or for an alliance that won together "England, France (you) and Spain win together." */
+  /**
+   * "England wins.", or for an alliance that won together "England, France (you) and Spain win
+   * together."; after a prosperity victory with the partner peoples: "England wins, with the
+   * Kalinago and the Arawak."
+   */
   private winnersLine(over: GameOverInfo): HTMLElement | null {
     const winners = over.winners ?? (over.winner ? [over.winner] : []);
     if (!winners.length) return null;
     const names = winners.map((n) => `${nationTitle(this.app.state, n)}${n === over.viewer ? ' (you)' : ''}`);
-    const text = names.length === 1 ? `${names[0]} wins.` : `${names.slice(0, -1).join(', ')} and ${names.at(-1)} win together.`;
+    const partners = over.partners?.length ? `, with ${peopleList(over.partners)}` : '';
+    const text = names.length === 1 ? `${names[0]} wins${partners}.` : `${names.slice(0, -1).join(', ')} and ${names.at(-1)} win together${partners}.`;
     return h('p', { class: 'winners' }, h('strong', null, text));
   }
 

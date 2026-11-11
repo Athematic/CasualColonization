@@ -79,6 +79,8 @@ async function main(): Promise<void> {
     const declared = rows.filter((r) => r.declared !== undefined).map((r) => `${r.level} ${r.independence}`).join(', ');
     const alliances = rows.reduce((n, r) => n + (r.relations?.alliances ?? 0), 0) / 2;
     const concord = rows.filter((r) => r.concord).map((r) => r.level).join(' + ');
+    const prosperity = rows.filter((r) => r.prosperity).map((r) => r.level).join(' + ');
+    const near = rows.filter((r) => r.prosperityFails?.length === 1).map((r) => `${r.level} ${r.prosperityFails![0]}`).join(', ');
     const confederation = rows.filter((r) => (r.relations?.confederations ?? 0) > 0).map((r) => r.level).join(' + ');
     const companies = rows.reduce((n, r) => n + (r.relations?.companies ?? 0), 0);
     const peopleMade = rows.reduce((n, r) => n + (r.relations?.peopleTreaties ?? 0), 0);
@@ -94,7 +96,7 @@ async function main(): Promise<void> {
     const defenceFights = rows.reduce((n, r) => n + (r.relations?.defenceFights ?? 0), 0);
     const pactWars = rows.reduce((n, r) => n + (r.relations?.pactWars ?? 0), 0);
     const last = Math.max(...rows.map((r) => r.lastTurn ?? 0));
-    console.error(`  game ${g + 1}/${options.games} (seed ${rows[0].seed}, to turn ${last}): ${line}  | agreements ${half('agreements')}, favoured ${half('favoured')}, wars ${wars} (royal ${royal}), alliances ${alliances}, companies ${companies}, people treaties ${peopleMade} (ended ${peopleEnded}, breaches ${breaches}), leases ${leases} (lapsed ${lapsed}), exchanges ${exchanges} (ended ${exchangesEnded}, taught again ${renewed}), defence pacts ${defences} (ended ${defencesEnded}, fights ${defenceFights}, wars ${pactWars})${declared ? `, independence: ${declared}` : ''}${confederation ? `, confederation: ${confederation}` : ''}${concord ? `, concord: ${concord}` : ''}`);
+    console.error(`  game ${g + 1}/${options.games} (seed ${rows[0].seed}, to turn ${last}): ${line}  | agreements ${half('agreements')}, favoured ${half('favoured')}, wars ${wars} (royal ${royal}), alliances ${alliances}, companies ${companies}, people treaties ${peopleMade} (ended ${peopleEnded}, breaches ${breaches}), leases ${leases} (lapsed ${lapsed}), exchanges ${exchanges} (ended ${exchangesEnded}, taught again ${renewed}), defence pacts ${defences} (ended ${defencesEnded}, fights ${defenceFights}, wars ${pactWars})${declared ? `, independence: ${declared}` : ''}${confederation ? `, confederation: ${confederation}` : ''}${concord ? `, concord: ${concord}` : ''}${prosperity ? `, prosperity: ${prosperity}` : ''}${near ? `, prosperity missed on one condition: ${near}` : ''}`);
   };
   const result = jobs === 1 ? runArena(options, report) : await runParallel(options, jobs, report);
   if (args.includes('--json')) console.log(JSON.stringify(result, null, 2));

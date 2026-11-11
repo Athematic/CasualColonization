@@ -19,6 +19,7 @@ import { calendarOf, difficultyOf, goodsOf, landReachOf, mechanicsOf, nationOf, 
 import { peoplePairRandom } from './relations.js';
 import { removeUnit, colonyList } from './unitindex.js';
 import { breakFaith, chiefAgainTurn, chiefWelcomes, defencePartner, leasedFromBeside, noteLandTaken, notePeopleContact, noteSpoken, noteTaught, peopleSellFactor, peopleTensionFall, peopleTreatyRules, processPeopleTreaties, settlementTeaches } from './peopletreaties.js';
+import { notePeopleWarEnded } from './prosperity.js';
 
 /**
  * The settlement next to a unit, checked for a visit. A wagon train or ship trading there may
@@ -422,6 +423,7 @@ export function processNatives(s: GameState): void {
         noteHistory(s, 'tribe', [nation], `The ${TRIBES[st.tribe].name} go to war with ${nationOf(s, nation).name}${burial ? ' over a desecrated burial ground' : ', their anger risen too far'}.`, { secret: true, at: st });
       } else if (atWar && !burial && t < 250 && !Object.values(s.settlements).some((o) => o.tribe === st.tribe && tensionOf(o, nation) >= 250)) {
         tribe.stance[nation] = 'peace';
+        notePeopleWarEnded(s, tribe, nation);
         message(s, `The ${TRIBES[st.tribe].name} have made peace with ${nationOf(s, nation).name}.`, nation, st);
         noteHistory(s, 'tribe', [nation], `The ${TRIBES[st.tribe].name} make peace with ${nationOf(s, nation).name}.`, { secret: true, at: st });
       }

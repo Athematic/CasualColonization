@@ -32,6 +32,7 @@ export * from './crown.js';
 export * from './rebellion.js';
 export * from './score.js';
 export * from './victory.js';
+export * from './prosperity.js';
 export * from './mines.js';
 export * from './rules/mines.js';
 export * from './leaving.js';

@@ -8,6 +8,7 @@ import { canAttack } from './movement.js';
 import { braveDefence, braveName, bravesOf, killBrave } from './braves.js';
 import { addTension, settlementName } from './natives.js';
 import { breakFaith, callToDefence, defendedByFriend, defencePartner } from './peopletreaties.js';
+import { notePeopleWarEnded, noteSettlementBurned } from './prosperity.js';
 import { sonsOfLiberty } from './production.js';
 import {
   colonyAt,
@@ -514,6 +515,8 @@ function destroySettlement(s: GameState, u: Unit, settlementId: string): string 
   delete s.settlements[st.id];
   for (const b of Object.values(bravesOf(s))) if (b.home === st.id) delete bravesOf(s)[b.id];
   track(u.owner, 'combat:settlement burned');
+  const burnedTribe = s.tribes.find((t) => t.id === st.tribe);
+  if (burnedTribe) noteSettlementBurned(s, burnedTribe, u.owner);
   const plunder = st.gold;
   player(s, u.owner).gold += plunder;
   let text = `The ${settlementName(s, st)} has been burned. ${plunder} gold was plundered.`;
@@ -550,6 +553,7 @@ function surrender(s: GameState, tribeId: TribeId, nation: NationId, at: { x: nu
   const tribe = s.tribes.find((t) => t.id === tribeId)!;
   const rest = Object.values(s.settlements).filter((o) => o.tribe === tribeId);
   if (!rest.length || tribe.burial?.includes(nation) || random(s) >= rules.surrenderChance) return '';
+  if (tribe.stance[nation] === 'war') notePeopleWarEnded(s, tribe, nation);
   tribe.stance[nation] = 'peace';
   tribe.submitted = [...(tribe.submitted ?? []).filter((n) => n !== nation), nation];
   let tribute = 0;

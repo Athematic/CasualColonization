@@ -391,6 +391,7 @@ export const CARIBBEAN: Scenario = {
     'rumour.treasure': 'You find a cache hidden by buccaneers and recover {gold} gold!',
     'rumour.treasure.history': 'Explorers find a cache hidden by buccaneers and recover {gold} gold.',
     'gameOver.time': 'The year {year} has come, and the age of the chartered companies is over.',
+    'gameOver.prosperity': 'The year {year} has come, and the age of the chartered companies is over. In peace and partnership with {partners}, {winners} {win} by prosperity.',
     'landing.eyebrow': 'A game of the West Indies, 1650–1750',
     'landing.heading': 'Found colonies. Trade sugar and tobacco. Outlast the great powers.',
     'landing.pitch':

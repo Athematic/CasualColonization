@@ -346,6 +346,16 @@ export interface Tribe {
   burial?: NationId[];
   /** Nations the tribe submitted to after losing its capital (see natives.ts). Missing means none. */
   submitted?: NationId[];
+  /**
+   * The turn the tribe's last war with each nation ended (the `prosperity` victory, prosperity.ts).
+   * Written only while the scenario plays for `prosperity`; missing means no war has ended.
+   */
+  warEnded?: Partial<Record<NationId, number>>;
+  /**
+   * Nations that burned one of the tribe's settlements (the `prosperity` victory). Written only
+   * while the scenario plays for `prosperity`; missing means none.
+   */
+  burned?: NationId[];
 }
 
 /**
@@ -658,6 +668,11 @@ export interface GameState {
      * (`concord`, victory.ts), ranked by their own score; empty when nobody won.
      */
     winners: NationId[];
+    /**
+     * The native peoples the winners are partners of (the `prosperity` victory, native-partners.md
+     * N10): named on the game-over screen, not winners themselves. Missing for other endings.
+     */
+    partners?: TribeId[];
   };
   /** Silver and ore dug so far from mining tiles, by "x,y" (see mines.ts). Missing means none. */
   mined?: Record<string, number>;
