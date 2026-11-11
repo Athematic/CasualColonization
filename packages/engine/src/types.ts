@@ -407,10 +407,21 @@ export interface Settlement {
   x: number;
   y: number;
   capital: boolean;
-  /** Skill taught to one colonist; null once taught. */
+  /** Skill taught to one colonist; null once taught (a cultural exchange may teach its partner again, `taughtAt`). */
   skill: UnitTypeId | null;
   /** Nations whose scouts have spoken with the chief. */
   visited: NationId[];
+  /**
+   * Turn the settlement last taught a colonist (Beta 2, native-partners.md N7: a cultural exchange
+   * makes it teach its partner again some 25 years later). Written only while the scenario has
+   * cultural exchange (`mechanics.peopleTreaties` includes `exchange`); absent otherwise.
+   */
+  taughtAt?: number;
+  /**
+   * Turn each nation's scout last spoke with the chief (N7: a cultural exchange welcomes the
+   * partner's scouts again once a decade). Written only while the scenario has cultural exchange.
+   */
+  spokeAt?: Partial<Record<NationId, number>>;
   defenders: number;
   gold: number;
   /** 0 (content) to 1000 (furious), per European nation. */

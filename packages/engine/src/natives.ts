@@ -18,7 +18,7 @@ import type { Colony, GameState, PeopleRelation, Settlement, Unit } from './type
 import { calendarOf, difficultyOf, goodsOf, landReachOf, mechanicsOf, nationOf, nativeProduceOf, nativeRulesOf, peopleOf, yearValue } from './scenarios/index.js';
 import { peoplePairRandom } from './relations.js';
 import { removeUnit, colonyList } from './unitindex.js';
-import { breakFaith, leasedFromBeside, noteLandTaken, notePeopleContact, peopleSellFactor, peopleTensionFall, peopleTreatyRules, processPeopleTreaties } from './peopletreaties.js';
+import { breakFaith, chiefAgainTurn, chiefWelcomes, leasedFromBeside, noteLandTaken, notePeopleContact, noteSpoken, noteTaught, peopleSellFactor, peopleTensionFall, peopleTreatyRules, processPeopleTreaties, settlementTeaches } from './peopletreaties.js';
 
 /**
  * The settlement next to a unit, checked for a visit. A wagon train or ship trading there may
@@ -49,7 +49,10 @@ export function settlementName(s: GameState, st: Settlement): string {
   return `${TRIBES[st.tribe].name} ${st.capital ? 'capital' : settlementKind(s, st).name}`;
 }
 
-/** A scout speaks with the chief: gifts, knowledge of the land or nothing. */
+/**
+ * A scout speaks with the chief: gifts, knowledge of the land or nothing. Once per nation, or
+ * again once a decade for a partner in a cultural exchange (N7).
+ */
 export function speakToChief(s: GameState, unitId: string, settlementId: string): string {
   const u = s.units[unitId];
   const st = adjacentSettlement(s, u, settlementId);
@@ -62,13 +65,19 @@ export function speakToChief(s: GameState, unitId: string, settlementId: string)
     message(s, text, u.owner, st);
     return text;
   }
-  if (st.visited.includes(u.owner)) {
-    const text = 'The chief has already spoken with your scouts.';
+  const again = st.visited.includes(u.owner);
+  if (again && !chiefWelcomes(s, st, u.owner)) {
+    const at = chiefAgainTurn(s, st, u.owner);
+    const years = at === undefined ? 0 : Math.max(1, Math.ceil(yearValue(at, calendarOf(s)) - yearValue(s.turn, calendarOf(s))));
+    const text = at === undefined ? 'The chief has already spoken with your scouts.' : `The chief has already spoken with your scouts; under your cultural exchange he will welcome them again in ${years} ${years === 1 ? 'year' : 'years'}.`;
     message(s, text, u.owner, st);
     return text;
   }
-  st.visited.push(u.owner);
-  notePeopleContact(s, u.owner, st.tribe);
+  if (!again) {
+    st.visited.push(u.owner);
+    notePeopleContact(s, u.owner, st.tribe);
+  } else track(u.owner, 'natives:chief visited again');
+  noteSpoken(s, st, u.owner);
   const generous = addOf(modifiers(s, u.owner, 'nativeGifts'));
   const r = random(s);
   let text: string;
@@ -86,7 +95,10 @@ export function speakToChief(s: GameState, unitId: string, settlementId: string)
   return text;
 }
 
-/** A colonist lives among the natives and learns their skill. */
+/**
+ * A colonist lives among the natives and learns their skill: the settlement's one skill, or under a
+ * cultural exchange a renewed one some 25 years after it last taught (N7, `settlementTeaches`).
+ */
 export function learnSkill(s: GameState, unitId: string, settlementId: string): string {
   const u = s.units[unitId];
   const st = adjacentSettlement(s, u, settlementId);
@@ -94,11 +106,13 @@ export function learnSkill(s: GameState, unitId: string, settlementId: string): 
   if (def.kind !== 'colonist' || u.role !== 'none') fail('Only unarmed, unequipped colonists can learn from natives.');
   if (def.skill > 0) fail('This colonist is already an expert.');
   if (u.type === 'pettyCriminal' && !modifiers(s, u.owner, 'nativesTeach').some((m) => m.units.includes(u.type))) fail('The natives will not teach a petty criminal.');
-  if (!st.skill) fail('This settlement has nothing more to teach.');
-  const skill = st.skill;
+  const skill = settlementTeaches(s, st, u.owner);
+  if (!skill) fail('This settlement has nothing more to teach.');
+  if (!st.skill) track(u.owner, 'natives:renewed teaching');
   u.type = skill;
   u.moves = 0;
   st.skill = null;
+  noteTaught(s, st);
   track(u.owner, 'cmd:learn');
   const text = `Your colonist has lived among the ${TRIBES[st.tribe].name} and become a ${UNIT_TYPES[skill].name}.`;
   message(s, text, u.owner, st);

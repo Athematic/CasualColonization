@@ -60,6 +60,7 @@ import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { stopPort } from '../routes.js';
 import { forEachUnitNear, indexedUnitsOf, ownedUnitsView, unitList } from '../unitindex.js';
 import { maybeIncite } from './natives.js';
+import { chiefWelcomes, settlementTeaches } from '../peopletreaties.js';
 import { armyForIndependence, expectedSupport, colonyDefences, supportParts, rebelColonyDefence, rebelPower, crownAffairs, defenceShort, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
 import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './plan.js';
 import { equippedPrice, trainEquipped } from './outfit.js';
@@ -1045,7 +1046,7 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
   const known = (x: number, y: number) => p.explored[y * w + x] === 1;
   for (const n of neighbours(s, pos.x, pos.y)) {
     const st = Object.values(s.settlements).find((o) => o.x === n.x && o.y === n.y);
-    if (st && !st.visited.includes(p.id) && tensionOf(st, p.id) < 500 && u.moves > 0) {
+    if (st && chiefWelcomes(s, st, p.id) && tensionOf(st, p.id) < 500 && u.moves > 0) {
       speakToChief(s, u.id, st.id);
       return;
     }
@@ -1059,7 +1060,7 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
     }
   }
   for (const st of Object.values(s.settlements)) {
-    if (known(st.x, st.y) && !st.visited.includes(p.id) && tensionOf(st, p.id) < 500) targets.push({ x: st.x, y: st.y, d: grid.distance(st.x, st.y, pos.x, pos.y) + 2 });
+    if (known(st.x, st.y) && chiefWelcomes(s, st, p.id) && tensionOf(st, p.id) < 500) targets.push({ x: st.x, y: st.y, d: grid.distance(st.x, st.y, pos.x, pos.y) + 2 });
   }
   targets.sort((a, b) => a.d - b.d);
   for (const t of targets.slice(0, 6)) {
@@ -1163,7 +1164,7 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   // Unskilled colonists learn a trade from the natives first.
   if (prof.learnFromNatives && UNIT_TYPES[u.type].skill <= 0 && u.type !== 'pettyCriminal' && u.type !== 'nativeConvert') {
     const teacher = Object.values(s.settlements)
-      .filter((st) => st.skill && tensionOf(st, p.id) < 400 && grid.distance(st.x, st.y, pos.x, pos.y) <= 8 && p.explored[st.y * s.map.width + st.x])
+      .filter((st) => settlementTeaches(s, st, p.id) && tensionOf(st, p.id) < 400 && grid.distance(st.x, st.y, pos.x, pos.y) <= 8 && p.explored[st.y * s.map.width + st.x])
       .sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0];
     if (teacher) {
       if (grid.distance(teacher.x, teacher.y, pos.x, pos.y) === 1 && u.moves > 0) {

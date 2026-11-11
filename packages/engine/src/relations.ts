@@ -70,6 +70,14 @@ export function peoplePairRandom(s: GameState, nation: NationId, people: TribeId
   return random(stream(s, nation, people, `people|${purpose}`));
 }
 
+/**
+ * A seeded number in [0, 1) for one native settlement and one purpose, from a stream of its own
+ * (never `GameState.rng`): when a settlement teaches again under a cultural exchange, and what.
+ */
+export function settlementRandom(s: GameState, settlementId: string, purpose: string): number {
+  return random(stream(s, 'settlement', settlementId, `settlement|${purpose}`));
+}
+
 /** A whole number from base − spread to base + spread, both included. */
 function around(r: { rng: number }, v: { base: number; spread: number }): number {
   return v.base - v.spread + Math.floor(random(r) * (2 * v.spread + 1));

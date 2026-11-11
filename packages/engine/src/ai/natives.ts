@@ -7,17 +7,19 @@ import { gridOf } from '../grid.js';
 import { nativeUnitPrice, settlementForSale } from '../braves.js';
 import { sellPrice } from '../europe.js';
 import { buyFromSettlement, incitePrice, inciteTribe, peopleRelationOf, tensionOf } from '../natives.js';
-import { hasLandUse, hasPeopleTrade, leasableTiles, leaseRent, peopleRefusal, peopleTreatyOn, peopleTreatyProblem, proposePeopleTreaty } from '../peopletreaties.js';
+import { hasExchange, hasLandUse, hasPeopleTrade, leasableTiles, leaseRent, peopleRefusal, peopleTreatyOn, peopleTreatyProblem, proposePeopleTreaty, settlementTeaches } from '../peopletreaties.js';
 import { cooperationOf, LEVEL_COOPERATION } from '../alliances.js';
 import { peoplePairRandom } from '../relations.js';
 import type { TribeId } from '../rules/nations.js';
-import { cargoRoomFor, isCoastal } from '../queries.js';
+import { cargoRoomFor, colonyWorkers, isCoastal } from '../queries.js';
 import { nativeRulesOf } from '../scenarios/index.js';
 import type { NationId } from '../rules/nations.js';
 import type { GameState, Player, Settlement, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
 import { colonyList } from '../unitindex.js';
+import { leaveColony } from '../colony.js';
+import { UNIT_TYPES } from '../rules/units.js';
 
 /** A purchase must fetch at least this much more in Europe (after tax) than it costs. */
 export const NATIVE_BUY_MARGIN = 1.4;
@@ -88,9 +90,11 @@ export const COMBATIVE_TREATY_VOLUME = 300;
  * make one with (unlocked, as `peopleTreatyProblem` says, and nothing the people holds against it),
  * at a seeded chance, the scenario's `proposePeopleTrade` times the level's share (Creative all of
  * it, Competent most, Combative half and only where it has traded enough with the people to pay,
- * Naive none: it only accepts a people's own offer). Drawn from the pair's own stream.
+ * Naive none: it only accepts a people's own offer). Drawn from the pair's own stream. With a
+ * trade partner it also proposes land use and a cultural exchange, and sends a colonist to learn
+ * where an exchange has made a settlement teach again.
  */
-export function peopleAffairs(s: GameState, p: Player): void {
+export function peopleAffairs(s: GameState, p: Player, prof?: AiProfile): void {
   if (!peopleTreatyOn(s, 'people-trade') || p.independence === 'lost') return;
   const chance = cooperationOf(s).proposePeopleTrade * LEVEL_COOPERATION[p.ai ?? 'naive'].people;
   if (chance <= 0) return;
@@ -101,6 +105,8 @@ export function peopleAffairs(s: GameState, p: Player): void {
     if (!rel) continue;
     if (hasPeopleTrade(s, p.id, people)) {
       leaseLand(s, p, people);
+      seekExchange(s, p, people);
+      if (prof?.learnFromNatives) sendLearner(s, p, people);
       continue;
     }
     if (combative && rel.volume < COMBATIVE_TREATY_VOLUME) continue;
@@ -131,4 +137,52 @@ function leaseLand(s: GameState, p: Player, people: TribeId): void {
   if (p.gold < leaseRent(s, p.id, tiles) * tiles.length * LEASE_YEARS_IN_HAND + LEASE_RESERVE) return;
   if (peoplePairRandom(s, p.id, people, `${p.id} propose land ${s.turn}`) >= chance) return;
   safely(() => proposePeopleTreaty(s, p.id, people, 'land-use'));
+}
+
+/**
+ * Proposes a cultural exchange (N7, N11) to a trade partner: Creative seeks it, Competent at a share
+ * (`LEVEL_COOPERATION.exchange`), Combative and Naive never propose, at the scenario's
+ * `proposeExchange` times the level's share, drawn from the pair's own stream.
+ */
+function seekExchange(s: GameState, p: Player, people: TribeId): void {
+  if (!peopleTreatyOn(s, 'exchange') || hasExchange(s, p.id, people)) return;
+  const chance = cooperationOf(s).proposeExchange * LEVEL_COOPERATION[p.ai ?? 'naive'].exchange;
+  if (chance <= 0) return;
+  if (peopleTreatyProblem(s, p.id, people, 'exchange') || peopleRefusal(s, p.id, people)) return;
+  if (peoplePairRandom(s, p.id, people, `${p.id} propose exchange ${s.turn}`) >= chance) return;
+  safely(() => proposePeopleTreaty(s, p.id, people, 'exchange'));
+}
+
+/** Tiles from one of its colonies within which a computer nation sends a colonist to a settlement that teaches again. */
+export const LEARNER_RANGE = 6;
+/** Colonists a colony keeps when it sends one out to learn. */
+const LEARNER_KEEP = 3;
+
+/**
+ * Under a cultural exchange (N7), a settlement of the partner people that teaches again within
+ * LEARNER_RANGE of one of the nation's colonies is sent a colonist: the least skilled free one (no
+ * criminal, convert or teacher) of the nearest colony with more than LEARNER_KEEP colonists, one a
+ * review. The colonist then walks there and learns as any colonist on the map does (advanced.ts
+ * colonistTurn), and joins a colony afterwards.
+ */
+function sendLearner(s: GameState, p: Player, people: TribeId): void {
+  if (!peopleTreatyOn(s, 'exchange') || !hasExchange(s, p.id, people)) return;
+  const grid = gridOf(s);
+  const colonies = ownColonies(s, p);
+  for (const id in s.settlements) {
+    const st = s.settlements[id];
+    if (st.tribe !== people || st.skill || !settlementTeaches(s, st, p.id)) continue;
+    if (tensionOf(st, p.id) >= 400 || !p.explored[st.y * s.map.width + st.x]) continue;
+    const from = colonies
+      .map((c) => ({ c, d: grid.distance(c.x, c.y, st.x, st.y), workers: colonyWorkers(s, c) }))
+      .filter((e) => e.d <= LEARNER_RANGE && e.workers.length > LEARNER_KEEP)
+      .sort((a, b) => a.d - b.d || (a.c.id < b.c.id ? -1 : 1))[0];
+    if (!from) continue;
+    const learner = from.workers
+      .filter((w) => UNIT_TYPES[w.type].skill <= 0 && w.type !== 'pettyCriminal' && w.type !== 'nativeConvert' && !w.teach)
+      .sort((a, b) => UNIT_TYPES[a.type].skill - UNIT_TYPES[b.type].skill || (a.id < b.id ? -1 : 1))[0];
+    if (!learner) continue;
+    safely(() => leaveColony(s, learner.id));
+    return;
+  }
 }

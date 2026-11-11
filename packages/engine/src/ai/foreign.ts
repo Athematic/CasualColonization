@@ -108,7 +108,7 @@ export function foreignAffairs(s: GameState, p: Player, prof: AiProfile, strengt
   if (companiesOn(s)) safely(() => companyAffairs(s, p, prof));
   if (s.treaties && alliancesOn(s)) safely(() => jointExpedition(s, p, prof));
   if (s.treaties && confederationOn(s)) safely(() => confederate(s, p));
-  if (peopleTreatiesOn(s)) safely(() => peopleAffairs(s, p));
+  if (peopleTreatiesOn(s)) safely(() => peopleAffairs(s, p, prof));
   pruneTriangles(s, p);
 }
 

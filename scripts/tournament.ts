@@ -86,8 +86,11 @@ async function main(): Promise<void> {
     const breaches = rows.reduce((n, r) => n + (r.relations?.peopleBreaches ?? 0), 0);
     const leases = rows.reduce((n, r) => n + (r.relations?.leases ?? 0), 0);
     const lapsed = rows.reduce((n, r) => n + (r.relations?.leasesLapsed ?? 0), 0);
+    const exchanges = rows.reduce((n, r) => n + (r.relations?.exchanges ?? 0), 0);
+    const exchangesEnded = rows.reduce((n, r) => n + (r.relations?.exchangesEnded ?? 0), 0);
+    const renewed = rows.reduce((n, r) => n + (r.relations?.renewedTeachings ?? 0), 0);
     const last = Math.max(...rows.map((r) => r.lastTurn ?? 0));
-    console.error(`  game ${g + 1}/${options.games} (seed ${rows[0].seed}, to turn ${last}): ${line}  | agreements ${half('agreements')}, favoured ${half('favoured')}, wars ${wars} (royal ${royal}), alliances ${alliances}, companies ${companies}, people treaties ${peopleMade} (ended ${peopleEnded}, breaches ${breaches}), leases ${leases} (lapsed ${lapsed})${declared ? `, independence: ${declared}` : ''}${confederation ? `, confederation: ${confederation}` : ''}${concord ? `, concord: ${concord}` : ''}`);
+    console.error(`  game ${g + 1}/${options.games} (seed ${rows[0].seed}, to turn ${last}): ${line}  | agreements ${half('agreements')}, favoured ${half('favoured')}, wars ${wars} (royal ${royal}), alliances ${alliances}, companies ${companies}, people treaties ${peopleMade} (ended ${peopleEnded}, breaches ${breaches}), leases ${leases} (lapsed ${lapsed}), exchanges ${exchanges} (ended ${exchangesEnded}, taught again ${renewed})${declared ? `, independence: ${declared}` : ''}${confederation ? `, confederation: ${confederation}` : ''}${concord ? `, concord: ${concord}` : ''}`);
   };
   const result = jobs === 1 ? runArena(options, report) : await runParallel(options, jobs, report);
   if (args.includes('--json')) console.log(JSON.stringify(result, null, 2));

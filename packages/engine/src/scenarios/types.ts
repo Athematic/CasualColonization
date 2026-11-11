@@ -173,7 +173,7 @@ export interface Mechanics {
   /**
    * Treaties between a nation and a native people (peopletreaties.ts, docs/design/native-partners.md):
    * the kinds in play. Absent or empty means none (Beta 2 step 1 builds `people-trade`, step 2
-   * `land-use`).
+   * `land-use`, step 3 `exchange`).
    */
   peopleTreaties?: PeopleTreatyKind[];
 }
@@ -247,6 +247,21 @@ export interface PeopleLandUseRules {
   pressure: number;
 }
 
+/**
+ * What a cultural exchange with a people (`exchange`, N7) needs and does. It needs a trade treaty
+ * with the people first (the ladder, N2).
+ */
+export interface PeopleExchangeRules {
+  /** Hidden: years of good relations the pair needs, drawn per pair (on its own, apart from the other kinds'). */
+  years: YearsAround;
+  /** Years after a settlement last taught before it teaches a partner again (from its people's skills), drawn per settlement and teaching. */
+  teachYears: YearsAround;
+  /** Years after a partner's scout last spoke with a chief before the chief welcomes the partner's scouts again. */
+  speakYears: number;
+  /** What the people's settlements gather for sale while they have a cultural exchange with anyone, against the usual (1.25: 25% more). */
+  gather: number;
+}
+
 /** How a people's temperament (`peoples.overrides[id].temperament`) shifts its answers and offers. */
 export interface TemperamentRules {
   /** Times the chance to accept a proposal. */
@@ -265,6 +280,7 @@ export interface TemperamentRules {
 export interface PeopleTreatyRules {
   trade: PeopleTradeRules;
   landUse: PeopleLandUseRules;
+  exchange: PeopleExchangeRules;
   /** Chance that a people accepts a treaty it is free to accept (unlocked, nothing against it). */
   accept: number;
   /** Chance, on a brave's trade visit to a nation's colony, that its people offers an unlocked treaty itself. */
@@ -282,9 +298,10 @@ export interface PeopleTreatyRules {
 }
 
 /** A scenario's changes to PEOPLE_TREATY_RULES: any field, and any part of the tables. */
-export type PeopleTreatyRulesOverride = Partial<Omit<PeopleTreatyRules, 'trade' | 'landUse' | 'temperaments'>> & {
+export type PeopleTreatyRulesOverride = Partial<Omit<PeopleTreatyRules, 'trade' | 'landUse' | 'exchange' | 'temperaments'>> & {
   trade?: Partial<PeopleTradeRules>;
   landUse?: Partial<PeopleLandUseRules>;
+  exchange?: Partial<PeopleExchangeRules>;
   temperaments?: Partial<Record<Temperament, Partial<TemperamentRules>>>;
 };
 
@@ -332,6 +349,11 @@ export interface Cooperation {
    * land instead, Naive never proposes).
    */
   proposeLandUse: number;
+  /**
+   * Chance per review that a nation proposes a cultural exchange (N7) to a trade partner (N11:
+   * Creative seeks it, Competent at a share; Combative and Naive do not propose).
+   */
+  proposeExchange: number;
 }
 
 /** One way the game can end: a registered victory kind (victory.ts) and its data. */
