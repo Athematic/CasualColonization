@@ -1,6 +1,7 @@
 /**
  * What events do: applying effects, and valuing them in gold for the computer players.
  */
+import { track } from '../telemetry.js';
 import { addTension } from '../natives.js';
 import { colonyWorkers, createUnit, isWater, player, reveal, tileAt, workArea } from '../queries.js';
 import { placeOnMap } from '../movement.js';
@@ -168,6 +169,7 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
         // The peace holds even with a people whose burial ground was desecrated: the grievance is
         // forgiven, or processNatives would put the people back at war next round (fix e).
         if (t.burial?.includes(p.id)) {
+          track(p.id, 'natives:burial ground forgiven');
           const rest = t.burial.filter((n) => n !== p.id);
           if (rest.length) t.burial = rest;
           else delete t.burial;

@@ -110,6 +110,7 @@ export const FEATURE_CATALOG: { id: string; kind: FeatureKind }[] = [
   { id: 'natives:unit killed', kind: 'event' },
   { id: 'natives:colonist killed', kind: 'event' },
   { id: 'natives:burial ground disturbed', kind: 'event' },
+  { id: 'natives:burial ground forgiven', kind: 'event' },
   { id: 'explore:expedition lost', kind: 'event' },
   { id: 'independence:lost', kind: 'event' },
   ...['road tiles by colonies', 'colonies linked by road', 'ships', 'cargo holds', 'warships', 'wagon trains', 'artillery'].map((f) => ({ id: `end:${f}`, kind: 'state' as const })),
