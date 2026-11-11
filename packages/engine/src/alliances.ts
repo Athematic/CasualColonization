@@ -53,7 +53,7 @@ export const ALLIANCE_RULES: AllianceRules = {
  * computer-only tournaments to give an alliance in about one game in four and a concord victory
  * about once in 30–40 games (docs/design/cooperation.md, C11).
  */
-export const COOPERATION: Cooperation = { proposeAlliance: 0.5, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1, jointExpedition: 0.05, confederation: 0.3 };
+export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace: 0, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1, jointExpedition: 0.05, confederation: 0.3 };
 
 /** Each level's share of COOPERATION's chances: Creative seeks alliances out, Naive never proposes. */
 export const LEVEL_COOPERATION: Record<AiLevel, { propose: number; accept: number }> = {
@@ -152,11 +152,31 @@ export function allianceThresholds(s: GameState, a: NationId, b: NationId): { ye
   return { years, volume };
 }
 
-/** Whether two Favoured Nations' years of peace and trade both reach the hidden thresholds for an alliance. */
+/**
+ * Whether two nations may ally: the usual way (`tiesUnlocked`: the rung below, then more peace and
+ * trade), or as old friends after a long peace (`longPeaceUnlocked`).
+ */
 export function allianceUnlocked(s: GameState, a: NationId, b: NationId): boolean {
+  return tiesUnlocked(s, a, b) || longPeaceUnlocked(s, a, b);
+}
+
+/** Whether two Favoured Nations' years of peace and trade both reach the hidden thresholds for an alliance. */
+export function tiesUnlocked(s: GameState, a: NationId, b: NationId): boolean {
   if (!(allianceRules(s).requires === 'trade' ? hasTradeAgreement(s, a, b) : isFavoured(s, a, b))) return false;
   const need = allianceThresholds(s, a, b);
   return yearsOfPeace(s, a, b) >= need.years && relation(s, a, b).volume >= need.volume;
+}
+
+/**
+ * Whether two nations with a trade agreement have kept the peace long enough to ally as old friends,
+ * without Favoured Nation or trade between their colonies (`AllianceRules.longPeace`, hidden, drawn
+ * per pair). Found in all-Creative tournaments: computer nations of the same kind hardly trade at
+ * each other's colonies, so the usual ladder never reached an alliance between them.
+ */
+export function longPeaceUnlocked(s: GameState, a: NationId, b: NationId): boolean {
+  const years = allianceRules(s).longPeace;
+  if (!years || !hasTradeAgreement(s, a, b)) return false;
+  return yearsOfPeace(s, a, b) >= around(pairRandom(s, a, b, 'alliance long peace'), years);
 }
 
 function bothHuman(s: GameState, a: NationId, b: NationId): boolean {
@@ -189,10 +209,11 @@ export function allianceProblem(s: GameState, from: NationId, to: NationId): str
   // Two people can ally at any time; otherwise Favoured Nation, and more peace and trade.
   if (bothHuman(s, from, to)) return null;
   if (isHostile(s, from, to) || inWaitingPeriod(s, from, to)) return `${nationTitle(s, to)} does not trust you again yet.`;
+  if (longPeaceUnlocked(s, from, to)) return null;
   if (allianceRules(s).requires === 'trade') {
     if (!hasTradeAgreement(s, from, to)) return `You need a trade agreement with ${name} first.`;
-  } else if (!isFavoured(s, from, to)) return `You must be each other's Favoured Nation first.`;
-  if (!allianceUnlocked(s, from, to)) return `Relations with ${name} are not yet close enough for an alliance: they need more years of peace and more trade between you.`;
+  } else if (!isFavoured(s, from, to)) return `You must be each other's Favoured Nation first${allianceRules(s).longPeace ? ', or keep the peace much longer' : ''}.`;
+  if (!tiesUnlocked(s, from, to)) return `Relations with ${name} are not yet close enough for an alliance: they need more years of peace and more trade between you.`;
   return null;
 }
 

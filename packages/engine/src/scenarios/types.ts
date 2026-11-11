@@ -177,6 +177,12 @@ export interface AllianceRules {
    * a scenario where Favoured Nation is rare. Leaving then ends the trade agreement.
    */
   requires: 'favoured' | 'trade';
+  /**
+   * Hidden: years of unbroken peace with a trade agreement after which two nations may ally without
+   * the rung in `requires` and without the trade in `volume` ("old friends"), drawn per pair. Absent:
+   * no such way. The computer players propose on this path at `Cooperation.proposeLongPeace`.
+   */
+  longPeace?: YearsAround;
   /** Share of each member's liberty bells that also counts for every other member's Congress (C5). */
   sharedBells: number;
   /** Gold a joint expedition costs, paid half by each of the two allies. */
@@ -191,6 +197,8 @@ export interface AllianceRules {
 export interface Cooperation {
   /** Chance that a nation proposes an alliance to a Favoured Nation partner once the alliance is unlocked. */
   proposeAlliance: number;
+  /** Chance that a nation proposes an alliance to an old friend (`AllianceRules.longPeace`) where the usual way is not open. */
+  proposeLongPeace: number;
   /** Chance that a nation accepts an alliance proposed to it. */
   acceptAlliance: number;
   /** How good a target an ally's enemy must be before a computer ally joins the war (1: as good as one it would attack alone). */

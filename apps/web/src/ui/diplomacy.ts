@@ -181,7 +181,7 @@ export class DiplomacyScreen implements Screen {
         const why = favouredProblem(s, me.id, p.id);
         buttons.push(h('button', { class: 'btn tiny primary', disabled: !!why, title: why ?? `Offer ${nationOf(app.state, p.id).name} Favoured Nation status`, onclick: () => app.dispatch({ type: 'proposeFavoured', nation: p.id }) }, 'Propose Favoured Nation'));
       }
-      if (mechanicsOf(s).alliances && !allied && (favoured || (trade && allianceRules(s).requires === 'trade') || (p.human && me.human))) {
+      if (mechanicsOf(s).alliances && !allied && (favoured || (trade && (allianceRules(s).requires === 'trade' || !!allianceRules(s).longPeace)) || (p.human && me.human))) {
         const why = allianceProblem(s, me.id, p.id);
         const invite = !!allianceOf(s, me.id);
         buttons.push(h('button', { class: 'btn tiny primary', 'data-action': 'propose-alliance', disabled: !!why, title: why ?? `Offer ${nationOf(s, p.id).name} ${invite ? 'a place in your alliance' : 'an alliance'}`, onclick: () => app.dispatch({ type: 'proposeAlliance', nation: p.id }) }, invite ? 'Invite to alliance' : 'Propose alliance'));

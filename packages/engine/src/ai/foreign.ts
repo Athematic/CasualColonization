@@ -44,7 +44,7 @@ import { UNIT_TYPES } from '../rules/units.js';
 import type { NationId } from '../rules/nations.js';
 import { track } from '../telemetry.js';
 import type { Colony, GameState, Player, ProposalKind, Unit } from '../types.js';
-import { allianceRules, alliancesOn, allianceOf, expeditionProblem, allianceProblem, alliesOf, cooperationOf, isAllied, LEVEL_COOPERATION, leaveAlliance, warOnFriend } from '../alliances.js';
+import { allianceRules, alliancesOn, allianceOf, longPeaceUnlocked, tiesUnlocked, expeditionProblem, allianceProblem, alliesOf, cooperationOf, isAllied, LEVEL_COOPERATION, leaveAlliance, warOnFriend } from '../alliances.js';
 import { proposeAlliance, proposeExpedition } from '../relations.js';
 import { startWar } from '../diplomacy.js';
 import { confederationOn, confederationProblem, proposeConfederation, readyForIndependence } from '../confederation.js';
@@ -203,7 +203,7 @@ function makeProposals(s: GameState, p: Player, prof: AiProfile, strength: numbe
           if (!isFavoured(s, p.id, o.id)) startCooldown(s, p, 'favoured', o.id);
           continue;
         }
-        if (!alliancesOn(s) || allianceRules(s).requires !== 'trade') continue;
+        if (!alliancesOn(s) || (allianceRules(s).requires !== 'trade' && !longPeaceUnlocked(s, p.id, o.id))) continue;
       }
       if (!alliancesOn(s) || isAllied(s, p.id, o.id)) continue;
       if (coolingDown(s, p, 'alliance', o.id) || allianceProblem(s, p.id, o.id) || !wantsAlliance(s, p, prof, o.id, strength)) continue;
@@ -225,7 +225,9 @@ function wantsAlliance(s: GameState, p: Player, prof: AiProfile, other: NationId
     const partnerAtWar = s.players.some((o) => o.id !== 'crown' && o.id !== p.id && player(s, other).stance[o.id] === 'war');
     if (!partnerAtWar && !bestWarTarget(s, p, prof, strength)) return false;
   }
-  const chance = cooperationOf(s).proposeAlliance * LEVEL_COOPERATION[p.ai ?? 'naive'].propose;
+  // The usual way at `proposeAlliance`; old friends after a long peace only at `proposeLongPeace`.
+  const coop = cooperationOf(s);
+  const chance = (tiesUnlocked(s, p.id, other) ? coop.proposeAlliance : coop.proposeLongPeace) * LEVEL_COOPERATION[p.ai ?? 'naive'].propose;
   return chance > 0 && pairRandom(s, p.id, other, `${p.id} alliance wish ${s.turn}`) < chance;
 }
 

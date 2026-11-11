@@ -395,6 +395,37 @@ describe('alliances: computer players', () => {
     expect(eager).toBeGreaterThanOrEqual(18);
   });
 
+  it('ally old friends after a long peace with a trade agreement, without Favoured Nation or trade (longPeace)', () => {
+    const old: Scenario = {
+      ...ALLIED,
+      id: 'test-alliances-old-friends',
+      alliances: { longPeace: { base: 60, spread: 0 } },
+      ai: { ...AMERICAS.ai, cooperation: { proposeLongPeace: 1, acceptAlliance: 1 } },
+    };
+    registerScenario(old);
+    const s = game({ humans: [], scenario: old.id });
+    s.turn = 300; // two turns a year
+    const rel = relation(s, 'england', 'france');
+    rel.peaceSince = s.turn - 2 * 60;
+    // No trade agreement: no way in.
+    expect(allianceProblem(s, 'france', 'england')).toMatch(/Favoured Nation first, or keep the peace much longer/);
+    makeTradeAgreement(s, 'england', 'france');
+    rel.peaceSince = s.turn - 2 * 59;
+    expect(allianceProblem(s, 'france', 'england')).toMatch(/Favoured Nation first/);
+    rel.peaceSince = s.turn - 2 * 60;
+    expect(allianceProblem(s, 'france', 'england')).toBeNull();
+    expect(isFavoured(s, 'england', 'france')).toBe(false);
+    s.turn = reviewTurn(300);
+    foreignAffairs(s, s.players[1], AI_PROFILES.creative, 0, 0);
+    expect(isAllied(s, 'england', 'france')).toBe(true);
+    // Without the scenario's chance for old friends, the same pair is not proposed to.
+    const t = game({ humans: [], scenario: 'test-alliances-eager' });
+    makeTradeAgreement(t, 'england', 'france');
+    t.turn = reviewTurn(300);
+    foreignAffairs(t, t.players[1], AI_PROFILES.creative, 0, 0);
+    expect(isAllied(t, 'england', 'france')).toBe(false);
+  });
+
   it('make no alliances when the scenario has none', () => {
     const s = game({ humans: [], scenario: 'test-alliances-eager' });
     ripen(s, 'england', 'france');
