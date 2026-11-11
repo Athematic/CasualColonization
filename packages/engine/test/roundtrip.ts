@@ -8,9 +8,9 @@
  * every round, and compares their saved states each round; on a difference it reports the first
  * differing round and the first differing path in the state.
  *
- * The fast cases run with `npm test`. CC_SLOW_TESTS=1 adds longer games.
+ * The cases live in roundtrip-*.test.ts, split so they run in parallel; CC_SLOW_TESTS=1 adds
+ * longer games (roundtrip-slow.test.ts).
  */
-import { describe, expect, it } from 'vitest';
 import {
   applyCommand,
   createGame,
@@ -26,7 +26,7 @@ import {
 } from '../src/index.js';
 
 /** The New game screen's defaults for a scenario, with its first nation as the player. */
-function webConfig(seed: number, scenarioId: string, events: boolean): GameConfig {
+export function webConfig(seed: number, scenarioId: string, events: boolean): GameConfig {
   const scenario = getScenario(scenarioId)!;
   const [first, ...rest] = nationSet(scenario, undefined).slice(0, 4).map((e) => e.id);
   const map = newGameOptions(scenario).defaultMap;
@@ -73,7 +73,7 @@ const roundTrip = (s: GameState) => deserialize(serialize(s));
  * Plays a game `rounds` rounds straight and with a save and load after every round; returns the
  * first round at which the saved states differ, with the path, or null.
  */
-function compare(config: GameConfig, rounds: number, headStartTurn?: number): string | null {
+export function compare(config: GameConfig, rounds: number, headStartTurn?: number): string | null {
   let a: GameState;
   let b: GameState;
   if (headStartTurn) {
@@ -153,23 +153,4 @@ export function notATree(s: GameState): string | null {
   return walk(s, '$');
 }
 
-const SLOW = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.CC_SLOW_TESTS === '1';
-
-describe('save and load do not change a game', () => {
-  const cases: [string, GameConfig, number, number?][] = [
-    ['americas, events, seed 7', webConfig(7, 'americas', true), 60],
-    ['americas, no events, seed 21', webConfig(21, 'americas', false), 60],
-    ['caribbean, events, seed 7', webConfig(7, 'caribbean', true), 60],
-    ['caribbean, no events, seed 21', webConfig(21, 'caribbean', false), 60],
-    ['americas head start to 30, seed 3', webConfig(3, 'americas', true), 10, 30],
-    ['caribbean head start to 20, seed 5', webConfig(5, 'caribbean', true), 10, 20],
-  ];
-  for (const [name, config, rounds, hs] of cases) {
-    it(name, () => {
-      expect(compare(config, rounds, hs)).toBeNull();
-    }, 120_000);
-  }
-  it.skipIf(!SLOW)('longer games (CC_SLOW_TESTS=1)', () => {
-    for (const scenario of ['americas', 'caribbean']) for (const seed of [1492, 99]) expect(compare(webConfig(seed, scenario, true), 250), `${scenario} ${seed}`).toBeNull();
-  }, 1_200_000);
-});
+export const SLOW = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.CC_SLOW_TESTS === '1';
