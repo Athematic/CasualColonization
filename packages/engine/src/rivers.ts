@@ -11,22 +11,36 @@
  * the game grid's direction order, grid.ts: eight on squares, six on hexes). The mask makes the
  * course unambiguous where two rivers run side by side, lets renderers draw smooth curves, and
  * marks the mouth with a bit towards the water. On every grid rivers run through tile centres
- * (docs/design/hex-maps.md H3). `riverLinked`, `linkRiver` and the generated rivers take the grid;
- * `RIVER_DIRS` and the stored maps' river lines (`parseRivers`) are square-only until hex step 2.
+ * (docs/design/hex-maps.md H3). `riverLinked`, `linkRiver`, the stored maps' river lines
+ * (`parseRivers`) and the generated rivers take the grid. Bit d of `rd` is the neighbour at
+ * `grid.neighbourOffsets(x, y)[2d], [2d + 1]` (on hexes the offsets depend on the row or column);
+ * `RIVER_DIRS` is that table on squares, kept for square-only code.
  */
 import { SQUARE, type Grid } from './grid.js';
 import { random } from './rng.js';
 import { TERRAIN } from './rules/terrain.js';
 import type { GameMap, Tile } from './types.js';
 
-/** Neighbour offsets in the square grid's direction order (grid.ts `SQUARE`): n, ne, e, se, s, sw, w, nw. */
+/**
+ * Neighbour offsets in the square grid's direction order (grid.ts `SQUARE`): n, ne, e, se, s, sw, w,
+ * nw. Squares only: on any grid, bit d of a river mask is the neighbour at
+ * `grid.neighbourOffsets(x, y)[2d], [2d + 1]` (`riverOffsets`).
+ */
 export const RIVER_DIRS: readonly [number, number][] = [
   [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1],
 ];
 
-/** The bit for the neighbour at (dx, dy), or -1 when it is not a neighbour. */
+/** The bit for the neighbour at (dx, dy) on squares, or -1 when it is not a neighbour (on any grid: `grid.directionIndex`). */
 export function riverDirIndex(dx: number, dy: number): number {
   return RIVER_DIRS.findIndex(([x, y]) => x === dx && y === dy);
+}
+
+/**
+ * The offsets of tile (x, y)'s neighbours in river bit order on the grid (`[dx0, dy0, dx1, dy1, …]`,
+ * `grid.neighbourOffsets`): bit d of `rd` runs to (x + o[2d], y + o[2d + 1]). Must not be changed.
+ */
+export function riverOffsets(grid: Grid, x: number, y: number): readonly number[] {
+  return grid.neighbourOffsets(x, y);
 }
 
 const water = (tile: Tile | undefined) => !!tile && TERRAIN[tile.t].water;
@@ -72,12 +86,17 @@ export function linkRiver(map: GameMap, ax: number, ay: number, bx: number, by: 
  *
  * An optional name ends with a colon. Then waypoints `x,y` in tile coordinates, from the source
  * downstream; `m` and `M` switch to minor and major for the stretch that follows (minor at
- * first). Waypoints are joined by straight steps to any of the 8 neighbours. Every tile between
+ * first). Waypoints are joined by the grid's straight line (`grid.line`): on squares rounded steps
+ * to any of the 8 neighbours, on hexes a cube line, so every step links two neighbours on the grid
+ * the map is read on (`grid`, squares when left out). Every tile between
  * the first and the last waypoint must be land. The first waypoint may be a lake the river flows
  * out of; the last waypoint is the water the river flows into, or a tile on
  * a river listed earlier, which this one joins as a tributary. Lines starting with `#` are comments.
+ *
+ * A river that breaks these rules throws, unless `problems` is given: then the river is left out
+ * whole and the reason is added to the list (reading a square map on hexes, hex-maps.md H11).
  */
-export function parseRivers(map: GameMap, text: string, mapId = 'map'): void {
+export function parseRivers(map: GameMap, text: string, mapId = 'map', grid: Grid = SQUARE, problems?: string[]): void {
   const lines = text.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
   for (const line of lines) {
     const colon = line.indexOf(':');
@@ -101,22 +120,37 @@ export function parseRivers(map: GameMap, text: string, mapId = 'map'): void {
         points.push({ x, y, size });
         continue;
       }
-      const steps = Math.max(Math.abs(x - last.x), Math.abs(y - last.y));
-      for (let i = 1; i <= steps; i++) {
-        points.push({ x: Math.round(last.x + ((x - last.x) * i) / steps), y: Math.round(last.y + ((y - last.y) * i) / steps), size });
-      }
+      const line = grid.line(last.x, last.y, x, y);
+      for (let i = 1; i < line.length; i++) points.push({ x: line[i].x, y: line[i].y, size });
     }
-    if (points.length < 2) throw new Error(`${where}: needs at least two tiles.`);
+    const fail = (why: string) => {
+      if (!problems) throw new Error(`${where}: ${why}`);
+      problems.push(`${where}: ${why}`);
+    };
+    if (points.length < 2) {
+      fail('needs at least two tiles.');
+      continue;
+    }
     const end = points[points.length - 1];
     const endTile = map.tiles[end.y * map.width + end.x];
-    if (!water(endTile) && !endTile.rv) throw new Error(`${where}: ends at ${end.x},${end.y}, which is neither water nor a river.`);
+    if (!water(endTile) && !endTile.rv) {
+      fail(`ends at ${end.x},${end.y}, which is neither water nor a river.`);
+      continue;
+    }
     const crossing = points.slice(0, -1).find((p) => map.tiles[p.y * map.width + p.x].rv);
-    if (crossing) throw new Error(`${where}: meets another river at ${crossing.x},${crossing.y} before its end.`);
+    if (crossing) {
+      fail(`meets another river at ${crossing.x},${crossing.y} before its end.`);
+      continue;
+    }
+    const wet = points.slice(1, -1).find((p) => water(map.tiles[p.y * map.width + p.x]));
+    if (wet) {
+      fail(`${wet.x},${wet.y} is water.`);
+      continue;
+    }
     for (let i = 0; i < points.length - 1; i++) {
       const p = points[i];
-      if (i > 0 && water(map.tiles[p.y * map.width + p.x])) throw new Error(`${where}: ${p.x},${p.y} is water.`);
       const q = points[i + 1];
-      linkRiver(map, p.x, p.y, q.x, q.y, q === end && !water(endTile) ? Math.min(p.size, endTile.rv!) as 1 | 2 : p.size);
+      linkRiver(map, p.x, p.y, q.x, q.y, q === end && !water(endTile) ? Math.min(p.size, endTile.rv!) as 1 | 2 : p.size, grid);
     }
     // A tributary joining a major river does not make the main river smaller.
     if (!water(endTile)) endTile.rv = Math.max(endTile.rv!, points[points.length - 2].size) as 1 | 2;

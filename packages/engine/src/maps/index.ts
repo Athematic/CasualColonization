@@ -27,7 +27,7 @@
 import type { TribeId } from '../rules/nations.js';
 import { TERRAIN, type TerrainId } from '../rules/terrain.js';
 import { randInt } from '../rng.js';
-import { gridIn } from '../grid.js';
+import { gridIn, SQUARE, type Grid } from '../grid.js';
 import { parseRivers } from '../rivers.js';
 import { entryPoints, newSettlement, settlementGround, sprinkleExtras, type EntrySide, type GeneratedWorld } from '../mapgen.js';
 import type { GameMap, Settlement, Tile } from '../types.js';
@@ -71,8 +71,33 @@ export function storedMap(id: string): StoredMap {
 /** The legend: each terrain's character in the catalogue (TerrainDef.char). */
 const CHARS: Record<string, TerrainId> = Object.fromEntries(Object.values(TERRAIN).map((d) => [d.char, d.id]));
 
-/** Turns a stored map's rows into map tiles. Throws on unknown characters or ragged rows. */
-export function parseStoredMap(def: StoredMap): GameMap {
+/**
+ * Turns a stored map's rows into map tiles. Throws on unknown characters or ragged rows.
+ *
+ * `grid` is the grid the map is read on (squares when left out). A text line is a row of tiles on
+ * every grid (hex-maps.md H1), so the terrain reads the same; only the rivers change: their
+ * waypoints are joined by the grid's lines, so on hexes every river step links two hex neighbours.
+ * Reading a square map on hexes is the first step of the conversion (H11): it throws where a river
+ * no longer fits (its line crosses water or another river), which the reviewed hex copy fixes.
+ */
+export function parseStoredMap(def: StoredMap, grid: Grid = SQUARE): GameMap {
+  return readStoredMap(def, grid);
+}
+
+/**
+ * A stored map read on another grid than it was drawn for, as the first step of converting it
+ * (hex-maps.md H11): the rows read as offset rows (pointy) or columns (flat) of hexes, and every
+ * river re-read as hex lines between its waypoints. A river that no longer fits (its line now
+ * crosses water or another river, or a tributary misses the river it joined) is left out and
+ * listed in `problems`, for the review pass that makes the map's own hex copy. Not used by games:
+ * a hex scenario plays a reviewed hex map, never a square one read this way.
+ */
+export function storedMapOn(def: StoredMap, grid: Grid): { map: GameMap; problems: string[] } {
+  const problems: string[] = [];
+  return { map: readStoredMap(def, grid, problems), problems };
+}
+
+function readStoredMap(def: StoredMap, grid: Grid, problems?: string[]): GameMap {
   const lines = def.rows.split('\n').map((l) => l.trimEnd());
   while (lines.length && !lines[0]) lines.shift();
   while (lines.length && !lines[lines.length - 1]) lines.pop();
@@ -88,7 +113,7 @@ export function parseStoredMap(def: StoredMap): GameMap {
     }
   });
   const map = { width, height: lines.length, tiles };
-  if (def.rivers) parseRivers(map, def.rivers, def.id);
+  if (def.rivers) parseRivers(map, def.rivers, def.id, grid, problems);
   return map;
 }
 
@@ -106,7 +131,7 @@ export function storedMapEntry(scenario: Scenario, id: string): StoredMapEntry {
 export function storedWorld(rng: { rng: number }, id: string, scenario: Scenario = AMERICAS): GeneratedWorld {
   const def = storedMap(id);
   const { peoples } = storedMapEntry(scenario, id);
-  const map = parseStoredMap(def);
+  const map = parseStoredMap(def, gridIn(scenario));
   sprinkleExtras(rng, map, scenario.map.extras, gridIn(scenario));
   const entryRows = def.entryRows ?? [0, map.height - 1];
   // Keep clear of every arrival point any number of nations could use.
