@@ -869,6 +869,13 @@ export interface ScenarioAi {
    */
   dates?: boolean;
   /**
+   * With `dates`: how much later than in the Americas the computer Europeans' plans come, as a
+   * stretch of the years since 1492 (absent: 1). Where they arrive late on poor land and take a turn
+   * a year (the North-east), an arc tuned for the Americas' half-year turns from 1492 has them reach
+   * for independence before their colonies are grown; 1.5 reads the Americas' 1666 as 1753.
+   */
+  stretch?: number;
+  /**
    * The least site score (ai/common.ts `siteScore`) a nation's first landing looks for along the
    * coast from where its ships arrive (absent: 18, any fair site). Higher where the nearest coasts
    * are poor and better land lies further on (the North-east: Newfoundland's and Labrador's

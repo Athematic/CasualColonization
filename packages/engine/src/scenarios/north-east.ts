@@ -292,6 +292,7 @@ export const NORTH_EAST: Scenario = {
   ai: {
     // The computer Europeans keep to the Americas' dates, though the game starts in 1000.
     dates: true,
+    stretch: knob('CC_STRETCH', 1),
     landing: knob('CC_LANDING', 18),
     siteTerrain: { tundra: knob('CC_TUNDRA', 1) },
     goods: AMERICAS.ai.goods,

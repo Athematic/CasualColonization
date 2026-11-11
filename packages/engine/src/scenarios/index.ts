@@ -368,7 +368,13 @@ export function CouncilText(x: ScenarioLike, player: PlayerId, key: CouncilTextK
  */
 export function aiTurn(s: HasScenario, turn: number): number {
   const scenario = scenarioOf(s);
-  if (scenario.ai.dates) return turnOfYear(yearOf(turn).year, scenario.calendar);
+  if (scenario.ai.dates) {
+    // The Americas' year of that turn, its distance from 1492 stretched where the scenario asks (`ai.stretch`).
+    const year = yearOf(turn).year;
+    const first = yearOf(0).year;
+    const stretch = scenario.ai.stretch ?? 1;
+    return turnOfYear(stretch === 1 ? year : Math.round(first + (year - first) * stretch), scenario.calendar);
+  }
   const pace = scenario.ai.pace ?? 1;
   return pace === 1 ? turn : Math.round(turn * pace);
 }
