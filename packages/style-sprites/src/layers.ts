@@ -31,6 +31,9 @@ import {
 
 export { coastPieces };
 
+/** The side of the square that covers a hex one tile across its flats: 2/√3 tiles, a hair more. */
+const HEX_COVER = 2 / Math.sqrt(3) + 0.02;
+
 /** Neighbour offsets clockwise from north: N, NE, E, SE, S, SW, W, NW. */
 export const DIRS = [
   [0, -1],
@@ -97,6 +100,16 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
     },
   };
 
+  /**
+   * On hexes a square sprite is drawn over the hex's bounding square (a hex is 2/√3 tiles across its corners),
+   * centred on it, so once clipped it covers the hex's tips too.
+   */
+  const hexSquare = (ctx: CanvasRenderingContext2D, list: string[], t: LayerTile, z: number, bleed: number) => {
+    const size = z * HEX_COVER;
+    const o = (size - z) / 2;
+    painter.square(ctx, list, t.px - o, t.py - o, size, dpr, { fill: true, bleed });
+  };
+
   /** A square sprite clipped to the tile's outline (hexes), or as it always was (squares). */
   const ground = (ctx: CanvasRenderingContext2D, list: string[], t: LayerTile, z: number, shape: (() => void) | undefined, bleed: number): boolean => {
     if (!hex || !shape) return painter.square(ctx, list, t.px, t.py, z, dpr, { fill: true, bleed });
@@ -105,7 +118,7 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
     ctx.beginPath();
     shape();
     ctx.clip();
-    painter.square(ctx, list, t.px, t.py, z, dpr, { fill: true, bleed: 0.5 });
+    hexSquare(ctx, list, t, z, 0.5);
     ctx.restore();
     return true;
   };
@@ -138,6 +151,8 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
     // Where a band is drawn the terrain no longer changes at the straight tile edge: no grey line there.
     if (blend) {
       hooks.hideBorder = (ax, ay, bx, by, z, s) => {
+        // No bands on hexes (blendBorders is square-only), so the border line stays.
+        if (hex) return false;
         const a = landTerrainAt(s, ax, ay);
         const b = landTerrainAt(s, bx, by);
         if (!a || !b) return false;
@@ -163,7 +178,8 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
         shape();
         ctx.clip();
       }
-      painter.square(ctx, list, t.px, t.py, z, dpr, { fill: true, bleed: clip ? 0 : 0.5 });
+      if (hex) hexSquare(ctx, list, t, z, 0);
+      else painter.square(ctx, list, t.px, t.py, z, dpr, { fill: true, bleed: clip ? 0 : 0.5 });
       if (blend && !hex) blendBorders(ctx, t, z, s);
       if (clip) ctx.restore();
       if (t.tile.p && ids.plowed(t.tile.t).some((p) => isTakeOf(pick.id, p))) plowed.add(t);

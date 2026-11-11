@@ -1,11 +1,13 @@
-import { colonyWorkers, nationOf, RIVER_DIRS, settlementKindOf, TERRAIN, type Colony, type GameState, type Settlement, type SettlementLook, type Tile } from '@cc/engine';
+import { colonyWorkers, gridOf, nationOf, RIVER_DIRS, settlementKindOf, TERRAIN, type Colony, type GameState, type Settlement, type SettlementLook, type Tile } from '@cc/engine';
 import {
   braveMarkers,
   hash2,
   isTileExplored,
   riverCourse,
   roadDrawing,
+  roadMask,
   strandPoints,
+  tileCentreOnScreen,
   traceStrand,
   isTileVisible,
   tileToScreen,
@@ -22,6 +24,7 @@ import {
   type Scene,
 } from '@cc/render-api';
 import { FOREST, HIGHLIGHT, INK, LAND, PAPER, PAPER_WASH, RIVER, ROAD, WAVE, WHITE, shade } from './palette.js';
+import { hexBorders, hexCoastPath, hexFurrows, hexLandPath, hexPath, hexWaves } from './hex.js';
 import { FONT, braveSprite, colonySprite, hills, inked, mountains, ruins, settlementSprite, tree, unitSprite } from './sprites.js';
 
 type Ctx = CanvasRenderingContext2D;
@@ -262,13 +265,16 @@ function drawLease(ctx: Ctx, color: string, px: number, py: number, z: number, l
   ctx.restore();
 }
 
-function drawRoads(ctx: Ctx,s: Readonly<GameState>, x: number, y: number, px: number, py: number, z: number, lw: number): void {
-  const cx = px + z / 2;
-  const cy = py + z / 2;
+function drawRoads(ctx: Ctx, s: Readonly<GameState>, x: number, y: number, px: number, py: number, z: number, lw: number): void {
   let mask = 0;
   RIVER_DIRS.forEach(([dx, dy], dir) => {
     if (hasRoad(s, x + dx, y + dy)) mask |= 1 << dir;
   });
+  drawRoadsAt(ctx, s, x, y, px + z / 2, py + z / 2, mask, z, lw);
+}
+
+/** The road of tile (x, y) through the centre (cx, cy), towards the neighbours in `mask` (river bit order). */
+function drawRoadsAt(ctx: Ctx, s: Readonly<GameState>, x: number, y: number, cx: number, cy: number, mask: number, z: number, lw: number): void {
   const { strands: segs, bridge } = roadDrawing(s, x, y, mask);
   const onRiver = !!s.map.tiles[y * s.map.width + x].rv;
   ctx.lineCap = 'round';
@@ -356,6 +362,9 @@ export class LigneClaireMapRenderer implements MapRenderer {
   protected ctx: Ctx;
   /** Tiles whose water hook drew them (their waves are part of it). */
   private hookedWater = new Set<MapTile>();
+  /** The frame being drawn, and whether its grid is hexagonal (set at the start of `render`). */
+  protected scene?: Scene;
+  protected hex = false;
 
   constructor(
     protected canvas: HTMLCanvasElement,
@@ -383,6 +392,10 @@ export class LigneClaireMapRenderer implements MapRenderer {
     const z = scene.camera.zoom;
     const lw = lineWidthFor(z);
     const range = visibleRange(scene);
+    // Hexes (hex-maps.md H16): the same layers on hex outlines; squares draw exactly as they always have.
+    const hex = gridOf(s).kind === 'hex';
+    this.scene = scene;
+    this.hex = hex;
     this.beginFrame(scene);
     const tiles: MapTile[] = [];
     for (let y = range.y0; y <= range.y1; y++) {
@@ -403,7 +416,8 @@ export class LigneClaireMapRenderer implements MapRenderer {
 
     // 2. Faint borders between land types, firm ink along the coast.
     ctx.beginPath();
-    for (const t of tiles) {
+    if (hex) hexBorders(ctx, scene, tiles, this.hooks.hideBorder && ((ax, ay, bx, by) => !!this.hooks.hideBorder?.(ax, ay, bx, by, z, s)));
+    else for (const t of tiles) {
       if (TERRAIN[t.tile.t].water) continue;
       for (const [d, edge] of [[E, 'e'], [S, 's']] as const) {
         const nx = t.x + d[0];
@@ -426,7 +440,11 @@ export class LigneClaireMapRenderer implements MapRenderer {
     ctx.stroke();
 
     ctx.beginPath();
-    for (const t of tiles) if (!TERRAIN[t.tile.t].water) coastPath(ctx, s, t.x, t.y, t.px, t.py, z);
+    for (const t of tiles) {
+      if (TERRAIN[t.tile.t].water) continue;
+      if (hex) hexCoastPath(ctx, scene, t.x, t.y, z);
+      else coastPath(ctx, s, t.x, t.y, t.px, t.py, z);
+    }
     ctx.strokeStyle = INK;
     ctx.lineWidth = lw * 1.3;
     ctx.lineCap = 'round';
@@ -446,19 +464,33 @@ export class LigneClaireMapRenderer implements MapRenderer {
       if (river?.strands.length) rivers.push({ t, course: river });
     }
     // Rivers over the landscape (trees keep clear of them), roads crossing on bridges.
-    for (const ink of [true, false]) for (const r of rivers) drawRiver(ctx, r.course, r.t.px, r.t.py, z, lw, ink);
+    // On hexes the curves meet at the exact hex centres (the box's corner is rounded to a pixel).
+    const corner = (t: MapTile): [number, number] => {
+      if (!hex) return [t.px, t.py];
+      const c = tileCentreOnScreen(scene, t.x, t.y);
+      return [c.x - z / 2, c.y - z / 2];
+    };
+    for (const ink of [true, false]) for (const r of rivers) drawRiver(ctx, r.course, ...corner(r.t), z, lw, ink);
     for (const { t } of rivers) if (hasRoad(s, t.x, t.y)) this.drawRoad(s, t, z, lw);
     for (const t of tiles) {
       if (t.tile.b) this.drawBonusMarker(t, z, lw);
       if (t.tile.lcr) this.drawRumour(t, z, lw);
     }
     // A people's land leased to a nation (Beta 2, land use): a faint dashed frame in its colour.
-    for (const t of tiles) if (t.tile.use) drawLease(ctx, nationOf(s, t.tile.use).color, t.px, t.py, z, lw);
+    for (const t of tiles) {
+      if (!t.tile.use) continue;
+      if (hex) this.hexLease(t, nationOf(s, t.tile.use).color, z, lw);
+      else drawLease(ctx, nationOf(s, t.tile.use).color, t.px, t.py, z, lw);
+    }
 
     // 4. A light paper wash over what we know but cannot currently see.
     // One path so overlapping edges are not washed twice.
     ctx.beginPath();
-    for (const t of tiles) if (!isTileVisible(scene, t.x, t.y)) ctx.rect(t.px, t.py, z + 0.5, z + 0.5);
+    for (const t of tiles) {
+      if (isTileVisible(scene, t.x, t.y)) continue;
+      if (hex) hexPath(ctx, scene, t.x, t.y, -0.5);
+      else ctx.rect(t.px, t.py, z + 0.5, z + 0.5);
+    }
     ctx.fillStyle = PAPER_WASH;
     ctx.fill();
 
@@ -519,8 +551,9 @@ export class LigneClaireMapRenderer implements MapRenderer {
       const by = shared ? p.y + z * 0.7 : p.y + z / 2;
       this.drawBrave(b, bx, by, shared ? z * 0.5 : z * 0.86, lw);
       if (shared) continue;
-      const fx = p.x + z * 0.06;
-      const fy = p.y + z * 0.06;
+      // On hexes the pennant moves in a little, off the box's corner (outside the hex).
+      const fx = p.x + z * (hex ? 0.13 : 0.06);
+      const fy = p.y + z * (hex ? 0.13 : 0.06);
       const fw = z * 0.24;
       const fh = z * 0.2;
       inked(ctx, tribeColor(b.tribe), lw * 0.8, () => {
@@ -552,8 +585,8 @@ export class LigneClaireMapRenderer implements MapRenderer {
       const us = inColony ? z * 0.62 : z * 0.86;
       this.drawUnit(stack, ux, uy, us, lw, s);
       // Pennant in the owner's colour, with the unit's standing order.
-      const fx = inColony ? p.x + z * 0.55 : p.x + z * 0.06;
-      const fy = p.y + z * 0.06;
+      const fx = inColony ? p.x + z * 0.55 : p.x + z * (hex ? 0.13 : 0.06);
+      const fy = p.y + z * (hex ? 0.13 : 0.06);
       const fw = z * 0.24;
       const fh = z * 0.2;
       inked(ctx, nationOf(scene.state, stack.top.owner).color, lw * 0.8, () => ctx.rect(fx, fy, fw, fh));
@@ -579,7 +612,11 @@ export class LigneClaireMapRenderer implements MapRenderer {
       ctx.setLineDash([lw * 3, lw * 3]);
       ctx.strokeStyle = INK;
       ctx.lineWidth = lw;
-      ctx.strokeRect(p.x + lw, p.y + lw, z - lw * 2, z - lw * 2);
+      if (hex) {
+        ctx.beginPath();
+        hexPath(ctx, scene, scene.hover.x, scene.hover.y, lw);
+        ctx.stroke();
+      } else ctx.strokeRect(p.x + lw, p.y + lw, z - lw * 2, z - lw * 2);
       ctx.setLineDash([]);
     }
 
@@ -616,27 +653,36 @@ export class LigneClaireMapRenderer implements MapRenderer {
 
   /** Water under every known tile (land tiles get it too, for their rounded corners). */
   protected drawWaterBase(t: MapTile, z: number): void {
-    if (this.hooks.water?.(this.ctx, t, z)) {
+    const scene = this.scene;
+    const hexShape = this.hex && scene ? () => hexPath(this.ctx, scene, t.x, t.y, -0.5) : undefined;
+    if (hexShape ? this.hooks.water?.(this.ctx, t, z, hexShape) : this.hooks.water?.(this.ctx, t, z)) {
       this.hookedWater.add(t);
       return;
     }
     const def = TERRAIN[t.tile.t];
     const waterColor = t.tile.t === 'highSeas' ? LAND.highSeas : LAND.ocean;
     this.ctx.fillStyle = def.water ? waterColor : LAND.ocean;
-    this.ctx.fillRect(t.px, t.py, z + 0.5, z + 0.5);
+    if (hexShape) {
+      this.ctx.beginPath();
+      hexShape();
+      this.ctx.fill();
+    } else this.ctx.fillRect(t.px, t.py, z + 0.5, z + 0.5);
   }
 
   protected drawWaterDetail(t: MapTile, z: number, lw: number): void {
     if (this.hookedWater.has(t)) return;
-    drawWaves(this.ctx, t.x, t.y, t.px, t.py, z, lw);
+    if (this.hex) hexWaves(this.ctx, t.x, t.y, t.px + z / 2, t.py + z / 2, z, lw, WAVE);
+    else drawWaves(this.ctx, t.x, t.y, t.px, t.py, z, lw);
   }
 
   /** The land shape of a tile, with rounded corners towards the water. */
   protected drawLandBase(s: Readonly<GameState>, t: MapTile, z: number): void {
     const ctx = this.ctx;
-    if (this.hooks.land?.(ctx, t, z, () => landPath(ctx, s, t.x, t.y, t.px, t.py, z), s)) return;
+    const scene = this.scene;
+    const path = this.hex && scene ? () => hexLandPath(ctx, scene, t.x, t.y, z) : () => landPath(ctx, s, t.x, t.y, t.px, t.py, z);
+    if (this.hooks.land?.(ctx, t, z, path, s)) return;
     ctx.beginPath();
-    landPath(ctx, s, t.x, t.y, t.px, t.py, z);
+    path();
     ctx.fillStyle = LAND[t.tile.t];
     ctx.fill();
   }
@@ -648,12 +694,17 @@ export class LigneClaireMapRenderer implements MapRenderer {
 
   protected drawPlowed(t: MapTile, z: number, lw: number): void {
     if (this.hooks.plowed?.(this.ctx, t, z)) return;
-    drawFurrows(this.ctx, t.px, t.py, z, LAND[t.tile.t], lw);
+    if (this.hex && this.scene) hexFurrows(this.ctx, this.scene, t.x, t.y, t.px + z / 2, t.py + z / 2, z, shade(LAND[t.tile.t], -0.18), lw);
+    else drawFurrows(this.ctx, t.px, t.py, z, LAND[t.tile.t], lw);
   }
 
   protected drawRoad(s: Readonly<GameState>, t: MapTile, z: number, lw: number): void {
     if (this.hooks.road?.(this.ctx, t, z, s)) return;
-    drawRoads(this.ctx, s, t.x, t.y, t.px, t.py, z, lw);
+    if (this.hex && this.scene) {
+      // Through the exact hex centre, towards the six neighbours with a road or colony.
+      const c = tileCentreOnScreen(this.scene, t.x, t.y);
+      drawRoadsAt(this.ctx, s, t.x, t.y, c.x, c.y, roadMask(s, t.x, t.y, (x, y) => hasRoad(s, x, y)), z, lw);
+    } else drawRoads(this.ctx, s, t.x, t.y, t.px, t.py, z, lw);
   }
 
   /** Hills, mountains or forest; trees keep clear of the tile's river. */
@@ -671,7 +722,24 @@ export class LigneClaireMapRenderer implements MapRenderer {
 
   protected drawBonusMarker(t: MapTile, z: number, lw: number): void {
     if (this.hooks.bonus?.(this.ctx, t, z)) return;
-    drawBonus(this.ctx, t.px, t.py, z, lw);
+    // On hexes a little nearer the centre, so the star stays inside the hex.
+    if (this.hex) drawBonus(this.ctx, t.px - z * 0.04, t.py + z * 0.04, z, lw);
+    else drawBonus(this.ctx, t.px, t.py, z, lw);
+  }
+
+  /** A leased hex: the dashed frame inside the hex. */
+  private hexLease(t: MapTile, color: string, z: number, lw: number): void {
+    const ctx = this.ctx;
+    if (!this.scene) return;
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lw * 0.8;
+    ctx.setLineDash([z * 0.08, z * 0.08]);
+    ctx.beginPath();
+    hexPath(ctx, this.scene, t.x, t.y, z * 0.12);
+    ctx.stroke();
+    ctx.restore();
   }
 
   protected drawRumour(t: MapTile, z: number, lw: number): void {

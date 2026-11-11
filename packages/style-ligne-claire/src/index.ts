@@ -55,6 +55,8 @@ export const ligneClaire: StylePlugin = {
     '--line-width': '2px',
     '--radius': '10px',
   },
+  // Squares, and hexes in both orientations (docs/design/hex-maps.md H16, Beta 4 step 6).
+  grids: ['square', 'hex'],
   createMapRenderer: (canvas, hooks) => new LigneClaireMapRenderer(canvas, hooks),
   drawIcon,
   tileColor,
