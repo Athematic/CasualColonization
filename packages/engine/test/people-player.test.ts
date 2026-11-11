@@ -8,6 +8,22 @@
 import { describe, expect, it } from 'vitest';
 import {
   AMERICAS,
+  AMERICAS_FATHERS,
+  FATHERS,
+  FATHER_CATEGORIES,
+  PEOPLE_COUNCIL,
+  congress,
+  councilIdOf,
+  councilText,
+  fatherCost,
+  fatherJoinTurns,
+  joinCongress,
+  nextFatherCost,
+  offerFathers,
+  processCongress,
+  promote,
+  proposePeace,
+  type FatherId,
   BUILDINGS,
   CARIBBEAN,
   EUROPEAN_UNIT_TYPES,
@@ -655,6 +671,8 @@ describe('a computer people’s towns grow and produce by the rules (T10)', () =
     // Experts learned from elders, none bought; nothing but the people's own units.
     expect(unitList(s).some((u) => u.owner === 'iroquois' && ['hunter', 'fisher', 'gardener', 'crafter'].includes(u.type))).toBe(true);
     expect(unitList(s).filter((u) => u.owner === 'iroquois' && !UNIT_TYPES[u.type].people)).toEqual([]);
+    // Its council house's counsel brings members into its own council (step 3).
+    expect(people(s).fathers.length).toBeGreaterThan(0);
     expectNoEurope(s);
   }, 120_000);
 
@@ -670,6 +688,184 @@ describe('a computer people’s towns grow and produce by the rules (T10)', () =
     expect(capital(loaded).hunger).toEqual(c.hunger);
     play(s, 40);
     play(loaded, 40);
+    expect(serialize(loaded)).toBe(serialize(s));
+  }, 120_000);
+});
+
+describe('councils (Beta 3 step 3, T8, T9)', () => {
+  const NAMED = ['garakontie', 'thayendanegea', 'clanMothers'];
+  const join = (s: GameState, id: FatherId) => joinCongress(s, people(s), id);
+
+  it('the Congress is one council among others, unchanged', () => {
+    expect(AMERICAS.councils).toEqual({ congress: congress(AMERICAS_FATHERS) });
+    expect(AMERICAS.councils.congress.late).toEqual({ category: 'political', turn: 120, add: 2 });
+    expect(councilIdOf(AMERICAS, 'european')).toBe('congress');
+    expect(councilIdOf(AMERICAS, 'people')).toBe('people');
+    const s = createGame(config());
+    expect(councilOf(s, 'england')).toBe(AMERICAS.councils.congress);
+    expect(councilOf(s, 'hudsonsBay')).toBeUndefined();
+    expect(councilOf(s, 'crown')).toBeUndefined();
+    expect(councilText(s, 'england', 'council')).toBe('Continental Congress');
+    expect(councilText(s, 'england', 'member')).toBe('Founding Father');
+    expect(councilText(s, 'england', 'product')).toBe('bells');
+    expect(councilText(CARIBBEAN, 'england', 'council')).toBe('Colonial Council');
+    const england = s.players.find((p) => p.id === 'england')!;
+    expect(Object.keys(england.fatherOffer)).toEqual(FATHER_CATEGORIES);
+    expect(nextFatherCost(s, england)).toBe(fatherCost(0, 3));
+  });
+
+  it("a people sits its own council: the engine's people's council, offered at setup", () => {
+    const s = createGame(config());
+    const p = people(s);
+    expect(councilOf(s, 'iroquois')).toBe(PEOPLE_COUNCIL);
+    expect(councilText(s, 'iroquois', 'council')).toBe('Council');
+    expect(councilText(s, 'iroquois', 'product')).toBe('counsel');
+    expect(Object.keys(p.fatherOffer)).toEqual(['household', 'land', 'knowledge', 'defence', 'peace']);
+    for (const id of Object.values(p.fatherOffer) as FatherId[]) expect(PEOPLE_COUNCIL.members).toContain(id);
+    expect(nextFatherCost(s, p)).toBe(fatherCost(0, 3));
+    // Every member is in one of its categories, drawn as an emblem and carries a source line; none is the Congress's.
+    for (const id of PEOPLE_COUNCIL.members) {
+      const def = FATHERS[id];
+      expect(PEOPLE_COUNCIL.categories).toContain(def.category);
+      expect(def.portrait, id).toBe('emblem');
+      expect(def.source, id).toBeTruthy();
+      expect(AMERICAS.councils.congress.members).not.toContain(id);
+    }
+    // A scenario's own people's council replaces the engine's.
+    const own: Scenario = { ...PEOPLE_GAME, id: 'test-people-council', councils: { ...AMERICAS.councils, people: { categories: ['peace'], members: ['speakers'] } } };
+    registerScenario(own);
+    const o = createGame(config({ scenario: own.id }));
+    expect(people(o).fatherOffer).toEqual({ peace: 'speakers' });
+  });
+
+  it('named people are offered only to their own people', () => {
+    const s = createGame(config());
+    const p = people(s);
+    const other: Player = { ...p, id: 'sioux', fathers: [], fatherOffer: {} };
+    const seen = new Set<string>();
+    for (let i = 0; i < 60; i++) {
+      offerFathers(s, other);
+      for (const id of Object.values(other.fatherOffer) as string[]) seen.add(id);
+      offerFathers(s, p);
+      for (const id of Object.values(p.fatherOffer) as string[]) seen.add(`iroquois:${id}`);
+    }
+    for (const id of NAMED) {
+      expect(seen.has(id), id).toBe(false);
+      expect(seen.has(`iroquois:${id}`), id).toBe(true);
+    }
+    expect(seen.has('keepersOfTheStores')).toBe(true);
+  });
+
+  it('fills with counsel: a member joins, is announced, and the next candidates are drawn', () => {
+    const s = createGame(config());
+    const p = people(s);
+    p.currentFather = 'clanMothers';
+    p.fatherBells = nextFatherCost(s, p) - 1;
+    processCongress(s, p);
+    expect(p.fathers).toEqual([]);
+    p.fatherBells += 1;
+    processCongress(s, p);
+    expect(p.fathers).toEqual(['clanMothers']);
+    expect(p.fatherBells).toBe(0);
+    expect(p.currentFather).toBeNull();
+    expect(Object.values(p.fatherOffer)).not.toContain('clanMothers');
+    expect(s.messages.some((m) => m.to === 'iroquois' && m.text.startsWith('The Clan Mothers join the Council of the Haudenosaunee.'))).toBe(true);
+    expect(s.messages.some((m) => m.to === 'england' && m.text === 'The Clan Mothers have joined the Council of the Haudenosaunee.')).toBe(true);
+    expect(fatherJoinTurns(s, 'iroquois')).toEqual({ clanMothers: s.turn });
+    expect(nextFatherCost(s, p)).toBe(fatherCost(1, 3));
+    // A computer people chooses its own candidates by the council's preference.
+    expect(p.human).toBe(false);
+    processCongress(s, p);
+    expect(PEOPLE_COUNCIL.members).toContain(p.currentFather);
+  });
+
+  it("the household's and the land's members: births, stores, gardens and the land's health", () => {
+    const s = quiet();
+    const c = capital(s);
+    expect(foodToGrow(s, c)).toBe(200);
+    join(s, 'clanMothers');
+    expect(foodToGrow(s, c)).toBe(160);
+    const store = storeCapacity(s, c);
+    join(s, 'keepersOfTheStores');
+    expect(storeCapacity(s, c)).toBe(store + 100);
+    // Gardens yield half as much again; hunting is untouched.
+    const p = forestBeside(s, c);
+    const furs = tileYield(s, c, p.x, p.y, 'furs', 'hunter');
+    tileAt(s, p.x, p.y)!.f = false;
+    expect(tileYield(s, c, p.x, p.y, 'food', 'gardener')).toBe(10);
+    join(s, 'keepersOfTheFields');
+    expect(tileYield(s, c, p.x, p.y, 'food', 'gardener')).toBe(15);
+    expect(tileYield(s, c, p.x, p.y, 'food', 'townsperson')).toBe(Math.round(5 * 1.5));
+    tileAt(s, p.x, p.y)!.f = true;
+    expect(tileYield(s, c, p.x, p.y, 'furs', 'hunter')).toBe(furs);
+    // The land where its towns stand recovers faster; elsewhere as before.
+    const land = s.land!;
+    const r = regionOf(land, c.x, c.y);
+    const far = land.health!.findIndex((_, i) => i !== r && !colonyList(s).some((o) => regionOf(land, o.x, o.y) === i));
+    land.health![r] = 50;
+    land.health![far] = 50;
+    processLand(s);
+    expect(land.health![r]).toBe(55);
+    join(s, 'huntLeaders');
+    processLand(s);
+    expect(land.health![r]).toBe(65);
+    expect(land.health![far]).toBe(60);
+  });
+
+  it('knowledge, defence and peace: teaching, canoes, sight, warriors and making peace', () => {
+    const s = quiet();
+    const c = capital(s);
+    const elder = colonyWorkers(s, c).find((u) => u.type === 'elder')!;
+    for (const u of colonyWorkers(s, c)) if (u.type === 'townsperson') setUnitLoc(s, u, { kind: 'map', x: c.x, y: c.y });
+    const student = worker(s, c, 'townsperson', { kind: 'building', building: 'workshop' });
+    join(s, 'elders');
+    elder.teach = 2;
+    processColony(s, c);
+    expect(s.units[student.id].type).toBe('crafter');
+    const canoe = createUnit(s, 'iroquois', 'birchbarkCanoe', { kind: 'map', x: c.x, y: c.y });
+    const runner = createUnit(s, 'iroquois', 'runner', { kind: 'map', x: c.x, y: c.y });
+    const warrior = createUnit(s, 'iroquois', 'warrior', { kind: 'map', x: c.x, y: c.y });
+    const moves = maxMoves(canoe, s);
+    const sight = sightRadius(runner, s);
+    const offence = offencePower(s, warrior);
+    join(s, 'canoeBuilders');
+    join(s, 'runners');
+    join(s, 'thayendanegea');
+    expect(maxMoves(canoe, s)).toBe(moves + 3);
+    expect(sightRadius(runner, s)).toBe(sight + 1);
+    expect(offencePower(s, warrior)).toBe(offence * 1.5);
+    join(s, 'warLeaders');
+    const t = createUnit(s, 'iroquois', 'townsperson', { kind: 'map', x: c.x, y: c.y });
+    expect(promote(s, t)).toMatch(/warriors/);
+    expect(t.type).toBe('warrior');
+    // Peace: refused while England is not tired of war, accepted with the Speakers.
+    startWar(s, 'england', 'iroquois');
+    expect(proposePeace(s, 'iroquois', 'england')).toMatch(/refuses/);
+    join(s, 'speakers');
+    expect(proposePeace(s, 'iroquois', 'england')).toMatch(/made peace/);
+    // Garakontié ends every war.
+    startWar(s, 'england', 'iroquois');
+    startWar(s, 'france', 'iroquois');
+    join(s, 'garakontie');
+    expect(people(s).stance.england).toBe('peace');
+    expect(people(s).stance.france).toBe('peace');
+  });
+
+  it('saves and loads with its members, candidates and counsel, and plays on the same', () => {
+    const s = play(createGame(config()), 30);
+    join(s, 'keepersOfTheStores');
+    join(s, 'huntLeaders');
+    const p = people(s);
+    p.currentFather = Object.values(p.fatherOffer)[0] as FatherId;
+    p.fatherBells = 40;
+    const json = serialize(s);
+    const loaded = deserialize(json);
+    expect(serialize(loaded)).toBe(json);
+    expect(people(loaded).fathers).toEqual(p.fathers);
+    expect(people(loaded).fatherOffer).toEqual(p.fatherOffer);
+    expect(storeCapacity(loaded, capital(loaded))).toBe(storeCapacity(s, capital(s)));
+    play(s, 30);
+    play(loaded, 30);
     expect(serialize(loaded)).toBe(serialize(s));
   }, 120_000);
 });
