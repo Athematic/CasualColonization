@@ -1,6 +1,6 @@
 # Design note: Hex maps (Beta 4)
 
-Status: **design, decisions mostly made** (11 November 2026): H1–H4, H6–H9, H11 and H17 are decided; the rest are recommendations for Simon to confirm. Simon agreed the outline of Beta 4 on 11 November 2026 ([ROADMAP.md](../ROADMAP.md#beta-4-hex-maps)): Vinland is hex-only; Australia is built on hexes after Beta 4; no map editor unless it helps make the maps; no locally generated terrain sprites, a placeholder sprite pack instead; Ligne claire is tried on hexes. On the same day he decided four of this note's questions: the scenario chooses the hexes' orientation (H1), rivers run through tile centres (H3), movement keys follow what players of Civilization-like games expect (H6), and a colony's work area may grow to two rings, gated by scenario data, with today's single ring the default (H7). The rest is proposed. The note builds on the 0.10 grid work (`packages/engine/src/grid.ts`; [SHIPPED.md](../SHIPPED.md#010-faster-turns-done); [SCENARIOS.md](../SCENARIOS.md#the-map-grid)) and on Beta 3, [native-nations.md](native-nations.md), whose North-east map (T19) becomes Vinland's map and whose Norse proposal (T17) is built here.
+Status: **step 1 built** (see "Implementation (step 1)" at the end); **design, decisions mostly made** (11 November 2026): H1–H4, H6–H9, H11 and H17 are decided; the rest are recommendations for Simon to confirm. Simon agreed the outline of Beta 4 on 11 November 2026 ([ROADMAP.md](../ROADMAP.md#beta-4-hex-maps)): Vinland is hex-only; Australia is built on hexes after Beta 4; no map editor unless it helps make the maps; no locally generated terrain sprites, a placeholder sprite pack instead; Ligne claire is tried on hexes. On the same day he decided four of this note's questions: the scenario chooses the hexes' orientation (H1), rivers run through tile centres (H3), movement keys follow what players of Civilization-like games expect (H6), and a colony's work area may grow to two rings, gated by scenario data, with today's single ring the default (H7). The rest is proposed. The note builds on the 0.10 grid work (`packages/engine/src/grid.ts`; [SHIPPED.md](../SHIPPED.md#010-faster-turns-done); [SCENARIOS.md](../SCENARIOS.md#the-map-grid)) and on Beta 3, [native-nations.md](native-nations.md), whose North-east map (T19) becomes Vinland's map and whose Norse proposal (T17) is built here.
 
 ## 1. Goal
 
@@ -176,3 +176,51 @@ Most are different functions in the same file, so the merges are textual. Step 4
 18. H20: a map review page only if the review pass needs it?
 19. H21: Vinland's own content (years, extent, "thriving", the Thing) decided at the start of step 4?
 20. Build hex steps 1–3 now, beside Beta 3, on their own branch?
+
+## Implementation (step 1)
+
+Built on `beta4/step1` (from `claude/beta4-hex-maps`), 11 November 2026. Engine and tests, plus the movement keys; nothing is drawn on hexes yet (step 3).
+
+**The grids** (`grid.ts`). `GridKind` is `'square' | 'hex'`; `Scenario.map.hex.orientation` is `'pointy'` (default) or `'flat'`. `HEX_POINTY` (odd-r) and `HEX_FLAT` (odd-q) are built by one `makeHex` from the orientation's cube conversion and cube direction steps (H2): distance is the largest cube difference; `withinOffsets` and `ringOffsets` are cached per parity and radius (row by row, as on squares); `neighbourOffsets` is one of two cached arrays. New on every grid: `directionIndex(x, y, dx, dy)` (H5's bit index), `line(a, b)` (cube interpolation with a tiny nudge on hexes; on squares the rounded steps `parseRivers` has always used, not yet used by it), and `centre(x, y)` in tile widths, used only to sample the generator's noise. `directionTowards` on hexes is the first tile of `line`, so it always gets one step nearer. `GridDirection.dx/dy` are the steps from column 0, row 0; on hexes callers use `step` or `neighbourOffsets`. `step` throws for a direction the orientation lacks.
+
+**The work area** (`workarea.ts`, H7). `Scenario.map.workArea: { rings: WorkRing[] }`, each ring with `size?` and `building?` (both must hold), at most two (checked by the conformance test). `openRings`, `colonyWorkArea` and `inColonyWorkArea` give "this colony now"; `workReach`, `reachArea` and `reachOffsets` "the most it can reach". With no `workArea` both are exactly `grid.workArea`, so the squares are untouched. Readers changed: the colony's jobs (`colonyOccupancy`, so `jobOptions`, `bestJob` and the computer players' job search), `validateJob` (the old message on one-ring scenarios), leasable land (now), lease pressure (reach), the computer players' land buying (now) and site scores (reach: ring 2 at `OUTER_RING_VALUE` 0.5, water counted on ring 1 only, shared tiles and the nearby colonies within the reach). A ring that closes moves its workers at the start of `processColony` (before the colony produces), with a message, as a lost lease does. Left on the first ring, deliberately: the lumber from clearing a forest next to a colony (`movement.ts`), the unused `colonyOwningTile`, the colony-founding spacing (`distance < 2`), the events' bonus resource near a colony, and the end-of-game road statistics.
+
+**The job search on 18 tiles.** `optimiseWorkers`, `bestJobFor` and the plain `bestJobByOptions` were already generic over the occupancy's tiles, with tile yields worked out once per colony and unit type; nothing needed changing. The pruning the note proposed ("only the best few tiles per good") was not needed: see the speed check. `CC_AI_CHECKS` (`setJobSearchChecks`) checks it in the hex game test.
+
+**Rivers** (part of step 2, as far as movement and generated maps need). `riverLinked` and `linkRiver` take the grid (squares by default): the bit is `grid.directionIndex`, the opposite `(d + n/2) % n`. Movement (`landStepCost`), the river defence (`combat.ts`) and the computer players' roads pass the game's grid. `generateRivers` drains over the grid's neighbours; the edge-only mouths and the diagonal penalty stay square-only. Left for step 2: `parseRivers` with hex lines (stored maps), `RIVER_DIRS` and the renderers' copies, the conversion of stored masks; braves already move by `landStepCost`.
+
+**Other square assumptions** from the audit: `ai/common.ts` `tilesAround` is indexed by direction (`directionIndex`), and the generator samples its noise at hex centres (H10). No other `for dy … for dx …` loop, Chebyshev formula or `RIVER_DIRS` use is left in the engine outside `grid.ts` and `rivers.ts`.
+
+**Movement keys** (H6): `apps/web/src/keys.ts` `keyDirection` moves only in the grid's directions, which gives exactly H6's mapping (pointy: no Up, Down, numpad 8 and 2; flat: no Left, Right, numpad 4 and 6; the diagonals on both). Not checked against Civilization's or Freeciv's documentation (no source here).
+
+**Hidden test scenarios** (`scenarios/hex-test.ts`): `hex-test` (pointy) and `hex-test-flat`, the Americas' rules on a generated hex map of the same sizes, with `workArea: { rings: [{}, { size: 5 }] }`.
+
+**Tests.** `grid.test.ts`: hex directions and their order, neighbours symmetric on both parities and within one tile on both axes, `distance` equal to breadth-first steps, rings of 6r and 3r(r+1)+1 tiles row by row, lines and `directionTowards`, centres one tile apart, the work rings' offsets, the square `line` and `directionIndex`. `grid-rules.test.ts`, on squares and both orientations: a step in every direction, paths as long as the distance and a go-to followed, roads and rivers at road speed and crossing at the land's, generated rivers linked both ways and reaching water, the work area (one ring while small; ring 2 at five colonists, refused before, released when the colony shrinks; a building gate on squares). `hex-game.test.ts`: 200 rounds of four computer players (all four levels) on each orientation, every worked tile within its colony's open rings and worked once, ring 2 worked, a save and load compared every ten rounds, the last 30 rounds with the index and job search checks. `apps/web/test/keys.test.ts` for the keys. The scenario conformance test checks the work rings.
+
+**Squares bit-identical.** `npm run bench -- --verify` and `--verify --scenario caribbean` "same"; golden tests unchanged; the 24-game Americas tournament (`--games 24 --turns 609 --play-on --events --seed 1000`) identical to the base.
+
+**Speed (H17)**, `npm run bench -- --keep-playing --scenario … --seed …` (head start to 1700, medium map, this Linux container, one run each):
+
+| Scenario | seed 2024 | seed 7 | seed 1492 | mean |
+| --- | ---: | ---: | ---: | ---: |
+| Americas (squares) | 4.4 s (17 colonies) | 4.4 s (30) | 4.7 s (32) | 4.5 s |
+| `hex-test` (pointy) | 4.1 s (28) | 4.3 s (38) | 3.2 s (28) | 3.9 s |
+| `hex-test-flat` | 3.1 s (44) | 2.6 s (18) | 4.3 s (38) | 3.3 s |
+
+Hex games are not slower than square games of the same size, with the second ring and as many or more colonies: fewer neighbours and smaller radius areas outweigh the larger job search. The 24-game tournaments took 100 s (Americas), 70 s (pointy) and 59 s (flat). The Mac gate on Vinland is step 4.
+
+**First tournaments on `hex-test`** (24 games, 609 turns, play-on, events, seed 1000; Americas' generated map for comparison):
+
+| Level | Americas: wins, score, colonies | `hex-test`: wins, score, colonies | `hex-test-flat`: wins, score, colonies |
+| --- | --- | --- | --- |
+| Combative | 12, 616, 13.4 | 10, 552, 13.5 | 12, 608, 13.3 |
+| Competent | 8, 493, 6.8 | 9, 549, 7.9 | 6, 464, 7.0 |
+| Creative | 5, 455, 6.2 | 5, 487, 6.5 | 7, 435, 5.9 |
+| Naive | 0, 269, 13.0 | 0, 211, 10.1 | 1, 245, 12.1 |
+
+The levels keep their order by score on both orientations and none stalls: every level founds colonies, and the three advanced levels win independence (pointy: Combative 4 won / 3 lost, Competent 12 / 5, Creative 12 / 3; Americas 8 / 6, 9 / 4, 12 / 4). Retuning (H12) is step 4's.
+
+**Open for Simon:**
+- The size gate counts colonists inside and out at the moment asked, so a ring opens the moment the fifth colonist joins and closes before the colony next produces when it falls below; the note said "at the end of its turn". Same effect for production; say if a ring should open only at a turn boundary.
+- `hex-test` uses two rings from size 5 so the larger area is played; a ring-1-only comparison run is step 4's.
+- H6's keys are as proposed but unchecked against Civilization and Freeciv.
