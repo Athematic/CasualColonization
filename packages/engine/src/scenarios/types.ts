@@ -712,6 +712,12 @@ export interface NationTypeSelection {
   units: readonly UnitTypeId[];
   /** Buildings, in catalogue order: what its towns have and build. */
   buildings: readonly BuildingKind[];
+  /**
+   * Knowledge of the land (native-nations.md T13), read for the people's nation type only: its land
+   * units move at most at river cost on its own and unclaimed land, except on plowed tiles
+   * (movement.ts, `knowsLand`). Missing means on; false switches it off for the scenario.
+   */
+  knowsLand?: boolean;
 }
 
 /**

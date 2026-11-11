@@ -25,11 +25,11 @@ import {
 import { FOREST_MOVE_COST, RIVER_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './rules/terrain.js';
 import { riverLinked } from './rivers.js';
 import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
-import type { TribeId } from './rules/nations.js';
+import type { PlayerId, TribeId } from './rules/nations.js';
 import type { Colony, GameState, ImprovementKind, Player, Tile, Unit } from './types.js';
-import { mechanicsOf, term } from './scenarios/index.js';
+import { mechanicsOf, nationTypeOf, term } from './scenarios/index.js';
 import { colonyTiles, setUnitLoc, unitTiles, colonyList, unitList } from './unitindex.js';
-import { systemsOfId } from './playerkind.js';
+import { kindOfId, systemsOfId } from './playerkind.js';
 import { alliesOf, colonyOpenTo, isAllied } from './alliances.js';
 
 export type MoveOption =
@@ -57,7 +57,37 @@ export function moveCost(s: GameState, u: Unit, fx: number, fy: number, tx: numb
   const to = tileAt(s, tx, ty)!;
   const w = s.map.width;
   const hasColony = (x: number, y: number) => (index ? index.colonies.has(y * w + x) : !!colonyAt(s, x, y));
-  return landStepCost(s, from, to, fx, fy, tx, ty, from.r || hasColony(fx, fy), to.r || hasColony(tx, ty));
+  const cost = landStepCost(s, from, to, fx, fy, tx, ty, from.r || hasColony(fx, fy), to.r || hasColony(tx, ty));
+  return knowsLand(s, u.owner) ? knowingStepCost(cost, to, u.owner) : cost;
+}
+
+/**
+ * Whether a player's land units know the land (native-nations.md T13): a playing people's, unless
+ * the scenario switches the trait off on the people's nation type (`nationTypes.people.knowsLand`
+ * false). European nations, companies and the Crown never do. Braves of peoples nobody plays keep
+ * Beta 2's rule instead (braves.ts, `braveStepCost`: at river cost only while defending).
+ */
+export function knowsLand(s: GameState, owner: PlayerId): boolean {
+  return kindOfId(owner) === 'people' && nationTypeOf(s, 'people').knowsLand !== false;
+}
+
+/**
+ * Whether a unit of `owner` that knows the land (`knowsLand`) moves onto this tile as along a river:
+ * the owner's own claimed land or land nobody claims, unless it is plowed. Another player's land
+ * (a nation's colonies' claims, another people's towns' land) is not known.
+ * Railroads, once they exist, end the knowledge too: check them here beside `p`.
+ */
+export function knownLand(tile: Tile, owner: PlayerId): boolean {
+  return !tile.p && (tile.claim === undefined || tile.claim === owner);
+}
+
+/**
+ * A step's cost (`landStepCost`) for a unit that knows the land: at most RIVER_MOVE_COST onto known
+ * land (`knownLand`, judged by the tile entered, as terrain is), so a road or a river, never dearer,
+ * still wins. `moveCost` and the path search (`stepCost`) both use it.
+ */
+export function knowingStepCost(cost: number, to: Tile, owner: PlayerId): number {
+  return cost > RIVER_MOVE_COST && knownLand(to, owner) ? RIVER_MOVE_COST : cost;
 }
 
 /**
@@ -352,6 +382,8 @@ interface SearchContext {
   war: Set<TribeId>;
   /** Allies whose colonies are open to the owner and whose units do not block it (alliances.ts); null without any. */
   allies: Set<string> | null;
+  /** Whether the owner's land units know the land (`knowsLand`, T13), so steps cost as `moveCost` says. */
+  knowsLand: boolean;
 }
 
 function searchContext(s: GameState, u: Unit): SearchContext {
@@ -364,7 +396,7 @@ function searchContext(s: GameState, u: Unit): SearchContext {
     if (t.stance[u.owner] === 'war') war.add(t.id);
   }
   const allies = s.treaties ? alliesOf(s, u.owner).filter((a) => colonyOpenTo(s, a, u.owner)) : [];
-  return { owner: u.owner, ship: isShip(u), player: s.players.find((p) => p.id === u.owner), war, allies: allies.length ? new Set(allies) : null };
+  return { owner: u.owner, ship: isShip(u), player: s.players.find((p) => p.id === u.owner), war, allies: allies.length ? new Set(allies) : null, knowsLand: knowsLand(s, u.owner) };
 }
 
 /** Whether the unit can stand on the tile with map index `i` (on the map) while pathing. */
@@ -398,7 +430,8 @@ function stepCost(s: GameState, ctx: SearchContext, fi: number, ti: number, fx: 
   if (ctx.ship) return 3;
   const from = s.map.tiles[fi];
   const to = s.map.tiles[ti];
-  return landStepCost(s, from, to, fx, fy, tx, ty, from.r || index.colony[fi] === index.gen, to.r || index.colony[ti] === index.gen);
+  const cost = landStepCost(s, from, to, fx, fy, tx, ty, from.r || index.colony[fi] === index.gen, to.r || index.colony[ti] === index.gen);
+  return ctx.knowsLand ? knowingStepCost(cost, to, ctx.owner) : cost;
 }
 
 /**
