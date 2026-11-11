@@ -502,7 +502,7 @@ export class App {
 
   /** Asks about decisions the rules left waiting mid-turn (a tax raise after a sale, a royal demand). */
   async answerPending(): Promise<void> {
-    if (this.me.pendingTax || this.me.pendingDemand || pendingDemands(this.state, this.me.id).some((d) => d.kind === 'demand') || pendingEvents(this.state, this.me.id).length) await this.turnStart();
+    if (this.me.pendingTax || this.me.pendingDemand || pendingDemands(this.state, this.me.id).some((d) => d.kind === 'demand' || d.kind === 'treaty') || pendingEvents(this.state, this.me.id).length) await this.turnStart();
   }
 
   /** Opens the Congress choice in the briefing modal. */

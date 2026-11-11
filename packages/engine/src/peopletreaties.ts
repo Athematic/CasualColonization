@@ -370,7 +370,7 @@ export function breakFaith(s: GameState, nation: NationId, people: TribeId, why:
   rel.waitUntil = Math.max(rel.waitUntil ?? 0, turnAfterYears(s.turn, around(peoplePairRandom(s, nation, people, `break wait ${rel.breaks}`), rules.waitingYears), cal));
   rel.hostileUntil = Math.max(rel.hostileUntil ?? 0, turnAfterYears(s.turn, around(peoplePairRandom(s, nation, people, `break hostility ${rel.breaks}`), rules.hostilityYears), cal));
   delete rel.goodSince;
-  s.nativeDemands = s.nativeDemands?.filter((d) => !(d.kind === 'treaty' && d.nation === nation && s.settlements[d.settlementId]?.tribe === people));
+  if (s.nativeDemands) s.nativeDemands = s.nativeDemands.filter((d) => !(d.kind === 'treaty' && d.nation === nation && s.settlements[d.settlementId]?.tribe === people));
   pruneSettlementStops(s, nation, people);
   const name = peopleName(people);
   message(s, `${nationOf(s, nation).name} has broken faith with the ${name} by ${BREACH_TEXT[why]}. Every treaty with them is over, and they will not soon trust ${nationOf(s, nation).name} again.`, nation);

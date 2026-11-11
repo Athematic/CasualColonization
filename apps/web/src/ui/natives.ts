@@ -1,5 +1,11 @@
 import {
+  calendarOf,
   cargoRoomFor,
+  formatDate,
+  peopleStanding,
+  peopleTradeBenefits,
+  peopleTradeTreaty,
+  peopleTreatiesOn,
   GOOD_DEFS,
   goodsOf,
   incitePrice,
@@ -41,7 +47,7 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
     for (const g of goodsOf(s)) {
       const n = Math.min(100, unit.cargo?.[g] ?? 0);
       if (n <= 0) continue;
-      const offer = nativeOffer(s, st, g, n);
+      const offer = nativeOffer(s, st, g, n, unit.owner);
       options.push({
         label: `Sell ${n} ${GOOD_DEFS[g].name.toLowerCase()} for ${offer} gold`,
         value: { kind: 'sell', good: g },
@@ -61,8 +67,13 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
       });
     }
     const mood = tensionLabel(st.tension[unit.owner] ?? 0, nativeRulesOf(s).tension);
+    // The treaty with the settlement's people, its benefits, and how the people stands (N13).
+    const treaty = peopleTradeTreaty(s, unit.owner, st.tribe);
+    const standing = peopleTreatiesOn(s) && !treaty ? peopleStanding(s, unit.owner, st.tribe) : null;
     const text = h('div', null,
       h('p', null, `The people here are ${mood}. They pay ${st.gold} gold at most, and want ${peopleOf(s, st.tribe).wants.map((g) => GOOD_DEFS[g].name.toLowerCase()).join(', ')}.`),
+      treaty ? h('p', { class: 'small', 'data-treaty': treaty.id }, `Trade treaty with the ${TRIBES[st.tribe].name} since ${formatDate(treaty.start, calendarOf(s))}: ${peopleTradeBenefits(s)}.`) : null,
+      standing ? h('p', { class: 'muted small' }, `The ${TRIBES[st.tribe].name}: ${standing.toLowerCase()}. No trade treaty yet (Foreign Affairs).`) : null,
       options.length ? null : h('p', { class: 'muted' }, 'You have nothing to sell, and they have nothing for sale.'));
     const choice: Deal | null = await choose<Deal>(`Trade with the ${settlementName(s, st)}`, text, [...options, { label: traded ? 'Done' : 'Leave', value: null as unknown as Deal }]);
     if (!choice) return traded;

@@ -1238,6 +1238,13 @@ button.good:not(:disabled):hover {
   vertical-align: middle;
 }
 
+/* Native peoples (Foreign Affairs): wide with treaties in play, long with many small peoples. */
+.card.natives .table-scroll {
+  overflow-x: auto;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
 .fathers {
   margin: 0.4rem 0 0;
   padding-left: 1.1rem;
