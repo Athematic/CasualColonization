@@ -5,7 +5,7 @@ import { track } from './telemetry.js';
 import { buildingCapacityPerWorker, centreProduction, colonyReport, foodToGrow, libertyBonus, tileYield, type ColonyReport } from './production.js';
 import { kindOfId, systemsOf } from './playerkind.js';
 import { noteTaken } from './land.js';
-import { claimTownLand, growPeopleTown, isPeopleTown, peopleLandClosedTo, planTownBuild, schoolOf, skillOfWork } from './peopleeconomy.js';
+import { claimTownLand, foodCapacity, growPeopleTown, housingOf, isPeopleTown, townDwellers, peopleLandClosedTo, planTownBuild, schoolOf, skillOfWork } from './peopleeconomy.js';
 import {
   colonyAt,
   colonyPopulation,
@@ -280,14 +280,38 @@ function jobValue(colony: Colony, u: Unit, job: Job, amount: number, foodNet: nu
   return value + (expert ? 30 : 0);
 }
 
+/**
+ * A job's worth in a people's town (native-nations.md T10), where nothing is sold to a home port:
+ * food first while the town is short, then the town's building work, then food for its stores and
+ * growth; goods only while there is room to keep them. A worker's own way counts (`amount` holds it).
+ */
+function townJobValue(s: GameState, colony: Colony, job: Job, amount: number, foodNet: number, report: ColonyReport): number {
+  if (job.kind === 'building' && BUILDINGS[job.building].school) return -1;
+  const product = job.kind === 'tile' ? job.good : BUILDINGS[job.building].output!;
+  if (product === 'food') {
+    if (foodNet < 2) return amount * 12;
+    // Stores full and no room for a birth: more food would spoil.
+    const full = colony.goods.food + foodNet >= foodCapacity(s, colony) || townDwellers(s, colony) >= housingOf(s, colony);
+    return amount * (full ? 1 : 5);
+  }
+  if (product === 'hammers') return amount * (colony.build ? 4 : 1);
+  if (product === 'bells') return amount * 2;
+  if (product === 'crosses') return 0;
+  const good = product as GoodId;
+  // Goods with no room left are worth little; furs and the rest are for trade (step 4) and the town's own use.
+  if (colony.goods[good] + report.net[good] >= warehouseCapacity(colony)) return amount * 0.2;
+  return amount * (good === 'lumber' ? 1 : 1.5);
+}
+
 /** Picks a sensible job for a unit joining a colony. */
 export function bestJob(s: GameState, colony: Colony, u: Unit): Job | null {
   const report = colonyReport(s, colony);
   const alreadyIn = u.loc.kind === 'colony' && u.loc.colonyId === colony.id;
   const foodNet = report.net.food - (alreadyIn ? 0 : 2);
   let best: { job: Job; value: number } | null = null;
+  const town = isPeopleTown(colony);
   for (const opt of jobOptions(s, colony, u)) {
-    const value = jobValue(colony, u, opt.job, opt.amount, foodNet, report);
+    const value = town ? townJobValue(s, colony, opt.job, opt.amount, foodNet, report) : jobValue(colony, u, opt.job, opt.amount, foodNet, report);
     if (!best || value > best.value) best = { job: opt.job, value };
   }
   return best?.job ?? null;

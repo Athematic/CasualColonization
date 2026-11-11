@@ -14,11 +14,14 @@
  * Expeditionary Force, independence, Congress or caravel. Its computer play is step 9; until then
  * a computer people ends its turn.
  */
-import { bestJob } from './colony.js';
+import { bestJob, canBuild } from './colony.js';
+import { claimTownLand, planTownBuild, schoolOf } from './peopleeconomy.js';
+import { BUILDINGS } from './rules/buildings.js';
+import type { UnitTypeId } from './rules/units.js';
 import { newPlayer } from './game.js';
 import { createUnit, message, newId, reveal, tileAt } from './queries.js';
 import type { TribeId } from './rules/nations.js';
-import { bornType, difficultyOf, goodsOf, nationOf, newColonyBuildings, playablePeoples, scenarioOf } from './scenarios/index.js';
+import { bornType, difficultyOf, goodsOf, nationOf, nationTypeOf, newColonyBuildings, peopleOf, playablePeoples, scenarioOf } from './scenarios/index.js';
 import { settlementName } from './natives.js';
 import { emptyGoods } from './rules/goods.js';
 import type { Colony, GameState, Player } from './types.js';
@@ -44,7 +47,12 @@ export function addPeoplePlayer(s: GameState, id: TribeId, human: boolean): Play
   // Difficulty is read for the people as for any player (raids, prices); this checks it resolves.
   difficultyOf(s, p);
 
-  const worker = bornType(s, id);
+  const born = bornType(s, id);
+  const own = nationTypeOf(s, 'people').units;
+  const pick = (t: UnitTypeId) => (own.includes(t) ? t : born);
+  // The town's first worker follows its people's lifeway: gardens for a farming people, hunting otherwise (T6).
+  const worker = pick(peopleOf(s, id).lifeway === 'nomadic' ? 'hunter' : 'gardener');
+  const towns: Colony[] = [];
   for (const st of settlements) {
     const colony: Colony = {
       id: newId(s, 'c'),
@@ -72,8 +80,27 @@ export function addPeoplePlayer(s: GameState, id: TribeId, human: boolean): Play
     const job = bestJob(s, colony, u);
     if (job) setUnitLoc(s, u, { kind: 'colony', colonyId: colony.id, job });
     else removeUnit(s, u.id);
-    createUnit(s, id, worker, { kind: 'map', x: st.x, y: st.y });
+    // A townsperson at work beside it, and a warrior in the town for the braves the settlement would have sent out.
+    const t = createUnit(s, id, born, { kind: 'map', x: st.x, y: st.y });
+    const tJob = bestJob(s, colony, t);
+    if (tJob) setUnitLoc(s, t, { kind: 'colony', colonyId: colony.id, job: tJob });
+    createUnit(s, id, pick('warrior'), { kind: 'map', x: st.x, y: st.y });
+    // The capital's elder teaches in its longhouse, and a runner carries word between the towns.
+    if (st === first) {
+      const school = schoolOf(s, colony);
+      if (own.includes('elder') && BUILDINGS[school].school && colony.buildings[school]) {
+        const elder = createUnit(s, id, 'elder', { kind: 'map', x: st.x, y: st.y });
+        setUnitLoc(s, elder, { kind: 'colony', colonyId: colony.id, job: { kind: 'building', building: school } });
+      }
+      createUnit(s, id, pick('runner'), { kind: 'map', x: st.x, y: st.y });
+    }
     reveal(s, id, st.x, st.y, 2);
+    towns.push(colony);
+  }
+  // Once every settlement is a town, each claims its land (T5) and a computer people's picks its first build.
+  for (const colony of towns) {
+    claimTownLand(s, colony);
+    planTownBuild(s, colony, (t) => canBuild(s, colony, t));
   }
   message(s, `The ${name} take their place among the nations, with ${settlements.length} town${settlements.length === 1 ? '' : 's'}.`, id, { x: first.x, y: first.y });
   return p;

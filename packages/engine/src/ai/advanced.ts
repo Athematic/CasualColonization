@@ -29,6 +29,7 @@ import { abandonColony } from '../leaving.js';
 import { boardShip, canImprove, findPath, goTo, setDestination, startImprovement } from '../movement.js';
 import { buyLand, establishMission, giftToTribe, landPrice, learnSkill, nativeLandOwner, speakToChief, takeLand, tensionOf } from '../natives.js';
 import { buildingCapacityPerWorker, landYield, workerTileYield, type ColonyReport } from '../production.js';
+import { landAdjusted } from '../land.js';
 import { aiColonyReport } from './reports.js';
 import {
   cargoFree,
@@ -568,7 +569,13 @@ function bestJobFor(s: GameState, p: Player, c: Colony, u: Unit, prof: AiProfile
     for (let k = start[t]; k < start[t + 1]; k++) {
       const g = goods[k];
       let amount = yields[k];
-      if (amount !== amount) amount = yields[k] = workerTileYield(s, c, tileAt(s, q.x, q.y), g, u.type, land[k], occupancy.bonus);
+      if (amount !== amount) {
+        const tile = tileAt(s, q.x, q.y);
+        amount = workerTileYield(s, c, tile, g, u.type, land[k], occupancy.bonus);
+        // Hard years and land health, as tileYield has them (land.ts).
+        if (s.land && tile) amount = landAdjusted(s, tile, q.x, q.y, g, amount);
+        yields[k] = amount;
+      }
       if (!(amount > 0)) continue;
       let pv = search.values.get(g);
       if (pv === undefined) search.values.set(g, (pv = productValue(p, c, report, g, prof, sol)));

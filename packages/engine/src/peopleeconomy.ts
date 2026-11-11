@@ -34,7 +34,7 @@ import { turnsInYear } from './land.js';
 import { nativeLandOwner } from './natives.js';
 import { kindOfId } from './playerkind.js';
 import { foodToGrow, FOOD_PER_COLONIST } from './production.js';
-import { colonyAt, colonyWorkers, createUnit, isWater, message, player, settlementAt, tileAt, unitName } from './queries.js';
+import { colonyAt, colonyWorkers, createUnit, isWater, message, player, settlementAt, tileAt, unitName, unitsAt } from './queries.js';
 import { BUILDINGS, type BuildingKind } from './rules/buildings.js';
 import type { PlayerId, TribeId } from './rules/nations.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
@@ -92,6 +92,13 @@ export function housingOf(s: GameState, colony: Colony): number {
     if (level > 0) n += housing[level - 1];
   }
   return any ? n : Infinity;
+}
+
+/** The people a town houses: its workers and its people standing in it (warriors, runners, the newborn without work). */
+export function townDwellers(s: GameState, colony: Colony): number {
+  let n = colonyWorkers(s, colony).length;
+  for (const u of unitsAt(s, colony.x, colony.y)) if (u.owner === colony.owner && u.loc.kind === 'map' && UNIT_TYPES[u.type].kind === 'colonist') n++;
+  return n;
 }
 
 /** Years of food a town holds (its food over its people's yearly need); Infinity for an empty town. */
@@ -154,7 +161,7 @@ export function growPeopleTown(s: GameState, colony: Colony): void {
   const toGrow = foodToGrow(s, colony);
   if (
     colony.goods.food >= toGrow + reserveOf(s, colony, pop) &&
-    pop < housingOf(s, colony) &&
+    townDwellers(s, colony) < housingOf(s, colony) &&
     !hungryThisYear(s, colony) &&
     !foughtThisYear(s, colony)
   ) {

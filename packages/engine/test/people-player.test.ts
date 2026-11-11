@@ -8,6 +8,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   AMERICAS,
+  PEOPLE_BUILDINGS,
+  PEOPLE_UNIT_TYPES,
   PLAYER_SYSTEMS,
   applyCommand,
   buildOptions,
@@ -32,6 +34,9 @@ const PEOPLE_GAME: Scenario = {
   name: 'People player test',
   hidden: true,
   peoples: { ...AMERICAS.peoples, playable: [{ id: 'iroquois', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga', 'Kanonwalohale'] }] },
+  // Step 2: the people's own units and buildings (T6, T7), hard years and land health (T10).
+  nationTypes: { people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS] } },
+  mechanics: { ...AMERICAS.mechanics, hardYears: { chance: 1 / 8 }, landHealth: { regionSize: 8, renewal: 40, recovery: 5, floor: 0.2 } },
 };
 registerScenario(PEOPLE_GAME);
 
@@ -133,14 +138,22 @@ describe('a people playing as a nation (Beta 3 step 1)', () => {
     expect(p.coloniesFounded).toBe(towns.length);
     for (const c of towns) {
       expect(c.name).toMatch(/^Iroquois /);
-      // Its own buildings (the placeholder selection), the European ones at level 0.
-      expect(c.buildings.townHall).toBe(1);
+      // Its own buildings (step 2: the people's selection), the European ones at level 0.
+      expect(c.buildings.longhouse).toBe(1);
+      expect(c.buildings.workshop).toBe(1);
+      expect(c.buildings.councilHouse).toBe(1);
+      expect(c.buildings.storagePits).toBe(0);
+      expect(c.buildings.townHall).toBe(0);
       expect(c.buildings.docks).toBe(0);
       expect(c.buildings.schoolhouse).toBe(0);
-      expect(buildOptions(s, c).every((b) => b.kind === 'building' && ['townHall', 'carpenter', 'blacksmith'].includes(b.id))).toBe(true);
+      expect(buildOptions(s, c).every((b) => (b.kind === 'building' ? PEOPLE_BUILDINGS : PEOPLE_UNIT_TYPES).includes(b.id as never))).toBe(true);
+      // A gardener (the Iroquois farm) and a townsperson at work; the capital's elder teaches.
       const inside = unitList(s).filter((u) => u.loc.kind === 'colony' && u.loc.colonyId === c.id);
-      expect(inside.map((u) => u.type)).toEqual(['nativeConvert']);
+      expect(inside.map((u) => u.type).filter((t) => t !== 'elder')).toEqual(['gardener', 'townsperson']);
+      expect(unitList(s).some((u) => u.loc.kind === 'map' && u.loc.x === c.x && u.loc.y === c.y && u.type === 'warrior')).toBe(true);
     }
+    expect(unitList(s).filter((u) => u.owner === 'iroquois' && u.type === 'elder')).toHaveLength(1);
+    expect(unitList(s).filter((u) => u.owner === 'iroquois' && u.type === 'runner')).toHaveLength(1);
     // No caravel, no Europe; the nations start as before.
     expectNoEurope(s);
     for (const n of ['england', 'france', 'netherlands']) expect(unitList(s).some((u) => u.owner === n && u.type === 'caravel')).toBe(true);

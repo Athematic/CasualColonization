@@ -137,10 +137,14 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     kind: 'storagePits', levels: [lvl('Storage Pits', 52, 0, 2), lvl('Bark-lined Storage Pits', 120, 0, 5)],
     initialLevel: 0, workplaces: 0, people: true, store: [100, 250], capacity: [100, 200],
   },
-  /** Crafters make tools of wood, stone and bone, frames and canoes: the town's building work. */
+  /**
+   * Crafters make tools of wood, stone and bone, frames and canoes: the town's building work. They
+   * gather their own wood, bark and stone (no input), and the whole town lends a hand (a hammer a
+   * turn without a worker, two with workshops).
+   */
   workshop: {
     kind: 'workshop', levels: [lvl('Workshop', 0, 0, 1), lvl('Workshops', 56, 0, 4)],
-    initialLevel: 1, workplaces: 3, input: 'lumber', output: 'hammers', people: true,
+    initialLevel: 1, workplaces: 3, output: 'hammers', baseOutput: [1, 2], people: true,
   },
   /** The people's docks: fishing from canoes, and canoes built. */
   canoeLanding: { kind: 'canoeLanding', levels: [lvl('Canoe Landing', 40, 0, 1)], initialLevel: 0, workplaces: 0, coastalOnly: true, people: true, water: true },

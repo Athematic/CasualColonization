@@ -20,6 +20,7 @@ import { boardShip, leaveShip, moveUnit, setDestination, setRoadTo, startImprove
 import { answerNativeDemand } from './braves.js';
 import { proposePeopleTreaty } from './peopletreaties.js';
 import { buyFromSettlement, buyLand, denounceMission, establishMission, giftToTribe, inciteTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
+import { claimLand } from './peopleeconomy.js';
 import { chooseFather } from './fathers.js';
 import { proposePeace, startWar } from './diplomacy.js';
 import { answerProposal, cancelFavoured, cancelTrade, proposeAlliance, proposeExpedition, proposeFavoured, proposeTrade } from './relations.js';
@@ -88,6 +89,8 @@ export type Command =
   | { type: 'chooseFather'; father: FatherId }
   | { type: 'buyLand'; x: number; y: number }
   | { type: 'takeLand'; x: number; y: number }
+  /** A native people claims unclaimed land next to its own (native-nations.md T5; peopleeconomy.ts). */
+  | { type: 'claimLand'; x: number; y: number }
   | { type: 'mission'; unitId: string; settlementId: string }
   | { type: 'cashTreasure'; unitId: string }
   | { type: 'answerTax'; accept: boolean }
@@ -359,6 +362,9 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'buyLand':
         text = buyLand(s, nation, cmd.x, cmd.y);
+        break;
+      case 'claimLand':
+        text = claimLand(s, nation, cmd.x, cmd.y);
         break;
       case 'takeLand':
         text = takeLand(s, nation, cmd.x, cmd.y);
