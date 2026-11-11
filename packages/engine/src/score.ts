@@ -71,6 +71,7 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreW
   let halfColonies = 0;
   let fullColonies = 0;
   let goods = 0;
+  const homePort = systemsOf(p).homePort;
   for (const c of colonyList(s)) {
     if (c.owner !== p.id) continue;
     for (const kind of buildingsOf(s, c.owner)) levels += Math.max(0, (c.buildings[kind] ?? 0) - BUILDINGS[kind].initialLevel);
@@ -79,7 +80,8 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreW
     rebels += Math.round((pop * sol) / 100);
     if (pop > 0 && sol >= 50) halfColonies++;
     if (pop > 0 && sol >= 100) fullColonies++;
-    for (const g of goodsOf(s)) if (g !== 'food') goods += (c.goods[g] ?? 0) * sellPrice(p, g);
+    // Goods are worth their home port's price; a playing people has none (its own score lines are step 7).
+    if (homePort) for (const g of goodsOf(s)) if (g !== 'food') goods += (c.goods[g] ?? 0) * sellPrice(p, g);
   }
 
   let agreements = 0;

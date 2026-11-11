@@ -174,7 +174,7 @@ function damageShip(s: GameState, ship: Unit): string {
     ship.repair = 4;
     return `${name} is damaged and limps to ${drydock.name} for repairs`;
   }
-  if (player(s, ship.owner).independence === 'none' && ship.owner !== 'crown') {
+  if (player(s, ship.owner).independence === 'none' && ship.owner !== 'crown' && systemsOfId(ship.owner).homePort) {
     setUnitLoc(s, ship, { kind: 'europe' });
     ship.repair = 6;
     return `${name} is damaged and returns to ${term(s, 'homeland')} for repairs`;

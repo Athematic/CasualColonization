@@ -13,6 +13,8 @@ import { initCrown } from './crown.js';
 import { entryPoints } from './mapgen.js';
 import { checkSavedScenario, checkScenarioConfig, difficultyOf, goodsOf, nationOf, peoplesOf, portMarketOf, term } from './scenarios/index.js';
 import { modifiers } from './scenarios/modifiers.js';
+import { systemsOfId } from './playerkind.js';
+import { addPeoplePlayer } from './peopleplayer.js';
 
 /** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
 export const SAVE_VERSION = 3;
@@ -76,6 +78,9 @@ export function createGame(config: GameConfig): GameState {
     message(s, term(s, 'arrival', { nation: nationOf(s, nation).name, heading }), nation, entry);
   });
 
+  // Peoples playing as nations (native-nations.md T3, T4) take their turns after the nations.
+  for (const people of config.peoples ?? []) addPeoplePlayer(s, people, config.humans.includes(people));
+
   beginPlayerTurn(s, s.players[0]);
   runAiUntilHuman(s);
   return s;
@@ -87,7 +92,8 @@ export function newPlayer(s: GameState, nation: PlayerId, human: boolean, entry:
     human,
     gold: 1000,
     tax: 0,
-    market: initialMarket(portMarketOf(s, nation), goodsOf(s)),
+    // A playing people has no home port, so no market (playerkind.ts `homePort`): an empty record.
+    market: systemsOfId(nation).homePort ? initialMarket(portMarketOf(s, nation), goodsOf(s)) : ({} as Player['market']),
     crosses: 0,
     crossesRequired: 30,
     recruitPool: [],

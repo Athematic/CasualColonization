@@ -150,12 +150,21 @@ export function nationTypeOf(s: HasScenario, type: 'european' | 'people'): Natio
 }
 
 /**
+ * The unit a colony grows by (colony.ts): a free colonist; in a playing people's town the first unit
+ * of the people's selection (step 2 makes its births its own, T10).
+ */
+export function bornType(s: HasScenario, owner: PlayerId): UnitTypeId {
+  return kindOfId(owner) === 'people' ? nationTypeOf(s, 'people').units[0] : 'freeColonist';
+}
+
+/**
  * The engine's placeholder selection for a playing people until step 2 adds the people's own units
- * and buildings (T6, T7): free colonists and a native convert (a brave's first form), a scout, and
- * the buildings every colony has.
+ * and buildings (T6, T7): the native convert (today's only native unit type: the people its towns
+ * are peopled and grow with, and its first units) and three buildings every colony starts with.
+ * `units[0]` is the unit a town is peopled and grows with.
  */
 export const PEOPLE_SELECTION: NationTypeSelection = {
-  units: ['freeColonist', 'nativeConvert', 'seasonedScout'],
+  units: ['nativeConvert'],
   buildings: ['townHall', 'carpenter', 'blacksmith'],
 };
 
@@ -433,6 +442,13 @@ export function checkScenarioConfig(config: GameConfig): Scenario {
   const set = nationSet(scenario, config.rivals);
   for (const nation of config.nations) {
     if (!set.some((e) => e.id === nation)) throw new Error(`${nation} is not one of the nations of ${scenario.name}.`);
+  }
+  // Peoples playing as nations (native-nations.md T4): only those the scenario names as playable.
+  const peoples = config.peoples ?? [];
+  if (new Set(peoples).size !== peoples.length) throw new Error('Each people can only take part once.');
+  for (const people of peoples) {
+    if (!playablePeoples(scenario).some((e) => e.id === people)) throw new Error(`${people} is not a people ${scenario.name} lets play as a nation.`);
+    if (!scenario.peoples.ids.includes(people)) throw new Error(`${people} is not one of the peoples of ${scenario.name}.`);
   }
   if (config.map) {
     if (!scenario.map.stored.some((e) => e.id === config.map)) throw new Error(`${scenario.name} has no map "${config.map}".`);

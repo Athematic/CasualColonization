@@ -50,7 +50,7 @@ export interface PlayerSystems {
   independence: boolean;
   /** Collects liberty bells for the Continental Congress (fathers.ts); allies' shared bells. */
   congress: boolean;
-  /** Starts the game with a caravel carrying a soldier and a pioneer (game.ts `startingUnits`). */
+  /** Starts the game with a caravel carrying a soldier and a pioneer (game.ts `startingUnits`); a people starts with its towns (peopleplayer.ts). */
   startingCaravel: boolean;
   /**
    * Makes war and is attacked: declares war, is a war target, its units fight and its ships are
@@ -71,6 +71,11 @@ export interface PlayerSystems {
   peoples: boolean;
   /** Braves of peoples nobody plays visit its colonies (to trade, bring gifts, demand or raid). */
   visitedByBraves: boolean;
+  /**
+   * Lost City Rumours: its units entering a rumour's tile explore it (rumours.ts; some finds are
+   * European: immigrants on the docks, treasure). A people's units leave rumours alone.
+   */
+  rumours: boolean;
   /** Historical and random events (events/index.ts). */
   events: boolean;
   /** Ranked among the European nations: final scores, holding shares in companies, play-on. */
@@ -89,19 +94,19 @@ export interface PlayerSystems {
 export const PLAYER_SYSTEMS: Readonly<Record<PlayerKind, Readonly<PlayerSystems>>> = {
   nation: {
     homePort: true, immigration: true, taxes: true, crown: true, independence: true, congress: true, startingCaravel: true,
-    war: true, relations: true, alliances: true, peoples: true, visitedByBraves: true, events: true, ranked: true, ai: 'level',
+    war: true, relations: true, alliances: true, peoples: true, visitedByBraves: true, rumours: true, events: true, ranked: true, ai: 'level',
   },
   company: {
     homePort: true, immigration: true, taxes: false, crown: false, independence: false, congress: false, startingCaravel: true,
-    war: false, relations: false, alliances: false, peoples: false, visitedByBraves: true, events: false, ranked: false, ai: 'company',
+    war: false, relations: false, alliances: false, peoples: false, visitedByBraves: true, rumours: true, events: false, ranked: false, ai: 'company',
   },
   crown: {
     homePort: true, immigration: false, taxes: true, crown: false, independence: false, congress: false, startingCaravel: false,
-    war: true, relations: false, alliances: false, peoples: false, visitedByBraves: false, events: false, ranked: false, ai: 'crown',
+    war: true, relations: false, alliances: false, peoples: false, visitedByBraves: false, rumours: true, events: false, ranked: false, ai: 'crown',
   },
   people: {
     homePort: false, immigration: false, taxes: false, crown: false, independence: false, congress: false, startingCaravel: false,
-    war: true, relations: false, alliances: false, peoples: false, visitedByBraves: false, events: false, ranked: false, ai: 'people',
+    war: true, relations: false, alliances: false, peoples: false, visitedByBraves: false, rumours: false, events: false, ranked: false, ai: 'people',
   },
 };
 

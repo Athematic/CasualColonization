@@ -32,7 +32,7 @@ import { noteMining } from './mines.js';
 import { noteProduction } from './stats.js';
 import { nativeLandClosedTo, onColonyFounded } from './natives.js';
 import type { BuildTarget, Colony, GameState, Job, Unit } from './types.js';
-import { buildingsOf, difficultyOf, goodsOf, mechanicsOf, nationOf, newColonyBuildings, unitsOf } from './scenarios/index.js';
+import { bornType, buildingsOf, difficultyOf, goodsOf, mechanicsOf, nationOf, newColonyBuildings, unitsOf } from './scenarios/index.js';
 import { addColony, setUnitLoc, removeUnit, colonyList } from './unitindex.js';
 
 export function canFoundColony(s: GameState, u: Unit): string | null {
@@ -470,7 +470,7 @@ export function processColony(s: GameState, colony: Colony): void {
 
   if (colony.goods.food >= foodToGrow(s, colony)) {
     colony.goods.food -= foodToGrow(s, colony);
-    createUnit(s, colony.owner, 'freeColonist', { kind: 'map', x: colony.x, y: colony.y });
+    createUnit(s, colony.owner, bornType(s, colony.owner), { kind: 'map', x: colony.x, y: colony.y });
     track(colony.owner, 'colony:colonist born');
     message(s, `A new colonist has been born in ${colony.name}.`, colony.owner, colony);
   } else if (colony.goods.food < 0) {

@@ -46,8 +46,9 @@ export function initialMarket(port?: PortRef, goods: readonly GoodId[] = GOODS):
   return Object.fromEntries(goods.map((g) => [g, { price: port ? portBasePrice(port, g) : GOOD_DEFS[g].price, volume: 0 }])) as Record<GoodId, MarketEntry>;
 }
 
+/** A good's price in the player's home port; 0 for a player with no market (a playing people, playerkind.ts `homePort`). */
 export function sellPrice(p: Player, good: GoodId): number {
-  return p.market[good].price;
+  return p.market[good]?.price ?? 0;
 }
 
 export function buyPrice(s: GameState, p: Player, good: GoodId): number {
@@ -476,6 +477,8 @@ export function priceRecoveryChance(s: GameState, p: Player): number {
 /** Drifts prices back toward their starting value in each home port (its own, rules/ports.ts). */
 export function recoverMarkets(s: GameState): void {
   for (const p of s.players) {
+    // A playing people has no market (playerkind.ts `homePort`).
+    if (!systemsOf(p).homePort) continue;
     const chance = priceRecoveryChance(s, p);
     const market = portMarketOf(s, p.id);
     for (const g of goodsOf(s)) {

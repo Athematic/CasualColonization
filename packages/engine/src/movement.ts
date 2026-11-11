@@ -29,6 +29,7 @@ import type { TribeId } from './rules/nations.js';
 import type { Colony, GameState, ImprovementKind, Player, Tile, Unit } from './types.js';
 import { mechanicsOf, term } from './scenarios/index.js';
 import { colonyTiles, setUnitLoc, unitTiles, colonyList, unitList } from './unitindex.js';
+import { systemsOfId } from './playerkind.js';
 import { alliesOf, colonyOpenTo, isAllied } from './alliances.js';
 
 export type MoveOption =
@@ -203,7 +204,8 @@ export function moveUnit(s: GameState, unitId: string, dir: Direction): void {
 
 function afterLandMove(s: GameState, u: Unit, x: number, y: number): void {
   const tile = tileAt(s, x, y)!;
-  if (tile.lcr) {
+  // A playing people's units leave the Lost City Rumours alone (playerkind.ts `rumours`).
+  if (tile.lcr && systemsOfId(u.owner).rumours) {
     delete tile.lcr;
     resolveRumour(s, u);
   }
