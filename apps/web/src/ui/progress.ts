@@ -84,6 +84,19 @@ function nationColor(s: GameState, nation: PlayerId, dark: boolean): string {
   return dark ? `color-mix(in srgb, ${c} 72%, white)` : c;
 }
 
+/** Each way of winning in a few words, for the final scores (native-nations.md T14). */
+const WAY_NAMES: Record<string, string> = {
+  military: 'every European nation defeated',
+  'independence-war': 'the War of Independence',
+  confederacy: 'a league of peoples',
+  concord: 'concord',
+  prosperity: 'prosperity',
+  continuity: 'continuity',
+  'good-life': 'a good life',
+  time: 'the highest score',
+  retired: 'retired',
+};
+
 export interface GameOverInfo {
   reason: string;
   winner?: PlayerId;
@@ -91,6 +104,10 @@ export interface GameOverInfo {
   winners?: PlayerId[];
   /** The winners' partner peoples, after a prosperity victory. */
   partners?: TribeId[];
+  /** Each winner's way (engine `waysOf`). */
+  ways?: Partial<Record<PlayerId, string>>;
+  /** The playing peoples' scores (games with a playing people). */
+  peopleScores?: Partial<Record<PlayerId, number>>;
   scores: Partial<Record<PlayerId, number>>;
   /** The nation of the person looking, if any. */
   viewer?: PlayerId;
@@ -180,17 +197,30 @@ export class ProgressScreen implements Screen {
     this.draw();
   }
 
-  /** The score of every nation split into its components: what is counted, and the points it earns. */
+  /**
+   * The score of every nation split into its components: what is counted, and the points it earns.
+   * Playing peoples have their own lines and their own table (native-nations.md T14): their scores
+   * are not compared with the Europeans'.
+   */
   private breakdownCard(): HTMLElement {
     const s = this.app.state;
-    const players = s.players.filter((p) => p.id !== 'crown');
+    const peoples = s.players.filter((p) => p.kind === 'people');
+    const europeans = this.breakdownTable(s.players.filter((p) => p.id !== 'crown' && p.kind !== 'people'));
+    return h('div', { class: 'card progress-breakdown' },
+      h('h3', null, 'Score breakdown'),
+      europeans,
+      peoples.length ? h('h3', null, 'The peoples’ scores') : null,
+      peoples.length ? this.breakdownTable(peoples) : null,
+      h('p', { class: 'muted small' }, 'Points per component; hover a figure for what is counted. Saves from before version 0.7 keep the old formula’s numbers in the graph for turns already recorded.'));
+  }
+
+  private breakdownTable(players: GameState['players']): HTMLElement {
+    const s = this.app.state;
     const parts = players.map((p) => scoreBreakdown(s, p));
     const best = Math.max(...parts.map((b) => b.total));
     // Lines by key, in order of first appearance: some lines are only some nations' (shares in companies).
     const lines = [...new Map(parts.flatMap((b) => b.lines).map((l) => [l.key, l] as const)).values()];
-    return h('div', { class: 'card progress-breakdown' },
-      h('h3', null, 'Score breakdown'),
-      h('div', { class: 'table-scroll' },
+    return h('div', { class: 'table-scroll' },
         h('table', { class: 'scores breakdown' },
           h('thead', null, h('tr', null,
             h('th', null, 'Component'),
@@ -204,21 +234,30 @@ export class ProgressScreen implements Screen {
               }))),
             h('tr', { class: 'total' },
               h('th', null, 'Total'),
-              parts.map((b) => h('th', null, b.total === best ? h('strong', null, String(b.total)) : String(b.total))))))),
-      h('p', { class: 'muted small' }, 'Points per component; hover a figure for what is counted. Saves from before version 0.7 keep the old formula’s numbers in the graph for turns already recorded.'));
+              parts.map((b) => h('th', null, b.total === best ? h('strong', null, String(b.total)) : String(b.total)))))));
   }
 
   private gameOverCard(over: GameOverInfo): HTMLElement {
     const rows = (Object.entries(over.scores) as [PlayerId, number][]).sort((a, b) => b[1] - a[1]);
+    const peopleRows = (Object.entries(over.peopleScores ?? {}) as [PlayerId, number][]).sort((a, b) => b[1] - a[1]);
     const level = DIFFICULTY[resolveDifficulty(this.app.state.difficulty)];
     return h('div', { class: 'card progress-over' },
       h('p', null, over.reason),
       h('p', { class: 'muted small', title: level.description }, `Difficulty: ${level.name}`),
       this.app.state.cheated ? h('p', null, h('span', { class: 'pill warn' }, 'Cheats used'), ` since ${formatDate(this.app.state.cheated.turn, calendarOf(this.app.state))}.`) : null,
       this.winnersLine(over),
-      h('table', { class: 'scores' }, rows.map(([n, score]) => h('tr', null,
-        h('td', null, h('span', { class: 'flag', style: `background:${nationOf(this.app.state, n).color}` }), ' ', nationTitle(this.app.state, n)),
-        h('td', null, String(score))))));
+      h('table', { class: 'scores' }, rows.map(([n, score]) => this.scoreRow(over, n, score))),
+      peopleRows.length ? h('p', { class: 'muted small' }, 'The peoples, by their own score (not compared with the nations’):') : null,
+      peopleRows.length ? h('table', { class: 'scores' }, peopleRows.map(([n, score]) => this.scoreRow(over, n, score))) : null);
+  }
+
+  /** One player's line in the final scores, with its way of winning if it won. */
+  private scoreRow(over: GameOverInfo, n: PlayerId, score: number): HTMLElement {
+    const way = over.ways?.[n];
+    return h('tr', null,
+      h('td', null, h('span', { class: 'flag', style: `background:${nationOf(this.app.state, n).color}` }), ' ', nationTitle(this.app.state, n), n === over.viewer ? ' (you)' : ''),
+      h('td', null, String(score)),
+      h('td', { class: 'muted small' }, way ? `won: ${WAY_NAMES[way] ?? way}` : ''));
   }
 
   /**
@@ -230,6 +269,10 @@ export class ProgressScreen implements Screen {
     const winners = over.winners ?? (over.winner ? [over.winner] : []);
     if (!winners.length) return null;
     const names = winners.map((n) => `${nationTitle(this.app.state, n)}${n === over.viewer ? ' (you)' : ''}`);
+    // Winners by different ways (a game with a playing people, T14): each with its way.
+    if (new Set(winners.map((n) => over.ways?.[n])).size > 1) {
+      return h('p', { class: 'winners' }, h('strong', null, `Winners: ${winners.map((n, i) => `${names[i]} (${WAY_NAMES[over.ways![n]!] ?? over.ways![n]})`).join(', ')}.`));
+    }
     const partners = over.partners?.length ? `, with ${peopleList(over.partners)}` : '';
     const text = names.length === 1 ? `${names[0]} wins${partners}.` : `${names.slice(0, -1).join(', ')} and ${names.at(-1)} win together${partners}.`;
     return h('p', { class: 'winners' }, h('strong', null, text));

@@ -15,6 +15,7 @@ import { finalScores, scoreBreakdown, type ScoreComponent } from './score.js';
 import { prosperityParams, prosperityStanding, type ProsperityCondition } from './prosperity.js';
 import { setFeatureSink } from './telemetry.js';
 import { royalForce } from './independence.js';
+import { VICTORY_ORDER, waysOf } from './victory.js';
 import { isFavoured } from './relations.js';
 import { alliesOf } from './alliances.js';
 import { bound, withPeople } from './treaties.js';
@@ -227,6 +228,8 @@ export interface ArenaEntry {
   concord?: boolean;
   /** Won by prosperity (native-partners.md N10), alone or with others. */
   prosperity?: boolean;
+  /** For a winner of a game that ended: its way (victory.ts `waysOf`: `time`, `independence-war`, `concord`, `prosperity`, …). */
+  way?: string;
   /**
    * Where the scenario plays for prosperity: the rule's conditions the nation failed at the end
    * (empty when it qualified), whether or not the game ended that way.
@@ -440,12 +443,14 @@ export function playArenaRound(opts: ArenaOptions, game: ArenaGame): ArenaEntry[
   const winners = state.gameOver?.winners;
   const prosperity = !!state.gameOver?.partners?.length;
   const together = !!winners && winners.length > 1 && !prosperity;
+  const ways = waysOf(state);
   return entries.map((e) => ({
     ...e,
     game: game.game,
     won: winners?.length ? winners.includes(e.nation) : e.score === best,
     ...(together && winners!.includes(e.nation) ? { concord: true } : {}),
     ...(prosperity && winners!.includes(e.nation) ? { prosperity: true } : {}),
+    ...(ways[e.nation] ? { way: ways[e.nation] } : {}),
   }));
 }
 
@@ -564,6 +569,20 @@ export function prosperityLine(entries: ArenaEntry[]): string {
   const alone = conditions.map((c) => `${c} ${judged.filter((e) => e.prosperityFails!.length === 1 && e.prosperityFails![0] === c).length}`).join(', ');
   const qualified = judged.filter((e) => !e.prosperityFails!.length).length;
   return `Prosperity: ${won.length} of ${games} games won by prosperity${winners ? ` (${winners})` : ''}; at the end ${qualified} of ${judged.length} nations qualified; failing each condition: ${failing}; failing only that one: ${alone}. `;
+}
+
+/**
+ * The winners' ways over a run (native-nations.md T14): how many winners won each way, in the
+ * victory order, and the games stopped before they ended (won by the best score, no way).
+ */
+export function formatWays(entries: ArenaEntry[]): string {
+  const count = new Map<string, number>();
+  for (const e of entries) if (e.won && e.way) count.set(e.way, (count.get(e.way) ?? 0) + 1);
+  const order = [...VICTORY_ORDER, 'retired'];
+  const ways = [...count.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  const games = new Set(entries.map((e) => e.game)).size;
+  const open = new Set(entries.filter((e) => e.won && !e.way).map((e) => e.game)).size;
+  return `Winners' ways: ${ways.map((w) => `${w} ${count.get(w)}`).join(', ') || 'none'}${open ? `; ${open} of ${games} games stopped before they ended` : ''}.`;
 }
 
 /**

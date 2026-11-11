@@ -1,4 +1,5 @@
 import {
+  waysOf,
   braveName,
   bravesAt,
   buildMapIndex,
@@ -503,7 +504,7 @@ export class App {
 
   /** Asks about decisions the rules left waiting mid-turn (a tax raise after a sale, a royal demand). */
   async answerPending(): Promise<void> {
-    if (this.me.pendingTax || this.me.pendingDemand || pendingDemands(this.state, this.me.id).some((d) => d.kind === 'demand' || d.kind === 'treaty') || pendingEvents(this.state, this.me.id).length) await this.turnStart();
+    if (this.me.independenceChoice || this.me.pendingTax || this.me.pendingDemand || pendingDemands(this.state, this.me.id).some((d) => d.kind === 'demand' || d.kind === 'treaty') || pendingEvents(this.state, this.me.id).length) await this.turnStart();
   }
 
   /** Opens the Congress choice in the briefing modal. */
@@ -527,7 +528,7 @@ export class App {
     if (!over || this.shownGameOver) return;
     this.shownGameOver = true;
     // The final scores open on the Progress Graphs, so the whole game can be looked back on.
-    this.showScreen(new ProgressScreen(this, { ...over, viewer: this.observer ? undefined : this.viewer, onMenu: () => this.exitToMenu() }));
+    this.showScreen(new ProgressScreen(this, { ...over, ways: waysOf(this.state), viewer: this.observer ? undefined : this.viewer, onMenu: () => this.exitToMenu() }));
   }
 
   /** After a unit acts, move on to the next one that needs orders. */

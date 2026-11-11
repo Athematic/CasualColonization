@@ -18,7 +18,7 @@
 // way and the results are gathered in game order, so the tables are identical.
 import { availableParallelism } from 'node:os';
 import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads';
-import { AI_LEVELS, arenaGames, DEFAULT_SCENARIO, DIFFICULTY_LEVELS, formatArena, getScenario, listScenarios, formatCrown, formatEvents, formatFeatures, formatProsperity, formatRelations, formatScoreSplit, formatRelationsLine, playArenaRound, runArena, summarise, type AiLevel, type ArenaEntry, type ArenaOptions, type DifficultyId, type MapSize, type Rivals } from '../packages/engine/src/index.ts';
+import { AI_LEVELS, arenaGames, DEFAULT_SCENARIO, DIFFICULTY_LEVELS, formatArena, getScenario, listScenarios, formatCrown, formatEvents, formatFeatures, formatProsperity, formatRelations, formatScoreSplit, formatRelationsLine, formatWays, playArenaRound, runArena, summarise, type AiLevel, type ArenaEntry, type ArenaOptions, type DifficultyId, type MapSize, type Rivals } from '../packages/engine/src/index.ts';
 
 if (!isMainThread) {
   // A worker: plays the games it is sent (by number) and sends back their rows.
@@ -102,6 +102,7 @@ async function main(): Promise<void> {
   if (args.includes('--json')) console.log(JSON.stringify(result, null, 2));
   else {
     console.log(`\n${formatArena(result.summary)}\n`);
+    console.log(`${formatWays(result.entries)}\n`);
     console.log(`Score by component, average points per nation:\n\n${formatScoreSplit(result.entries)}\n`);
     console.log(`Relations and trade between the Europeans, average per nation per game:\n\n${formatRelations(result.summary)}\n\n${formatRelationsLine(result.entries)}\n`);
     console.log(`The Crown: independence, the Royal Expeditionary Force (land units) against the old formula, demands and royal wars, average per nation per game:\n\n${formatCrown(result.entries)}\n`);

@@ -1,4 +1,4 @@
-import { councilText, CouncilText, aBrave, peopleTradeBenefits, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, TRIBES, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { independenceQuestion, councilText, CouncilText, aBrave, peopleTradeBenefits, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, TRIBES, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import { icon } from '../styles.js';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -61,6 +61,27 @@ interface Decision {
 function decisions(app: App, opts: { father: boolean }): Decision[] {
   const me = app.me;
   const list: Decision[] = [];
+  // A War of Independence won while at war with a people (victory.ts, native-nations.md T14).
+  const question = independenceQuestion(app.state, me.id);
+  if (question) {
+    list.push({
+      id: 'independence',
+      required: true,
+      render: (done) =>
+        h('div', { class: 'decision-body' },
+          h('p', null, question),
+          h('div', { class: 'decision-actions' },
+            h('button', {
+              class: 'btn primary',
+              onclick: () => {
+                if (!app.dispatch({ type: 'answerIndependence', keepPlaying: false }, true)) return;
+                done('The victory stands.');
+                void app.showGameOver();
+              },
+            }, 'End with the victory'),
+            h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerIndependence', keepPlaying: true }, true) && done('You keep playing: peace or war is yours to choose.') }, 'Keep playing'))),
+    });
+  }
   const tax = me.pendingTax;
   if (tax) {
     const good = GOOD_DEFS[tax.good].name.toLowerCase();
@@ -230,7 +251,7 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
 }
 
 /** Decision headings; `{…}` are the scenario's terms. */
-const TITLES: Record<string, string> = { tax: '{Crown} raises taxes', demand: '{King} demands gold', mercenaries: 'Mercenaries offer their services', father: '{council}' };
+const TITLES: Record<string, string> = { independence: 'The {independenceWar} is won', tax: '{Crown} raises taxes', demand: '{King} demands gold', mercenaries: 'Mercenaries offer their services', father: '{council}' };
 
 let open = false;
 
