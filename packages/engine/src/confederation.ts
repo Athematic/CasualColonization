@@ -24,18 +24,23 @@ import { track } from './telemetry.js';
 import { addTreaty, bound, endTreaty, treatyNations } from './treaties.js';
 import type { GameState, Treaty } from './types.js';
 
-/** Whether a computer nation is ready to declare independence now (set by the computer players). */
-type Judge = (s: GameState, nation: NationId) => boolean;
+/**
+ * Whether a computer nation is ready to declare independence now (set by the computer players);
+ * `together`: as an ally's partner in a confederation, which asks a smaller margin than declaring alone.
+ */
+type Judge = (s: GameState, nation: NationId, together: boolean) => boolean;
 let judge: Judge = () => false;
 
-/** The computer players register their readiness for independence here (ai/index.ts). */
-export function setConfederationJudge(fn: Judge): void {
+/** The computer players register their readiness for independence here (ai/index.ts). Returns the previous judge. */
+export function setConfederationJudge(fn: Judge): Judge {
+  const previous = judge;
   judge = fn;
+  return previous;
 }
 
-/** Whether a computer nation would declare independence now. */
-export function readyForIndependence(s: GameState, nation: NationId): boolean {
-  return judge(s, nation);
+/** Whether a computer nation would declare independence now: alone, or `together` with an ally. */
+export function readyForIndependence(s: GameState, nation: NationId, together = false): boolean {
+  return judge(s, nation, together);
 }
 
 /** Whether the scenario lets allies declare together. */
@@ -65,7 +70,7 @@ export function confederationProblem(s: GameState, from: NationId, to: NationId)
 
 /** A computer nation joins when it would declare independence now anyway. */
 export function aiAcceptsConfederation(s: GameState, ai: NationId, from: NationId): boolean {
-  return isAllied(s, ai, from) && readyForIndependence(s, ai);
+  return isAllied(s, ai, from) && readyForIndependence(s, ai, true);
 }
 
 /** `a` and `b` declare independence together, as one confederation. */

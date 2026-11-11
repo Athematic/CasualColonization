@@ -42,6 +42,9 @@ export const ALLIANCE_RULES: AllianceRules = {
   waitingYears: { base: 15, spread: 3 },
   hostilityYears: { base: 25, spread: 5 },
   requires: 'favoured',
+  // Old friends: 120–180 years of peace with a trade agreement also open an alliance (rarely proposed:
+  // COOPERATION.proposeLongPeace). The Americas' first such pairs ally in the late 1600s.
+  longPeace: { base: 150, spread: 30 },
   // C5: a small share, enough to make an alliance felt in the mid game.
   sharedBells: 0.1,
   expeditionCost: 1200,
@@ -53,14 +56,20 @@ export const ALLIANCE_RULES: AllianceRules = {
  * computer-only tournaments to give an alliance in about one game in four and a concord victory
  * about once in 30–40 games (docs/design/cooperation.md, C11).
  */
-export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace: 0, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1, jointExpedition: 0.05, confederation: 0.3 };
+export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace: 0.001, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1, jointExpedition: 0.05, confederation: 0.6, confederationReadiness: 0.65 };
 
-/** Each level's share of COOPERATION's chances: Creative seeks alliances out, Naive never proposes. */
-export const LEVEL_COOPERATION: Record<AiLevel, { propose: number; accept: number }> = {
-  naive: { propose: 0, accept: 0.5 },
-  competent: { propose: 0.6, accept: 0.8 },
-  combative: { propose: 0.5, accept: 0.7 },
-  creative: { propose: 1, accept: 1 },
+/**
+ * Each level's share of COOPERATION's chances: Creative seeks alliances out, Naive never proposes.
+ * `together`: the level's share of `confederationReadiness`'s smaller margin when declaring
+ * independence with an ally; only Creative, which seizes the chance, takes it (the others answer
+ * by their usual readiness: in tournaments, Competent and Combative pairs otherwise declared
+ * together in one game in seven, and lost half of those wars).
+ */
+export const LEVEL_COOPERATION: Record<AiLevel, { propose: number; accept: number; together: number }> = {
+  naive: { propose: 0, accept: 0.5, together: 0 },
+  competent: { propose: 0.6, accept: 0.8, together: 0 },
+  combative: { propose: 0.5, accept: 0.7, together: 0 },
+  creative: { propose: 1, accept: 1, together: 1 },
 };
 
 /** The game's cooperation: the scenario's `ai.cooperation` over COOPERATION. */

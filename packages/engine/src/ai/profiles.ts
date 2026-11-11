@@ -159,4 +159,6 @@ export interface AiMemory {
   seaSettlers?: Record<string, { x: number; y: number }>;
   /** Turn the nation adopted its independence plan (ai/plan.ts). */
   independencePlan?: number;
+  /** Ready for independence with an ally: the turn it began waiting for the ally to declare together (ai/advanced.ts). */
+  allyWait?: number;
 }

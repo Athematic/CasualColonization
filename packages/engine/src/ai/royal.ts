@@ -200,9 +200,12 @@ export function supportParts(s: GameState, p: Player): { mercenaries: number; in
  */
 export const HOLD_ALONE = 1;
 
-/** Whether the nation's own defence and the mercenaries can hold until the intervention comes (HOLD_ALONE). `power` is the nation's `rebelPower`, when the caller has it. */
-export function holdsAlone(s: GameState, p: Player, mercenaries = supportParts(s, p).mercenaries, power = rebelPower(s, p)): boolean {
-  return power + mercenaries >= refPower(p) * HOLD_ALONE;
+/**
+ * Whether the nation's own defence and the mercenaries can hold until the intervention comes (HOLD_ALONE,
+ * times `share`: less when declaring together with an ally). `power` is the nation's `rebelPower`, when the caller has it.
+ */
+export function holdsAlone(s: GameState, p: Player, mercenaries = supportParts(s, p).mercenaries, power = rebelPower(s, p), share = 1): boolean {
+  return power + mercenaries >= refPower(p) * HOLD_ALONE * share;
 }
 
 /**

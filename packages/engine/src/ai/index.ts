@@ -3,12 +3,17 @@ import { mechanicsOf } from '../scenarios/index.js';
 import type { GameState, Player } from '../types.js';
 import { readyToDeclare, runAdvanced } from './advanced.js';
 import { setConfederationJudge } from '../confederation.js';
+import { cooperationOf, LEVEL_COOPERATION } from '../alliances.js';
 import { creativeProfile } from './creative.js';
 import { runNaive } from './naive.js';
 import { AI_PROFILES, COMPANY_PROFILE, type AiProfile } from './profiles.js';
 
-// A computer nation answers a proposal to declare independence together by its readiness (confederation.ts).
-setConfederationJudge((s, nation) => readyToDeclare(s, nation));
+// A computer nation proposes to declare independence together when ready itself, and answers by its
+// readiness (confederation.ts), wanting a smaller margin over its Royal Expeditionary Force than alone.
+setConfederationJudge((s, nation, together) => {
+  const share = together ? LEVEL_COOPERATION[s.players.find((p) => p.id === nation)?.ai ?? 'naive'].together : 0;
+  return readyToDeclare(s, nation, 1 - (1 - cooperationOf(s).confederationReadiness) * share);
+});
 
 /** Plays one turn for a computer-controlled nation at its level. */
 export function runAi(s: GameState, p: Player): void {

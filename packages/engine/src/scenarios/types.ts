@@ -211,6 +211,11 @@ export interface Cooperation {
   jointExpedition: number;
   /** Chance per review that a nation ready for independence proposes to an ally that is ready too to declare together. */
   confederation: number;
+  /**
+   * The share of its usual margin over the Royal Expeditionary Force a computer nation wants when it
+   * declares together with an ally rather than alone (1: the same; it still faces its own REF).
+   */
+  confederationReadiness: number;
 }
 
 /** One way the game can end: a registered victory kind (victory.ts) and its data. */

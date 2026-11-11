@@ -47,7 +47,7 @@ import type { Colony, GameState, Player, ProposalKind, Unit } from '../types.js'
 import { allianceRules, alliancesOn, allianceOf, longPeaceUnlocked, tiesUnlocked, expeditionProblem, allianceProblem, alliesOf, cooperationOf, isAllied, LEVEL_COOPERATION, leaveAlliance, warOnFriend } from '../alliances.js';
 import { proposeAlliance, proposeExpedition } from '../relations.js';
 import { startWar } from '../diplomacy.js';
-import { confederationOn, confederationProblem, proposeConfederation, readyForIndependence } from '../confederation.js';
+import { confederationOf, confederationOn, confederationProblem, proposeConfederation, readyForIndependence } from '../confederation.js';
 import { companies, companiesOn, companyCharters, companyRules } from '../companies.js';
 import { buyShares, foundCompany, foundProblem, sharePrice, sharesProblem } from '../chartered.js';
 import type { AiLevel } from './profiles.js';
@@ -266,6 +266,37 @@ function confederate(s: GameState, p: Player): void {
     proposeConfederation(s, p.id, a);
     return;
   }
+}
+
+/** Turns a nation ready for independence may wait for an ally whose own plan is under way. */
+export const ALLY_WAIT_TURNS = 20;
+
+/**
+ * Before a nation declares independence alone (confederation.ts): it declares together with an ally
+ * that is ready too, or, at the scenario's `confederation` chance times its level's share (drawn
+ * once), waits up to ALLY_WAIT_TURNS for an ally that has taken up an independence plan. Returns
+ * whether it declared together or waits. Without the wait both allies had to become ready on the
+ * same turn, and no confederation ever formed between computer players.
+ */
+export function declareWithAlly(s: GameState, p: Player): boolean {
+  if (!s.treaties || !confederationOn(s)) return false;
+  const allies = alliesOf(s, p.id).filter((a) => player(s, a).independence === 'none');
+  if (!allies.length) return false;
+  for (const a of allies) {
+    if (confederationProblem(s, p.id, a) || !readyForIndependence(s, a, true)) continue;
+    track(p.id, 'independence:declared with an ally');
+    proposeConfederation(s, p.id, a);
+    if (confederationOf(s, p.id)) return true;
+  }
+  const memory = (p.aiMemory = p.aiMemory ?? {});
+  if (memory.allyWait === undefined) {
+    const planned = allies.find((a) => player(s, a).aiMemory?.independencePlan !== undefined);
+    const chance = cooperationOf(s).confederation * LEVEL_COOPERATION[p.ai ?? 'naive'].propose;
+    const waits = !!planned && pairRandom(s, p.id, planned, `${p.id} wait for ally ${s.turn}`) < chance;
+    memory.allyWait = waits ? s.turn : s.turn - ALLY_WAIT_TURNS;
+    if (waits) track(p.id, 'independence:waits for an ally');
+  }
+  return s.turn - memory.allyWait < ALLY_WAIT_TURNS;
 }
 
 /** Each level's share of COOPERATION's company chances: Creative founds and buys most readily. */

@@ -55,7 +55,7 @@ import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import type { BuildTarget, Colony, GameState, Job, Player, Unit } from '../types.js';
 import { aiFight, bestColonySite, boardRescue, countUnits, disembarkAll, fetchStranded, keenSiteScore, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
 import { buyShips, shipToBuild } from './fleet.js';
-import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
+import { bestWarTarget, choosePort, declareWithAlly, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { stopPort } from '../routes.js';
 import { forEachUnitNear, indexedUnitsOf, ownedUnitsView } from '../unitindex.js';
@@ -139,10 +139,10 @@ let turnSupport = 0;
  * third of the colonies weak. `mercenaries` are those of `supportParts`, when the caller has them.
  * The colonies' defences are worked out once for all three.
  */
-function readyToFight(s: GameState, p: Player, ratio: number, support: number, mercenaries = supportParts(s, p).mercenaries): boolean {
+function readyToFight(s: GameState, p: Player, ratio: number, support: number, mercenaries = supportParts(s, p).mercenaries, holdShare = 1): boolean {
   const defences = colonyDefences(s, p);
   const power = rebelPower(s, p, defences);
-  if (defenceShort(s, p, ratio, support, power) || !holdsAlone(s, p, mercenaries, power)) return false;
+  if (defenceShort(s, p, ratio, support, power) || !holdsAlone(s, p, mercenaries, power, holdShare)) return false;
   // Last: weakColonies adds the mercenaries to the defences.
   return weakColonies(s, p, mercenaries, defences).length * 3 < ownColonies(s, p).length;
 }
@@ -1520,9 +1520,11 @@ function abandonOutposts(s: GameState, p: Player): void {
 /**
  * Whether a computer nation would declare independence now, by the checks `independence` makes
  * (without giving up outposts first): the judge of a confederation proposal (confederation.ts).
- * Its level's profile; the Creative level's plan is the Competent one it starts from.
+ * Its level's profile; the Creative level's plan is the Competent one it starts from. `readiness`
+ * scales the defence it wants against the Royal Expeditionary Force (below 1 when declaring
+ * together with an ally, `Cooperation.confederationReadiness`).
  */
-export function readyToDeclare(s: GameState, nation: Player['id']): boolean {
+export function readyToDeclare(s: GameState, nation: Player['id'], readiness = 1): boolean {
   const p = s.players.find((o) => o.id === nation);
   if (!p || p.human || !p.ai || p.ai === 'naive' || p.kind === 'company' || p.independence !== 'none') return false;
   const plan = AI_PROFILES[p.ai].independence;
@@ -1533,7 +1535,7 @@ export function readyToDeclare(s: GameState, nation: Player['id']): boolean {
   const fortified = colonies.filter((c) => c.buildings.stockade > 0).length;
   if (armed < colonies.length * plan.armyPerColony || fortified < colonies.length / 3) return false;
   const support = expectedSupport(s, p);
-  return readyToFight(s, p, plan.ratio, support) && canDeclareIndependence(s, p.id) === null;
+  return readyToFight(s, p, plan.ratio * readiness, support, undefined, readiness) && canDeclareIndependence(s, p.id) === null;
 }
 
 function independence(s: GameState, p: Player, prof: AiProfile): void {
@@ -1552,6 +1554,11 @@ function independence(s: GameState, p: Player, prof: AiProfile): void {
   abandonOutposts(s, p);
   if (!readyToFight(s, p, plan.ratio, turnSupport)) return;
   if (canDeclareIndependence(s, p.id) !== null) return;
+  // With an ally (confederation): declared together, or waiting a little for the ally.
+  if (declareWithAlly(s, p)) {
+    if (p.independence !== 'none') hireMercenaries(s, p, prof, plan.ratio);
+    return;
+  }
   declareIndependence(s, p.id);
   hireMercenaries(s, p, prof, plan.ratio);
 }

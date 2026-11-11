@@ -52,7 +52,8 @@ import {
   type Scenario,
   type Unit,
 } from '../src/index.js';
-import { foreignAffairs } from '../src/ai/foreign.js';
+import { ALLY_WAIT_TURNS, declareWithAlly, foreignAffairs } from '../src/ai/foreign.js';
+import { setConfederationJudge } from '../src/confederation.js';
 
 /** The Americas with alliances on; and a copy whose computer players cooperate eagerly. */
 const ALLIED: Scenario = { ...AMERICAS, id: 'test-alliances', name: 'test-alliances', hidden: true, mechanics: { ...AMERICAS.mechanics, alliances: true, confederation: false }, victory: [{ id: 'independence-war' }, { id: 'concord', params: { share: 0.6 } }, { id: 'time' }] };
@@ -165,7 +166,7 @@ describe('alliances: unlocking and proposals', () => {
     s.turn = 300; // ten years of peace (two turns a year): not enough
     rel.volume = ALLIANCE_RULES.volume.max;
     expect(allianceProblem(s, 'england', 'france')).toMatch(/not yet close enough/);
-    rel.peaceSince = 0;
+    rel.peaceSince = s.turn - 2 * 40; // forty years: enough for an alliance, far from the long peace of old friends
     rel.volume = 0;
     expect(allianceProblem(s, 'england', 'france')).toMatch(/not yet close enough/);
     rel.volume = ALLIANCE_RULES.volume.max;
@@ -545,6 +546,41 @@ describe('confederation: declaring independence together (step 5)', () => {
     processIndependence(s);
     expect(player(s, 'england').independence).toBe('lost');
     expect(player(s, 'france').independence).toBe('lost');
+  });
+
+  it('a computer nation ready to declare declares with an ally ready too, or waits a little for one with a plan', () => {
+    const eager: Scenario = { ...CONFED, id: 'test-confederation-eager', ai: { ...AMERICAS.ai, cooperation: { confederation: 1 } } };
+    registerScenario(eager);
+    const s = game({ scenario: eager.id, humans: [] });
+    rebels(s);
+    let franceReady = false;
+    const previous = setConfederationJudge((_, nation, together) => nation === 'france' && together && franceReady);
+    try {
+      const england = player(s, 'england');
+      // France has no plan: England declares alone.
+      expect(declareWithAlly(s, england)).toBe(false);
+      // With a plan under way, England (Creative, at the scenario's chance 1) waits for France...
+      delete england.aiMemory?.allyWait;
+      player(s, 'france').aiMemory = { independencePlan: 1 };
+      expect(declareWithAlly(s, england)).toBe(true);
+      s.turn += ALLY_WAIT_TURNS - 1;
+      expect(declareWithAlly(s, england)).toBe(true);
+      // ...and declares together as soon as France is ready to declare with it.
+      franceReady = true;
+      expect(declareWithAlly(s, england)).toBe(true);
+      expect(confederationOf(s, 'england')?.kind).toBe('confederation');
+      expect(player(s, 'france').independence).toBe('declared');
+      // Not beyond the wait.
+      const t = game({ scenario: eager.id, humans: [] });
+      rebels(t);
+      franceReady = false;
+      player(t, 'france').aiMemory = { independencePlan: 1 };
+      expect(declareWithAlly(t, player(t, 'england'))).toBe(true);
+      t.turn += ALLY_WAIT_TURNS;
+      expect(declareWithAlly(t, player(t, 'england'))).toBe(false);
+    } finally {
+      setConfederationJudge(previous);
+    }
   });
 
   it('a computer ally answers by its own readiness for independence', () => {
