@@ -103,10 +103,10 @@ describe('the Americas scenario is today’s tables', () => {
 
   it('events, maps, difficulty and score', () => {
     expect(AMERICAS.events).toBe('americas');
-    // Every stored map but the Caribbean's, which belongs to the Caribbean scenario: the Americas'
+    // Every stored map but the Caribbean's and the North-east's, which belong to their scenarios: the Americas'
     // New game screen offers what it always has.
     expect(AMERICAS.map.stored.map((e) => e.id)).toEqual(['north-america', 'south-america', 'americas', 'australia']);
-    expect(STORED_MAPS.map((m) => m.id)).toEqual([...AMERICAS.map.stored.map((e) => e.id), 'caribbean']);
+    expect(STORED_MAPS.map((m) => m.id)).toEqual([...AMERICAS.map.stored.map((e) => e.id), 'caribbean', 'north-east']);
     expect(AMERICAS.map.generator).toBe(AMERICAS_GENERATOR);
     expect(AMERICAS_GENERATOR.sizes).toBe(MAP_SIZES);
     expect(AMERICAS.map.crown).toBe('entry');
