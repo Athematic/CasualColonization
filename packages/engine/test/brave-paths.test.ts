@@ -7,16 +7,21 @@ import {
   buildIndex,
   createGame,
   createUnit,
+  firstMeetingText,
   foundColony,
+  isExplored,
+  meetPeople,
   moveCost,
   processBraves,
   removeUnit,
+  reveal,
   setFeatureSink,
   tileAt,
   FOREST_MOVE_COST,
   RIVER_MOVE_COST,
   ROAD_MOVE_COST,
   SQUARE,
+  TRIBES,
   type Brave,
   type GameState,
   type Settlement,
@@ -234,5 +239,67 @@ describe('braves follow rivers as units do', () => {
     tileAt(s, x, y + 1)!.r = tileAt(s, x, y + 2)!.r = true;
     expect(braveStepCost(s, x, y + 2, x, y + 1, true)).toBe(ROAD_MOVE_COST);
     expect(braveStepCost(s, x, y + 2, x, y + 1, true)).toBeLessThanOrEqual(RIVER_MOVE_COST);
+  });
+});
+
+describe('the first meeting with a people', () => {
+  const LINE = 'Their braves know the land so well that they move swiftly when they defend it.';
+
+  it('tells a person once per people, when a settlement is first seen or a brave first comes; computer players are not told', () => {
+    const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['england'] });
+    const meetings = (nation: string) => s.messages.filter((m) => m.to === nation && m.text.includes(LINE));
+    // A people with two settlements England has not seen, apart, and which it has not met.
+    const unseen = Object.values(s.settlements).filter((st) => !isExplored(s, 'england', st.x, st.y) && !isExplored(s, 'france', st.x, st.y));
+    let st: Settlement | undefined;
+    let other: Settlement | undefined;
+    for (const a of unseen) {
+      other = unseen.find((o) => o.tribe === a.tribe && o.id !== a.id && SQUARE.distance(o.x, o.y, a.x, a.y) > 4);
+      if (other && !s.tribes.find((t) => t.id === a.tribe)!.met) {
+        st = a;
+        break;
+      }
+    }
+    expect(st && other).toBeDefined();
+    const before = meetings('england').length;
+    reveal(s, 'england', st!.x, st!.y, 1);
+    const told = meetings('england');
+    expect(told.length).toBe(before + 1);
+    const last = told[told.length - 1];
+    expect(last.text).toBe(firstMeetingText(st!.tribe));
+    expect(last.text).toBe(`You have met the ${TRIBES[st!.tribe].name}. ${LINE}`);
+    expect(last.at).toEqual({ x: st!.x, y: st!.y });
+    expect(s.tribes.find((t) => t.id === st!.tribe)!.met).toEqual(['england']);
+    // Another settlement of the same people, a brave come to the colonies: no second telling.
+    reveal(s, 'england', other!.x, other!.y, 1);
+    meetPeople(s, 'england', st!.tribe, st);
+    expect(meetings('england').length).toBe(before + 1);
+    // France, a computer player, is never told and nothing is written for it.
+    reveal(s, 'france', st!.x, st!.y, 1);
+    meetPeople(s, 'france', st!.tribe, st);
+    expect(meetings('france')).toHaveLength(0);
+    expect(s.tribes.find((t) => t.id === st!.tribe)!.met).toEqual(['england']);
+  });
+
+  it('tells a person whose colony a brave reaches, if no settlement of its people told it first', () => {
+    const { s, st } = openGround();
+    const founder = createUnit(s, 'england', 'freeColonist', { kind: 'map', x: st.x + 2, y: st.y });
+    founder.moves = 3;
+    const c = foundColony(s, founder.id, 'Welcome');
+    // England, played by a computer when it saw the settlement, is now a person's.
+    s.players.find((p) => p.id === 'england')!.human = true;
+    const tribe = s.tribes.find((t) => t.id === st.tribe)!;
+    expect(tribe.met).toBeUndefined();
+    const before = s.messages.length;
+    brave(s, st, st.x + 1, st.y, { task: { kind: 'visit', colonyId: c.id, purpose: 'gift' } });
+    processBraves(s);
+    processBraves(s);
+    const after = s.messages.slice(before);
+    const told = after.filter((m) => m.text === firstMeetingText(st.tribe));
+    expect(told).toHaveLength(1);
+    expect(told[0].to).toBe('england');
+    expect(tribe.met).toEqual(['england']);
+    // The meeting comes before the gift's own message.
+    const gift = after.findIndex((m) => m.text.includes('as a gift'));
+    expect(gift).toBeGreaterThan(after.indexOf(told[0]));
   });
 });

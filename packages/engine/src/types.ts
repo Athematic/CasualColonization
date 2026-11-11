@@ -356,6 +356,11 @@ export interface Tribe {
    * while the scenario plays for `prosperity`; missing means none.
    */
   burned?: NationId[];
+  /**
+   * Nations whose person has been told of the first meeting with the people (queries.ts,
+   * `meetPeople`); written only for nations a person plays. Missing means none.
+   */
+  met?: NationId[];
 }
 
 /**

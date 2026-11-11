@@ -19,6 +19,7 @@ import {
   isCoastal,
   isShip,
   isWater,
+  meetPeople,
   message,
   newId,
   player,
@@ -602,6 +603,7 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
   const nation = c.owner;
   const p = player(s, nation);
   delete b.task;
+  meetPeople(s, nation, st.tribe, c);
   if (purpose === 'gift') {
     const goods = settlementForSale(s, st).filter((r) => r.amount >= 20).sort((x, y) => y.amount - x.amount);
     if (goods.length && random(s) < 0.4) {
@@ -864,6 +866,7 @@ export function attackColony(s: GameState, b: Brave, c: Colony): void {
   if (!defender) return;
   const tribe = TRIBES[b.tribe].name;
   const st = s.settlements[b.home];
+  meetPeople(s, c.owner, b.tribe, c);
   track(c.owner, 'natives:raid suffered');
   const off = braveCombat(b).offence * 1.5;
   const def = defencePower(s, defender);
@@ -943,6 +946,7 @@ function attackUnit(s: GameState, b: Brave, target: Unit, defend?: NationId): vo
   if (!defender) return;
   const tribe = TRIBES[b.tribe].name;
   const at = { x: target.loc.x, y: target.loc.y };
+  meetPeople(s, defender.owner, b.tribe, at);
   const off = braveCombat(b).offence * 1.5;
   const def = defencePower(s, defender, b);
   track(defender.owner, 'natives:unit attacked');

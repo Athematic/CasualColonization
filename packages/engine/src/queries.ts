@@ -1,6 +1,6 @@
 import { BUILDINGS, WAREHOUSE_CAPACITY } from './rules/buildings.js';
 import type { GoodId } from './rules/goods.js';
-import type { NationId } from './rules/nations.js';
+import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
 import { FOREST_DEFENCE, TERRAIN, type TerrainDef } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeDef } from './rules/units.js';
 import type { Colony, GameState, Player, Settlement, Tile, Unit, UnitLocation } from './types.js';
@@ -188,18 +188,46 @@ export function sightRadius(u: Unit, s: GameState): number {
 }
 
 export function reveal(s: GameState, nation: NationId, x: number, y: number, radius: number): void {
-  revealTo(s, player(s, nation).explored, x, y, radius);
+  revealTo(s, player(s, nation), x, y, radius);
   // Allies share their sight (alliances.ts).
-  if (s.treaties) for (const ally of sightSharers(s, nation)) revealTo(s, player(s, ally).explored, x, y, radius);
+  if (s.treaties) for (const ally of sightSharers(s, nation)) revealTo(s, player(s, ally), x, y, radius);
 }
 
-function revealTo(s: GameState, explored: number[], x: number, y: number, radius: number): void {
+function revealTo(s: GameState, p: Player, x: number, y: number, radius: number): void {
+  const explored = p.explored;
   const within = gridOf(s).withinOffsets(x, y, radius);
   for (let k = 0; k < within.length; k += 2) {
     const nx = x + within[k];
     const ny = y + within[k + 1];
-    if (inBounds(s, nx, ny)) explored[ny * s.map.width + nx] = 1;
+    if (!inBounds(s, nx, ny)) continue;
+    const i = ny * s.map.width + nx;
+    if (explored[i] === 1) continue;
+    explored[i] = 1;
+    // A settlement first seen is a person's first meeting with its people.
+    if (p.human) {
+      const st = settlementAt(s, nx, ny);
+      if (st) meetPeople(s, p.id, st.tribe, st);
+    }
   }
+}
+
+/** What a person is told on first meeting a native people (meetPeople). */
+export function firstMeetingText(people: TribeId): string {
+  return `You have met the ${TRIBES[people].name}. Their braves know the land so well that they move swiftly when they defend it.`;
+}
+
+/**
+ * A nation's first meeting with a native people: the first of its settlements seen (reveal), or the
+ * first of its braves to come to the nation's colonies or units (braves.ts). A person playing the
+ * nation is told about the people once (`Tribe.met`); computer players need no telling, so nothing
+ * is written for them.
+ */
+export function meetPeople(s: GameState, nation: NationId, people: TribeId, at?: { x: number; y: number }): void {
+  if (!s.players.find((o) => o.id === nation)?.human) return;
+  const tribe = s.tribes.find((t) => t.id === people);
+  if (!tribe || tribe.met?.includes(nation)) return;
+  (tribe.met ??= []).push(nation);
+  message(s, firstMeetingText(people), nation, at);
 }
 
 /** True if the tile is worked by any colony's colonist. */
