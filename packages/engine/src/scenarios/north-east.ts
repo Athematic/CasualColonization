@@ -292,9 +292,7 @@ export const NORTH_EAST: Scenario = {
   ai: {
     // The computer Europeans keep to the Americas' dates, though the game starts in 1000.
     dates: true,
-    stretch: knob('CC_STRETCH', 1),
-    landing: knob('CC_LANDING', 18),
-    siteTerrain: { tundra: knob('CC_TUNDRA', 1) },
+    stretch: knob('CC_STRETCH', 1.5),
     goods: AMERICAS.ai.goods,
   },
   mechanics: {
@@ -317,7 +315,7 @@ export const NORTH_EAST: Scenario = {
     // The peoples' economy (T10, T12): hard years, the land's health by region, epidemics after contact.
     ...(flag('CC_OFF', 'h') ? {} : { hardYears: { chance: 1 / 8 } }),
     ...(flag('CC_OFF', 'l') ? {} : { landHealth: { regionSize: 8, renewal: 40, recovery: 5, floor: 0.2 } }),
-    ...(flag('CC_OFF', 'e') ? {} : { epidemics: { chance: 1 / knob('CC_EPI', 25), years: knob('CC_EPY', 3), loss: 1, reach: knob('CC_EPR', 8) } }),
+    ...(flag('CC_OFF', 'e') ? {} : { epidemics: { chance: 1 / knob('CC_EPI', 50), years: knob('CC_EPY', 3), loss: 1, reach: knob('CC_EPR', 8) } }),
   },
   // Both sides judged at the end year, in the decided order (T14).
   victory: [
