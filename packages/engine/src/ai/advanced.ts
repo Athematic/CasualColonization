@@ -58,7 +58,7 @@ import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, declareWithAlly, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { stopPort } from '../routes.js';
-import { forEachUnitNear, indexedUnitsOf, ownedUnitsView } from '../unitindex.js';
+import { forEachUnitNear, indexedUnitsOf, ownedUnitsView, unitList } from '../unitindex.js';
 import { maybeIncite } from './natives.js';
 import { armyForIndependence, expectedSupport, colonyDefences, supportParts, rebelColonyDefence, rebelPower, crownAffairs, defenceShort, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
 import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './plan.js';
@@ -1352,7 +1352,7 @@ function privateer(s: GameState, p: Player, ship: Unit): boolean {
       return true;
     }
   }
-  const near = Object.values(s.units)
+  const near = unitList(s)
     .filter((o) => prey(o) && o.loc.kind === 'map' && grid.distance(o.loc.x, o.loc.y, pos.x, pos.y) <= 8)
     .sort((a, b) => grid.distance((a.loc as { x: number }).x, (a.loc as { y: number }).y, pos.x, pos.y) - grid.distance((b.loc as { x: number }).x, (b.loc as { y: number }).y, pos.x, pos.y))[0];
   if (near && near.loc.kind === 'map') {

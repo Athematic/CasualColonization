@@ -50,7 +50,7 @@ import { type NationId } from './rules/nations.js';
 import { difficultyOf, nationOf, nationSet, scenarioOf, term, Term, type ScenarioLike } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, MercenaryOffer, Player, Unit } from './types.js';
-import { forEachUnitNear, removeUnit, setUnitOwner, colonyList } from './unitindex.js';
+import { forEachUnitNear, removeUnit, setUnitOwner, colonyList, unitList } from './unitindex.js';
 
 /** A seeded draw for this nation and purpose. */
 const draw = (s: GameState, nation: NationId, purpose: string) => pairRandom(s, nation, 'crown', `rebellion ${purpose}`);
@@ -317,7 +317,7 @@ function interventionRound(s: GameState, p: Player): void {
 
 /** When the war ends, the intervention force sails home. */
 export function alliesGoHome(s: GameState, nation: NationId): void {
-  const allies = Object.values(s.units).filter((u) => u.owner === nation && u.ally);
+  const allies = unitList(s).filter((u) => u.owner === nation && u.ally);
   for (const u of allies) removeUnit(s, u.id);
   if (allies.length) message(s, `The ${term(s, 'independenceWar')} is over: the intervention force sails home.`, nation);
 }
@@ -351,7 +351,7 @@ export const ALLY_ATTACK_ODDS = 0.5;
  */
 export function runAllies(s: GameState, p: Player): void {
   if (p.independence !== 'declared') return;
-  for (const u of Object.values(s.units)) {
+  for (const u of unitList(s)) {
     if (u.owner !== p.id || !u.ally || !s.units[u.id] || u.loc.kind !== 'map' || u.moves <= 0) continue;
     safely(() => allyTurn(s, p, u));
   }
@@ -458,6 +458,6 @@ export function processRebellion(s: GameState, p: Player): void {
 
 /** Mercenaries and the intervention force fighting for a nation, and how far the intervention is, for the Military report. */
 export function warSupport(s: GameState, nation: NationId): { mercenaries: Unit[]; allies: Unit[]; intervention: ReturnType<typeof interventionStatus> } {
-  const own = Object.values(s.units).filter((u) => u.owner === nation);
+  const own = unitList(s).filter((u) => u.owner === nation);
   return { mercenaries: own.filter((u) => u.mercenary), allies: own.filter((u) => u.ally), intervention: interventionStatus(s, nation) };
 }

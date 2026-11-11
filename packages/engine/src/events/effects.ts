@@ -13,7 +13,7 @@ import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState } from '../types.js';
 import type { Effect, EventVars, EventsState, GoodRef, Num } from './types.js';
 import { difficultyOf, goodsOf, portMarketOf } from '../scenarios/index.js';
-import { colonyList } from '../unitindex.js';
+import { colonyList, unitList } from '../unitindex.js';
 
 /** What a point of tax is worth to a nation over the rest of a game, in gold (measured against 30-turn outcomes in docs/design/events.md). */
 export const TAX_POINT_VALUE = 150;
@@ -177,7 +177,7 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
       for (const c of ownColonies(s, p.id)) c.liberty += Math.round(200 * colonyWorkers(s, c).length * e.share);
       return;
     case 'convertUnits':
-      for (const u of Object.values(s.units)) if (u.owner === p.id && u.type === e.from) u.type = e.to;
+      for (const u of unitList(s)) if (u.owner === p.id && u.type === e.from) u.type = e.to;
       return;
     case 'liftBoycotts':
       p.boycotts = {};
@@ -295,7 +295,7 @@ export function valueEffects(s: GameState, effects: Effect[], v: EventVars): num
         total += ownColonies(s, v.nation).reduce((n, c) => n + colonyWorkers(s, c).length, 0) * e.share * 400;
         break;
       case 'convertUnits':
-        total += Object.values(s.units).filter((u) => u.owner === v.nation && u.type === e.from).length * Math.max(0, (UNIT_TYPES[e.to].price ?? 0) - (UNIT_TYPES[e.from].price ?? 0));
+        total += unitList(s).filter((u) => u.owner === v.nation && u.type === e.from).length * Math.max(0, (UNIT_TYPES[e.to].price ?? 0) - (UNIT_TYPES[e.from].price ?? 0));
         break;
       case 'liftBoycotts':
         total += Object.keys(p.boycotts).length * 500;

@@ -9,7 +9,7 @@ import type { GoodId } from '../rules/goods.js';
 import type { NationId } from '../rules/nations.js';
 import type { Colony, GameState } from '../types.js';
 import type { EventVars, TargetSelector } from './types.js';
-import { colonyList } from '../unitindex.js';
+import { colonyList, unitList } from '../unitindex.js';
 
 function pickOne<T>(items: T[], r: () => number): T | undefined {
   return items.length ? items[Math.floor(r() * items.length)] : undefined;
@@ -40,7 +40,7 @@ export function colony(opts: { minPop?: number; coastal?: boolean; good?: { id: 
 
 /** One of the nation's ships on open water (not in a colony), picked at random. */
 export const shipAtSea: TargetSelector = (s, nation, r) => {
-  const ships = Object.values(s.units).filter((u) => {
+  const ships = unitList(s).filter((u) => {
     if (u.owner !== nation || !isShip(u) || u.loc.kind !== 'map' || u.repair) return false;
     return isWater(tileAt(s, u.loc.x, u.loc.y)) && !colonyAt(s, u.loc.x, u.loc.y);
   });

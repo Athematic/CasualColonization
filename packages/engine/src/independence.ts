@@ -30,7 +30,7 @@ import { crownSideOf } from './world.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
 import { concludeConfederation, confederationOf } from './confederation.js';
 import { treatyNations } from './treaties.js';
-import { removeUnit, colonyList } from './unitindex.js';
+import { removeUnit, colonyList, unitList } from './unitindex.js';
 
 /** Share of all colonists, across every colony, who support independence. */
 export function rebelShare(s: GameState, nation: NationId): number {
@@ -97,7 +97,7 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   lapseFavoured(s, nation);
 
   // Everything left in Europe is confiscated.
-  for (const u of Object.values(s.units)) {
+  for (const u of unitList(s)) {
     if (u.owner !== nation) continue;
     const inEurope = u.loc.kind === 'europe' || (u.loc.kind === 'sailing' && u.loc.to === 'europe');
     const aboardInEurope = u.loc.kind === 'carrier' && s.units[u.loc.carrierId]?.loc.kind === 'europe';
@@ -105,7 +105,7 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   }
   // Veterans, and half the soldiers of committed colonies, form the Continental Army.
   let continentals = 0;
-  for (const u of Object.values(s.units)) {
+  for (const u of unitList(s)) {
     if (u.owner !== nation || (u.role !== 'soldier' && u.role !== 'dragoon')) continue;
     const pos = unitPosition(s, u);
     const colony = pos && colonyAt(s, pos.x, pos.y);
@@ -219,7 +219,7 @@ function endRebellion(s: GameState, p: Player): void {
  * fewer (and the Crown has taken one), with the same outcome for all of them.
  */
 function checkConfederationOutcome(s: GameState, members: Player[]): void {
-  const beaten = (p: Player) => p.ref.regulars + p.ref.dragoons + p.ref.artillery === 0 && !Object.values(s.units).some((u) => u.owner === 'crown' && u.against === p.id && !isShip(u));
+  const beaten = (p: Player) => p.ref.regulars + p.ref.dragoons + p.ref.artillery === 0 && !unitList(s).some((u) => u.owner === 'crown' && u.against === p.id && !isShip(u));
   const ids = new Set(members.map((m) => m.id));
   let outcome: 'won' | 'lost' | null = null;
   if (members.every(beaten)) outcome = 'won';
@@ -236,7 +236,7 @@ function checkConfederationOutcome(s: GameState, members: Player[]): void {
     m.independence = outcome;
     track(m.id, `independence:${outcome}`);
     endRebellion(s, m);
-    if (outcome === 'won') for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === m.id) removeUnit(s, u.id);
+    if (outcome === 'won') for (const u of unitList(s)) if (u.owner === 'crown' && u.against === m.id) removeUnit(s, u.id);
   }
   const t = confederationOf(s, members[0].id);
   if (t) concludeConfederation(s, t);
@@ -254,12 +254,12 @@ function checkOutcome(s: GameState, p: Player): void {
     if (members.every((m) => m.independence === 'declared')) return checkConfederationOutcome(s, members);
   }
   const ref = p.ref;
-  const royalsLeft = Object.values(s.units).some((u) => u.owner === 'crown' && u.against === p.id && !isShip(u));
+  const royalsLeft = unitList(s).some((u) => u.owner === 'crown' && u.against === p.id && !isShip(u));
   if (ref.regulars + ref.dragoons + ref.artillery === 0 && !royalsLeft) {
     p.independence = 'won';
     track(p.id, 'independence:won');
     endRebellion(s, p);
-    for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === p.id) removeUnit(s, u.id);
+    for (const u of unitList(s)) if (u.owner === 'crown' && u.against === p.id) removeUnit(s, u.id);
     const text = term(s, 'gameOver.won', { nation: nationOf(s, p.id).name });
     message(s, text);
     noteHistory(s, 'independence', [p.id], text);
@@ -309,7 +309,7 @@ function safely(fn: () => void): void {
 
 /** The Crown's troops march on the nearest rebel colony and attack it. */
 export function runCrown(s: GameState): void {
-  for (const u of Object.values(s.units)) {
+  for (const u of unitList(s)) {
     if (u.owner !== 'crown' || !s.units[u.id] || u.loc.kind !== 'map') continue;
     safely(() => crownUnit(s, u));
   }

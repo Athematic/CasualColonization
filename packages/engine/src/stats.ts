@@ -11,7 +11,7 @@ import { ROLES, UNIT_TYPES } from './rules/units.js';
 import { score } from './score.js';
 import type { GameState, StatsHistory } from './types.js';
 import { goodsOf } from './scenarios/index.js';
-import { colonyList } from './unitindex.js';
+import { colonyList, unitList } from './unitindex.js';
 
 /** What each snapshot holds, in order. Per-turn values are rates; the rest are levels. */
 export const STAT_KEYS = [
@@ -131,8 +131,7 @@ function census(s: GameState): StatsCensus {
   for (const t of s.map.tiles) if (!TERRAIN[t.t].water) land++;
   const pop = new Map<string, number>();
   const forces = new Map<NationId, { military: number; ships: number; holds: number }>();
-  for (const id in s.units) {
-    const u = s.units[id];
+  for (const u of unitList(s)) {
     if (u.loc.kind === 'colony') pop.set(u.loc.colonyId, (pop.get(u.loc.colonyId) ?? 0) + 1);
     let f = forces.get(u.owner);
     if (!f) forces.set(u.owner, (f = { military: 0, ships: 0, holds: 0 }));

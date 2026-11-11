@@ -18,7 +18,7 @@ import { ROLES, UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
-import { colonyList } from '../unitindex.js';
+import { colonyList, unitList } from '../unitindex.js';
 
 /** A demand at most this share of the treasury is cheap: paid whatever refusing would cost. */
 export const CHEAP_DEMAND = 0.15;
@@ -220,7 +220,7 @@ export function hireMercenaries(s: GameState, p: Player, prof: AiProfile | null,
   if (!offer) return;
   let hire = !!prof && p.gold >= offer.price && p.independence === 'declared';
   if (hire && offer.turn !== p.refAtDeclaration?.turn) {
-    const ashore = Object.values(s.units).filter((u) => u.owner === 'crown' && u.against === p.id && !isShip(u)).length;
+    const ashore = unitList(s).filter((u) => u.owner === 'crown' && u.against === p.id && !isShip(u)).length;
     const threat = refPower(p) + ashore * REGULAR;
     hire = rebelPower(s, p) < threat * ratio;
   }

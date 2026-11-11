@@ -22,7 +22,7 @@ import { calendarOf, lastTurn, nationOf, scenarioOf, term } from './scenarios/in
 import { treatyNations } from './treaties.js';
 import type { NationId } from './rules/nations.js';
 import type { GameState, Player } from './types.js';
-import { removeUnit } from './unitindex.js';
+import { removeUnit, unitList } from './unitindex.js';
 
 export type GameOver = NonNullable<GameState['gameOver']>;
 
@@ -162,5 +162,5 @@ registerVictory({
 export function finishNation(s: GameState, p: Player): void {
   const breakdown = scoreBreakdown(s, p);
   p.finished = { turn: s.turn, score: breakdown.total, parts: Object.fromEntries(breakdown.lines.map((l) => [l.key, l.points])) };
-  for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === p.id) removeUnit(s, u.id);
+  for (const u of unitList(s)) if (u.owner === 'crown' && u.against === p.id) removeUnit(s, u.id);
 }

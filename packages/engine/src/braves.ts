@@ -55,7 +55,7 @@ import { TERRAIN } from './rules/terrain.js';
 import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from './types.js';
 import { difficultyOf, goodsOf, nativeProduceOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
-import { removeUnit, colonyList } from './unitindex.js';
+import { removeUnit, colonyList, unitList } from './unitindex.js';
 
 /** The kind of a settlement in its game's scenario (camp, village, city…), with its numbers. */
 export function settlementKind(s: GameState, st: Settlement): SettlementKindDef {
@@ -189,7 +189,7 @@ function buildIndex(s: GameState): PhaseIndex {
   const colonies = new Map<number, Colony>();
   for (const c of colonyList(s)) colonies.set(c.y * w + c.x, c);
   const units = new Map<number, Unit[]>();
-  for (const u of Object.values(s.units)) {
+  for (const u of unitList(s)) {
     if (u.loc.kind !== 'map' || isShip(u)) continue;
     const i = u.loc.y * w + u.loc.x;
     const list = units.get(i);
@@ -784,7 +784,7 @@ function attackUnit(s: GameState, b: Brave, target: Unit): void {
     return;
   }
   const name = unitName(defender);
-  for (const o of Object.values(s.units)) if (o.loc.kind === 'carrier' && o.loc.carrierId === defender.id) removeUnit(s, o.id);
+  for (const o of unitList(s)) if (o.loc.kind === 'carrier' && o.loc.carrierId === defender.id) removeUnit(s, o.id);
   removeUnit(s, defender.id);
   track(defender.owner, 'natives:unit killed');
   message(s, `The ${tribe} attack and kill your ${name}.`, defender.owner, at);
