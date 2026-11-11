@@ -80,7 +80,7 @@ Sprites for the scenario's new peoples, council members and units are named like
 
 ## Layer hooks
 
-`MapLayerHooks` (in `@cc/render-api`) name the layers of a map frame: `water`, `land` (with a `shape()` callback that traces the renderer's own outline of the tile), `shore`, `plowed`, `road`, `relief` (hills, mountains, forest), `bonus`, `rumour`, `settlement`, `colony`, `unit` and `brave` (a native brave; sprite packs map `units.braves`, falling back to procedural drawing), plus `beginFrame`. A renderer that supports them offers each piece to its hook first. A hook returns `true` when it drew the piece, and `false` to let the renderer draw it as usual. Everything else (coastline ink, rivers, fog, captions, pennants, routes, badges) stays with the renderer. `LigneClaireMapRenderer` supports all of them. The schematic renderer ignores them.
+`MapLayerHooks` (in `@cc/render-api`) name the layers of a map frame: `water`, `land` (with a `shape()` callback that traces the renderer's own outline of the tile), `shore`, `plowed`, `road`, `relief` (hills, mountains, forest), `bonus`, `rumour`, `settlement`, `colony`, `unit` and `brave` (a native brave; sprite packs map `units.braves`, falling back to procedural drawing), plus `beginFrame`. A renderer that supports them offers each piece to its hook first. A hook returns `true` when it drew the piece, and `false` to let the renderer draw it as usual. Everything else (coastline ink, rivers, fog, captions, pennants, routes, badges) stays with the renderer. `LigneClaireMapRenderer` supports all of them. The schematic renderer supports them on squares and hexes (all but `hideBorder`; it calls `relief`, `bonus` and `plowed` without drawing those itself), and passes `water` the tile's outline as a `shape` argument; without hooks it draws as it always has. `LayerTile.px, py` is the top-left of the tile's `zoom × zoom` box, which on hexes is centred on the hex.
 
 ## Sprite packs
 
@@ -103,6 +103,7 @@ A `SpritePack` is data (`packages/style-sprites/src/pack.ts`):
 | `mapping` | Game concepts to sprite ids: units by type and role, terrain (base, plowed, water under land, per-terrain overrides), forest, hills and mountains, bonus resources by terrain, rumours, road pieces, coast bands, colonies by size, stockade and fort, settlements by tribe and capital, buildings by level, goods, and the nation overlays (pennant, flag, mission). |
 | `rules` | How each kind of sprite sits on a tile: its size relative to the tile, where its anchor (the ground point from the manifest) goes, the bonus marker box, the walls, the colony flag, the mission marker and the unit icon pennant. |
 | `procedural` | Layers to leave to the fallback even when sprites exist (`water`, `land`, `shore`, `roads`, `relief`, `bonus`, `rumour`, `settlements`, `colonies`, `units`, `icons`). Rivers, the coastline's ink, fog, captions and markers always come from the fallback. |
+| `fallback` | What draws a missing sprite: `'procedural'` (default) the fallback style; `'placeholder'` a plain placeholder from `src/placeholder.ts` (flat terrain colours, a silhouette per category, labelled icons). See [Placeholder](#placeholder). |
 
 Ids are templates. `{type}`, `{role}`, `{terrain}`, `{tribe}`, `{building}`, `{level}`, `{product}` and `{father}` become the engine ids in kebab-case (`expertFurTrapper` becomes `expert-fur-trapper`). A slot holds one template, a list tried in order, or `null` (always procedural). `DEFAULT_MAPPING` is the scheme of [SPRITE_PROMPTS.md](SPRITE_PROMPTS.md) section 5:
 
@@ -149,6 +150,12 @@ const australia = extendPack(ligneClairePaintedPack, {
 ### Ligne claire (painted)
 
 The first pack, `packages/style-sprites/packs/ligne-claire-painted.ts`, uses the default mapping and rules, with Ligne claire as the fallback and its theme and fonts. Its sprites live in `assets/sprites/` next to the page, beside the masters (https://casual.spence.dk/assets/sprites/ on the server). Point it elsewhere with `?sprites=https://casual.spence.dk/assets/sprites/` (remembered; `?sprites=default` forgets it, `?sprites=off` draws everything procedurally). Loading from another origin needs `Access-Control-Allow-Origin: *` on the server's `/assets/sprites/`. Without it the browser refuses the images and the style falls back to Ligne claire. Terrain transition pieces (`rules.transitions`) can be switched per browser with `?transitions=on` or `?transitions=off` (remembered; `?transitions=default` goes back to the pack's setting), so the effect can be compared in the live game.
+
+### Placeholder
+
+`packages/style-sprites/packs/placeholder.ts` has no images (`source.base: null`) and `fallback: 'placeholder'`, over the schematic style. A sprite style draws the grids its fallback draws (`grids`), so this one draws squares and hexes; it is the sprite style of hex maps until hex terrain art exists ([design/hex-maps.md](design/hex-maps.md) H15). On hexes the sprite layers clip square sprites to the hex and do not use the square-only pieces (coast bands, terrain transitions, road spokes in quarter turns). Choose it with `?style=placeholder`.
+
+**Which ids a pack lacks.** `missingIds(pack, scenario, has, grid?)` (`src/missing.ts`) lists every sprite the scenario can show that the manifest (`has`) lacks, by category, with whether a placeholder covers it, and `uncovered`: what nothing would draw (for a placeholder pack, a missing sprite without a placeholder in a category it claims). `formatMissing(report)` prints it. `test/placeholder.test.ts` runs it for the shipped packs: it fails if the placeholder pack leaves anything uncovered, and only reports for packs with a procedural fallback (reading `tools/sprite-pipeline/out/manifest.json` when it exists).
 
 ### Terrain variants
 
