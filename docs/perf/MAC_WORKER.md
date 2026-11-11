@@ -84,7 +84,7 @@ Newest last. Each entry has an id; acknowledge it in your next report.
   - `npm test` at most 6 s;
   - the Americas tournament at most 90 s.
 
-  Tournament tables will differ from the baseline: the save/load fix re-recorded hashes, but the games are unchanged, so the tables should still match. Report any table difference. Wait for a quiet machine (load under 3).
+  The tournament tables should match the baseline's: the save/load fix re-recorded hashes, but it didn't change any game. Report any difference in the tables. Wait for a quiet machine (load under 3).
 
 What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
 
