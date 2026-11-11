@@ -7,6 +7,7 @@ import { UNIT_TYPES } from './rules/units.js';
 import { recentProduction } from './stats.js';
 import type { ScoreWeights } from './rules/score.js';
 import type { GameState, Player } from './types.js';
+import { companyScoreShare, sharesIn } from './companies.js';
 import { ownedUnitsView } from './unitindex.js';
 
 /** The Americas end after the autumn turn of this year (other scenarios: their calendar's `end`). */
@@ -23,7 +24,9 @@ export type ScoreComponent =
   | 'fathers'
   | 'wealth'
   | 'peace'
-  | 'independence';
+  | 'independence'
+  /** Shares in chartered companies (companies.ts): the holder's part of each company's score. Only for shareholders. */
+  | 'companies';
 
 export interface ScoreLine {
   key: ScoreComponent;
@@ -102,6 +105,19 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreW
     line('peace', 'Peace and cooperation', agreements + tribes, 'agreements and tribes', agreements * w.tradeAgreement + favoured * w.favoured + tribes * w.peacefulTribe),
     line('independence', 'Independence won', p.independence === 'won' ? 1 : 0, 'won', p.independence === 'won' ? w.independence : 0),
   ];
+  // A company cannot win: its score counts for its shareholders, by their shares.
+  if (s.players.length > s.config.nations.length && p.kind !== 'company') {
+    let held = 0;
+    let points = 0;
+    for (const co of s.players) {
+      if (co.kind !== 'company') continue;
+      const share = sharesIn(co, p.id);
+      if (!share.held) continue;
+      held += share.held;
+      points += companyScoreShare(co, p.id, scoreBreakdown(s, co, w).total);
+    }
+    if (held) lines.push(line('companies', 'Shares in companies', held, 'shares', points));
+  }
   return { lines, total: lines.reduce((sum, l) => sum + l.points, 0) };
 }
 
@@ -115,6 +131,6 @@ export function score(s: GameState, p: Player, w: ScoreWeights = scoreWeightsOf(
  */
 export function finalScores(s: GameState): Partial<Record<Player['id'], number>> {
   const out: Partial<Record<Player['id'], number>> = {};
-  for (const p of s.players) if (p.id !== 'crown') out[p.id] = p.finished ? p.finished.score : score(s, p);
+  for (const p of s.players) if (p.id !== 'crown' && p.kind !== 'company') out[p.id] = p.finished ? p.finished.score : score(s, p);
   return out;
 }

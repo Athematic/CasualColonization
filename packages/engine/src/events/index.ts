@@ -288,7 +288,7 @@ export function fireEvent(s: GameState, def: EventDef, nation: NationId, given?:
 
 /** Fires a historical (world) event for every nation still taking part. */
 function fireWorld(s: GameState, def: EventDef): void {
-  for (const p of s.players) fireEvent(s, def, p.id);
+  for (const p of s.players) if (p.kind !== 'company') fireEvent(s, def, p.id);
   // Marked as fired even if no nation had a target, so it stays once-only.
   eventsState(s).fired[def.id] = s.turn;
 }
@@ -312,7 +312,7 @@ function drawHistorical(s: GameState): void {
 function drawRandom(s: GameState): void {
   const defs = eventDefs(s).filter((d) => d.kind === 'random' && !d.hidden);
   for (const p of s.players) {
-    if (p.id === 'crown' || !Object.values(s.colonies).some((c) => c.owner === p.id)) continue;
+    if (p.id === 'crown' || p.kind === 'company' || !Object.values(s.colonies).some((c) => c.owner === p.id)) continue;
     if (eventRandom(s, `random ${s.turn} ${p.id}`) >= RANDOM_EVENT_RATE) continue;
     const options: { def: EventDef; vars: EventVars; weight: number }[] = [];
     for (const def of defs) {

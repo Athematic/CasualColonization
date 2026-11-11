@@ -106,6 +106,10 @@ export type Stance = 'peace' | 'war';
 
 export interface Player {
   id: NationId;
+  /** A chartered company (companies.ts) rather than a nation; missing means a nation (or the Crown). */
+  kind?: 'company';
+  /** A company's shareholders and bookkeeping; only on a company. */
+  company?: CompanyBook;
   human: boolean;
   /** Computer level, for nations not played by people. */
   ai?: AiLevel;
@@ -182,6 +186,23 @@ export interface Player {
   goodsSpoiled?: number;
   /** Difficulty whose economics this nation plays at; missing means Conquistador (computer players). */
   difficulty?: DifficultyId;
+  /**
+   * Shared bells (alliances.ts): the nation's bells already counted for its allies' Congress, and
+   * the remainder (in hundredths of a bell) not yet given. Written once the nation has allies.
+   */
+  allyBells?: { seen: number; carry: number };
+}
+
+/** A chartered company's shareholders and bookkeeping (companies.ts). */
+export interface CompanyBook {
+  /** Shares held, by nation. */
+  shares: Partial<Record<NationId, number>>;
+  /** The nation that founded it, and the turn. */
+  founder: NationId;
+  founded: number;
+  /** Turn of the last dividend, and the gold paid out in dividends so far. */
+  lastDividend: number;
+  paid: number;
 }
 
 /** A mercenary company's offer to rebels: veteran soldiers, veteran dragoons and artillery for gold. */
@@ -236,6 +257,8 @@ export interface Unit {
   repair?: number;
   /** For Royal troops: the rebel nation they were sent against. */
   against?: NationId;
+  /** A joint expedition's scout (alliances.ts): the ally that paid half, and gets half of what it finds. */
+  joint?: NationId;
   /** A mercenary hired during the War of Independence (rebellion.ts). */
   mercenary?: true;
   /**
@@ -397,11 +420,12 @@ export interface GameMessage {
   at?: { x: number; y: number };
 }
 
-export type ProposalKind = 'trade' | 'favoured';
+export type ProposalKind = 'trade' | 'favoured' | 'alliance' | 'expedition' | 'confederation';
 
 /**
  * Relations between two European nations (see relations.ts and docs/design/favoured-nation.md).
- * Turn numbers, not years; the thresholds are hidden from players.
+ * Turn numbers, not years; the thresholds are hidden from players. The agreements themselves (a
+ * trade agreement, Favoured Nation status) are treaties (`GameState.treaties`, treaties.ts).
  */
 export interface Relation {
   /** The pair, in the order of `GameConfig.nations`. */
@@ -413,10 +437,6 @@ export interface Relation {
   peaceNeeded: number;
   /** Hidden: active trade routes between the two needed for Favoured Nation (2–4, from the seed). */
   routesNeeded: number;
-  /** A trade agreement: route stops at each other's colonies are allowed. */
-  trade?: boolean;
-  /** Favoured Nation status (implies a trade agreement). */
-  favoured?: boolean;
   /** Gold that has changed hands at each other's colonies, both ways, over the game. */
   volume: number;
   /** After a cancellation: no new agreements or foreign stops before this turn. */
@@ -427,6 +447,67 @@ export interface Relation {
   cancels?: number;
   /** A proposal waiting for the other side (a person) to answer. */
   proposal?: { kind: ProposalKind; from: NationId; turn: number };
+}
+
+/**
+ * The kinds of treaty between European nations (docs/design/cooperation.md, C9): a trade
+ * agreement, Favoured Nation status and, from Beta 1, an alliance. Beta 2's treaties with native
+ * peoples are meant to reuse the record.
+ */
+export type TreatyKind = 'trade' | 'favoured' | 'alliance' | 'confederation';
+
+/** How a treaty ended. */
+export interface TreatyEnd {
+  turn: number;
+  /**
+   * Cancelled by one side, ended by a war between the parties, lapsed (Favoured Nation at a
+   * declaration of independence), or left: an alliance's last members but one left it.
+   */
+  why: 'cancelled' | 'war' | 'lapsed' | 'left' | 'concluded';
+  /** The nation that ended it, when one did. */
+  by?: NationId;
+}
+
+/**
+ * A party to a treaty. Only European nations for now; the shape leaves room for other kinds of
+ * party later (Beta 2's native peoples) without changing the record.
+ */
+export type TreatyParty = { kind: 'nation'; id: NationId };
+
+/**
+ * A treaty (treaties.ts). Treaties are kept after they end, with `end` set, so the diplomacy
+ * screen can show the past ones; at most one treaty of a kind is in force between two nations.
+ */
+export interface Treaty {
+  /** 't1', 't2', … in the order the treaties were made. */
+  id: string;
+  kind: TreatyKind;
+  /** Who is bound by it: for a trade agreement and Favoured Nation, the pair in the order of `GameConfig.nations`. */
+  parties: TreatyParty[];
+  /** Turn it was made. */
+  start: number;
+  /** Missing while it is in force. */
+  end?: TreatyEnd;
+  /** What the parties agreed beyond the kind's rules; missing for trade agreements and Favoured Nation. */
+  terms?: TreatyTerms;
+  /** Members that left an alliance (`parties` holds the members now), with the turn. Missing means none. */
+  left?: { party: TreatyParty; turn: number }[];
+}
+
+/**
+ * The terms of a treaty, by kind. A union, so other kinds of treaty can bring their own terms.
+ */
+export type TreatyTerms = AllianceTerms;
+
+/** What an alliance binds its members to (alliances.ts reads them; ALLIANCE_TERMS are the standard ones). */
+export interface AllianceTerms {
+  kind: 'alliance';
+  /** An attack on one member is war with all of them. */
+  defensive: boolean;
+  /** Members' units may enter, garrison and trade in each other's colonies. */
+  openColonies: boolean;
+  /** Members see what each other's units and colonies see. */
+  sharedSight: boolean;
 }
 
 /**
@@ -464,13 +545,28 @@ export interface GameState {
   difficulty?: DifficultyId;
   /** Relations between each pair of European nations, keyed by relationKey(a, b). */
   relations: Record<string, Relation>;
+  /** Treaties between European nations, in force and past, in the order made (treaties.ts). Missing until the first one. */
+  treaties?: Treaty[];
   /** Trade routes by id; missing means none. */
   routes?: Record<string, TradeRoute>;
   /** Native braves on the map, by id. Missing (older saves) means none yet; settlements send them out. */
   braves?: Record<string, Brave>;
   /** Native demands and offers waiting for a person's answer. Missing means none. */
   nativeDemands?: NativeDemand[];
-  gameOver?: { turn: number; reason: string; winner?: NationId; scores: Partial<Record<NationId, number>>; /** The person ended the game early (leaving.ts). */ retired?: boolean };
+  gameOver?: {
+    turn: number;
+    reason: string;
+    /** The first winner, for code that knows one winner only; missing when nobody won. */
+    winner?: NationId;
+    scores: Partial<Record<NationId, number>>;
+    /** The person ended the game early (leaving.ts). */
+    retired?: boolean;
+    /**
+     * Every winner, best first (C3): one nation, or the members of an alliance that won together
+     * (`concord`, victory.ts), ranked by their own score; empty when nobody won.
+     */
+    winners: NationId[];
+  };
   /** Silver and ore dug so far from mining tiles, by "x,y" (see mines.ts). Missing means none. */
   mined?: Record<string, number>;
   /** Set the first time a cheat is used and never cleared. Missing means the game is not cheated. */
@@ -500,6 +596,10 @@ export type HistoryKind =
   | 'peace'
   | 'trade'
   | 'favoured'
+  /** Alliances made, joined and left (alliances.ts). */
+  | 'alliance'
+  /** Chartered companies founded (companies.ts). */
+  | 'company'
   | 'cancel'
   | 'treasure'
   | 'burned'

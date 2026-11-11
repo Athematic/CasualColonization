@@ -118,7 +118,7 @@ function nationTable(scenario: Scenario, rivals: Rivals | undefined): ReadonlyMa
     const { sets } = scenario.nations;
     const first = (rivals ?? scenario.nations.default) === 'real' && sets.real ? sets.real : sets.alternative;
     const map = new Map<NationId, NationEntry>();
-    for (const e of [...first, ...sets.alternative, ...(sets.real ?? []), scenario.nations.crown]) if (!map.has(e.id)) map.set(e.id, e);
+    for (const e of [...first, ...sets.alternative, ...(sets.real ?? []), scenario.nations.crown, ...(scenario.nations.companies ?? [])]) if (!map.has(e.id)) map.set(e.id, e);
     byRivals.set(key, (table = map));
   }
   return table;

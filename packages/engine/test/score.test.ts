@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addTreaty,
   BUILDINGS,
   BUILDING_ORDER,
   SCORE_WEIGHTS,
@@ -96,10 +97,10 @@ describe('score breakdown', () => {
     const s = bare();
     const p = player(s, 'england');
     const before = score(s, p);
-    const key = Object.keys(s.relations)[0];
-    s.relations[key].trade = true;
+    const rel = s.relations[Object.keys(s.relations)[0]];
+    addTreaty(s, 'trade', [rel.a, rel.b]);
     expect(score(s, p)).toBe(before + SCORE_WEIGHTS.tradeAgreement);
-    s.relations[key].favoured = true;
+    addTreaty(s, 'favoured', [rel.a, rel.b]);
     expect(score(s, p)).toBe(before + SCORE_WEIGHTS.tradeAgreement + SCORE_WEIGHTS.favoured);
   });
 

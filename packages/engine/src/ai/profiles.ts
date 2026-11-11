@@ -116,6 +116,20 @@ export const AI_PROFILES: Record<Exclude<AiLevel, 'naive'>, AiProfile> = {
   creative: { ...competent, adaptive: true },
 };
 
+/**
+ * A chartered company's own simple profile (companies.ts): a Competent economy that settles,
+ * trades and pays its way, without war, missions, schools, liberty or independence.
+ */
+export const COMPANY_PROFILE: AiProfile = {
+  ...competent,
+  colonyTarget: (turn) => Math.min(6, 1 + Math.floor(turn / 40)),
+  liberty: 0,
+  aggression: 0,
+  missions: false,
+  schools: false,
+  independence: null,
+};
+
 /** What a Creative nation is concentrating on at the moment. */
 export type AiFocus = 'explore' | 'expand' | 'develop' | 'liberty' | 'independence' | 'defend' | 'war';
 
@@ -145,4 +159,6 @@ export interface AiMemory {
   seaSettlers?: Record<string, { x: number; y: number }>;
   /** Turn the nation adopted its independence plan (ai/plan.ts). */
   independencePlan?: number;
+  /** Ready for independence with an ally: the turn it began waiting for the ally to declare together (ai/advanced.ts). */
+  allyWait?: number;
 }

@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  isFavoured,
   AMERICAS,
   applyCommand,
   canBuild,
@@ -229,7 +230,7 @@ describe('Favoured Nation', () => {
     makeTradeAgreement(s, 'england', 'france');
     expect(favouredProblem(s, 'england', 'france')).toMatch(/no Favoured Nation/);
     expect(applyCommand(s, { type: 'proposeFavoured', nation: 'france' }).ok).toBe(false);
-    expect(s.relations[Object.keys(s.relations)[0]].favoured).toBeFalsy();
+    expect(isFavoured(s, 'england', 'france')).toBe(false);
     expect(buildingTies(t, player(t, 'england'), 'france')).toBe(true);
     expect(buildingTies(s, player(s, 'england'), 'france')).toBe(false);
   });

@@ -13,6 +13,7 @@ import { noteHistory } from './history.js';
 import { royalForce } from './independence.js';
 import { message, player } from './queries.js';
 import { hasTradeAgreement, isFavoured, pairRandom } from './relations.js';
+import { warOnFriend } from './alliances.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { type NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
@@ -209,8 +210,8 @@ export function royalWarTargets(s: GameState, nation: NationId): { nation: Natio
   if (p.independence !== 'none') return [];
   const out: { nation: NationId; weight: number }[] = [];
   for (const o of s.players) {
-    if (o.id === nation || o.id === 'crown' || o.independence !== 'none') continue;
-    if (p.stance[o.id] === 'war' || isFavoured(s, nation, o.id)) continue;
+    if (o.id === nation || o.id === 'crown' || o.kind === 'company' || o.independence !== 'none') continue;
+    if (p.stance[o.id] === 'war' || isFavoured(s, nation, o.id) || warOnFriend(s, nation, o.id)) continue;
     if (!Object.values(s.colonies).some((c) => c.owner === o.id)) continue;
     out.push({ nation: o.id, weight: hasTradeAgreement(s, nation, o.id) ? ROYAL_WAR.partnerWeight : 1 });
   }
@@ -222,6 +223,7 @@ export function royalWar(s: GameState, nation: NationId, target: NationId): void
   const p = player(s, nation);
   if (p.independence !== 'none' || player(s, target).independence !== 'none') fail(`${Term(s, 'king')} declares no wars for or on independent nations.`);
   if (isFavoured(s, nation, target)) fail(`${Term(s, 'king')} declares no war on a Favoured Nation.`);
+  if (warOnFriend(s, nation, target)) fail(`${Term(s, 'king')} declares no war on an ally, or on the ally of a friend.`);
   declareWar(s, nation, target);
   const crown = (p.royal = p.royal ?? { bells: p.bells, points: 0, added: 0 });
   crown.lastWar = s.turn;
@@ -254,7 +256,7 @@ function maybeRoyalWar(s: GameState, p: Player, colonies: number): void {
 export function processCrown(s: GameState): void {
   const mechanics = mechanicsOf(s);
   for (const p of s.players) {
-    if (p.id === 'crown' || p.independence !== 'none') continue;
+    if (p.id === 'crown' || p.kind === 'company' || p.independence !== 'none') continue;
     const colonies = Object.values(s.colonies).filter((c) => c.owner === p.id).length;
     if (mechanics.ref) growForce(s, p, colonies);
     if (mechanics.demands) {

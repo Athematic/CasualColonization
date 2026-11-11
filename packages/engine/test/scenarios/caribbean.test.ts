@@ -52,7 +52,7 @@ describe('the Caribbean scenario', () => {
     expect(o.defaultMap).toBe('caribbean');
     expect(o.firstYear).toBe(1650);
     expect(o.startYears.map((y) => y.year)).toEqual([1675, 1700, 1725]);
-    expect(o.victory).toEqual(['Highest score when time runs out']);
+    expect(o.victory).toEqual(['An alliance holding most of the score at the end wins together', 'Highest score when time runs out']);
     expect(o.nations.real).toEqual(['england', 'france', 'netherlands', 'spain', 'denmark']);
     expect(o.nations.alternative).toEqual(['courland', 'england', 'brandenburg', 'france', 'scotland', 'netherlands', 'malta', 'spain', 'denmark']);
     expect(o.maxNations).toBe(9);
@@ -75,11 +75,12 @@ describe('the Caribbean scenario', () => {
     expect(TRIBES.tupi.wants).toContain('coats');
   });
 
-  it('switches off the REF and independence, keeps taxes and demands, and wins by time alone', () => {
+  it('switches off the REF and independence, keeps taxes and demands, and wins by time or concord', () => {
     const m = CARIBBEAN.mechanics;
     expect([m.ref, m.independence]).toEqual([false, false]);
     expect([m.taxes, m.demands]).toEqual([true, true]);
-    expect(CARIBBEAN.victory).toEqual([{ id: 'time' }]);
+    expect(CARIBBEAN.victory).toEqual([{ id: 'concord' }, { id: 'time' }]);
+    expect(m.alliances).toBe(true);
     expect(m.charter && m.charter.base).toBeGreaterThan(100);
     expect(CARIBBEAN.score?.wealth).toBeGreaterThan(1 / 800);
     expect(CARIBBEAN.ai.pace).toBe(0.35);

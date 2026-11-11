@@ -14,6 +14,8 @@ import { nationSet, scenarioOf, type Rivals } from './scenarios/index.js';
 import { scoreBreakdown, type ScoreComponent } from './score.js';
 import { setFeatureSink } from './telemetry.js';
 import { royalForce } from './independence.js';
+import { isFavoured } from './relations.js';
+import { alliesOf } from './alliances.js';
 import type { GameState, MapSize, Player } from './types.js';
 
 export interface ArenaOptions {
@@ -86,6 +88,21 @@ export interface RelationsTally {
   royalWars: number;
   /** Land units the Crown added to the nation's Royal Expeditionary Force over the game. */
   refAdded: number;
+  /** Alliances the nation made or joined, left (including by war on an ally), and its allies at the end. */
+  alliances: number;
+  alliancesLeft: number;
+  alliesAtEnd: number;
+  /** Wars the nation joined on an ally's side by choice (the defensive pact's wars are not counted). */
+  allyWars: number;
+  /** Chartered companies the nation founded, shares it bought, and gold it received in dividends. */
+  companies: number;
+  shares: number;
+  dividends: number;
+  /** Joint expeditions the nation took part in, and bells its allies' shared bells gave its Congress. */
+  expeditions: number;
+  sharedBells: number;
+  /** Declarations of independence made together with an ally (confederation.ts). */
+  confederations: number;
 }
 
 const TALLY: Record<string, keyof RelationsTally> = {
@@ -106,13 +123,23 @@ const TALLY: Record<string, keyof RelationsTally> = {
   'crown:demand refused': 'demandsRefused',
   'crown:royal war': 'royalWars',
   'crown:ref units added': 'refAdded',
+  'diplomacy:alliance made': 'alliances',
+  'diplomacy:alliance joined': 'alliances',
+  'diplomacy:alliance left': 'alliancesLeft',
+  "diplomacy:joined an ally's war": 'allyWars',
+  'company:founded': 'companies',
+  'company:shares bought': 'shares',
+  'company:dividend': 'dividends',
+  'alliance:joint expedition': 'expeditions',
+  'alliance:bells received': 'sharedBells',
+  'independence:confederation': 'confederations',
 };
 
 /** Tally keys that add up the amount reported, not the number of reports. */
-const AMOUNTS = new Set<keyof RelationsTally>(['foreignStopSales', 'partnerPortSales', 'refAdded']);
+const AMOUNTS = new Set<keyof RelationsTally>(['foreignStopSales', 'partnerPortSales', 'refAdded', 'shares', 'dividends', 'sharedBells']);
 
 function emptyTally(): RelationsTally {
-  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0 };
+  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0, alliances: 0, alliancesLeft: 0, alliesAtEnd: 0, allyWars: 0, companies: 0, shares: 0, dividends: 0, expeditions: 0, sharedBells: 0, confederations: 0 };
 }
 
 /** What one event did to one nation over a game: times it fired, the choices taken (by index) and the computer players' gold value of the outcomes. */
@@ -153,8 +180,10 @@ export interface ArenaEntry {
   finished?: number;
   /** The game was cheated in (arena games never cheat, but standings can come from any state). */
   cheated?: boolean;
-  /** Highest score in its game (ties count for all). */
+  /** Won its game: one of `gameOver.winners`, or, for a game stopped before it ended, the highest score (ties count for all). */
   won: boolean;
+  /** Won together with its allies (the `concord` victory). */
+  concord?: boolean;
   /** Feature uses, when the arena counts them. */
   features?: FeatureCounts;
   /** Relations and trade with the other Europeans (arena games always count them). */
@@ -262,8 +291,9 @@ function endRelations(s: GameState, nation: NationId, counted?: RelationsTally):
   for (const rel of Object.values(s.relations ?? {})) {
     if (rel.a !== nation && rel.b !== nation) continue;
     r.volume += rel.volume;
-    if (rel.favoured) r.favouredAtEnd++;
+    if (isFavoured(s, rel.a, rel.b)) r.favouredAtEnd++;
   }
+  r.alliesAtEnd = alliesOf(s, nation).length;
   return r;
 }
 
@@ -341,9 +371,12 @@ export function arenaGames(opts: ArenaOptions): ArenaGame[] {
 /** Plays one game of an arena run and gives its rows, the winners marked. */
 export function playArenaRound(opts: ArenaOptions, game: ArenaGame): ArenaEntry[] {
   const setup = { scenario: opts.scenario, rivals: opts.rivals, playOn: opts.playOn };
-  const { entries } = playArenaGame(game.seed, game.line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured, opts.events, !opts.noCharter, setup);
+  const { state, entries } = playArenaGame(game.seed, game.line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured, opts.events, !opts.noCharter, setup);
   const best = Math.max(...entries.map((e) => e.score));
-  return entries.map((e) => ({ ...e, game: game.game, won: e.score === best }));
+  // A game that ended names its winners (several after a concord victory); one stopped early: the best score.
+  const winners = state.gameOver?.winners;
+  const together = !!winners && winners.length > 1;
+  return entries.map((e) => ({ ...e, game: game.game, won: winners?.length ? winners.includes(e.nation) : e.score === best, ...(together && winners!.includes(e.nation) ? { concord: true } : {}) }));
 }
 
 export function summarise(entries: ArenaEntry[]): ArenaSummary[] {
@@ -388,13 +421,13 @@ function averageTally(rows: ArenaEntry[]): RelationsTally {
 
 /** A Markdown table of relations and trade between the Europeans, per level (average per nation per game). */
 export function formatRelations(summary: ArenaSummary[]): string {
-  const head = '| Level | Proposals | Agreements | Favoured made | Favoured at end | Cancelled | Trade volume | Foreign stop sales | Partner port sales | Triangle trades | Wars declared | on partners | Tax refusals |';
-  const rule = '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
+  const head = '| Level | Proposals | Agreements | Favoured made | Favoured at end | Cancelled | Alliances made | left | allies at end | Wars joined for allies | Trade volume | Foreign stop sales | Partner port sales | Triangle trades | Wars declared | on partners | Tax refusals |';
+  const rule = '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
   const rows = summary
     .filter((r) => r.relations)
     .map((r) => {
       const t = r.relations!;
-      return `| ${AI_LEVEL_INFO[r.level].name} | ${t.proposals} | ${t.agreements} | ${t.favoured} | ${t.favouredAtEnd} | ${t.cancelled} | ${t.volume} | ${t.foreignStopSales} | ${t.partnerPortSales} | ${t.triangles} | ${t.wars} | ${t.warsOnPartners} | ${t.taxRefusals} |`;
+      return `| ${AI_LEVEL_INFO[r.level].name} | ${t.proposals} | ${t.agreements} | ${t.favoured} | ${t.favouredAtEnd} | ${t.cancelled} | ${t.alliances} | ${t.alliancesLeft} | ${t.alliesAtEnd} | ${t.allyWars} | ${t.volume} | ${t.foreignStopSales} | ${t.partnerPortSales} | ${t.triangles} | ${t.wars} | ${t.warsOnPartners} | ${t.taxRefusals} |`;
     });
   return [head, rule, ...rows].join('\n');
 }
@@ -409,8 +442,32 @@ export function formatRelationsLine(entries: ArenaEntry[]): string {
     `Per game: ${per(sum('agreements') / 2)} trade agreements, ${per(sum('favoured') / 2)} Favoured Nation pairs made ` +
     `(${per(sum('favouredAtEnd') / 2)} at the end, ${per(sum('cancelled'))} cancelled), ${Math.round(sum('volume') / 2 / games)} gold traded at each other's colonies, ` +
     `${per(sum('foreignStopSales'))} units sold at partners' colonies and ${per(sum('partnerPortSales'))} in partners' ports, ${per(sum('triangles'))} triangle trades, ` +
-    `${per(sum('wars'))} wars declared (${per(sum('warsOnPartners'))} on trade partners or Favoured Nations), ${per(sum('taxRefusals'))} tax raises refused.`
+    `${per(sum('wars'))} wars declared (${per(sum('warsOnPartners'))} on trade partners or Favoured Nations), ${per(sum('taxRefusals'))} tax raises refused. ` +
+    allianceLine(entries)
   );
+}
+
+/**
+ * Alliances and concord over a run: games with at least one alliance made, alliances made and
+ * standing at the end per game, and games won together (the `concord` victory).
+ */
+export function allianceLine(entries: ArenaEntry[]): string {
+  const byGame = new Map<number, ArenaEntry[]>();
+  for (const e of entries) byGame.set(e.game, [...(byGame.get(e.game) ?? []), e]);
+  const games = byGame.size || 1;
+  const rows = [...byGame.values()];
+  const withAlliance = rows.filter((g) => g.some((e) => (e.relations?.alliances ?? 0) > 0)).length;
+  // A new alliance counts for both its founders, a join for the newcomer and the member who invited it.
+  const made = entries.reduce((n, e) => n + (e.relations?.alliances ?? 0), 0) / 2;
+  const concord = rows.filter((g) => g.some((e) => e.concord)).length;
+  const withCompany = rows.filter((g) => g.some((e) => (e.relations?.companies ?? 0) > 0)).length;
+  const founded = entries.reduce((n, e) => n + (e.relations?.companies ?? 0), 0);
+  const dividends = entries.reduce((n, e) => n + (e.relations?.dividends ?? 0), 0);
+  const expeditions = entries.reduce((n, e) => n + (e.relations?.expeditions ?? 0), 0) / 2;
+  const bells = entries.reduce((n, e) => n + (e.relations?.sharedBells ?? 0), 0);
+  return `Alliances: ${withAlliance} of ${games} games with an alliance, ${Math.round((made / games) * 10) / 10} made per game, ${Math.round((expeditions / games) * 10) / 10} joint expeditions and ${Math.round(bells / games)} shared bells per game; ${concord} of ${games} games won together (concord). ` +
+    `Confederations: ${rows.filter((g) => g.some((e) => (e.relations?.confederations ?? 0) > 0)).length} of ${games} games. ` +
+    `Companies: ${withCompany} of ${games} games with a chartered company, ${Math.round((founded / games) * 10) / 10} founded per game, ${Math.round(dividends / games)} gold of dividends per game.`;
 }
 
 /**
@@ -436,7 +493,7 @@ export function formatCrown(entries: ArenaEntry[]): string {
 
 /** A Markdown table of the average points per score component for each level. */
 export function formatScoreSplit(entries: ArenaEntry[]): string {
-  const keys: ScoreComponent[] = ['colonists', 'experts', 'buildings', 'production', 'liberty', 'fathers', 'wealth', 'peace', 'independence'];
+  const keys: ScoreComponent[] = ['colonists', 'experts', 'buildings', 'production', 'liberty', 'fathers', 'wealth', 'peace', 'independence', 'companies'];
   const levels = [...new Set(entries.map((e) => e.level))];
   const head = `| Level | ${keys.join(' | ')} | Total |`;
   const rule = `| --- | ${keys.map(() => '---:').join(' | ')} | ---: |`;

@@ -43,7 +43,14 @@ import type { GoodId } from '../rules/goods.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { NationId } from '../rules/nations.js';
 import { track } from '../telemetry.js';
-import type { Colony, GameState, Player, Unit } from '../types.js';
+import type { Colony, GameState, Player, ProposalKind, Unit } from '../types.js';
+import { allianceRules, alliancesOn, allianceOf, longPeaceUnlocked, tiesUnlocked, expeditionProblem, allianceProblem, alliesOf, cooperationOf, isAllied, LEVEL_COOPERATION, leaveAlliance, warOnFriend } from '../alliances.js';
+import { proposeAlliance, proposeExpedition } from '../relations.js';
+import { startWar } from '../diplomacy.js';
+import { confederationOf, confederationOn, confederationProblem, proposeConfederation, readyForIndependence } from '../confederation.js';
+import { companies, companiesOn, companyCharters, companyRules } from '../companies.js';
+import { buyShares, foundCompany, foundProblem, sharePrice, sharesProblem } from '../chartered.js';
+import type { AiLevel } from './profiles.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
 import { aiGoodsOf, aiTurn } from '../scenarios/index.js';
@@ -95,21 +102,25 @@ export function foreignAffairs(s: GameState, p: Player, prof: AiProfile, strengt
   safely(() => maybePayArrears(s, p, prof));
   safely(() => reconsiderFavoured(s, p, prof, strength, army));
   if (!s.config.noFavoured) safely(() => makeProposals(s, p, prof, strength));
+  if (s.treaties && alliancesOn(s)) safely(() => joinAlliesWars(s, p, prof, strength, army));
+  if (companiesOn(s)) safely(() => companyAffairs(s, p, prof));
+  if (s.treaties && alliancesOn(s)) safely(() => jointExpedition(s, p, prof));
+  if (s.treaties && confederationOn(s)) safely(() => confederate(s, p));
   pruneTriangles(s, p);
 }
 
 // ---------------------------------------------------------------------------
 // Proposals
 
-function cooldownKey(kind: 'trade' | 'favoured', nation: NationId): string {
+function cooldownKey(kind: ProposalKind, nation: NationId): string {
   return `${kind}:${nation}`;
 }
 
-function coolingDown(s: GameState, p: Player, kind: 'trade' | 'favoured', nation: NationId): boolean {
+function coolingDown(s: GameState, p: Player, kind: ProposalKind, nation: NationId): boolean {
   return (p.aiMemory?.proposalCooldown?.[cooldownKey(kind, nation)] ?? -1) > s.turn;
 }
 
-function startCooldown(s: GameState, p: Player, kind: 'trade' | 'favoured', nation: NationId): void {
+function startCooldown(s: GameState, p: Player, kind: ProposalKind, nation: NationId): void {
   const memory = (p.aiMemory = p.aiMemory ?? {});
   const cool = (memory.proposalCooldown = memory.proposalCooldown ?? {});
   const r = pairRandom(s, p.id, nation, `${p.id} cooldown ${kind} ${s.turn}`);
@@ -173,20 +184,183 @@ export function favouredPays(s: GameState, p: Player, prof: AiProfile, other: Na
 function makeProposals(s: GameState, p: Player, prof: AiProfile, strength: number): void {
   const memory = p.aiMemory ?? {};
   for (const o of s.players) {
-    if (o.id === p.id || o.id === 'crown' || !atPeace(s, p.id, o.id) || isHostile(s, p.id, o.id)) continue;
+    if (o.id === p.id || o.id === 'crown' || o.kind === 'company' || !atPeace(s, p.id, o.id) || isHostile(s, p.id, o.id)) continue;
     if (memory.warTarget && s.colonies[memory.warTarget]?.owner === o.id) continue;
     if (memory.warPlan?.nation === o.id) continue;
     if (!hasTradeAgreement(s, p.id, o.id)) {
       if (coolingDown(s, p, 'trade', o.id) || tradeProblem(s, p.id, o.id) || !tradeNeighbours(s, p, o.id)) continue;
       safely(() => proposeTrade(s, p.id, o.id));
       if (!hasTradeAgreement(s, p.id, o.id)) startCooldown(s, p, 'trade', o.id);
-    } else if (!isFavoured(s, p.id, o.id)) {
-      // favouredProblem includes the hidden thresholds: like a person, the computer only learns
-      // whether relations are close enough, never the numbers.
-      if (coolingDown(s, p, 'favoured', o.id) || favouredProblem(s, p.id, o.id) || !favouredPays(s, p, prof, o.id, strength)) continue;
-      safely(() => proposeFavoured(s, p.id, o.id));
-      if (!isFavoured(s, p.id, o.id)) startCooldown(s, p, 'favoured', o.id);
+    } else {
+      // In a scenario whose alliances need only a trade agreement (Scenario.alliances.requires),
+      // an alliance is weighed even where Favoured Nation is not reached.
+      const favoured = isFavoured(s, p.id, o.id);
+      if (!favoured) {
+        // favouredProblem includes the hidden thresholds: like a person, the computer only learns
+        // whether relations are close enough, never the numbers.
+        if (!coolingDown(s, p, 'favoured', o.id) && !favouredProblem(s, p.id, o.id) && favouredPays(s, p, prof, o.id, strength)) {
+          safely(() => proposeFavoured(s, p.id, o.id));
+          if (!isFavoured(s, p.id, o.id)) startCooldown(s, p, 'favoured', o.id);
+          continue;
+        }
+        if (!alliancesOn(s) || (allianceRules(s).requires !== 'trade' && !longPeaceUnlocked(s, p.id, o.id))) continue;
+      }
+      if (!alliancesOn(s) || isAllied(s, p.id, o.id)) continue;
+      if (coolingDown(s, p, 'alliance', o.id) || allianceProblem(s, p.id, o.id) || !wantsAlliance(s, p, prof, o.id, strength)) continue;
+      safely(() => proposeAlliance(s, p.id, o.id));
+      if (!isAllied(s, p.id, o.id)) startCooldown(s, p, 'alliance', o.id);
     }
+  }
+}
+
+/**
+ * Whether the nation proposes an alliance to a Favoured Nation partner now that one is unlocked:
+ * a seeded chance per review, the scenario's `proposeAlliance` times its level's share (Creative
+ * all of it, Naive none). A nation bent on war (aggression 0.5 or more: Combative, Creative set on
+ * war) wants allies for war: only when the partner is at war, or it has a war target of its own,
+ * so that the pact covers its back.
+ */
+function wantsAlliance(s: GameState, p: Player, prof: AiProfile, other: NationId, strength: number): boolean {
+  if (prof.aggression >= 0.5) {
+    const partnerAtWar = s.players.some((o) => o.id !== 'crown' && o.id !== p.id && player(s, other).stance[o.id] === 'war');
+    if (!partnerAtWar && !bestWarTarget(s, p, prof, strength)) return false;
+  }
+  // The usual way at `proposeAlliance`; old friends after a long peace only at `proposeLongPeace`.
+  const coop = cooperationOf(s);
+  const chance = (tiesUnlocked(s, p.id, other) ? coop.proposeAlliance : coop.proposeLongPeace) * LEVEL_COOPERATION[p.ai ?? 'naive'].propose;
+  return chance > 0 && pairRandom(s, p.id, other, `${p.id} alliance wish ${s.turn}`) < chance;
+}
+
+/**
+ * A joint expedition (alliances.ts) with an ally, while there are Lost City Rumours left to find:
+ * a nation with its half of the cost plus its reserve and 1,000 gold proposes one at a seeded
+ * chance per review (the scenario's `jointExpedition` times the level's share of proposing
+ * alliances), when it has none out already.
+ */
+function jointExpedition(s: GameState, p: Player, prof: AiProfile): void {
+  const allies = alliesOf(s, p.id);
+  if (!allies.length || p.independence !== 'none' || !prof.scouting) return;
+  if (ownedUnitsView(s, p.id).some((u) => u.joint)) return;
+  const half = Math.ceil(allianceRules(s).expeditionCost / 2);
+  if (p.gold < half + prof.reserve + 1000 || !s.map.tiles.some((t) => t.lcr)) return;
+  const chance = cooperationOf(s).jointExpedition * LEVEL_COOPERATION[p.ai ?? 'naive'].propose;
+  for (const a of allies) {
+    if (expeditionProblem(s, p.id, a) || pairRandom(s, p.id, a, `${p.id} expedition ${s.turn}`) >= chance) continue;
+    proposeExpedition(s, p.id, a);
+    return;
+  }
+}
+
+/**
+ * Declaring independence together (confederation.ts): only when this nation is ready to declare
+ * now and an ally can too (a computer ally then answers by its own readiness), at a seeded chance
+ * per review, the scenario's `confederation` times the level's share of proposing alliances.
+ * Both being ready on the same review is rare, which keeps confederations rare between computers.
+ */
+function confederate(s: GameState, p: Player): void {
+  const allies = alliesOf(s, p.id);
+  if (!allies.length || !readyForIndependence(s, p.id)) return;
+  const chance = cooperationOf(s).confederation * LEVEL_COOPERATION[p.ai ?? 'naive'].propose;
+  for (const a of allies) {
+    if (confederationProblem(s, p.id, a) || pairRandom(s, p.id, a, `${p.id} confederation ${s.turn}`) >= chance) continue;
+    proposeConfederation(s, p.id, a);
+    return;
+  }
+}
+
+/** Turns a nation ready for independence may wait for an ally whose own plan is under way. */
+export const ALLY_WAIT_TURNS = 20;
+
+/**
+ * Before a nation declares independence alone (confederation.ts): it declares together with an ally
+ * that is ready too, or, at the scenario's `confederation` chance times its level's share (drawn
+ * once), waits up to ALLY_WAIT_TURNS for an ally that has taken up an independence plan. Returns
+ * whether it declared together or waits. Without the wait both allies had to become ready on the
+ * same turn, and no confederation ever formed between computer players.
+ */
+export function declareWithAlly(s: GameState, p: Player): boolean {
+  if (!s.treaties || !confederationOn(s)) return false;
+  const allies = alliesOf(s, p.id).filter((a) => player(s, a).independence === 'none');
+  if (!allies.length) return false;
+  for (const a of allies) {
+    if (confederationProblem(s, p.id, a) || !readyForIndependence(s, a, true)) continue;
+    track(p.id, 'independence:declared with an ally');
+    proposeConfederation(s, p.id, a);
+    if (confederationOf(s, p.id)) return true;
+  }
+  const memory = (p.aiMemory = p.aiMemory ?? {});
+  if (memory.allyWait === undefined) {
+    const planned = allies.find((a) => player(s, a).aiMemory?.independencePlan !== undefined);
+    const chance = cooperationOf(s).confederation * LEVEL_COOPERATION[p.ai ?? 'naive'].propose;
+    const waits = !!planned && pairRandom(s, p.id, planned, `${p.id} wait for ally ${s.turn}`) < chance;
+    memory.allyWait = waits ? s.turn : s.turn - ALLY_WAIT_TURNS;
+    if (waits) track(p.id, 'independence:waits for an ally');
+  }
+  return s.turn - memory.allyWait < ALLY_WAIT_TURNS;
+}
+
+/** Each level's share of COOPERATION's company chances: Creative founds and buys most readily. */
+export const LEVEL_COMPANIES: Record<AiLevel, number> = { naive: 0, competent: 0.7, combative: 0.4, creative: 1 };
+
+/**
+ * Chartered companies (companies.ts): a nation with gold to spare founds a company it may charter
+ * (the capital and `foundMargin` of it again, plus its reserve), or buys five shares in one that
+ * exists (their price, plus its reserve and `sharesMargin` more), each at a seeded chance per review: the scenario's
+ * `foundCompany` and `buyShares` times the level's share. Not before the turn it would start wars,
+ * nor once it has declared independence.
+ */
+function companyAffairs(s: GameState, p: Player, prof: AiProfile): void {
+  if (p.independence !== 'none' || s.turn <= aiTurn(s, 50)) return;
+  const coop = cooperationOf(s);
+  const share = LEVEL_COMPANIES[p.ai ?? 'naive'];
+  if (!share) return;
+  for (const entry of companyCharters(s)) {
+    const capital = companyRules(s).capital;
+    if (foundProblem(s, p.id, entry.id) || p.gold < capital * (1 + coop.foundMargin) + prof.reserve) continue;
+    if (pairRandom(s, p.id, entry.id, `found ${s.turn}`) >= coop.foundCompany * share) continue;
+    foundCompany(s, p.id, entry.id);
+    return;
+  }
+  for (const co of companies(s)) {
+    if (p.gold < sharePrice(s, co) * 5 + prof.reserve + coop.sharesMargin || sharesProblem(s, p.id, co.id, 5)) continue;
+    if (pairRandom(s, p.id, co.id, `shares ${s.turn}`) >= coop.buyShares * share) continue;
+    buyShares(s, p.id, co.id, 5);
+    return;
+  }
+}
+
+/**
+ * Joining an ally's war, which the defensive pact does not oblige (C4): a computer ally joins
+ * when it gains, that is when a colony of the enemy near its own makes a target at least
+ * `joinWar` times as good as one it would attack on its own. Never against a Favoured Nation or a
+ * friend's ally, never while at war already with someone else, and not before the turn it would
+ * start wars of its own.
+ */
+function joinAlliesWars(s: GameState, p: Player, prof: AiProfile, strength: number, army: number): void {
+  if (!allianceOf(s, p.id) || p.independence !== 'none' || army < 2 || s.turn <= aiTurn(s, 50) || prof.aggression <= 0) return;
+  if (Object.entries(p.stance).some(([o, st]) => st === 'war' && o !== 'crown')) return;
+  const enemies = new Set<NationId>();
+  for (const a of alliesOf(s, p.id)) {
+    for (const [o, st] of Object.entries(player(s, a).stance)) if (st === 'war' && o !== 'crown' && o !== p.id) enemies.add(o as NationId);
+  }
+  const grid = gridOf(s);
+  const memory = (p.aiMemory = p.aiMemory ?? {});
+  for (const enemy of enemies) {
+    const e = s.players.find((o) => o.id === enemy);
+    if (!e || e.independence !== 'none' || e.finished || isFavoured(s, p.id, enemy) || warOnFriend(s, p.id, enemy)) continue;
+    let best: Colony | null = null;
+    let bestScore = 0;
+    for (const c of Object.values(s.colonies)) {
+      if (c.owner !== enemy || !ownColonies(s, p).some((o) => grid.distance(o.x, o.y, c.x, c.y) <= 10)) continue;
+      const score = strength / (colonyDefence(s, c) + 1);
+      if (score > bestScore) [best, bestScore] = [c, score];
+    }
+    if (!best || bestScore < cooperationOf(s).joinWar * (2.5 / prof.aggression)) continue;
+    track(p.id, 'diplomacy:joined an ally\'s war');
+    startWar(s, p.id, enemy);
+    memory.lastWar = s.turn;
+    memory.warTarget = best.id;
+    return;
   }
 }
 
@@ -221,9 +395,11 @@ export function bestWarTarget(s: GameState, p: Player, prof: AiProfile, strength
   for (const c of Object.values(s.colonies)) {
     if (c.owner === p.id || c.owner === 'crown' || p.stance[c.owner] === 'war') continue;
     if (!favoured && isFavoured(s, p.id, c.owner)) continue;
+    // Allies, like Favoured Nations, are weighed only to decide on leaving; a friend's allies never.
+    if (s.treaties && (isAllied(s, p.id, c.owner) ? !favoured : warOnFriend(s, p.id, c.owner))) continue;
     if (memory.warPlan && memory.warPlan.nation === c.owner && s.turn < memory.warPlan.turn) continue;
     const enemy = s.players.find((o) => o.id === c.owner);
-    if (!enemy || enemy.independence !== 'none') continue;
+    if (!enemy || enemy.independence !== 'none' || enemy.kind === 'company') continue;
     const hostile = isHostile(s, p.id, c.owner);
     const aggression = hostile ? Math.max(prof.aggression, HOSTILE_AGGRESSION) : prof.aggression;
     if (aggression <= 0) continue;
@@ -251,6 +427,8 @@ function reconsiderFavoured(s: GameState, p: Player, prof: AiProfile, strength: 
   const memory = (p.aiMemory = p.aiMemory ?? {});
   const missions = new Set(Object.values(s.settlements).filter((st) => st.mission === p.id).map((st) => st.tribe));
   for (const o of partners) {
+    // Allies are not dropped over the natives: that would mean leaving the alliance.
+    if (isAllied(s, p.id, o)) continue;
     const grievance = s.tribes.some((t) => missions.has(t.id) && t.stance[p.id] !== 'war' && t.stance[o] === 'war');
     if (grievance && pairRandom(s, p.id, o, `${p.id} natives ${s.turn}`) < NATIVE_GRIEVANCE_CHANCE) {
       track(p.id, 'diplomacy:favoured nation cancelled over natives');
@@ -262,6 +440,16 @@ function reconsiderFavoured(s: GameState, p: Player, prof: AiProfile, strength: 
   if (bestWarTarget(s, p, prof, strength)?.ready) return;
   const target = bestWarTarget(s, p, prof, strength, true);
   if (!target || !isFavoured(s, p.id, target.c.owner) || target.score < 1.5 * (2.5 / target.aggression)) return;
+  if (s.treaties && isAllied(s, p.id, target.c.owner)) {
+    // Leaving an alliance costs more: only for a target three times as good as the level of war,
+    // and not in the alliance's first 40 turns.
+    const since = allianceOf(s, p.id)!.start;
+    if (target.score < 3 * (2.5 / target.aggression) || s.turn - since < 40) return;
+    track(p.id, 'diplomacy:alliance left for war');
+    leaveAlliance(s, p.id);
+    memory.warPlan = { nation: target.c.owner, turn: s.turn + WAR_AFTER_CANCEL };
+    return;
+  }
   track(p.id, 'diplomacy:favoured nation cancelled for war');
   cancelFavoured(s, p.id, target.c.owner);
   memory.warPlan = { nation: target.c.owner, turn: s.turn + WAR_AFTER_CANCEL };

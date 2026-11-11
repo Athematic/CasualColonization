@@ -7,6 +7,7 @@ import { random, weightedPick } from './rng.js';
 import { FATHERS, fatherCost, type FatherCategory, type FatherId } from './rules/fathers.js';
 import { aiTurn, councilOf, nationOf, scenarioOf, term } from './scenarios/index.js';
 import { memberEffects } from './scenarios/modifiers.js';
+import { shareBells } from './alliances.js';
 import type { GameState, Player } from './types.js';
 
 export function hasFather(s: GameState, nation: Player['id'], id: FatherId): boolean {
@@ -46,6 +47,10 @@ const AI_PREFERENCE: FatherId[] = [
 
 /** Collects liberty bells for the Continental Congress; called once per turn for each player. */
 export function processCongress(s: GameState, p: Player): void {
+  // A chartered company has no Congress (companies.ts).
+  if (p.kind === 'company') return;
+  // Allies' Congresses share a part of each other's bells (alliances.ts, C5).
+  if (s.treaties) shareBells(s, p.id);
   if (!p.currentFather) {
     const offered = Object.values(p.fatherOffer) as FatherId[];
     if (!offered.length) return;

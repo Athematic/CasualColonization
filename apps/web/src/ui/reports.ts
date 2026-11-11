@@ -527,14 +527,14 @@ const HISTORY_FILTERS: { id: string; name: string; kinds: HistoryKind[] }[] = [
   { id: 'all', name: 'Everything', kinds: [] },
   { id: 'colonies', name: 'Colonies', kinds: ['colony', 'captured'] },
   { id: 'congress', name: '{councilShort}', kinds: ['father', 'independence'] },
-  { id: 'diplomacy', name: 'Diplomacy', kinds: ['war', 'peace', 'trade', 'favoured', 'cancel', 'tribe'] },
+  { id: 'diplomacy', name: 'Diplomacy', kinds: ['war', 'peace', 'trade', 'favoured', 'alliance', 'company', 'cancel', 'tribe'] },
   { id: 'treasure', name: 'Treasure and conquest', kinds: ['treasure', 'burned'] },
   { id: 'crown', name: '{Crown}', kinds: ['crown'] },
   { id: 'events', name: 'Events', kinds: ['event'] },
 ];
 
 const HISTORY_MARKS: Record<HistoryKind, string> = {
-  colony: '⌂', captured: '⚑', father: '★', war: '⚔', peace: '☮', trade: '⇄', favoured: '♦', cancel: '✕', treasure: '◆', burned: '🔥', independence: '✦', tribe: '⚔', crown: '♛', event: '✸',
+  colony: '⌂', captured: '⚑', father: '★', war: '⚔', peace: '☮', trade: '⇄', favoured: '♦', alliance: '⛨', company: '⚓', cancel: '✕', treasure: '◆', burned: '🔥', independence: '✦', tribe: '⚔', crown: '♛', event: '✸',
 };
 
 let historyFilter = 'all';

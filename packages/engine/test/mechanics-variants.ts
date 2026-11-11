@@ -30,5 +30,5 @@ variant('test-no-custom-house', { customHouse: false });
 variant('test-no-missions', { missions: false });
 variant('test-all-off', {
   taxes: false, boycotts: false, demands: false, royalWars: false, ref: false,
-  independence: false, favoured: false, charter: false, customHouse: false, missions: false,
+  independence: false, favoured: false, charter: false, customHouse: false, missions: false, alliances: false, companies: false,
 });

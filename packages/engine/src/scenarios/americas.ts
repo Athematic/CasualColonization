@@ -22,6 +22,7 @@ import { SOUTH_AMERICA_PEOPLES } from '../maps/south-america.js';
 import { AMERICAS_CALENDAR } from './calendar.js';
 import { AMERICAS_TEXT } from './terms.js';
 import type { GeneratorSettings, NationEntry, RumourEntry, Scenario } from './types.js';
+import { HUDSONS_BAY, MISSISSIPPI, WEST_INDIA } from './companies.js';
 
 /**
  * The generated New World (mapgen.ts): one continent a little west of the middle, with Europe across
@@ -137,6 +138,8 @@ export const AMERICAS: Scenario = {
     default: 'alternative',
     max: 8,
     crown: entry('crown'),
+    // Chartered companies (companies.ts), with `mechanics.companies`.
+    companies: [HUDSONS_BAY, WEST_INDIA, MISSISSIPPI],
   },
   peoples: {
     ids: [...TRIBE_ORDER],
@@ -170,9 +173,13 @@ export const AMERICAS: Scenario = {
     charter: COLONY_CHARTER,
     customHouse: true,
     missions: true,
+    alliances: true,
+    companies: true,
+    confederation: true,
   },
-  // Winning the War of Independence ends the game; otherwise it ends after autumn 1850.
-  victory: [{ id: 'independence-war' }, { id: 'time' }],
+  // Winning the War of Independence ends the game; otherwise it ends after autumn 1850, won by an
+  // alliance holding most of the score together, or else by the highest score.
+  victory: [{ id: 'independence-war' }, { id: 'concord' }, { id: 'time' }],
   rumours: AMERICAS_RUMOURS,
   // No `difficulty` or `score`: the Americas play by the engine's own DIFFICULTY and SCORE_WEIGHTS.
   // The Americas' terms are the defaults every scenario starts from (scenarios/terms.ts).

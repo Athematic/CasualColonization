@@ -18,7 +18,7 @@
 import { BUILDING_ORDER } from '../rules/buildings.js';
 import { FATHER_CATEGORIES, type FatherId } from '../rules/fathers.js';
 import { GOODS, type GoodId } from '../rules/goods.js';
-import { NATIONS, type NationId } from '../rules/nations.js';
+import { NATIONS, type CompanyId, type NationId } from '../rules/nations.js';
 import { SETTLEMENT_KINDS } from '../rules/natives.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { TerrainId } from '../rules/terrain.js';
@@ -27,6 +27,7 @@ import { CARIBBEAN_PEOPLES } from '../maps/caribbean.js';
 import { AMERICAS, AMERICAS_GENERATOR } from './americas.js';
 import type { Calendar } from './calendar.js';
 import type { GeneratorSettings, NationEntry, Scenario } from './types.js';
+import { COURLAND_COMPANY, DARIEN, WEST_INDIA } from './companies.js';
 
 const without = <T>(list: readonly T[], ...drop: T[]): T[] => list.filter((x) => !drop.includes(x));
 
@@ -82,7 +83,7 @@ export const CARIBBEAN_GENERATOR: GeneratorSettings = {
 };
 
 /** The home ports and their markets in this century. Factors as in rules/ports.ts: 10–30%, no furs or coats. */
-const PORTS: Record<Exclude<NationId, 'portugal' | 'sweden' | 'russia' | 'crown'>, PortEntry> = {
+const PORTS: Record<Exclude<NationId, 'portugal' | 'sweden' | 'russia' | 'crown' | CompanyId>, PortEntry> = {
   // London: the great sugar and tobacco market, protected by the duties on foreign sugar.
   england: { name: 'London', market: { prices: { sugar: 1.15, tobacco: 1.2, silver: 0.9 }, depth: { cotton: 1.5, tools: 1.5 } } },
   // La Rochelle: the sugar of the Antilles; France banned colonial rum in 1713 to protect its brandy.
@@ -313,6 +314,8 @@ export const CARIBBEAN: Scenario = {
     default: 'alternative',
     max: ALTERNATIVE.length,
     crown: { ...AMERICAS.nations.crown },
+    // The companies of the Caribbean century: the Darien scheme, the Dutch WIC, Courland's Tobago.
+    companies: [DARIEN, WEST_INDIA, COURLAND_COMPANY],
   },
   peoples: {
     // North to south: the Arawak of the Greater Antilles, the Kalinago of the Lesser Antilles, the
@@ -334,6 +337,7 @@ export const CARIBBEAN: Scenario = {
     pace: 0.35,
     // Settlers sail to other islands when theirs is full.
     islands: true,
+    cooperation: { proposeAlliance: 0.03, foundCompany: 0.12, buyShares: 0.25, foundMargin: 0, sharesMargin: 500 },
     goods: {
       trade: ['silver', 'sugar', 'tobacco', 'cotton', 'ore', 'rum', 'cigars', 'cloth', 'horses'],
       export: ['sugar', 'tobacco', 'cotton', 'ore', 'silver', 'rum', 'cigars', 'cloth'],
@@ -355,8 +359,15 @@ export const CARIBBEAN: Scenario = {
     charter: { base: 150, cap: 3000 },
     customHouse: true,
     missions: true,
+    alliances: true,
+    companies: true,
   },
-  victory: [{ id: 'time' }],
+  // A century of trading companies and small powers: alliances need only a trade agreement (no
+  // Favoured Nation forms between the computer players here) and half a century of peace, and
+  // companies are cheaper and founded more readily than in the Americas.
+  alliances: { requires: 'trade', peaceYears: { base: 50, spread: 10 }, volume: { min: 0, max: 0 } },
+  companyRules: { capital: 1000, reserve: 400 },
+  victory: [{ id: 'concord' }, { id: 'time' }],
   rumours: AMERICAS.rumours,
   // A century of trade: wealth and trade agreements weigh more than in the Americas (1/800, 3, 4).
   score: { wealth: 1 / 500, tradeAgreement: 5, favoured: 6 },

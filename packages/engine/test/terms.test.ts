@@ -167,7 +167,7 @@ describe('New game options', () => {
     expect(o.nations.real).toEqual(['england', 'france', 'netherlands', 'spain']);
     expect(o.rivals).toBe('alternative');
     expect(o.charter).toEqual({ base: 100, cap: 2000 });
-    expect(o.victory).toEqual(['Independence by war', 'Highest score when time runs out']);
+    expect(o.victory).toEqual(['Independence by war', 'An alliance holding most of the score at the end wins together', 'Highest score when time runs out']);
   });
 
   it('follow another scenario: its maps, no generated map, its calendar, no charter', () => {

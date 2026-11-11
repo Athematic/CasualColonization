@@ -21,7 +21,10 @@ import { answerNativeDemand } from './braves.js';
 import { buyFromSettlement, buyLand, denounceMission, establishMission, giftToTribe, inciteTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
 import { chooseFather } from './fathers.js';
 import { proposePeace, startWar } from './diplomacy.js';
-import { answerProposal, cancelFavoured, cancelTrade, proposeFavoured, proposeTrade } from './relations.js';
+import { answerProposal, cancelFavoured, cancelTrade, proposeAlliance, proposeExpedition, proposeFavoured, proposeTrade } from './relations.js';
+import { leaveAlliance, tradeInColony } from './alliances.js';
+import { buyShares, foundCompany } from './chartered.js';
+import { proposeConfederation } from './confederation.js';
 import { abandonColony, retire } from './leaving.js';
 import { declareIndependence } from './independence.js';
 import { answerDemand } from './crown.js';
@@ -105,6 +108,19 @@ export type Command =
   | { type: 'answerProposal'; nation: NationId; accept: boolean }
   | { type: 'cancelTrade'; nation: NationId }
   | { type: 'cancelFavoured'; nation: NationId }
+  /** Proposes an alliance to `nation`, or invites it to join yours (alliances.ts). */
+  | { type: 'proposeAlliance'; nation: NationId }
+  | { type: 'leaveAlliance' }
+  /** Proposes a joint expedition to an ally: each pays half, the gold it finds is shared (alliances.ts). */
+  | { type: 'proposeExpedition'; nation: NationId }
+  /** Proposes to an ally that both declare independence now, together (confederation.ts). */
+  | { type: 'proposeConfederation'; nation: NationId }
+  /** Founds a chartered company from the scenario's list, or buys new shares in one (companies.ts). */
+  | { type: 'foundCompany'; company: NationId }
+  | { type: 'buyShares'; company: NationId; count: number }
+  /** A ship or wagon train in an ally's colony sells goods to it, or buys goods from it (alliances.ts). */
+  | { type: 'sellInColony'; carrierId: string; good: GoodId; amount: number }
+  | { type: 'buyInColony'; carrierId: string; good: GoodId; amount: number }
   | { type: 'giftTribe'; tribe: TribeId; gold: number }
   | { type: 'declareIndependence' }
   /** Abandons a small colony without a stockade (leaving.ts). */
@@ -396,6 +412,31 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'cancelFavoured':
         text = cancelFavoured(s, nation, cmd.nation);
+        break;
+      case 'proposeAlliance':
+        text = proposeAlliance(s, nation, cmd.nation);
+        break;
+      case 'leaveAlliance':
+        text = leaveAlliance(s, nation);
+        break;
+      case 'proposeExpedition':
+        text = proposeExpedition(s, nation, cmd.nation);
+        break;
+      case 'proposeConfederation':
+        text = proposeConfederation(s, nation, cmd.nation);
+        break;
+      case 'foundCompany':
+        track(nation, 'cmd:foundCompany');
+        text = foundCompany(s, nation, cmd.company);
+        break;
+      case 'buyShares':
+        track(nation, 'cmd:buyShares');
+        text = buyShares(s, nation, cmd.company, cmd.count);
+        break;
+      case 'sellInColony':
+      case 'buyInColony':
+        ownUnit(s, nation, cmd.carrierId);
+        text = tradeInColony(s, nation, cmd.carrierId, cmd.good, cmd.amount, cmd.type === 'buyInColony');
         break;
       case 'giftTribe':
         text = giftToTribe(s, nation, cmd.tribe, cmd.gold);

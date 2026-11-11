@@ -22,7 +22,7 @@ describe('computer players with every mechanic off', () => {
       expect(p.royal?.lastWar).toBeUndefined();
       expect(p.independence).toBe('none');
     }
-    expect(Object.values(s.relations).some((r) => r.favoured)).toBe(false);
+    expect((s.treaties ?? []).some((t) => t.kind === 'favoured' || t.kind === 'alliance')).toBe(false);
     expect(Object.values(s.settlements).some((st) => st.mission)).toBe(false);
     expect(Object.values(s.colonies).some((c) => c.buildings.customHouse > 0)).toBe(false);
     expect(Object.values(s.units).some((u) => u.role === 'missionary')).toBe(false);

@@ -160,7 +160,8 @@ export function sellToMarket(s: GameState, p: Player, good: GoodId, amount: numb
 
 function maybeRaiseTax(s: GameState, p: Player, gross: number, good: GoodId): void {
   const mechanics = mechanicsOf(s);
-  if (!mechanics.taxes) return;
+  // A chartered company has no Crown to tax it (companies.ts).
+  if (!mechanics.taxes || p.kind === 'company') return;
   const rules = difficultyOf(s, p);
   if (p.tax >= rules.taxCeiling || gross < 100 || p.pendingTax) return;
   const chance = Math.min(0.12, 0.015 + s.turn / 3000) * rules.taxChance;

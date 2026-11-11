@@ -1,5 +1,6 @@
 import { gridOf } from './grid.js';
 import { createUnit, message, player, reveal, tileAt, unitPosition } from './queries.js';
+import { splitFind } from './alliances.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { randInt, weightedPick } from './rng.js';
@@ -74,7 +75,8 @@ export function resolveRumour(s: GameState, u: Unit): void {
       break;
     case 'smallTreasure': {
       const gold = (50 + randInt(s, 150)) * (expert ? 2 : 1);
-      p.gold += gold;
+      // A joint expedition shares what it finds (alliances.ts).
+      p.gold += u.joint ? splitFind(s, u, gold) : gold;
       message(s, term(s, 'rumour.smallTreasure', { gold }), u.owner, pos);
       break;
     }
@@ -84,7 +86,7 @@ export function resolveRumour(s: GameState, u: Unit): void {
       break;
     case 'treasure': {
       const gold = 300 + randInt(s, 700);
-      p.gold += gold;
+      p.gold += u.joint ? splitFind(s, u, gold) : gold;
       message(s, term(s, 'rumour.treasure', { gold }), u.owner, pos);
       noteHistory(s, 'treasure', [u.owner], term(s, 'rumour.treasure.history', { gold }), { secret: true, at: pos });
       break;

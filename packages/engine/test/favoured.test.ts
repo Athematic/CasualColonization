@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  hasTradeAgreement,
   applyCommand,
   buyPrice,
   colonySiteProblem,
@@ -165,7 +166,7 @@ describe('trade agreements and foreign colony stops', () => {
     expect(applyCommand(s, { type: 'createRoute', name: 'x', stops: [{ at: home.id, load: [], unload: [] }, { at: quebec.id, load: [], unload: [] }] }).ok).toBe(false);
     const r = ok(s, { type: 'proposeTrade', nation: 'france' });
     expect(r.text).toMatch(/trade agreement/);
-    expect(relation(s, 'england', 'france').trade).toBe(true);
+    expect(hasTradeAgreement(s, 'england', 'france')).toBe(true);
 
     fr.gold = 10_000;
     quebec.goods.furs = 0;
@@ -236,10 +237,10 @@ describe('trade agreements and foreign colony stops', () => {
     const rel = relation(s, 'england', 'france');
     rel.hostileUntil = s.turn + 20;
     expect(ok(s, { type: 'proposeTrade', nation: 'france' }).text).toMatch(/turns down/);
-    expect(rel.trade).toBeUndefined();
+    expect(hasTradeAgreement(s, 'england', 'france')).toBe(false);
     delete rel.hostileUntil;
     ok(s, { type: 'proposeTrade', nation: 'france' });
-    expect(rel.trade).toBe(true);
+    expect(hasTradeAgreement(s, 'england', 'france')).toBe(true);
   });
 });
 
@@ -349,8 +350,8 @@ describe('Favoured Nation', () => {
     const r = ok(s, { type: 'cancelFavoured', nation: 'france' });
     expect(r.text).toMatch(/cancelled/);
     const rel = relation(s, 'england', 'france');
-    expect(rel.favoured).toBeUndefined();
-    expect(rel.trade).toBeUndefined();
+    expect(isFavoured(s, 'england', 'france')).toBe(false);
+    expect(hasTradeAgreement(s, 'england', 'france')).toBe(false);
     expect(near.cargo.furs).toBeUndefined();
     expect(quebec.goods.furs).toBe(60);
     expect(theirs.cargo.sugar).toBeUndefined();
@@ -394,8 +395,8 @@ describe('Favoured Nation', () => {
     home.liberty = 10_000;
     ok(s, { type: 'declareIndependence' });
     const rel = relation(s, 'england', 'france');
-    expect(rel.favoured).toBeUndefined();
-    expect(rel.trade).toBe(true);
+    expect(isFavoured(s, 'england', 'france')).toBe(false);
+    expect(hasTradeAgreement(s, 'england', 'france')).toBe(true);
     expect(rel.waitUntil).toBeUndefined();
     expect(rel.hostileUntil).toBeUndefined();
     expect(near.cargo.furs).toBe(60);
@@ -426,7 +427,7 @@ describe('Favoured Nation between two people (hot seat)', () => {
     expect(s.players[s.current].id).toBe('france');
     ok(s, { type: 'answerProposal', nation: 'england', accept: true });
     expect(isFavoured(s, 'england', 'france')).toBe(true);
-    expect(rel.trade).toBe(true);
+    expect(hasTradeAgreement(s, 'england', 'france')).toBe(true);
 
     const near = createUnit(s, 'england', 'wagonTrain', { kind: 'map', ...besideLand(s, quebec) });
     near.cargo = { furs: 60 };
@@ -445,7 +446,7 @@ describe('Favoured Nation between two people (hot seat)', () => {
     ok(s, { type: 'endTurn' });
     ok(s, { type: 'answerProposal', nation: 'england', accept: false });
     const rel = relation(s, 'england', 'france');
-    expect(rel.trade).toBeUndefined();
+    expect(hasTradeAgreement(s, 'england', 'france')).toBe(false);
     expect(rel.proposal).toBeUndefined();
     expect(s.messages.some((m) => m.to === 'england' && /turns down/.test(m.text))).toBe(true);
   });
