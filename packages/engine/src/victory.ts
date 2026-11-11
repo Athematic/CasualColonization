@@ -14,12 +14,19 @@
  *   members together hold more than `params.share` of the total score (default CONCORD_SHARE)
  *   wins together; its members are the winners, ranked by their own score. List it before `time`.
  *
+ * - `prosperity` (Beta 2, docs/design/native-partners.md N10, prosperity.ts): at the end of the
+ *   calendar, every nation at peace with the peoples it has met for the last 30 years, that never
+ *   burned a settlement, holds treaties with at least half of them and has at least 0.8 of the best
+ *   score wins; `gameOver.partners` names its partner peoples. List it after `concord`, so an
+ *   alliance that also qualifies wins as an alliance, and before `time`.
+ *
  * Kinds are pure functions of the state and draw no random numbers. `gameOver.winners` lists every
  * winner, best first; `gameOver.winner` is the first of them, for code that knows one winner only.
  */
 import { finalScores, scoreBreakdown } from './score.js';
 import { calendarOf, lastTurn, nationOf, scenarioOf, term } from './scenarios/index.js';
 import { treatyNations } from './treaties.js';
+import { peopleList, prosperityParams, prosperityWinners } from './prosperity.js';
 import type { NationId } from './rules/nations.js';
 import type { GameState, Player } from './types.js';
 import { removeUnit, unitList } from './unitindex.js';
@@ -103,6 +110,23 @@ registerVictory({
     const names = winners.map((n) => nationOf(s, n).name);
     const allies = `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
     return { turn: s.turn, reason: term(s, 'gameOver.concord', { year: cal.end.year, allies }), winner: winners[0], winners, scores };
+  },
+});
+
+registerVictory({
+  id: 'prosperity',
+  name: 'Prosperity in peace and partnership with the native peoples',
+  check(s, moment, params) {
+    if (moment.kind !== 'round') return null;
+    const cal = calendarOf(s);
+    if (s.turn < lastTurn(cal)) return null;
+    const scores = finalScores(s);
+    const won = prosperityWinners(s, scores, prosperityParams(params));
+    if (!won) return null;
+    const names = won.winners.map((n) => nationOf(s, n).name);
+    const winners = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
+    const reason = term(s, 'gameOver.prosperity', { year: cal.end.year, winners, partners: peopleList(won.partners), win: names.length > 1 ? 'win together' : 'wins' });
+    return { turn: s.turn, reason, winner: won.winners[0], winners: won.winners, partners: won.partners, scores };
   },
 });
 

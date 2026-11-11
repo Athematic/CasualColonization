@@ -111,7 +111,8 @@ describe('transition pieces join without steps or wedges', () => {
         }
       }
     }
-  });
+    // 60 random maps take about 3 s alone on a loaded machine; the 5 s default timed out in full runs.
+  }, 30_000);
 
   it('draws an L-shaped concave corner and a U-shaped inlet with filleted corners and a straight band', () => {
     const g: TerrainId = 'grassland';

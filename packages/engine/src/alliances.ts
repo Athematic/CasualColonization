@@ -27,7 +27,7 @@ import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, scenarioOf, tu
 import type { AllianceRules, Cooperation, YearsAround } from './scenarios/types.js';
 import type { AiLevel } from './ai/profiles.js';
 import { track } from './telemetry.js';
-import { addTreaty, bound, endTreaty, treatyNations } from './treaties.js';
+import { addTreaty, bound, endTreaty, nationParty, sameParty, treatyNations } from './treaties.js';
 import type { AllianceTerms, GameState, Treaty, Unit } from './types.js';
 import { removeUnit, setUnitLoc, colonyList } from './unitindex.js';
 import type { GoodId } from './rules/goods.js';
@@ -54,9 +54,12 @@ export const ALLIANCE_RULES: AllianceRules = {
  * How readily the computer players cooperate, for the most cooperative level (Creative); the
  * others take LEVEL_COOPERATION's share. A scenario's `ai.cooperation` is merged over it. Tuned for
  * computer-only tournaments to give an alliance in about one game in four and a concord victory
- * about once in 30–40 games (docs/design/cooperation.md, C11).
+ * about once in 30–40 games (docs/design/cooperation.md, C11). `confederation` and
+ * `confederationReadiness` were 0.6 and 0.65 in Beta 1; Beta 2's peoples made Creative nations
+ * readier to declare together (a confederation in 15 of 192 all-Creative games against Beta 1's 7),
+ * so step 6 brought them back to about one in 30 (native-partners.md section 15).
  */
-export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace: 0.001, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1, foundMargin: 0.5, sharesMargin: 1500, jointExpedition: 0.05, confederation: 0.6, confederationReadiness: 0.65 };
+export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace: 0.001, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1, foundMargin: 0.5, sharesMargin: 1500, jointExpedition: 0.05, confederation: 0.3, confederationReadiness: 0.8, proposePeopleTrade: 0.5, acceptPeopleOffer: 0.9, proposeLandUse: 0.5, proposeExchange: 0.3, proposeDefence: 0.3 };
 
 /**
  * Each level's share of COOPERATION's chances: Creative seeks alliances out, Naive never proposes.
@@ -64,12 +67,22 @@ export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace
  * independence with an ally; only Creative, which seizes the chance, takes it (the others answer
  * by their usual readiness: with the smaller margin for every level, four-level tournaments had a
  * confederation in 7 of 48 games, mostly Competent with Combative, and four of the seven wars were lost).
+ * `people` and `peopleAccept` (Beta 2, native-partners.md N11): the level's share of
+ * `proposePeopleTrade` and `acceptPeopleOffer`. Creative is the peoples' main partner, Competent
+ * proposes too, Combative where the trade pays, Naive only accepts what a people offers.
+ * `land` (step 2): the level's share of `proposeLandUse`: Creative and Competent lease land (Competent
+ * buys it today), Combative takes it instead, Naive never proposes.
+ * `exchange` (step 3): the level's share of `proposeExchange`: Creative seeks a cultural exchange,
+ * Competent at 0.6, Combative and Naive never propose one.
+ * `defence` (step 4): the level's share of `proposeDefence`: Creative seeks a mutual defence pact,
+ * Competent at 0.5, Combative and Naive never propose one (Simon, 11 November 2026: Combative,
+ * which makes no land use or exchange for the ladder, makes no defence pacts).
  */
-export const LEVEL_COOPERATION: Record<AiLevel, { propose: number; accept: number; together: number }> = {
-  naive: { propose: 0, accept: 0.5, together: 0 },
-  competent: { propose: 0.6, accept: 0.8, together: 0 },
-  combative: { propose: 0.5, accept: 0.7, together: 0 },
-  creative: { propose: 1, accept: 1, together: 1 },
+export const LEVEL_COOPERATION: Record<AiLevel, { propose: number; accept: number; together: number; people: number; peopleAccept: number; land: number; exchange: number; defence: number }> = {
+  naive: { propose: 0, accept: 0.5, together: 0, people: 0, peopleAccept: 0.8, land: 0, exchange: 0, defence: 0 },
+  competent: { propose: 0.6, accept: 0.8, together: 0, people: 0.8, peopleAccept: 1, land: 0.8, exchange: 0.6, defence: 0.5 },
+  combative: { propose: 0.5, accept: 0.7, together: 0, people: 0.5, peopleAccept: 0.7, land: 0, exchange: 0, defence: 0 },
+  creative: { propose: 1, accept: 1, together: 1, people: 1, peopleAccept: 1, land: 1, exchange: 1, defence: 1 },
 };
 
 /** The game's cooperation: the scenario's `ai.cooperation` over COOPERATION. */
@@ -251,7 +264,7 @@ export function aiAcceptsAlliance(s: GameState, ai: NationId, from: NationId): b
 export function makeAlliance(s: GameState, a: NationId, b: NationId): string {
   const existing = allianceOf(s, a) ?? allianceOf(s, b);
   const newcomer = existing ? (bound(existing, a) ? b : a) : b;
-  if (existing) existing.parties.push({ kind: 'nation', id: newcomer });
+  if (existing) existing.parties.push(nationParty(newcomer));
   else addTreaty(s, 'alliance', [relation(s, a, b).a, relation(s, a, b).b], { ...ALLIANCE_TERMS });
   const t = allianceOf(s, a)!;
   shareExplored(s, treatyNations(t));
@@ -289,8 +302,9 @@ export function leaveAlliance(s: GameState, by: NationId, war?: NationId): strin
   if (!war) track(by, 'cmd:leaveAlliance');
   track(by, 'diplomacy:alliance left');
   const former = treatyNations(t).filter((n) => n !== by);
-  t.parties = t.parties.filter((p) => !(p.kind === 'nation' && p.id === by));
-  (t.left = t.left ?? []).push({ party: { kind: 'nation', id: by }, turn: s.turn });
+  const leaver = nationParty(by);
+  t.parties = t.parties.filter((p) => !sameParty(p, leaver));
+  (t.left = t.left ?? []).push({ party: leaver, turn: s.turn });
   if (t.parties.length < 2) endTreaty(s, t, war ? 'war' : 'left', by);
   const rules = allianceRules(s);
   for (const o of former) {

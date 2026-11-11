@@ -18,6 +18,7 @@ import {
 } from './europe.js';
 import { boardShip, leaveShip, moveUnit, setDestination, setRoadTo, startImprovement } from './movement.js';
 import { answerNativeDemand } from './braves.js';
+import { proposePeopleTreaty } from './peopletreaties.js';
 import { buyFromSettlement, buyLand, denounceMission, establishMission, giftToTribe, inciteTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
 import { chooseFather } from './fathers.js';
 import { proposePeace, startWar } from './diplomacy.js';
@@ -38,7 +39,7 @@ import type { NationId, TribeId } from './rules/nations.js';
 import type { RoleId, UnitTypeId } from './rules/units.js';
 import { endTurn } from './turn.js';
 import { assignRoute, createRoute, deleteRoute, editRoute, unassignRoute } from './routes.js';
-import type { BuildTarget, GameState, ImprovementKind, Job, RouteStop } from './types.js';
+import type { BuildTarget, GameState, ImprovementKind, Job, PeopleTreatyKind, RouteStop } from './types.js';
 import { removeUnit, unitList } from './unitindex.js';
 
 export type Command =
@@ -122,6 +123,8 @@ export type Command =
   | { type: 'sellInColony'; carrierId: string; good: GoodId; amount: number }
   | { type: 'buyInColony'; carrierId: string; good: GoodId; amount: number }
   | { type: 'giftTribe'; tribe: TribeId; gold: number }
+  /** Proposes a treaty to a native people, which answers at once (peopletreaties.ts); a trade treaty when `kind` is left out. */
+  | { type: 'proposePeopleTreaty'; people: TribeId; kind?: PeopleTreatyKind }
   | { type: 'declareIndependence' }
   /** Abandons a small colony without a stockade (leaving.ts). */
   | { type: 'abandonColony'; colonyId: string }
@@ -440,6 +443,9 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'giftTribe':
         text = giftToTribe(s, nation, cmd.tribe, cmd.gold);
+        break;
+      case 'proposePeopleTreaty':
+        text = proposePeopleTreaty(s, nation, cmd.people, cmd.kind ?? 'people-trade');
         break;
       case 'abandonColony':
         ownColony(s, nation, cmd.colonyId);

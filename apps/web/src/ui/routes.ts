@@ -7,9 +7,12 @@ import {
   goodsOf,
   isCoastal,
   isForeignStop,
+  isSettlementStop,
   isShip,
   MAX_ROUTE_STOPS,
   nationOf,
+  partnerSettlements,
+  peopleTreatyOn,
   portName,
   portOf,
   portsFor,
@@ -19,9 +22,11 @@ import {
   routesOf,
   routeStopName,
   routeUnits,
+  settlementName,
   stopPort,
   term,
   Term,
+  TRIBES,
   unitName,
   unitPosition,
   type GoodId,
@@ -105,7 +110,8 @@ export class RoutesScreen implements Screen {
       h('h3', null, 'How trade routes work'),
       h('p', { class: 'small' }, `A route is a round trip of stops: your colonies, and ${term(this.app.state, 'homeland')} for ships. At each stop a ship or wagon train first unloads, then loads, the goods you choose. Units on a route move by themselves at the start of each of your turns and never wait for orders.`),
       h('p', { class: 'small' }, `Goods unloaded in ${term(this.app.state, 'homeland')} are sold at market prices, less tax; boycotted goods stay aboard. A ${term(this.app.state, 'homeland')} stop can call at a Favoured Nation partner’s port instead of your own, at its prices and tax. Unloading in a colony stops when its warehouse is full, so nothing spoils.`),
-      h('p', { class: 'small' }, 'With a trade agreement (Foreign Affairs), a route can also call at the other nation’s colonies, marked with its flag. The ship or wagon train stops next to the colony: unloading sells goods to it at its nation’s home-market prices, as far as its warehouse has room and its treasury can pay; loading buys what it has above 50 of each good.'));
+      h('p', { class: 'small' }, 'With a trade agreement (Foreign Affairs), a route can also call at the other nation’s colonies, marked with its flag. The ship or wagon train stops next to the colony: unloading sells goods to it at its nation’s home-market prices, as far as its warehouse has room and its treasury can pay; loading buys what it has above 50 of each good.'),
+      peopleTreatyOn(this.app.state) ? h('p', { class: 'small' }, 'With a trade treaty with a native people (Foreign Affairs), a route can call at its settlements too: the unit stops next to the settlement and sells one good and buys one, as a wagon train trading there does.') : null);
   }
 
   private editor(route: TradeRoute, unit: Unit | undefined): HTMLElement {
@@ -116,6 +122,8 @@ export class RoutesScreen implements Screen {
     const units = routeUnits(s, route.id);
     const colonies = Object.values(s.colonies).filter((c) => c.owner === this.app.viewer).sort((a, b) => a.name.localeCompare(b.name));
     const foreign = foreignStopColonies(s, this.app.viewer).sort((a, b) => a.owner.localeCompare(b.owner) || a.name.localeCompare(b.name));
+    // Settlements of peoples with a trade treaty (native-partners.md N4), by people.
+    const partners = partnerSettlements(s, this.app.viewer);
     const free = Object.values(s.units).filter((u) => u.owner === this.app.viewer && canUseRoutes(u) && u.route?.id !== route.id && (u.loc.kind === 'map' || u.loc.kind === 'europe' || u.loc.kind === 'sailing'));
     return h('div', { class: 'card route-editor' },
       h('div', { class: 'row wrap' },
@@ -132,7 +140,9 @@ export class RoutesScreen implements Screen {
           colonies.map((c) => h('option', { value: c.id }, `${c.name}${isCoastal(s, c.x, c.y) ? '' : ' (inland)'}`)),
           h('option', { value: EUROPE_STOP }, `${Term(this.app.state, 'homeland')} (ships only)`),
           [...new Set(foreign.map((c) => c.owner))].map((owner) => h('optgroup', { label: `${nationOf(this.app.state, owner).adjective} colonies (trade agreement)` },
-            foreign.filter((c) => c.owner === owner).map((c) => h('option', { value: c.id }, `⚑ ${c.name} (${nationOf(this.app.state, owner).adjective})${isCoastal(s, c.x, c.y) ? '' : ' (inland)'}`)))))),
+            foreign.filter((c) => c.owner === owner).map((c) => h('option', { value: c.id }, `⚑ ${c.name} (${nationOf(this.app.state, owner).adjective})${isCoastal(s, c.x, c.y) ? '' : ' (inland)'}`)))),
+          [...new Set(partners.map((st) => st.tribe))].map((people) => h('optgroup', { label: `${TRIBES[people].name} settlements (trade treaty)` },
+            partners.filter((st) => st.tribe === people).map((st) => h('option', { value: st.id }, `${settlementName(s, st)}${isCoastal(s, st.x, st.y) ? '' : ' (inland)'}`)))))),
       h('h3', null, 'Units on this route'),
       units.length
         ? h('ul', { class: 'route-units' }, units.map((u) => h('li', null,
@@ -162,8 +172,9 @@ export class RoutesScreen implements Screen {
       this.setStops(route, stops);
     };
     const update = (change: Partial<RouteStop>) => this.setStops(route, route.stops.map((st, k) => (k === i ? { ...st, ...change } : st)));
-    const foreign = isForeignStop(s, stop, route.owner);
-    const owner = foreign ? s.colonies[stop.at].owner : undefined;
+    const settlement = isSettlementStop(s, stop) ? s.settlements[stop.at] : undefined;
+    const foreign = isForeignStop(s, stop, route.owner) || !!settlement;
+    const owner = foreign && !settlement ? s.colonies[stop.at].owner : undefined;
     return h('li', { class: `stop${foreign ? ' foreign' : ''}` },
       h('div', { class: 'stop-head' },
         h('strong', null, owner ? h('span', { class: 'foreign-flag', style: `background:${nationOf(this.app.state, owner).color}`, title: `${nationOf(this.app.state, owner).adjective} colony` }) : null, routeStopName(s, stop, route.owner)),
@@ -172,7 +183,9 @@ export class RoutesScreen implements Screen {
           h('button', { class: 'btn tiny', disabled: !my || i === 0, 'aria-label': 'Move stop up', onclick: () => move(-1) }, '↑'),
           h('button', { class: 'btn tiny', disabled: !my || i === route.stops.length - 1, 'aria-label': 'Move stop down', onclick: () => move(1) }, '↓'),
           h('button', { class: 'btn tiny', disabled: !my, 'aria-label': 'Remove stop', onclick: () => this.setStops(route, route.stops.filter((_, k) => k !== i)) }, '✕'))),
-      foreign ? h('div', { class: 'muted small' }, `Trading stop: goods unloaded are sold to the colony, goods loaded are bought from it, at ${nationOf(this.app.state, owner!).adjective} prices.`) : null,
+      settlement
+        ? h('div', { class: 'muted small' }, `Trading stop (trade treaty with the ${TRIBES[settlement.tribe].name}): as a wagon train does there, one good is sold (the listed one they pay most for, up to 100) and one bought (the listed one they have most of), at the treaty's prices. The deal ends the unit's moves for the turn.`)
+        : foreign ? h('div', { class: 'muted small' }, `Trading stop: goods unloaded are sold to the colony, goods loaded are bought from it, at ${nationOf(this.app.state, owner!).adjective} prices.`) : null,
       europe ? this.portPicker(route, stop, (port) => update({ port })) : null,
       this.cargoRules(foreign ? 'Sell' : 'Unload', stop.unload, europe ? null : 'up to', europe ? 'sold' : 'fill', (unload) => update({ unload })),
       this.cargoRules(foreign ? 'Buy' : 'Load', stop.load, europe ? 'buy to' : 'keep', europe ? '100' : foreign ? '50' : '0', (load) => update({ load })),

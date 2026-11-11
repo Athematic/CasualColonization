@@ -2,13 +2,13 @@ import { TRIBES, type TribeId } from './rules/nations.js';
 import type { SettlementKindDef } from './rules/natives.js';
 import { TERRAIN, type TerrainId } from './rules/terrain.js';
 import type { UnitTypeId } from './rules/units.js';
-import { FIRST_BRAVE_AFTER } from './rules/natives.js';
+import { NATIVE_RULES } from './rules/natives.js';
 import { random, randInt, pick } from './rng.js';
 import { generateRivers } from './rivers.js';
 import { gridIn, SQUARE, type Grid } from './grid.js';
 import type { GameMap, MapSize, Settlement, Tile } from './types.js';
 import { AMERICAS, AMERICAS_GENERATOR } from './scenarios/americas.js';
-import { peopleIn, settlementKindIn } from './scenarios/index.js';
+import { nativeRulesIn, peopleIn, settlementKindIn } from './scenarios/index.js';
 import type { ClimateZone, GeneratorSettings, MapExtras, Scenario } from './scenarios/types.js';
 
 /** The Americas' generated map sizes (the New game screen's choice until it offers each scenario's). */
@@ -188,7 +188,7 @@ export function sprinkleExtras(rng: { rng: number }, map: GameMap, extras: MapEx
 }
 
 /** A native settlement of a kind, with a random skill, defenders and gold for its tribe. */
-export function newSettlement(rng: { rng: number }, id: string, tribe: TribeId, x: number, y: number, capital: boolean, kind: SettlementKindDef, skills: readonly UnitTypeId[] = TRIBES[tribe].skills): Settlement {
+export function newSettlement(rng: { rng: number }, id: string, tribe: TribeId, x: number, y: number, capital: boolean, kind: SettlementKindDef, skills: readonly UnitTypeId[] = TRIBES[tribe].skills, firstBrave = NATIVE_RULES.firstBraveAfter): Settlement {
   const { size } = kind;
   return {
     id,
@@ -201,7 +201,7 @@ export function newSettlement(rng: { rng: number }, id: string, tribe: TribeId, 
     defenders: size + (capital ? 2 : 0) + randInt(rng, 2),
     gold: (size * 150 + randInt(rng, 200)) * (capital ? 2 : 1),
     tension: {},
-    braveTimer: FIRST_BRAVE_AFTER,
+    braveTimer: firstBrave,
   };
 }
 
@@ -236,7 +236,7 @@ function placeSettlements(rng: { rng: number }, tiles: Tile[], width: number, he
     const tribe = peoples[band];
     const capital = !capitals.has(tribe);
     capitals.add(tribe);
-    placed.push(newSettlement(rng, `s${placed.length + 1}`, tribe, c.x, c.y, capital, settlementKindIn(scenario, tribe), peopleIn(scenario, tribe).skills));
+    placed.push(newSettlement(rng, `s${placed.length + 1}`, tribe, c.x, c.y, capital, settlementKindIn(scenario, tribe), peopleIn(scenario, tribe).skills, nativeRulesIn(scenario).firstBraveAfter));
   }
   return placed;
 }

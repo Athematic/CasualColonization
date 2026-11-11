@@ -64,7 +64,7 @@ describe('score breakdown', () => {
     player(s, 'england').gold = 5000;
     player(s, 'england').fathers = ['adamSmith', 'jeffersonn'] as never;
     const b = scoreBreakdown(s, player(s, 'england'));
-    expect(b.lines.map((l) => l.key)).toEqual(['colonists', 'experts', 'buildings', 'production', 'liberty', 'fathers', 'wealth', 'peace', 'independence']);
+    expect(b.lines.map((l) => l.key)).toEqual(['colonists', 'experts', 'buildings', 'production', 'liberty', 'fathers', 'wealth', 'peace', 'independence', 'peoples']);
     expect(b.lines.reduce((sum, l) => sum + l.points, 0)).toBe(b.total);
     expect(b.total).toBe(score(s, player(s, 'england')));
     expect(b.lines.find((l) => l.key === 'colonists')).toMatchObject({ value: 6, points: 3 });

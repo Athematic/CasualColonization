@@ -22,6 +22,7 @@ import {
   FATHERS,
   favouredProblem,
   hasTradeAgreement,
+  inContact,
   isAllied,
   isFavoured,
   mechanicsOf,
@@ -33,13 +34,28 @@ import {
   relation,
   relationsMood,
   routesBetween,
+  nativeRulesOf,
+  peopleStanding,
+  peopleTradeBenefits,
+  peopleTreatiesOn,
+  peopleTreatyOn,
+  peopleTreatyProblem,
+  landUseBenefits,
+  defenceBenefits,
+  exchangeBenefits,
+  leasedTiles,
+  leaseTerms,
+  peopleTreatyRules,
   tensionLabel,
+  tensionSeverity,
   term,
   Term,
   tradeProblem,
   tradeTies,
   treatyName,
+  treatiesWithPeople,
   TRIBES,
+  withPeople,
   type NationId,
   type Player,
   type TribeId,
@@ -75,32 +91,7 @@ export class DiplomacyScreen implements Screen {
     const treaties = this.treatyCard();
     const companies = this.companyCard();
 
-    const tribes = s.tribes
-      .map((t) => {
-        const settlements = Object.values(s.settlements).filter((st) => st.tribe === t.id);
-        const met = settlements.some((st) => me.explored[st.y * s.map.width + st.x]);
-        const tension = settlements.length ? Math.round(settlements.reduce((n, st) => n + (st.tension[me.id] ?? 0), 0) / settlements.length) : 0;
-        const missions = settlements.filter((st) => st.mission === me.id).length;
-        return { t, settlements, met, tension, missions };
-      })
-      .filter((r) => r.met);
-    const natives = h('div', { class: 'card' },
-      h('h3', null, 'Native peoples'),
-      tribes.length ? h('table', { class: 'table' },
-        h('tr', null, h('th', null, 'Tribe'), h('th', null, 'Settlements'), h('th', null, 'Mood'), h('th', null, 'Missions'), h('th', null, 'Gift')),
-        tribes.map(({ t, settlements, tension, missions }) => {
-          const war = t.stance[me.id] === 'war';
-          const mood = war ? 'at war' : tensionLabel(tension);
-          return h('tr', null,
-            h('td', null, h('span', { class: 'flag', style: `background:${TRIBES[t.id].color}` }), ' ', TRIBES[t.id].name),
-            h('td', null, String(settlements.length)),
-            h('td', null, h('span', { class: `pill ${war || tension >= 700 ? 'bad' : tension >= 400 ? 'warn' : 'good'}` }, mood)),
-            h('td', null, String(missions)),
-            h('td', null, h('div', { class: 'row' }, [100, 500].map((gold) =>
-              h('button', { class: 'btn tiny', disabled: me.gold < gold, onclick: () => this.gift(t.id, gold) }, String(gold))))));
-        }))
-        : h('p', { class: 'muted small' }, 'You have not met any native peoples yet.'),
-      h('p', { class: 'muted small' }, 'Colonies near native land raise tension, especially as they grow. Trade, gifts and missions calm it; furious tribes raid.'));
+    const natives = this.nativesCard();
 
     const cost = nextFatherCost(s, me);
     const congress = h('div', { class: 'card' },
@@ -224,8 +215,95 @@ export class DiplomacyScreen implements Screen {
   }
 
   /**
-   * Treaties: those in force between any European nations (they are public), yours first, then
-   * your past ones, most recent first.
+   * Native peoples (native-partners.md N13): a row per people met, with its settlements, mood,
+   * missions and gifts and, where the scenario has treaties with peoples, its standing in words,
+   * its treaties with you and a Propose action. Peoples in contact (a scout's visit, a mission or
+   * trade) come first, partners first among them; peoples only seen are folded away, so the list
+   * stays usable with dozens of small peoples.
+   */
+  private nativesCard(): HTMLElement {
+    const app = this.app;
+    const s = app.state;
+    const me = app.me;
+    const treaties = peopleTreatiesOn(s);
+    const thresholds = nativeRulesOf(s).tension;
+    const rows = s.tribes
+      .map((t) => {
+        const settlements = Object.values(s.settlements).filter((st) => st.tribe === t.id);
+        const contact = inContact(s, me.id, t.id);
+        const met = contact || settlements.some((st) => me.explored[st.y * s.map.width + st.x]);
+        const tension = settlements.length ? Math.round(settlements.reduce((n, st) => n + (st.tension[me.id] ?? 0), 0) / settlements.length) : 0;
+        const missions = settlements.filter((st) => st.mission === me.id).length;
+        const inForce = treatiesWithPeople(s, me.id, t.id);
+        return { t, settlements, met, tension, missions, contact, inForce };
+      })
+      .filter((r) => r.met)
+      .sort((a, b) => Number(b.inForce.length > 0) - Number(a.inForce.length > 0) || Number(b.contact) - Number(a.contact) || TRIBES[a.t.id].name.localeCompare(TRIBES[b.t.id].name));
+    const head = () => h('tr', null, h('th', null, 'People'), h('th', null, 'Settlements'), h('th', null, 'Mood'), treaties ? h('th', null, 'Standing') : null, treaties ? h('th', null, 'Treaties') : null, h('th', null, 'Missions'), h('th', null, 'Gift'));
+    // Words and colours at the thresholds the braves act on (demands, raids, war).
+    const row = ({ t, settlements, tension, missions, contact, inForce }: (typeof rows)[number]) => {
+      const war = t.stance[me.id] === 'war';
+      const mood = war ? 'at war' : tensionLabel(tension, thresholds);
+      const why = treaties ? peopleTreatyProblem(s, me.id, t.id) : null;
+      const name = TRIBES[t.id].name;
+      // Land use (a lease, N5) is the next rung once trade is agreed.
+      const landOn = treaties && peopleTreatyOn(s, 'land-use');
+      const trading = inForce.some((x) => x.kind === 'people-trade');
+      const leasing = inForce.find((x) => x.kind === 'land-use');
+      const whyLand = landOn && trading && !leasing ? peopleTreatyProblem(s, me.id, t.id, 'land-use') : null;
+      const lease = leasing && leaseTerms(leasing);
+      const leaseText = lease ? `Land use (${leasedTiles(s, me.id, t.id).length} tiles, ${lease.rent} gold a tile a year)` : null;
+      // A cultural exchange (N7) is the other rung on trade.
+      const exchangeOn = treaties && peopleTreatyOn(s, 'exchange');
+      const exchanging = inForce.some((x) => x.kind === 'exchange');
+      const whyExchange = exchangeOn && trading && !exchanging ? peopleTreatyProblem(s, me.id, t.id, 'exchange') : null;
+      // A mutual defence pact (N7) is the top rung: on trade and land use or an exchange.
+      const defenceOn = treaties && peopleTreatyOn(s, 'defence');
+      const defending = inForce.some((x) => x.kind === 'defence');
+      const rung = !!leasing || exchanging;
+      const whyDefence = defenceOn && trading && rung && !defending ? peopleTreatyProblem(s, me.id, t.id, 'defence') : null;
+      return h('tr', { 'data-people': t.id },
+        h('td', null, h('span', { class: 'flag', style: `background:${TRIBES[t.id].color}` }), ' ', name),
+        h('td', null, String(settlements.length)),
+        h('td', null, h('span', { class: `pill ${war ? 'bad' : tensionSeverity(tension, thresholds)}` }, mood)),
+        treaties ? h('td', { class: 'small' }, peopleStanding(s, me.id, t.id)) : null,
+        treaties ? h('td', { class: 'small' },
+          inForce.length ? inForce.map((x) => (x === leasing && leaseText ? leaseText : treatyName(x))).join(', ') : null,
+          !inForce.length && contact && !war
+            ? h('button', { class: 'btn tiny', 'data-action': 'propose-people-trade', disabled: !!why || !app.isMyTurn(), title: why ?? `Offer the ${name} a trade treaty: ${peopleTradeBenefits(s)}.`, 'aria-label': `Propose a trade treaty to the ${name}`, onclick: () => app.dispatch({ type: 'proposePeopleTreaty', people: t.id }) }, 'Propose')
+            : !inForce.length ? '—' : null,
+          landOn && trading && !leasing && !war
+            ? [' ', h('button', { class: 'btn tiny', 'data-action': 'propose-land-use', disabled: !!whyLand || !app.isMyTurn(), title: whyLand ?? `Ask the ${name} to lease you their land beside your colonies: ${landUseBenefits(s)}.`, 'aria-label': `Propose land use to the ${name}`, onclick: () => app.dispatch({ type: 'proposePeopleTreaty', people: t.id, kind: 'land-use' }) }, 'Lease land')]
+            : null,
+          exchangeOn && trading && !exchanging && !war
+            ? [' ', h('button', { class: 'btn tiny', 'data-action': 'propose-exchange', disabled: !!whyExchange || !app.isMyTurn(), title: whyExchange ?? `Offer the ${name} a cultural exchange: ${exchangeBenefits(s)}.`, 'aria-label': `Propose a cultural exchange to the ${name}`, onclick: () => app.dispatch({ type: 'proposePeopleTreaty', people: t.id, kind: 'exchange' }) }, 'Propose exchange')]
+            : null,
+          defenceOn && trading && rung && !defending && !war
+            ? [' ', h('button', { class: 'btn tiny', 'data-action': 'propose-defence', disabled: !!whyDefence || !app.isMyTurn(), title: whyDefence ?? `Offer the ${name} a mutual defence pact: ${defenceBenefits(s)}.`, 'aria-label': `Propose a mutual defence pact to the ${name}`, onclick: () => app.dispatch({ type: 'proposePeopleTreaty', people: t.id, kind: 'defence' }) }, 'Propose defence')]
+            : null) : null,
+        h('td', null, String(missions)),
+        h('td', null, h('div', { class: 'row' }, [100, 500].map((gold) =>
+          h('button', { class: 'btn tiny', disabled: me.gold < gold, onclick: () => this.gift(t.id, gold) }, String(gold))))));
+    };
+    // With treaties in play, peoples only seen (no contact yet) are folded away.
+    const shown = treaties ? rows.filter((r) => r.contact) : rows;
+    const folded = treaties ? rows.filter((r) => !r.contact) : [];
+    return h('div', { class: 'card natives' },
+      h('h3', null, 'Native peoples'),
+      shown.length ? h('div', { class: 'table-scroll' }, h('table', { class: 'table' }, head(), shown.map(row))) : null,
+      folded.length ? h('details', null, h('summary', { class: 'small' }, `Seen, not yet met (${folded.length})`), h('div', { class: 'table-scroll' }, h('table', { class: 'table' }, head(), folded.map(row)))) : null,
+      !rows.length ? h('p', { class: 'muted small' }, 'You have not met any native peoples yet.') : null,
+      h('p', { class: 'muted small' }, 'Colonies near native land raise tension, especially as they grow. Trade, gifts and missions calm it; uneasy tribes demand tribute, angry ones raid and furious ones go to war.'),
+      treaties ? h('p', { class: 'muted small' }, `After years of good relations${peopleTreatyRules(s).trade.volume.max > 0 ? ' and trade' : ''}, a people you have met (a scout’s visit, a mission or trade) may agree to a trade treaty, or offer one through a visiting brave: ${peopleTradeBenefits(s)}. Taking a partner’s land, attacking it or paying it to make war breaks faith: every treaty with that people ends, and it will not trust you again for many years.`) : null,
+      treaties && peopleTreatyOn(s, 'land-use') ? h('p', { class: 'muted small' }, `With a trade treaty and more years of good relations, a people may lease you its land: ${landUseBenefits(s)}. The rent is paid each year; if you cannot pay, the lease lapses. You may still buy a leased tile; taking one breaks faith.`) : null,
+      treaties && peopleTreatyOn(s, 'exchange') ? h('p', { class: 'muted small' }, `With a trade treaty and more years of good relations, a people may agree to a cultural exchange: ${exchangeBenefits(s)}. It ends with the trade treaty.`) : null,
+      treaties && peopleTreatyOn(s, 'defence') ? h('p', { class: 'muted small' }, `With a trade treaty and land use or a cultural exchange, after still more years of good relations, a people may make a mutual defence pact with you, and with no other nation while it holds: ${defenceBenefits(s)}. Its braves defend only; they do not join your own wars.`) : null);
+  }
+
+  /**
+   * Treaties: those in force between any European nations, or between a nation and a native
+   * people (they are public), yours first, then your past ones, most recent first. A party is
+   * named by `describeTreaty` ("France and the Kalinago").
    */
   private treatyCard(): HTMLElement | null {
     const s = this.app.state;
@@ -241,7 +319,7 @@ export class DiplomacyScreen implements Screen {
     return h('div', { class: 'card treaties' },
       h('h3', null, 'Treaties'),
       mine.length ? h('ul', { class: 'treaty-list' }, mine.map(item)) : h('p', { class: 'muted small' }, 'You have no treaties in force.'),
-      others.length ? h('details', null, h('summary', { class: 'small' }, `Between other nations (${others.length})`), h('ul', { class: 'treaty-list' }, others.map(item))) : null,
+      others.length ? h('details', null, h('summary', { class: 'small' }, `${others.some(withPeople) ? 'Between others' : 'Between other nations'} (${others.length})`), h('ul', { class: 'treaty-list' }, others.map(item))) : null,
       past.length ? h('details', null, h('summary', { class: 'small' }, `Your past treaties (${past.length})`), h('ul', { class: 'treaty-list muted' }, past.map(item))) : null);
   }
 

@@ -1,7 +1,9 @@
 /**
  * What events do: applying effects, and valuing them in gold for the computer players.
  */
+import { track } from '../telemetry.js';
 import { addTension } from '../natives.js';
+import { notePeopleWarEnded } from '../prosperity.js';
 import { colonyWorkers, createUnit, isWater, player, reveal, tileAt, workArea } from '../queries.js';
 import { placeOnMap } from '../movement.js';
 import { colonyReport } from '../production.js';
@@ -164,7 +166,18 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
       return;
     case 'peaceWithPeoples':
       for (const st of Object.values(s.settlements)) st.tension[p.id] = 0;
-      for (const t of s.tribes) t.stance[p.id] = 'peace';
+      for (const t of s.tribes) {
+        if (t.stance[p.id] === 'war') notePeopleWarEnded(s, t, p.id);
+        t.stance[p.id] = 'peace';
+        // The peace holds even with a people whose burial ground was desecrated: the grievance is
+        // forgiven, or processNatives would put the people back at war next round (fix e).
+        if (t.burial?.includes(p.id)) {
+          track(p.id, 'natives:burial ground forgiven');
+          const rest = t.burial.filter((n) => n !== p.id);
+          if (rest.length) t.burial = rest;
+          else delete t.burial;
+        }
+      }
       return;
     case 'stockades':
       for (const c of ownColonies(s, p.id)) if (colonyWorkers(s, c).length >= e.minColonists && c.buildings.stockade === 0) c.buildings.stockade = 1;

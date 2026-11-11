@@ -60,6 +60,8 @@ import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { stopPort } from '../routes.js';
 import { forEachUnitNear, indexedUnitsOf, ownedUnitsView, unitList } from '../unitindex.js';
 import { maybeIncite } from './natives.js';
+import { chiefWelcomes, defencePartner, settlementTeaches } from '../peopletreaties.js';
+import type { TribeId } from '../rules/nations.js';
 import { armyForIndependence, expectedSupport, colonyDefences, supportParts, rebelColonyDefence, rebelPower, crownAffairs, defenceShort, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
 import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './plan.js';
 import { equippedPrice, trainEquipped } from './outfit.js';
@@ -833,6 +835,8 @@ function acquireLand(s: GameState, p: Player, c: Colony, prof: AiProfile): void 
     const st = nativeLandOwner(s, n.x, n.y);
     if (!st) continue;
     const tile = tileAt(s, n.x, n.y)!;
+    // Land leased to the nation is worked already (N5): no need to buy it.
+    if (tile.use === p.id) continue;
     const def = tile.f ? 'forest' : tile.t;
     if (def === 'arctic' || def === 'mountains') continue;
     if (prof.land === 'take' && tensionOf(st, p.id) < 600) {
@@ -1043,7 +1047,7 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
   const known = (x: number, y: number) => p.explored[y * w + x] === 1;
   for (const n of neighbours(s, pos.x, pos.y)) {
     const st = Object.values(s.settlements).find((o) => o.x === n.x && o.y === n.y);
-    if (st && !st.visited.includes(p.id) && tensionOf(st, p.id) < 500 && u.moves > 0) {
+    if (st && chiefWelcomes(s, st, p.id) && tensionOf(st, p.id) < 500 && u.moves > 0) {
       speakToChief(s, u.id, st.id);
       return;
     }
@@ -1057,7 +1061,7 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
     }
   }
   for (const st of Object.values(s.settlements)) {
-    if (known(st.x, st.y) && !st.visited.includes(p.id) && tensionOf(st, p.id) < 500) targets.push({ x: st.x, y: st.y, d: grid.distance(st.x, st.y, pos.x, pos.y) + 2 });
+    if (known(st.x, st.y) && chiefWelcomes(s, st, p.id) && tensionOf(st, p.id) < 500) targets.push({ x: st.x, y: st.y, d: grid.distance(st.x, st.y, pos.x, pos.y) + 2 });
   }
   targets.sort((a, b) => a.d - b.d);
   for (const t of targets.slice(0, 6)) {
@@ -1161,7 +1165,7 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   // Unskilled colonists learn a trade from the natives first.
   if (prof.learnFromNatives && UNIT_TYPES[u.type].skill <= 0 && u.type !== 'pettyCriminal' && u.type !== 'nativeConvert') {
     const teacher = Object.values(s.settlements)
-      .filter((st) => st.skill && tensionOf(st, p.id) < 400 && grid.distance(st.x, st.y, pos.x, pos.y) <= 8 && p.explored[st.y * s.map.width + st.x])
+      .filter((st) => settlementTeaches(s, st, p.id) && tensionOf(st, p.id) < 400 && grid.distance(st.x, st.y, pos.x, pos.y) <= 8 && p.explored[st.y * s.map.width + st.x])
       .sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0];
     if (teacher) {
       if (grid.distance(teacher.x, teacher.y, pos.x, pos.y) === 1 && u.moves > 0) {
@@ -1475,6 +1479,15 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
 // ---------------------------------------------------------------------------
 // Diplomacy and war
 
+/** Whether a people has a mutual defence pact with a nation other than `p` that `p` is at peace with (raiding it would be war with that nation). */
+function defendedAgainst(s: GameState, p: Player, people: TribeId): boolean {
+  const partner = defencePartner(s, people);
+  return partner !== undefined && partner !== p.id && p.stance[partner] !== 'war';
+}
+
+/** Tension of a people's worst settlement near the nation's colonies above which a computer nation gives it gold (profile `giftsAbove`). */
+export const GIFTS_ABOVE = 450;
+
 function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
   const grid = gridOf(s);
   const colonies = ownColonies(s, p);
@@ -1484,7 +1497,7 @@ function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
       const near = Object.values(s.settlements).filter((st) => st.tribe === t.id && colonies.some((c) => grid.distance(c.x, c.y, st.x, st.y) <= 6));
       if (!near.length) continue;
       const worst = Math.max(...near.map((st) => tensionOf(st, p.id)));
-      if ((worst > 450 || t.stance[p.id] === 'war') && p.gold > prof.reserve + 200) {
+      if ((worst > (prof.giftsAbove ?? GIFTS_ABOVE) || t.stance[p.id] === 'war') && p.gold > prof.reserve + 200) {
         giftToTribe(s, p.id, t.id, Math.min(300, p.gold - prof.reserve));
       }
     }
@@ -1495,8 +1508,9 @@ function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
 
   // Raid nearby native settlements for treasure.
   if (prof.raidNatives && army.length >= 2 && s.turn > aiTurn(s, 40)) {
+    // Not a people defended by a nation at peace with it (native-partners.md N7): the raid would be war with that nation.
     const st = Object.values(s.settlements)
-      .filter((o) => colonies.some((c) => grid.distance(c.x, c.y, o.x, o.y) <= 6))
+      .filter((o) => colonies.some((c) => grid.distance(c.x, c.y, o.x, o.y) <= 6) && !(s.treaties && defendedAgainst(s, p, o.tribe)))
       .sort((a, b) => a.defenders - b.defenders)[0];
     if (st) {
       for (const u of army) {

@@ -133,7 +133,7 @@ const N = {
     adjective: 'French',
     color: NATIONS.france.color,
     // The French made treaties with the Kalinago (1660) and traded with them throughout the century.
-    bonus: { text: 'Cooperation: native settlements give better gifts and teach more readily.', modifiers: [{ hook: 'nativeGifts', add: 0.15 }] },
+    bonus: { text: 'Cooperation: native settlements give better gifts and teach more readily.', modifiers: [{ hook: 'nativeGifts', add: 0.15 }, { hook: 'nativesTeach', units: ['pettyCriminal'] }] },
     colonyNames: [
       'Saint-Pierre', 'Fort-Royal', 'Basse-Terre', 'Cap-Français', 'Port-de-Paix', 'Léogâne', 'Petit-Goâve', 'Saint-Louis',
       'Les Cayes', 'Port-au-Prince', 'Cayenne', 'Marigot', 'Grand-Bourg', 'Le Carbet', 'La Trinité', 'Le Marin', 'Sainte-Anne',
@@ -337,7 +337,7 @@ export const CARIBBEAN: Scenario = {
     pace: 0.35,
     // Settlers sail to other islands when theirs is full.
     islands: true,
-    cooperation: { proposeAlliance: 0.03, foundCompany: 0.12, buyShares: 0.25, foundMargin: 0, sharesMargin: 500 },
+    cooperation: { proposeAlliance: 0.03, foundCompany: 0.12, buyShares: 0.25, foundMargin: 0, sharesMargin: 500, proposePeopleTrade: 0.8, proposeDefence: 0.6 },
     goods: {
       trade: ['silver', 'sugar', 'tobacco', 'cotton', 'ore', 'rum', 'cigars', 'cloth', 'horses'],
       export: ['sugar', 'tobacco', 'cotton', 'ore', 'silver', 'rum', 'cigars', 'cloth'],
@@ -359,18 +359,29 @@ export const CARIBBEAN: Scenario = {
     charter: { base: 150, cap: 3000 },
     customHouse: true,
     missions: true,
+    burialGrounds: true,
+    surrender: true,
     alliances: true,
     companies: true,
+    // Treaties with native peoples (peopletreaties.ts, Beta 2): trade, land use, cultural exchange and mutual defence so far.
+    peopleTreaties: ['people-trade', 'land-use', 'exchange', 'defence'],
   },
   // A century of trading companies and small powers: alliances need only a trade agreement (no
   // Favoured Nation forms between the computer players here) and half a century of peace, and
   // companies are cheaper and founded more readily than in the Americas.
   alliances: { requires: 'trade', peaceYears: { base: 50, spread: 10 }, volume: { min: 0, max: 0 } },
   companyRules: { capital: 1000, reserve: 400 },
-  victory: [{ id: 'concord' }, { id: 'time' }],
+  // Treaties with the peoples (the French treaty with the Kalinago, 1660): the islands' colonies
+  // hardly trade at settlements, so a trade treaty needs only years of good relations (as
+  // alliances here need no trade), and the peoples offer one more readily. That treaty was one of
+  // peace and alliance: mutual defence comes sooner here (10 +/- 3 years of good relations, not
+  // 16 +/- 4) and the computer nations seek it twice as readily (ai.cooperation.proposeDefence).
+  peopleTreaties: { trade: { volume: { min: 0, max: 0 } }, offer: 0.5, defence: { years: { base: 10, spread: 3 } } },
+  victory: [{ id: 'concord' }, { id: 'prosperity' }, { id: 'time' }],
   rumours: AMERICAS.rumours,
-  // A century of trade: wealth and trade agreements weigh more than in the Americas (1/800, 3, 4).
-  score: { wealth: 1 / 500, tradeAgreement: 5, favoured: 6 },
+  // A century of trade: wealth and trade agreements (with nations and with peoples) weigh more than
+  // in the Americas (1/800, 3, 4 and 3).
+  score: { wealth: 1 / 500, tradeAgreement: 5, favoured: 6, peopleTreaty: 5 },
   text: {
     colonyLand: 'the West Indies',
     council: 'Colonial Council',
@@ -381,6 +392,7 @@ export const CARIBBEAN: Scenario = {
     'rumour.treasure': 'You find a cache hidden by buccaneers and recover {gold} gold!',
     'rumour.treasure.history': 'Explorers find a cache hidden by buccaneers and recover {gold} gold.',
     'gameOver.time': 'The year {year} has come, and the age of the chartered companies is over.',
+    'gameOver.prosperity': 'The year {year} has come, and the age of the chartered companies is over. In peace and partnership with {partners}, {winners} {win} by prosperity.',
     'landing.eyebrow': 'A game of the West Indies, 1650–1750',
     'landing.heading': 'Found colonies. Trade sugar and tobacco. Outlast the great powers.',
     'landing.pitch':

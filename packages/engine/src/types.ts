@@ -87,6 +87,12 @@ export interface Tile {
   d?: boolean;
   /** European nation that bought or took this land from the natives. */
   claim?: NationId;
+  /**
+   * European nation that leases this tile of a people's land while a land use treaty holds (Beta 2,
+   * native-partners.md N5, peopletreaties.ts): its colonies next to the tile may work it, and the
+   * land stays the people's (`nativeLandOwner` still names its settlement). Absent when unleased.
+   */
+  use?: NationId;
 }
 
 export interface GameMap {
@@ -340,6 +346,21 @@ export interface Tribe {
   burial?: NationId[];
   /** Nations the tribe submitted to after losing its capital (see natives.ts). Missing means none. */
   submitted?: NationId[];
+  /**
+   * The turn the tribe's last war with each nation ended (the `prosperity` victory, prosperity.ts).
+   * Written only while the scenario plays for `prosperity`; missing means no war has ended.
+   */
+  warEnded?: Partial<Record<NationId, number>>;
+  /**
+   * Nations that burned one of the tribe's settlements (the `prosperity` victory). Written only
+   * while the scenario plays for `prosperity`; missing means none.
+   */
+  burned?: NationId[];
+  /**
+   * Nations whose person has been told of the first meeting with the people (queries.ts,
+   * `meetPeople`); written only for nations a person plays. Missing means none.
+   */
+  met?: NationId[];
 }
 
 /**
@@ -368,7 +389,8 @@ export type BraveTask =
   | { kind: 'visit'; colonyId: string; purpose: 'gift' | 'trade' | 'demand' }
   /** Waiting next to a colony for the answer to a demand. */
   | { kind: 'wait'; demandId: string; turns: number }
-  | { kind: 'attack'; colonyId?: string; unitId?: string };
+  /** `defend`: the partner nation whose colony the brave sets out to defend under a mutual defence pact (N7, written only then). */
+  | { kind: 'attack'; colonyId?: string; unitId?: string; defend?: NationId };
 
 /**
  * A brave's demand for tribute, or offer of goods for sale, waiting for a person to answer it in
@@ -376,7 +398,11 @@ export type BraveTask =
  */
 export interface NativeDemand {
   id: string;
-  kind: 'demand' | 'offer';
+  /**
+   * A demand for tribute, an offer of goods for sale, or (Beta 2, native-partners.md N8) the
+   * people's offer of a treaty (`treaty` names its kind; no goods, `amount` 0).
+   */
+  kind: 'demand' | 'offer' | 'treaty';
   nation: NationId;
   colonyId: string;
   settlementId: string;
@@ -386,6 +412,8 @@ export interface NativeDemand {
   amount: number;
   /** For an offer: the price asked in gold. */
   price?: number;
+  /** For a treaty offer: the kind of treaty the people offers. */
+  treaty?: PeopleTreatyKind;
   turn: number;
 }
 
@@ -395,10 +423,26 @@ export interface Settlement {
   x: number;
   y: number;
   capital: boolean;
-  /** Skill taught to one colonist; null once taught. */
+  /** Skill taught to one colonist; null once taught (a cultural exchange may teach its partner again, `taughtAt`). */
   skill: UnitTypeId | null;
   /** Nations whose scouts have spoken with the chief. */
   visited: NationId[];
+  /**
+   * Turn the settlement last taught a colonist (Beta 2, native-partners.md N7: a cultural exchange
+   * makes it teach its partner again some 25 years later). Written only while the scenario has
+   * cultural exchange (`mechanics.peopleTreaties` includes `exchange`); absent otherwise.
+   */
+  taughtAt?: number;
+  /**
+   * Times the settlement has taught again under a cultural exchange (Beta 2 step 6: at most the
+   * scenario's `exchange.renewals`). Written only when it does; absent before.
+   */
+  renewed?: number;
+  /**
+   * Turn each nation's scout last spoke with the chief (N7: a cultural exchange welcomes the
+   * partner's scouts again once a decade). Written only while the scenario has cultural exchange.
+   */
+  spokeAt?: Partial<Record<NationId, number>>;
   defenders: number;
   gold: number;
   /** 0 (content) to 1000 (furious), per European nation. */
@@ -450,29 +494,78 @@ export interface Relation {
 }
 
 /**
- * The kinds of treaty between European nations (docs/design/cooperation.md, C9): a trade
- * agreement, Favoured Nation status and, from Beta 1, an alliance. Beta 2's treaties with native
- * peoples are meant to reuse the record.
+ * A nation's standing with one native people (native-partners.md N3), as `Relation` is between two
+ * nations: the years of good relations and the trade that unlock treaties with the people (against
+ * hidden thresholds drawn per pair from the seed, never stored), and the waiting and hostility
+ * after a broken treaty. Turn numbers, not years. Written lazily (natives.ts `peopleRelation`) when
+ * the nation first trades with the people; step 0 keeps `goodSince` and `volume`, the treaties of
+ * later steps the rest.
  */
-export type TreatyKind = 'trade' | 'favoured' | 'alliance' | 'confederation';
+export interface PeopleRelation {
+  nation: NationId;
+  people: TribeId;
+  /**
+   * Turn the current run of good relations began (at peace with the people, its settlements
+   * content on average); missing while relations are not good. Checked once a round.
+   */
+  goodSince?: number;
+  /** Gold that has changed hands in trade with the people's settlements and braves, both ways, over the game. */
+  volume: number;
+  /** After a broken treaty: the people makes no new treaty with the nation before this turn. */
+  waitUntil?: number;
+  /** After a broken treaty: the people treats the nation as hostile until this turn. */
+  hostileUntil?: number;
+  /** Treaties with the people broken so far; seeds the next waiting and hostility draws. */
+  breaks?: number;
+  /** A proposal waiting for an answer: made by the nation to the people, or offered by the people. */
+  proposal?: { kind: PeopleTreatyKind; from: 'nation' | 'people'; turn: number };
+  /**
+   * Turn the nation last took land from the people (without paying for it) (step 1, N8: the people
+   * refuses new treaties for `PeopleTreatyRules.landYears` after). Written only while the
+   * scenario has treaties with peoples.
+   */
+  tookLand?: number;
+}
+
+/**
+ * The kinds of treaty: between European nations (docs/design/cooperation.md, C9) a trade
+ * agreement, Favoured Nation status, an alliance and a confederation; between one nation and one
+ * native people (docs/design/native-partners.md, N1) the `PeopleTreatyKind`s. A kind says what is
+ * agreed, not who agrees, so code that reads European kinds (`'trade'`) never meets a people.
+ */
+export type TreatyKind = 'trade' | 'favoured' | 'alliance' | 'confederation' | PeopleTreatyKind;
+
+/**
+ * Treaties between a nation and a native people (Beta 2, N1–N7): a trade treaty, land use,
+ * cultural exchange and mutual defence. Step 1 makes the trade treaty (peopletreaties.ts); the
+ * others are only named.
+ */
+export type PeopleTreatyKind = 'people-trade' | 'land-use' | 'exchange' | 'defence';
 
 /** How a treaty ended. */
 export interface TreatyEnd {
   turn: number;
   /**
    * Cancelled by one side, ended by a war between the parties, lapsed (Favoured Nation at a
-   * declaration of independence), or left: an alliance's last members but one left it.
+   * declaration of independence; a treaty with a people that has no settlements left), left: an
+   * alliance's last members but one left it, or broken: a nation broke faith with a people (N8).
    */
-  why: 'cancelled' | 'war' | 'lapsed' | 'left' | 'concluded';
-  /** The nation that ended it, when one did. */
-  by?: NationId;
+  why: 'cancelled' | 'war' | 'lapsed' | 'left' | 'concluded' | 'broken';
+  /**
+   * The party that ended it, when one did: a nation by its bare id (as every treaty between
+   * nations is saved), a people as a party (`{ kind: 'people', id }`). Read with treaties.ts
+   * `treatyEndedBy`.
+   */
+  by?: NationId | TreatyParty;
 }
 
 /**
- * A party to a treaty. Only European nations for now; the shape leaves room for other kinds of
- * party later (Beta 2's native peoples) without changing the record.
+ * A party to a treaty: a European nation, or a native people (Beta 2, native-partners.md N1), by
+ * the people's one id (`TribeId`), the id it would keep as a nation of its own later. Read parties
+ * through the helpers in treaties.ts (`partyIsNation`, `partyIsPeople`, `treatyNations`,
+ * `treatyPeoples`), never by assuming that every party is a player.
  */
-export type TreatyParty = { kind: 'nation'; id: NationId };
+export type TreatyParty = { kind: 'nation'; id: NationId } | { kind: 'people'; id: TribeId };
 
 /**
  * A treaty (treaties.ts). Treaties are kept after they end, with `end` set, so the diplomacy
@@ -497,7 +590,20 @@ export interface Treaty {
 /**
  * The terms of a treaty, by kind. A union, so other kinds of treaty can bring their own terms.
  */
-export type TreatyTerms = AllianceTerms;
+export type TreatyTerms = AllianceTerms | LandUseTerms;
+
+/**
+ * What a land use treaty with a people binds the nation to (Beta 2, native-partners.md N5,
+ * peopletreaties.ts): a yearly rent in gold for each tile it leases, set when the lease is made.
+ * The tiles themselves carry the lease (`Tile.use`).
+ */
+export interface LandUseTerms {
+  kind: 'land-use';
+  /** Gold a year for each tile leased, set when the lease was made. */
+  rent: number;
+  /** Turn the next year's rent is due (the first year's is paid when the lease is made). */
+  due: number;
+}
 
 /** What an alliance binds its members to (alliances.ts reads them; ALLIANCE_TERMS are the standard ones). */
 export interface AllianceTerms {
@@ -547,6 +653,12 @@ export interface GameState {
   relations: Record<string, Relation>;
   /** Treaties between European nations, in force and past, in the order made (treaties.ts). Missing until the first one. */
   treaties?: Treaty[];
+  /**
+   * Each nation's standing with each native people (natives.ts, native-partners.md N3), keyed by
+   * `peopleRelationKey(nation, people)` ("france|arawak"). Written lazily, when a nation first
+   * trades with a people; missing until then.
+   */
+  peopleRelations?: Record<string, PeopleRelation>;
   /** Trade routes by id; missing means none. */
   routes?: Record<string, TradeRoute>;
   /** Native braves on the map, by id. Missing (older saves) means none yet; settlements send them out. */
@@ -566,6 +678,11 @@ export interface GameState {
      * (`concord`, victory.ts), ranked by their own score; empty when nobody won.
      */
     winners: NationId[];
+    /**
+     * The native peoples the winners are partners of (the `prosperity` victory, native-partners.md
+     * N10): named on the game-over screen, not winners themselves. Missing for other endings.
+     */
+    partners?: TribeId[];
   };
   /** Silver and ore dug so far from mining tiles, by "x,y" (see mines.ts). Missing means none. */
   mined?: Record<string, number>;

@@ -69,7 +69,7 @@ export const AMERICAS_GENERATOR: GeneratorSettings = {
 /** What each nation's bonus does (its text is NATIONS[id].bonus), read at the engine's hook points (rules/modifiers.ts). */
 const BONUSES: Partial<Record<NationId, Modifier[]>> = {
   england: [{ hook: 'crossesStep', set: 12 }],
-  france: [{ hook: 'nativeGifts', add: 0.15 }],
+  france: [{ hook: 'nativeGifts', add: 0.15 }, { hook: 'nativesTeach', units: ['pettyCriminal'] }],
   netherlands: [{ hook: 'priceRecovery', set: 0.2 }],
   spain: [{ hook: 'offenceVsSettlements', mul: 1.5 }],
   portugal: [{ hook: 'shipMoves', add: 1 }],
@@ -173,13 +173,18 @@ export const AMERICAS: Scenario = {
     charter: COLONY_CHARTER,
     customHouse: true,
     missions: true,
+    burialGrounds: true,
+    surrender: true,
     alliances: true,
     companies: true,
     confederation: true,
+    // Treaties with native peoples (peopletreaties.ts, Beta 2): trade, land use, cultural exchange and mutual defence so far.
+    peopleTreaties: ['people-trade', 'land-use', 'exchange', 'defence'],
   },
   // Winning the War of Independence ends the game; otherwise it ends after autumn 1850, won by an
-  // alliance holding most of the score together, or else by the highest score.
-  victory: [{ id: 'independence-war' }, { id: 'concord' }, { id: 'time' }],
+  // alliance holding most of the score together, or by every nation that prospered in peace and
+  // partnership with the native peoples (prosperity.ts, Beta 2), or else by the highest score.
+  victory: [{ id: 'independence-war' }, { id: 'concord' }, { id: 'prosperity' }, { id: 'time' }],
   rumours: AMERICAS_RUMOURS,
   // No `difficulty` or `score`: the Americas play by the engine's own DIFFICULTY and SCORE_WEIGHTS.
   // The Americas' terms are the defaults every scenario starts from (scenarios/terms.ts).

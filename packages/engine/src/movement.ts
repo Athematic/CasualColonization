@@ -26,7 +26,7 @@ import { FOREST_MOVE_COST, RIVER_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './ru
 import { riverLinked } from './rivers.js';
 import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
 import type { TribeId } from './rules/nations.js';
-import type { Colony, GameState, ImprovementKind, Player, Unit } from './types.js';
+import type { Colony, GameState, ImprovementKind, Player, Tile, Unit } from './types.js';
 import { mechanicsOf, term } from './scenarios/index.js';
 import { colonyTiles, setUnitLoc, unitTiles, colonyList, unitList } from './unitindex.js';
 import { alliesOf, colonyOpenTo, isAllied } from './alliances.js';
@@ -56,8 +56,16 @@ export function moveCost(s: GameState, u: Unit, fx: number, fy: number, tx: numb
   const to = tileAt(s, tx, ty)!;
   const w = s.map.width;
   const hasColony = (x: number, y: number) => (index ? index.colonies.has(y * w + x) : !!colonyAt(s, x, y));
-  const roadFrom = from.r || hasColony(fx, fy);
-  const roadTo = to.r || hasColony(tx, ty);
+  return landStepCost(s, from, to, fx, fy, tx, ty, from.r || hasColony(fx, fy), to.r || hasColony(tx, ty));
+}
+
+/**
+ * Move points a step on land costs, between two neighbouring tiles: ROAD_MOVE_COST when both ends
+ * have a road (`roadFrom`, `roadTo`: a road, or for a unit a colony), RIVER_MOVE_COST along a river
+ * that links the two tiles (road and river do not add up), else the forest's or the terrain's cost.
+ * Units (moveCost and the path search) and braves (braves.ts, braveStepCost) share it.
+ */
+export function landStepCost(s: GameState, from: Tile, to: Tile, fx: number, fy: number, tx: number, ty: number, roadFrom: boolean, roadTo: boolean): number {
   if (roadFrom && roadTo) return ROAD_MOVE_COST;
   // Along a river: as cheap as a road, and the two do not add up.
   if (to.rv && from.rv && riverLinked(s.map, fx, fy, tx, ty)) return RIVER_MOVE_COST;
@@ -388,13 +396,7 @@ function stepCost(s: GameState, ctx: SearchContext, fi: number, ti: number, fx: 
   if (ctx.ship) return 3;
   const from = s.map.tiles[fi];
   const to = s.map.tiles[ti];
-  const roadFrom = from.r || index.colony[fi] === index.gen;
-  const roadTo = to.r || index.colony[ti] === index.gen;
-  if (roadFrom && roadTo) return ROAD_MOVE_COST;
-  // Along a river: as cheap as a road, and the two do not add up.
-  if (to.rv && from.rv && riverLinked(s.map, fx, fy, tx, ty)) return RIVER_MOVE_COST;
-  if (to.f) return FOREST_MOVE_COST;
-  return TERRAIN[to.t].moveCost;
+  return landStepCost(s, from, to, fx, fy, tx, ty, from.r || index.colony[fi] === index.gen, to.r || index.colony[ti] === index.gen);
 }
 
 /**

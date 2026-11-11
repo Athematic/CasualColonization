@@ -233,6 +233,7 @@ export function newGameScreen(
       scenario.mechanics.alliances ? 'alliances (defence, open colonies, shared sight and bells, joint expeditions)' : null,
       scenario.mechanics.companies && scenario.nations.companies?.length ? 'chartered companies' : null,
       scenario.victory.some((v) => v.id === 'concord') ? 'winning together as an alliance' : null,
+      scenario.victory.some((v) => v.id === 'prosperity') ? 'winning by prosperity in partnership with the native peoples' : null,
       scenario.mechanics.confederation && scenario.mechanics.independence ? 'declaring independence together' : null,
     ].filter((x): x is string => !!x);
     const scenarios = playableScenarios();

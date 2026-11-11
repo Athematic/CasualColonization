@@ -87,6 +87,14 @@ class SchematicRenderer implements MapRenderer {
         ctx.strokeStyle = 'rgba(0,0,0,0.25)';
         ctx.strokeRect(p.x + 0.5, p.y + 0.5, z - 1, z - 1);
         if (tile.lcr) this.text('?', p.x + z / 2, p.y + z / 2, z * 0.5, '#ffe28a');
+        // A people's land leased to a nation (Beta 2, land use): a dashed frame in its colour.
+        if (tile.use) {
+          ctx.save();
+          ctx.strokeStyle = nationOf(s, tile.use).color;
+          ctx.setLineDash([3, 3]);
+          ctx.strokeRect(p.x + 3.5, p.y + 3.5, z - 7, z - 7);
+          ctx.restore();
+        }
         if (!isTileVisible(scene, x, y)) {
           ctx.fillStyle = 'rgba(17,20,24,0.35)';
           ctx.fillRect(p.x, p.y, z, z);
