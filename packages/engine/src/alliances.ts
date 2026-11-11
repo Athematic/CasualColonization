@@ -54,9 +54,12 @@ export const ALLIANCE_RULES: AllianceRules = {
  * How readily the computer players cooperate, for the most cooperative level (Creative); the
  * others take LEVEL_COOPERATION's share. A scenario's `ai.cooperation` is merged over it. Tuned for
  * computer-only tournaments to give an alliance in about one game in four and a concord victory
- * about once in 30–40 games (docs/design/cooperation.md, C11).
+ * about once in 30–40 games (docs/design/cooperation.md, C11). `confederation` and
+ * `confederationReadiness` were 0.6 and 0.65 in Beta 1; Beta 2's peoples made Creative nations
+ * readier to declare together (a confederation in 15 of 192 all-Creative games against Beta 1's 7),
+ * so step 6 brought them back to about one in 30 (native-partners.md section 15).
  */
-export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace: 0.001, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1, foundMargin: 0.5, sharesMargin: 1500, jointExpedition: 0.05, confederation: 0.6, confederationReadiness: 0.65, proposePeopleTrade: 0.5, acceptPeopleOffer: 0.9, proposeLandUse: 0.5, proposeExchange: 0.3, proposeDefence: 0.3 };
+export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace: 0.001, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1, foundMargin: 0.5, sharesMargin: 1500, jointExpedition: 0.05, confederation: 0.3, confederationReadiness: 0.8, proposePeopleTrade: 0.5, acceptPeopleOffer: 0.9, proposeLandUse: 0.5, proposeExchange: 0.3, proposeDefence: 0.3 };
 
 /**
  * Each level's share of COOPERATION's chances: Creative seeks alliances out, Naive never proposes.
