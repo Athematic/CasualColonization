@@ -163,7 +163,16 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
       return;
     case 'peaceWithPeoples':
       for (const st of Object.values(s.settlements)) st.tension[p.id] = 0;
-      for (const t of s.tribes) t.stance[p.id] = 'peace';
+      for (const t of s.tribes) {
+        t.stance[p.id] = 'peace';
+        // The peace holds even with a people whose burial ground was desecrated: the grievance is
+        // forgiven, or processNatives would put the people back at war next round (fix e).
+        if (t.burial?.includes(p.id)) {
+          const rest = t.burial.filter((n) => n !== p.id);
+          if (rest.length) t.burial = rest;
+          else delete t.burial;
+        }
+      }
       return;
     case 'stockades':
       for (const c of ownColonies(s, p.id)) if (colonyWorkers(s, c).length >= e.minColonists && c.buildings.stockade === 0) c.buildings.stockade = 1;

@@ -14,6 +14,7 @@ import {
   CARIBBEAN,
   gridOf,
   landPrice,
+  joinCongress,
   learnSkill,
   modifiers,
   nationOf,
@@ -327,5 +328,34 @@ describe('mood labels at the real thresholds (fix b)', () => {
     st.tension.england = 200;
     // Conquistador: 250 more, so 450: braves demand tribute but do not yet attack.
     expect(takeLand(s, 'england', at.x, at.y)).toMatch(/are uneasy\.$/);
+  });
+});
+
+describe("Pocahontas's peace holds after a desecrated burial ground (fix e)", () => {
+  it('forgives the burial ground, so the people stays at peace', () => {
+    const s = game();
+    const st = Object.values(s.settlements)[0];
+    const tribe = tribeOf(s, st);
+    tribe.burial = ['england', 'france'];
+    tribe.stance.england = 'war';
+    tribe.stance.france = 'war';
+    for (const o of Object.values(s.settlements)) if (o.tribe === st.tribe) o.tension.england = o.tension.france = 1000;
+    joinCongress(s, player(s, 'england'), 'pocahontas');
+    expect(tribe.stance.england).toBe('peace');
+    expect(tribe.burial).toEqual(['france']);
+    for (let i = 0; i < 5; i++) processNatives(s);
+    expect(tribe.stance.england).toBe('peace');
+    expect(st.tension.england).toBeLessThan(NATIVE_RULES.tension.war);
+    // Only the nation that gained Pocahontas is forgiven.
+    expect(tribe.stance.france).toBe('war');
+  });
+
+  it('leaves no empty burial list behind', () => {
+    const s = game();
+    const tribe = s.tribes[0];
+    tribe.burial = ['england'];
+    joinCongress(s, player(s, 'england'), 'pocahontas');
+    expect(tribe.burial).toBeUndefined();
+    expect(serialize(deserialize(serialize(s)))).toBe(serialize(s));
   });
 });
