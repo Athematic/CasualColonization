@@ -12,6 +12,7 @@ import type { BuildingKind } from '../rules/buildings.js';
 import type { DifficultyId, DifficultyRules } from '../rules/difficulty.js';
 import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
+import type { PeopleEconomy } from '../rules/peoples.js';
 import type { Modifier, RumourOutcome } from '../rules/modifiers.js';
 import type { Effect } from '../events/types.js';
 import type { CompanyId, Lifeway, NationId, PeopleDef, PlayerId, Temperament, TribeId } from '../rules/nations.js';
@@ -72,6 +73,11 @@ export interface Scenario {
    * nations' selection. Missing means the engine's placeholder selection (`nationTypeOf`).
    */
   nationTypes?: { people?: NationTypeSelection };
+  /**
+   * A playing people's stores and gardens (native-nations.md T10; rules/peoples.ts), merged over
+   * the engine's PEOPLE_ECONOMY. Absent fields keep the engine's values.
+   */
+  peopleEconomy?: Partial<PeopleEconomy>;
   council: Council;
   /** What the computer players need to know about the scenario's content. */
   ai: ScenarioAi;
@@ -182,6 +188,38 @@ export interface Mechanics {
    * `land-use`, step 3 `exchange`, step 4 `defence`).
    */
   peopleTreaties?: PeopleTreatyKind[];
+  /**
+   * Hard years (native-nations.md T10): each year, each region (land.ts) has a hard year with
+   * this chance, drawn from the game seed; food yields there are halved for everyone. Absent or
+   * false means off (the Americas and the Caribbean).
+   */
+  hardYears?: false | HardYearRules;
+  /**
+   * Land health per region (T10, land.ts): furs and game taken beyond a region's renewal wear it
+   * down, and its fur and game yields scale with its health. Absent or false means off.
+   */
+  landHealth?: false | LandHealthRules;
+}
+
+/** Hard years (`Mechanics.hardYears`). */
+export interface HardYearRules {
+  /** Chance of a hard year in each region each year (1 in 8). */
+  chance: number;
+}
+
+/** Land health (`Mechanics.landHealth`). */
+export interface LandHealthRules {
+  /**
+   * Side of a region in tiles, on maps without regions of their own: the map is cut into squares
+   * of this size (8). Step 8's stored map brings real regions.
+   */
+  regionSize: number;
+  /** Furs and game a region renews in a year: what can be taken without wearing it (40). */
+  renewal: number;
+  /** Health a region regains in a year while less than its renewal is taken (5). */
+  recovery: number;
+  /** The lowest share of fur and game yields a worn region still gives (0.2). */
+  floor: number;
 }
 
 /** A whole number of years from `base − spread` to `base + spread`, drawn from the game seed. */

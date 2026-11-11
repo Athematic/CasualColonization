@@ -8,6 +8,7 @@
  * deterministic.
  */
 import { gridOf } from './grid.js';
+import { settlementFurs } from './land.js';
 import { chooseDefender, defencePower, promote } from './combat.js';
 import { fail } from './errors.js';
 import { sellPrice } from './europe.js';
@@ -150,7 +151,9 @@ function gatherGoods(s: GameState, st: Settlement): void {
     const n = produce[g];
     if (!n) continue;
     const goods = (st.goods = st.goods ?? {});
-    goods[g] = Math.min(cap, (goods[g] ?? 0) + n);
+    // Furs come from the land's health, and count against it (land.ts, T10).
+    const got = s.land?.taken && g === 'furs' ? settlementFurs(s, st.x, st.y, n) : n;
+    goods[g] = Math.min(cap, (goods[g] ?? 0) + got);
   }
 }
 

@@ -31,8 +31,8 @@ import { random, randInt } from './rng.js';
 import { riverLinked } from './rivers.js';
 import { isFavoured, onWar } from './relations.js';
 import { pactAllies, sendOut, warOnFriend } from './alliances.js';
-import { systemsOfId } from './playerkind.js';
-import { STOCKADE_DEFENCE } from './rules/buildings.js';
+import { kindOfId, systemsOfId } from './playerkind.js';
+import { BUILDINGS, STOCKADE_DEFENCE } from './rules/buildings.js';
 import { AMBUSH_BONUS, BOMBARD_CHANCE, CAPTURE_CHANCE, REPAIR_COST, RIVER_DEFENCE } from './rules/combat.js';
 import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
@@ -52,6 +52,9 @@ function troopBonus(u: Unit, attacking: boolean): number {
       return 1.5;
     case 'continentalSoldier':
       return 2;
+    // A people's warrior armed with muskets fights as a veteran does (native-nations.md T6).
+    case 'warrior':
+      return 1.5;
     case 'kingsRegular':
       return attacking ? 1.5 : 1.75;
     default:
@@ -73,7 +76,8 @@ export function ambushBonus(s: GameState, attacker: { x: number; y: number }, de
 
 export function offencePower(s: GameState, u: Unit, target?: Unit): number {
   const def = UNIT_TYPES[u.type];
-  let power = def.kind === 'colonist' ? ROLES[u.role].offence : def.offence;
+  // A colonist fights by its role; a people's warrior has its bow (`def.offence`) without one.
+  let power = def.kind === 'colonist' ? Math.max(ROLES[u.role].offence, def.offence) : def.offence;
   power *= troopBonus(u, true);
   for (const m of modifiers(s, u.owner, 'unitOffence')) if (m.unit === u.type) power *= m.mul;
   const pos = target && !isShip(u) ? unitPosition(s, u) : undefined;
@@ -95,7 +99,7 @@ export function riverCrossing(s: GameState, from: { x: number; y: number }, to: 
 /** `attackFrom`: where the attack comes from, for the river defence bonus (a unit in the open defending against a crossing attacker). */
 export function defencePower(s: GameState, u: Unit, attackFrom?: { x: number; y: number }): number {
   const def = UNIT_TYPES[u.type];
-  let power = def.kind === 'colonist' ? ROLES[u.role].defence : def.defence;
+  let power = def.kind === 'colonist' ? Math.max(ROLES[u.role].defence, def.defence) : def.defence;
   power *= troopBonus(u, false);
   if (isShip(u)) return power;
   const pos = unitPosition(s, u);
@@ -105,6 +109,9 @@ export function defencePower(s: GameState, u: Unit, attackFrom?: { x: number; y:
   if (colony) {
     const level = colony.buildings.stockade;
     bonus = level > 0 ? STOCKADE_DEFENCE[level - 1] : 0;
+    // A people's palisade (native-nations.md T7).
+    const palisade = colony.buildings.palisade;
+    if (palisade) bonus = Math.max(bonus, BUILDINGS.palisade.defence![palisade - 1]);
     if (def.kind === 'artillery') bonus += 75;
     // Paul Revere: colonists take up stored muskets.
     if (def.kind === 'colonist' && !isArmed(u) && modifiers(s, colony.owner, 'armedFromStock').some((m) => colony.goods.muskets >= m.muskets)) power = ROLES.soldier.defence;
@@ -213,6 +220,12 @@ function demote(s: GameState, u: Unit, winner: Unit): string {
       }
       return `${name} is disarmed`;
     }
+    // No captives where a people plays (native-nations.md, out of scope for Beta 3): a beaten
+    // unarmed person of a people, or beaten by one, is lost.
+    if (systemsOfId(u.owner).ai === 'people' || systemsOfId(winner.owner).ai === 'people') {
+      removeUnit(s, u.id);
+      return `${name} is lost`;
+    }
     // Unarmed colonists and treasure are captured.
     setUnitOwner(s, u, winner.owner);
     u.role = 'none';
@@ -306,6 +319,13 @@ export function bombardShips(s: GameState, nation: PlayerId): void {
 
 /** Winning soldiers may become veterans; George Washington makes it certain. */
 export function promote(s: GameState, u: Unit): string {
+  // A people's townsperson who wins a fight may become a warrior, armed or not (native-nations.md T6).
+  const people = kindOfId(u.owner) === 'people';
+  if (people) {
+    if (!s.units[u.id] || u.type !== 'townsperson' || random(s) >= 0.2) return '';
+    u.type = 'warrior';
+    return ` The victors become ${UNIT_TYPES.warrior.name.toLowerCase()}s.`;
+  }
   if (!s.units[u.id] || !isArmed(u) || UNIT_TYPES[u.type].skill > 0 || u.type === 'nativeConvert') return '';
   if (!hasModifier(s, u.owner, 'alwaysPromote') && random(s) >= 0.2) return '';
   u.type = player(s, u.owner).independence === 'declared' ? 'continentalSoldier' : 'veteranSoldier';
@@ -347,6 +367,8 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
     defender = chooseDefender(s, unitsAt(s, tp.x, tp.y).filter((o) => o.owner === t.owner), pos);
   }
   if (!defender) fail('There is nothing to attack.');
+  // A people's town attacked has no birth this year (native-nations.md T10).
+  if (colony && kindOfId(colony.owner) === 'people') colony.foughtAt = s.turn;
   // The nation attacked: a colony's owner (its allies' garrison defends it), else the defender's.
   const enemy = colony ? colony.owner : defender.owner;
   if (s.players.length > s.config.nations.length && (!systemsOfId(enemy).war || !systemsOfId(u.owner).war)) fail('Chartered companies are neutral: they are not attacked and do not attack.');
@@ -365,7 +387,7 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
   const attackerRole = u.role;
   let text: string;
   if (won) {
-    const unarmed = UNIT_TYPES[defender.type].kind === 'colonist' && !isArmed(defender);
+    const unarmed = UNIT_TYPES[defender.type].kind === 'colonist' && !isArmed(defender) && UNIT_TYPES[defender.type].offence === 0;
     if (colony && (unarmed || defender.loc.kind === 'colony')) {
       text = captureColony(s, u, colony);
     } else {

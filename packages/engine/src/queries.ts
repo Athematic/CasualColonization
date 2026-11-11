@@ -170,7 +170,10 @@ export function cargoRoomFor(s: GameState, carrier: Unit, good: GoodId): number 
 }
 
 export function warehouseCapacity(colony: Colony): number {
-  return WAREHOUSE_CAPACITY[colony.buildings.warehouse] ?? 100;
+  const base = WAREHOUSE_CAPACITY[colony.buildings.warehouse] ?? 100;
+  // A people's storage pits keep goods as a warehouse does (native-nations.md T7).
+  const pits = colony.buildings.storagePits;
+  return pits ? base + BUILDINGS.storagePits.capacity![pits - 1] : base;
 }
 
 export function isExplored(s: GameState, nation: PlayerId, x: number, y: number): boolean {
@@ -180,8 +183,8 @@ export function isExplored(s: GameState, nation: PlayerId, x: number, y: number)
 
 export function sightRadius(u: Unit, s: GameState): number {
   const def = UNIT_TYPES[u.type];
-  let r = 1;
-  if (u.role === 'scout') r = 2;
+  let r = def.sight ?? 1;
+  if (u.role === 'scout') r = Math.max(r, 2);
   if (def.kind === 'ship' && def.offence > 0) r = 2;
   for (const m of modifiers(s, u.owner, 'sight')) if ((!m.roles || m.roles.includes(u.role)) && (!m.land || def.kind !== 'ship')) r += m.add;
   return r;

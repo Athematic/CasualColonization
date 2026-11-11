@@ -5,7 +5,7 @@
  *
  * Imports only the leaf rule tables, so any engine module can import the registry.
  */
-import { BUILDING_ORDER } from '../rules/buildings.js';
+import { EUROPEAN_BUILDINGS } from '../rules/buildings.js';
 import { COLONY_CHARTER } from '../rules/difficulty.js';
 import { AMERICAS_FATHERS, FATHER_CATEGORIES } from '../rules/fathers.js';
 import { GOODS } from '../rules/goods.js';
@@ -14,7 +14,7 @@ import { HOME_PORTS, NATION_ORDER, NATIONS, TRIBE_ORDER, type AmericasNationId, 
 import { BURIAL_WEIGHT, NATIVE_PRODUCE, SETTLEMENT_KINDS } from '../rules/natives.js';
 import { PORT_CHARACTER } from '../rules/ports.js';
 import { TERRAIN, type TerrainId } from '../rules/terrain.js';
-import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
+import { EUROPEAN_UNIT_TYPES } from '../rules/units.js';
 import { AMERICAS_PEOPLES } from '../maps/americas.js';
 import { AUSTRALIA_PLACEHOLDER_PEOPLES } from '../maps/australia.js';
 import { NORTH_AMERICA_PEOPLES } from '../maps/north-america.js';
@@ -147,8 +147,8 @@ export const AMERICAS: Scenario = {
     settlements: { nomadic: SETTLEMENT_KINDS.camp, agricultural: SETTLEMENT_KINDS.village, urban: SETTLEMENT_KINDS.city },
   },
   goods: [...GOODS],
-  units: Object.keys(UNIT_TYPES) as UnitTypeId[],
-  buildings: [...BUILDING_ORDER],
+  units: [...EUROPEAN_UNIT_TYPES],
+  buildings: [...EUROPEAN_BUILDINGS],
   council: { categories: [...FATHER_CATEGORIES], members: [...AMERICAS_FATHERS] },
   events: 'americas',
   ai: {

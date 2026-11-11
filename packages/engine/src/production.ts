@@ -7,6 +7,10 @@ import { yieldMultiplier } from './cheats.js';
 import { modifiers, setOr } from './scenarios/modifiers.js';
 import { applyEventModifiers } from './events/modifiers.js';
 import { colonyWorkers, isWater, tileAt } from './queries.js';
+import { kindOfId } from './playerkind.js';
+import { landAdjusted } from './land.js';
+import { wayOf } from './rules/peoples.js';
+import { peopleEconomyOf } from './scenarios/index.js';
 import type { Colony, GameState, Tile, Unit } from './types.js';
 
 export const FOOD_PER_COLONIST = 2;
@@ -34,6 +38,8 @@ export const TORY_COLONY_BELOW = 30;
 
 /** Production bonus per worker from Sons of Liberty membership, less the Tory penalty. */
 export function libertyBonus(s: GameState, colony: Colony, pop = colonyWorkers(s, colony).length): number {
+  // A playing people's towns have no Sons of Liberty and no Tories (native-nations.md T1, T10).
+  if (kindOfId(colony.owner) === 'people') return 0;
   const sol = sonsOfLiberty(s, colony, pop);
   const tories = pop - Math.round((pop * sol) / 100);
   const penalty = tories > TORY_PENALTY_AT[1] ? 2 : tories > TORY_PENALTY_AT[0] ? 1 : 0;
@@ -78,7 +84,9 @@ function tileYieldOf(tile: Tile, good: GoodId, plowed: boolean): number {
 /** `bonus` is the colony's liberty bonus, when the caller has already worked it out. */
 export function tileYield(s: GameState, colony: Colony, x: number, y: number, good: GoodId, unitType: UnitTypeId, bonus = libertyBonus(s, colony)): number {
   const tile = tileAt(s, x, y);
-  return workerTileYield(s, colony, tile, good, unitType, landYield(s, colony, tile, good), bonus);
+  const amount = workerTileYield(s, colony, tile, good, unitType, landYield(s, colony, tile, good), bonus);
+  // Hard years and land health (land.ts), in scenarios that have them.
+  return s.land && tile ? landAdjusted(s, tile, x, y, good, amount) : amount;
 }
 
 /**
@@ -87,7 +95,7 @@ export function tileYield(s: GameState, colony: Colony, x: number, y: number, go
  */
 export function landYield(s: GameState, colony: Colony, tile: Tile | undefined, good: GoodId): number {
   if (!tile) return 0;
-  if (isWater(tile) && colony.buildings.docks === 0) return 0;
+  if (isWater(tile) && colony.buildings.docks === 0 && !colony.buildings.canoeLanding) return 0;
   return baseTileYield(tile, good) * yieldMultiplier(s);
 }
 
@@ -101,6 +109,9 @@ export function workerTileYield(s: GameState, colony: Colony, tile: Tile | undef
     def.expertFor === good &&
     (good !== 'food' || (unitType === 'expertFisherman') === isWater(tile));
   if (expert) amount *= 2;
+  // A people's worker's ways (rules/peoples.ts): a hunter hunts, a fisher fishes, a gardener gardens.
+  const ways = def.ways;
+  if (ways) amount *= ways[wayOf(tile, good, peopleEconomyOf(s).gardens)] ?? 1;
   for (const m of modifiers(s, colony.owner, 'tileYield')) if (m.good === good) amount *= m.mul;
   // Converts know the land: better at farming, fishing and trapping.
   if (unitType === 'nativeConvert' && (good === 'food' || good === 'sugar' || good === 'tobacco' || good === 'cotton' || good === 'furs')) amount += 1;
@@ -116,6 +127,10 @@ export function centreProduction(s: GameState, colony: Colony): Partial<Record<G
   if (centre.best) out[centre.best] = centre.bestAmount;
   const mult = yieldMultiplier(s);
   if (mult !== 1) for (const g of Object.keys(out) as GoodId[]) out[g]! *= mult;
+  if (s.land) {
+    const tile = tileAt(s, colony.x, colony.y)!;
+    for (const g of Object.keys(out) as GoodId[]) out[g] = landAdjusted(s, tile, colony.x, colony.y, g, out[g]!);
+  }
   return out;
 }
 
@@ -212,11 +227,17 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
   const bonus = libertyBonus(s, colony, units.length);
 
   // The centre tile's goods, as centreProduction gives them: two different goods, each added to a zero.
-  const centre = centreGoods(s, colony);
-  if (centre) {
-    const mult = yieldMultiplier(s);
-    if (centre.food > 0) produced.food += mult !== 1 ? centre.food * mult : centre.food;
-    if (centre.best) produced[centre.best] += mult !== 1 ? centre.bestAmount * mult : centre.bestAmount;
+  if (s.land) {
+    // Hard years and land health touch the centre's yields too (land.ts).
+    const out = centreProduction(s, colony);
+    for (const g of Object.keys(out) as GoodId[]) produced[g] += out[g]!;
+  } else {
+    const centre = centreGoods(s, colony);
+    if (centre) {
+      const mult = yieldMultiplier(s);
+      if (centre.food > 0) produced.food += mult !== 1 ? centre.food * mult : centre.food;
+      if (centre.best) produced[centre.best] += mult !== 1 ? centre.bestAmount * mult : centre.bestAmount;
+    }
   }
 
   // Workers in buildings, by building, each list in the workers' order.

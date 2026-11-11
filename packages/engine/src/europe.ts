@@ -413,6 +413,7 @@ export function sailToEurope(s: GameState, carrierId: string, port?: PlayerId): 
   if (tile.t !== 'highSeas') fail(`Ships can only sail to ${term(s, 'homeland')} from the high seas.`);
   if (colonyAt(s, ship.loc.x, ship.loc.y)) fail('The ship is in port.');
   if (player(s, ship.owner).independence !== 'none') fail(`Rebel ships are not welcome in ${term(s, 'homeland')}.`);
+  if (!systemsOf(player(s, ship.owner)).homePort) fail(`You have no port in ${term(s, 'homeland')}.`);
   const target = port ?? ship.owner;
   const problem = portProblem(s, ship.owner, target);
   if (problem) fail(problem);

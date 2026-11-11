@@ -346,6 +346,28 @@ export interface Colony {
   exports: Partial<Record<GoodId, boolean>>;
   /** For a colony the Crown has retaken: who held it before. */
   takenFrom?: PlayerId;
+  /**
+   * A playing people's town that has gone hungry (native-nations.md T10, peopleeconomy.ts): the
+   * turn its run of hungry years began and the last turn it went hungry. Missing when it has not.
+   */
+  hunger?: { since: number; last: number };
+  /** The last turn a playing people's town was attacked (no birth that year, T10). Missing when never. */
+  foughtAt?: number;
+}
+
+/**
+ * The land's regions (land.ts). A region is a square of `size` tiles (the map cut in `cols`
+ * columns) until step 8's map brings regions of its own; arrays are indexed by region.
+ */
+export interface LandState {
+  size: number;
+  cols: number;
+  /** Health per region, 0–100, starting at 100; only with land health. */
+  health?: number[];
+  /** Furs and game taken in each region so far this year; only with land health. */
+  taken?: number[];
+  /** The regions having a hard year this year, in order; only with hard years. */
+  hard?: number[];
 }
 
 export interface Tribe {
@@ -694,6 +716,11 @@ export interface GameState {
      */
     partners?: TribeId[];
   };
+  /**
+   * The land's regions (native-nations.md T10, land.ts), while the scenario has hard years or land
+   * health: missing otherwise (the Americas and the Caribbean).
+   */
+  land?: LandState;
   /** Silver and ore dug so far from mining tiles, by "x,y" (see mines.ts). Missing means none. */
   mined?: Record<string, number>;
   /** Set the first time a cheat is used and never cleared. Missing means the game is not cheated. */

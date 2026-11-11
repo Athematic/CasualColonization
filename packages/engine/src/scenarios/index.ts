@@ -5,7 +5,8 @@
  * are unchanged. There is no "current scenario": code that needs one reads `scenarioOf(s)` (Q8).
  */
 import { SaveVersionError } from '../errors.js';
-import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
+import { BUILDINGS, PEOPLE_BUILDINGS, type BuildingKind } from '../rules/buildings.js';
+import { PEOPLE_ECONOMY, type PeopleEconomy } from '../rules/peoples.js';
 import { kindOfId } from '../playerkind.js';
 import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
@@ -14,7 +15,7 @@ import { TRIBES, type PeopleDef, type PlayerId, type TribeId } from '../rules/na
 import { mergeNativeRules, type NativeRules, type SettlementKindDef } from '../rules/natives.js';
 import type { PortCharacter } from '../rules/ports.js';
 import { SCORE_WEIGHTS, type ScoreWeights } from '../rules/score.js';
-import { COLONY_BUILDS, IMMIGRANT_WEIGHTS, PURCHASABLE, TRAINABLE, type UnitTypeId } from '../rules/units.js';
+import { COLONY_BUILDS, IMMIGRANT_WEIGHTS, PEOPLE_UNIT_TYPES, PURCHASABLE, TRAINABLE, type UnitTypeId } from '../rules/units.js';
 import type { GameConfig, GameState } from '../types.js';
 import { AMERICAS } from './americas.js';
 import { CARIBBEAN } from './caribbean.js';
@@ -151,22 +152,32 @@ export function nationTypeOf(s: HasScenario, type: 'european' | 'people'): Natio
 
 /**
  * The unit a colony grows by (colony.ts): a free colonist; in a playing people's town the first unit
- * of the people's selection (step 2 makes its births its own, T10).
+ * of the people's selection (the townsperson, T10).
  */
 export function bornType(s: HasScenario, owner: PlayerId): UnitTypeId {
   return kindOfId(owner) === 'people' ? nationTypeOf(s, 'people').units[0] : 'freeColonist';
 }
 
 /**
- * The engine's placeholder selection for a playing people until step 2 adds the people's own units
- * and buildings (T6, T7): the native convert (today's only native unit type: the people its towns
- * are peopled and grow with, and its first units) and three buildings every colony starts with.
- * `units[0]` is the unit a town is peopled and grows with.
+ * The engine's selection for a playing people when its scenario names none: the people's own
+ * units and buildings of the catalogue (native-nations.md T6, T7; Beta 3 step 2). `units[0]` is the
+ * unit a town is peopled and grows with (the townsperson).
  */
 export const PEOPLE_SELECTION: NationTypeSelection = {
-  units: ['nativeConvert'],
-  buildings: ['townHall', 'carpenter', 'blacksmith'],
+  units: [...PEOPLE_UNIT_TYPES],
+  buildings: [...PEOPLE_BUILDINGS],
 };
+
+const ECONOMIES = new WeakMap<Scenario, PeopleEconomy>();
+
+/** A game's rules for a playing people's stores and gardens: the engine's PEOPLE_ECONOMY with the scenario's `peopleEconomy`. */
+export function peopleEconomyOf(s: HasScenario): PeopleEconomy {
+  const scenario = scenarioOf(s);
+  if (!scenario.peopleEconomy) return PEOPLE_ECONOMY;
+  let e = ECONOMIES.get(scenario);
+  if (!e) ECONOMIES.set(scenario, (e = { ...PEOPLE_ECONOMY, ...scenario.peopleEconomy }));
+  return e;
+}
 
 /**
  * A player as its game's scenario has it (Q2): name, adjective, colour, bonus, colony names and

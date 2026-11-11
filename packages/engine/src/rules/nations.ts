@@ -129,6 +129,11 @@ export interface PeopleDef {
    * Scenario data (`peoples.overrides`); the catalogue gives none.
    */
   temperament?: Temperament;
+  /**
+   * Years of food a playing people's towns keep as their reserve (native-nations.md T10; the
+   * engine's `PeopleEconomy.storeYears` when missing). Scenario data (`peoples.overrides`).
+   */
+  storeYears?: number;
 }
 
 /** A people's temperament towards treaties (N8). Not "wary", which is a mood word (tensionLabel). */

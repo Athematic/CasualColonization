@@ -15,7 +15,15 @@ export type BuildingKind =
   | 'stockade'
   | 'printingPress'
   | 'schoolhouse'
-  | 'customHouse';
+  | 'customHouse'
+  // A native people's own buildings (native-nations.md T7; Beta 3 step 2): `people: true`.
+  | 'longhouse'
+  | 'dryingRacks'
+  | 'storagePits'
+  | 'workshop'
+  | 'canoeLanding'
+  | 'palisade'
+  | 'councilHouse';
 
 export interface BuildingLevel {
   name: string;
@@ -38,6 +46,23 @@ export interface BuildingDef {
   coastalOnly?: boolean;
   /** Only built by nations with an `unlockBuilding` modifier for it (rules/modifiers.ts; the custom house: Peter Stuyvesant). */
   locked?: boolean;
+  /**
+   * A native people's building (native-nations.md T7): in a playing people's selection
+   * (`Scenario.nationTypes.people`), never in the European nations' (`EUROPEAN_BUILDINGS`).
+   */
+  people?: true;
+  /** People a town can house at each level; births stop at it (peopleeconomy.ts). */
+  housing?: number[];
+  /** Food a town can keep in store at each level, beyond what it puts by towards a birth (peopleeconomy.ts). */
+  store?: number[];
+  /** Other goods a town can keep, added to its storage at each level (as a warehouse; queries.ts `warehouseCapacity`). */
+  capacity?: number[];
+  /** Defence bonus in percent at each level for units in the town (as a stockade; combat.ts). */
+  defence?: number[];
+  /** Its places are teaching places, as a schoolhouse's (`SCHOOL_TEACHERS` by level). */
+  school?: true;
+  /** The town may work water tiles and build boats (as docks). */
+  water?: true;
 }
 
 const lvl = (name: string, hammers: number, tools: number, minPop: number): BuildingLevel => ({ name, hammers, tools, minPop });
@@ -94,6 +119,38 @@ export const BUILDINGS: Record<BuildingKind, BuildingDef> = {
     initialLevel: 0, workplaces: 3,
   },
   customHouse: { kind: 'customHouse', levels: [lvl('Custom House', 150, 50, 3)], initialLevel: 0, workplaces: 0, locked: true },
+
+  // A native people's own buildings (native-nations.md T7, Beta 3 step 2; drafted for Simon's
+  // review). No tools: iron tools came only from Europeans. No ceremonial or sacred places.
+  /** Housing, and where elders teach the young. */
+  longhouse: {
+    kind: 'longhouse', levels: [lvl('Longhouse', 0, 0, 1), lvl('Longhouses', 64, 0, 4), lvl('Many Longhouses', 160, 0, 8)],
+    initialLevel: 1, workplaces: 3, people: true, housing: [6, 12, 20], school: true,
+  },
+  /** Fish and meat dried and smoked for winter. */
+  dryingRacks: {
+    kind: 'dryingRacks', levels: [lvl('Drying Racks', 0, 0, 1), lvl('Smokehouse', 64, 0, 3)],
+    initialLevel: 1, workplaces: 0, people: true, store: [50, 150],
+  },
+  /** Winter stores of maize, beans, dried fish and goods. */
+  storagePits: {
+    kind: 'storagePits', levels: [lvl('Storage Pits', 52, 0, 2), lvl('Bark-lined Storage Pits', 120, 0, 5)],
+    initialLevel: 0, workplaces: 0, people: true, store: [100, 250], capacity: [100, 200],
+  },
+  /** Crafters make tools of wood, stone and bone, frames and canoes: the town's building work. */
+  workshop: {
+    kind: 'workshop', levels: [lvl('Workshop', 0, 0, 1), lvl('Workshops', 56, 0, 4)],
+    initialLevel: 1, workplaces: 3, input: 'lumber', output: 'hammers', people: true,
+  },
+  /** The people's docks: fishing from canoes, and canoes built. */
+  canoeLanding: { kind: 'canoeLanding', levels: [lvl('Canoe Landing', 40, 0, 1)], initialLevel: 0, workplaces: 0, coastalOnly: true, people: true, water: true },
+  /** A town's wall of posts; Hochelaga had three rows. */
+  palisade: {
+    kind: 'palisade', levels: [lvl('Palisade', 64, 0, 3), lvl('Double Palisade', 120, 0, 6), lvl('Triple Palisade', 200, 0, 10)],
+    initialLevel: 0, workplaces: 0, people: true, defence: [50, 100, 150],
+  },
+  /** Where the town's council meets; its product pays council members (step 3; bells until then). */
+  councilHouse: { kind: 'councilHouse', levels: [lvl('Council House', 0, 0, 1)], initialLevel: 1, workplaces: 3, output: 'bells', baseOutput: [1], people: true },
 };
 
 /** Teachers a school of each level can hold. */
@@ -102,6 +159,12 @@ export const SCHOOL_TEACHERS = [1, 2, 3];
 export const TEACH_TURNS = [4, 6, 8];
 
 export const BUILDING_ORDER: BuildingKind[] = Object.keys(BUILDINGS) as BuildingKind[];
+
+/** The catalogue's buildings of the European nations (every building but a people's own), in catalogue order. */
+export const EUROPEAN_BUILDINGS: BuildingKind[] = BUILDING_ORDER.filter((k) => !BUILDINGS[k].people);
+
+/** A native people's own buildings (T7), in catalogue order (the order their production runs in). */
+export const PEOPLE_BUILDINGS: BuildingKind[] = BUILDING_ORDER.filter((k) => BUILDINGS[k].people);
 
 /** Production per worker in a level-1 building, indexed by skill + 2 (criminal..expert). */
 export const BUILDING_SKILL_OUTPUT = [1, 2, 3, 6];

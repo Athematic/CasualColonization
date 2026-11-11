@@ -561,6 +561,10 @@ function standsWithPeoples(nation: PlayerId): boolean {
  * content on average (below the `content` threshold). A people with no settlements left has none.
  */
 export function goodRelations(s: GameState, nation: PlayerId, people: TribeId): boolean {
+  // A people playing as a nation has no settlements: its relations are good while the two are at
+  // peace (its side of Beta 2's standing record, native-nations.md T10).
+  const playing = s.players.find((p) => p.id === people);
+  if (playing) return playing.stance[nation] !== 'war' && s.players.some((p) => p.id === nation);
   const tribe = s.tribes.find((t) => t.id === people);
   if (!tribe || tribe.stance[nation] === 'war') return false;
   let n = 0;

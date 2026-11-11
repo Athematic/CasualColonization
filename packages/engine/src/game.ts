@@ -15,6 +15,7 @@ import { checkSavedScenario, checkScenarioConfig, difficultyOf, goodsOf, nationO
 import { modifiers } from './scenarios/modifiers.js';
 import { systemsOf, systemsOfId } from './playerkind.js';
 import { addPeoplePlayer } from './peopleplayer.js';
+import { initLand } from './land.js';
 
 /** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
 export const SAVE_VERSION = 3;
@@ -80,6 +81,8 @@ export function createGame(config: GameConfig): GameState {
 
   // Peoples playing as nations (native-nations.md T3, T4) take their turns after the nations.
   for (const people of config.peoples ?? []) addPeoplePlayer(s, people, config.humans.includes(people));
+  // The land's regions, hard years and health, in scenarios that have them (land.ts, T10).
+  initLand(s);
 
   beginPlayerTurn(s, s.players[0]);
   runAiUntilHuman(s);

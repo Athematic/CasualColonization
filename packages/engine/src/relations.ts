@@ -72,6 +72,14 @@ export function peoplePairRandom(s: GameState, nation: PlayerId, people: TribeId
 }
 
 /**
+ * A seeded number in [0, 1) for one region of the land and one purpose (a hard year, land.ts), from
+ * a stream of its own (never `GameState.rng`).
+ */
+export function regionRandom(s: GameState, region: number, purpose: string): number {
+  return random(stream(s, 'region', String(region), `region|${purpose}`));
+}
+
+/**
  * A seeded number in [0, 1) for one native settlement and one purpose, from a stream of its own
  * (never `GameState.rng`): when a settlement teaches again under a cultural exchange, and what.
  */

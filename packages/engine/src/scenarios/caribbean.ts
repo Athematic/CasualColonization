@@ -15,14 +15,14 @@
  *
  * Imports only the leaf rule tables, like the Americas, so any engine module can import the registry.
  */
-import { BUILDING_ORDER } from '../rules/buildings.js';
+import { EUROPEAN_BUILDINGS } from '../rules/buildings.js';
 import { FATHER_CATEGORIES, type FatherId } from '../rules/fathers.js';
 import { GOODS, type GoodId } from '../rules/goods.js';
 import { NATIONS, type CompanyId, type NationId } from '../rules/nations.js';
 import { SETTLEMENT_KINDS } from '../rules/natives.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { TerrainId } from '../rules/terrain.js';
-import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
+import { EUROPEAN_UNIT_TYPES } from '../rules/units.js';
 import { CARIBBEAN_PEOPLES } from '../maps/caribbean.js';
 import { AMERICAS, AMERICAS_GENERATOR } from './americas.js';
 import type { Calendar } from './calendar.js';
@@ -328,8 +328,8 @@ export const CARIBBEAN: Scenario = {
     overrides: { tupi: { wants: ['tradeGoods', 'tools', 'cloth'] } },
   },
   goods: GOODS_IN_PLAY,
-  units: without(Object.keys(UNIT_TYPES) as UnitTypeId[], 'expertFurTrapper', 'masterFurTrader'),
-  buildings: without(BUILDING_ORDER, 'furTrader'),
+  units: without(EUROPEAN_UNIT_TYPES, 'expertFurTrapper', 'masterFurTrader'),
+  buildings: without(EUROPEAN_BUILDINGS, 'furTrader'),
   council: { categories: [...FATHER_CATEGORIES], members: COUNCIL },
   events: 'caribbean',
   ai: {
