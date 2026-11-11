@@ -67,6 +67,7 @@ import { RoutesScreen } from './ui/routes.js';
 import { Sidebar } from './ui/sidebar.js';
 import { showTurnStart, sortNews } from './ui/turnstart.js';
 import { defenceLine, exchangeLine, inciteDialog, leaseLine, nativeTradeDialog, speakLabel } from './ui/natives.js';
+import { keyDirection } from './keys.js';
 
 /**
  * Turns of movement a unit needs to walk a path: the rest of this turn's moves first (or a fresh
@@ -138,12 +139,6 @@ export interface Screen {
 
 /** A watched head start shows each turn for at least this long. */
 export const HEAD_START_MIN_MS = 250;
-
-const KEY_DIRS: Record<string, Direction> = {
-  ArrowUp: 'n', ArrowDown: 's', ArrowLeft: 'w', ArrowRight: 'e',
-  Home: 'nw', PageUp: 'ne', End: 'sw', PageDown: 'se',
-  Numpad8: 'n', Numpad2: 's', Numpad4: 'w', Numpad6: 'e', Numpad7: 'nw', Numpad9: 'ne', Numpad1: 'sw', Numpad3: 'se',
-};
 
 export class App {
   readonly root: HTMLElement;
@@ -1090,7 +1085,7 @@ export class App {
       }
       return;
     }
-    const dir = KEY_DIRS[e.code] ?? KEY_DIRS[e.key];
+    const dir = keyDirection(gridOf(this.state), e.code, e.key);
     if (dir && this.selected) {
       e.preventDefault();
       void this.step(dir);
