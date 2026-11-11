@@ -27,7 +27,7 @@ import { pairAtWar, pairTreaty, playingPeople, sideName, standingWith } from './
 import { reserveOf } from './peopleeconomy.js';
 import { peopleTreatyRules } from './peopletreaties.js';
 import { kindOfId, systemsOfId } from './playerkind.js';
-import { cargoRoomFor, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
+import { cargoFree, cargoRoomFor, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import type { PlayerId, TribeId } from './rules/nations.js';
 import { UNIT_TYPES } from './rules/units.js';
@@ -49,13 +49,19 @@ export function europeanGoodsPrice(s: GameState, people: PlayerId, good: GoodId)
 
 /**
  * The price per unit of `good` sold by `seller` to `buyer` (a nation and a playing people), the
- * carrier's owner (`trader`) getting the trade treaty's prices if the two have one.
+ * carrier's owner (`trader`) getting the trade treaty's prices if the two have one. Not rounded:
+ * a deal's gold is the whole amount's price, rounded (`dealGold`).
  */
 export function pairPrice(s: GameState, seller: PlayerId, buyer: PlayerId, good: GoodId, trader: PlayerId): number {
   const base = kindOfId(seller) === 'people' ? peopleGoodsPrice(s, good) : europeanGoodsPrice(s, buyer, good);
   if (!pairTreaty(s, 'people-trade', seller, buyer)) return base;
   const r = peopleTreatyRules(s).trade;
-  return Math.max(1, Math.round(base * (trader === seller ? r.sell : r.buy)));
+  return base * (trader === seller ? r.sell : r.buy);
+}
+
+/** The gold for `n` units at a unit price, rounded. */
+export function dealGold(n: number, price: number): number {
+  return Math.round(n * price);
 }
 
 /** How much of a good a town or colony can let go: a people's town keeps its reserve of food. */
@@ -95,13 +101,14 @@ export function tradeWithPeople(s: GameState, by: PlayerId, unitId: string, colo
   const stock = load ? spare(s, c, good) : cargo[good] ?? 0;
   const room = load ? cargoRoomFor(s, u, good) : Math.max(0, warehouseCapacity(c) - c.goods[good]);
   const price = pairPrice(s, seller, buyer, good, u.owner);
-  const afford = Math.floor(Math.max(0, player(s, buyer).gold) / price);
+  let afford = Math.floor(Math.max(0, player(s, buyer).gold) / price);
+  while (afford > 0 && dealGold(afford, price) > player(s, buyer).gold) afford--;
   const name = GOOD_DEFS[good].name.toLowerCase();
   if (stock <= 0) fail(`There is no ${name} to sell.`);
   if (room <= 0) fail(`There is no room for more ${name}.`);
   const n = Math.min(Math.max(0, Math.floor(amount)), stock, room, afford);
-  if (n <= 0) fail(`${sideName(s, buyer)} cannot pay ${price} gold a unit for ${name}.`);
-  const gold = n * price;
+  if (n <= 0) fail(`${sideName(s, buyer)} cannot pay ${Math.round(price * 10) / 10} gold a unit for ${name}.`);
+  const gold = dealGold(n, price);
   if (load) {
     c.goods[good] -= n;
     cargo[good] = (cargo[good] ?? 0) + n;
@@ -115,7 +122,7 @@ export function tradeWithPeople(s: GameState, by: PlayerId, unitId: string, colo
   notePeopleTrade(s, nation, people as TribeId, gold);
   track(by, 'cmd:tradeWithPeople');
   track(people, seller === people ? 'trade:people sold' : 'trade:people bought', gold);
-  const text = `${sideName(s, seller).replace(/^the /, 'The ')} sell ${n} ${name} to ${sideName(s, buyer)} at ${c.name} for ${gold} gold (${price} a unit).`;
+  const text = `${sideName(s, seller).replace(/^the /, 'The ')} sell ${n} ${name} to ${sideName(s, buyer)} at ${c.name} for ${gold} gold.`;
   message(s, text, seller, c);
   message(s, text, buyer, c);
   return text;
@@ -144,7 +151,24 @@ export function barter(s: GameState, by: PlayerId, unitId: string, at: { colonyI
   if (have <= 0) fail(`There is no ${GOOD_DEFS[give].name.toLowerCase()} aboard.`);
   const worth = GOOD_DEFS[give].nativeValue * (pairTreaty(s, 'people-trade', u.owner, other) ? peopleTreatyRules(s).trade.sell : 1);
   const stock = town ? spare(s, town, take) : st!.goods?.[take] ?? 0;
-  const n = Math.min(Math.floor((have * worth) / GOOD_DEFS[take].nativeValue), stock, cargoRoomFor(s, u, take) + (give === take ? have : 0));
+  // The hold's room once what is given is out of it.
+  const held = cargo[give] ?? 0;
+  cargo[give] = held - have;
+  const room = cargoRoomFor(s, u, take);
+  cargo[give] = held;
+  let n = Math.min(Math.floor((have * worth) / GOOD_DEFS[take].nativeValue), stock, room);
+  // What is left of the goods given must still fit beside the goods taken.
+  const fits = (k: number) => {
+    const left = held - Math.min(have, Math.ceil((k * GOOD_DEFS[take].nativeValue) / worth));
+    cargo[give] = left;
+    cargo[take] = (cargo[take] ?? 0) + k;
+    const ok = cargoFree(s, u) >= 0;
+    cargo[take] -= k;
+    cargo[give] = held;
+    return ok;
+  };
+  while (n > 0 && !fits(n)) n--;
+  if (!cargo[take]) delete cargo[take];
   if (n <= 0) fail(`${sideName(s, other).replace(/^the /, 'The ')} have no ${GOOD_DEFS[take].name.toLowerCase()} to spare for it.`);
   const given = Math.min(have, Math.ceil((n * GOOD_DEFS[take].nativeValue) / worth));
   cargo[give] = (cargo[give] ?? 0) - given;

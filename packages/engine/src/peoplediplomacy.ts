@@ -161,7 +161,11 @@ export function pairAtWar(s: GameState, a: PlayerId, b: PlayerId): boolean {
 
 /** Whether a side is still in the game: a player with a colony or unit, a people nobody plays with a settlement. */
 function stillThere(s: GameState, id: PlayerId): boolean {
-  if (s.players.some((p) => p.id === id)) return colonyList(s).some((c) => c.owner === id);
+  if (s.players.some((p) => p.id === id)) {
+    if (colonyList(s).some((c) => c.owner === id)) return true;
+    for (const k in s.units) if (s.units[k].owner === id) return true;
+    return false;
+  }
   for (const k in s.settlements) if (s.settlements[k].tribe === id) return true;
   return false;
 }
