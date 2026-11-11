@@ -35,7 +35,8 @@ import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { isCompanyIdent, TRIBES, type NationId } from './rules/nations.js';
 import { braveCombat } from './rules/natives.js';
-import { FOREST_MOVE_COST, RIVER_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './rules/terrain.js';
+import { landStepCost } from './movement.js';
+import { RIVER_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './rules/terrain.js';
 import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from './types.js';
 import { difficultyOf, goodsOf, nativeProduceOf, nativeRulesOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
@@ -405,15 +406,17 @@ export function braveDefending(b: Brave): boolean {
 }
 
 /**
- * Move points a brave spends stepping onto a tile: a road costs ROAD_MOVE_COST, a forest
- * FOREST_MOVE_COST, other land its terrain's cost (braves do not follow rivers or need a road on the
- * tile they leave, as before). A brave moving to defend (`braveDefending`) always moves as if
- * following a river, because the native peoples know the land so well: a step costs no more than
- * RIVER_MOVE_COST, and a road or anything cheaper still wins.
+ * Move points a brave spends on a step from one tile to a neighbouring one: the same as a unit's
+ * step on land (movement.ts, `landStepCost`): a road's cost from road to road, a river's along a
+ * river that links the two tiles, else the forest's or the terrain's cost. (Braves never stand in
+ * or enter a colony, so a colony's road never counts for them.) A brave moving to defend
+ * (`braveDefending`) always moves as if following a river, because the native peoples know the land
+ * so well: a step costs no more than RIVER_MOVE_COST, and a road or anything cheaper still wins.
  */
-export function braveStepCost(s: GameState, x: number, y: number, defending: boolean): number {
-  const tile = tileAt(s, x, y)!;
-  const cost = tile.r ? ROAD_MOVE_COST : tile.f ? FOREST_MOVE_COST : TERRAIN[tile.t].moveCost;
+export function braveStepCost(s: GameState, fx: number, fy: number, tx: number, ty: number, defending: boolean): number {
+  const from = tileAt(s, fx, fy)!;
+  const to = tileAt(s, tx, ty)!;
+  const cost = landStepCost(s, from, to, fx, fy, tx, ty, !!from.r, !!to.r);
   // The native peoples know the land so well that braves moving to defend go as fast as along a river.
   return defending ? Math.min(cost, RIVER_MOVE_COST) : cost;
 }
@@ -511,7 +514,7 @@ export function braveRoute(s: GameState, b: Brave, tx: number, ty: number, onto:
       const nIdx = ny * w + nx;
       if (done[nIdx] === gen) continue;
       if (grid.distance(nx, ny, cx0, cy0) > reach) continue;
-      const c = cost[idx] + braveStepCost(s, nx, ny, defending);
+      const c = cost[idx] + braveStepCost(s, cx, cy, nx, ny, defending);
       if (seen[nIdx] === gen && c >= cost[nIdx]) continue;
       if (!open(s, b, nx, ny, index)) continue;
       seen[nIdx] = gen;
@@ -557,9 +560,9 @@ function walk(s: GameState, b: Brave, tx: number, ty: number, points: number, in
   let left = points;
   for (const step of route) {
     if (left <= 0) break;
+    left -= braveStepCost(s, b.x, b.y, step.x, step.y, defending);
     b.x = step.x;
     b.y = step.y;
-    left -= braveStepCost(s, step.x, step.y, defending);
   }
   return true;
 }
@@ -583,9 +586,9 @@ function wanderStep(s: GameState, b: Brave, st: Settlement, points: number, inde
     }
     if (!options.length) return;
     const p = options[randInt(s, options.length)];
+    left -= braveStepCost(s, b.x, b.y, p.x, p.y, false);
     b.x = p.x;
     b.y = p.y;
-    left -= braveStepCost(s, p.x, p.y, false);
   }
 }
 

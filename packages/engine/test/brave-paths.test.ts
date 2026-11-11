@@ -8,6 +8,7 @@ import {
   createGame,
   createUnit,
   foundColony,
+  moveCost,
   processBraves,
   removeUnit,
   setFeatureSink,
@@ -119,25 +120,29 @@ describe('braves moving to defend', () => {
     expect(braveDefending(b(undefined))).toBe(false);
   });
 
-  it('step at the river cost on open land and the road cost on a road', () => {
+  it('step at the river cost on open land, forest and mountains, and the road cost on a road', () => {
     const { s, st } = openGround();
     const x = st.x + 2;
     const y = st.y;
     const t = tileAt(s, x, y)!;
-    expect(braveStepCost(s, x, y, false)).toBe(3);
-    expect(braveStepCost(s, x, y, true)).toBe(RIVER_MOVE_COST);
+    const step = (defending: boolean) => braveStepCost(s, x - 1, y, x, y, defending);
+    expect(step(false)).toBe(3);
+    expect(step(true)).toBe(RIVER_MOVE_COST);
     t.f = true;
-    expect(braveStepCost(s, x, y, false)).toBe(FOREST_MOVE_COST);
-    expect(braveStepCost(s, x, y, true)).toBe(RIVER_MOVE_COST);
+    expect(step(false)).toBe(FOREST_MOVE_COST);
+    expect(step(true)).toBe(RIVER_MOVE_COST);
     delete t.f;
     t.t = 'mountains';
-    expect(braveStepCost(s, x, y, true)).toBe(RIVER_MOVE_COST);
+    expect(step(true)).toBe(RIVER_MOVE_COST);
     t.t = 'plains';
+    // A road needs both ends, as for units.
     t.r = true;
-    expect(braveStepCost(s, x, y, false)).toBe(ROAD_MOVE_COST);
-    expect(braveStepCost(s, x, y, true)).toBe(ROAD_MOVE_COST);
+    expect(step(false)).toBe(3);
+    expect(step(true)).toBe(RIVER_MOVE_COST);
+    tileAt(s, x - 1, y)!.r = true;
+    expect(step(false)).toBe(ROAD_MOVE_COST);
+    expect(step(true)).toBe(ROAD_MOVE_COST);
   });
-
   it('cover three plains tiles a round on foot, for their own land or a partner, where a raiding or visiting brave covers one', () => {
     const { s, st } = openGround();
     const enemy = createUnit(s, 'france', 'freeColonist', { kind: 'map', x: st.x + 6, y: st.y });
@@ -175,5 +180,59 @@ describe('braves moving to defend', () => {
     expect(set).toBeDefined();
     expect(set!.task).toEqual({ kind: 'attack', unitId: enemy.id });
     expect(braveDefending(set!)).toBe(true);
+  });
+});
+
+describe('braves follow rivers as units do', () => {
+  /** A minor river from (x, y) east to (x + 1, y), both tiles forest; the river links them (and any river already there). */
+  function river(s: GameState, x: number, y: number): void {
+    const a = tileAt(s, x, y)!;
+    const b = tileAt(s, x + 1, y)!;
+    a.f = b.f = true;
+    a.rv = b.rv = 1;
+    a.rd = (a.rd ?? 0) | (1 << 2); // east (grid.ts direction order: n, ne, e, se, s, sw, w, nw)
+    b.rd = (b.rd ?? 0) | (1 << 6); // west
+  }
+
+  it('a step along a river costs the river cost, as for a unit; a step onto a river tile it does not link costs the tile', () => {
+    const { s, st } = openGround();
+    const x = st.x + 2;
+    const y = st.y;
+    river(s, x, y);
+    const unit = createUnit(s, 'england', 'freeColonist', { kind: 'map', x: st.x - 4, y: st.y - 4 });
+    // Along the river, both ways.
+    expect(braveStepCost(s, x, y, x + 1, y, false)).toBe(RIVER_MOVE_COST);
+    expect(braveStepCost(s, x + 1, y, x, y, false)).toBe(RIVER_MOVE_COST);
+    expect(braveStepCost(s, x, y, x + 1, y, false)).toBe(moveCost(s, unit, x, y, x + 1, y));
+    // Onto the river from the side (the river does not link the tiles): the forest's cost.
+    expect(braveStepCost(s, x, y + 1, x, y, false)).toBe(FOREST_MOVE_COST);
+    expect(braveStepCost(s, x, y + 1, x, y, false)).toBe(moveCost(s, unit, x, y + 1, x, y));
+    // Off the river onto plains: the plains' cost.
+    expect(braveStepCost(s, x + 1, y, x + 2, y, false)).toBe(3);
+  });
+
+  it('a raiding brave walks along a river three tiles a round where it walks one across the forest', () => {
+    const { s, st } = openGround();
+    const y = st.y + 2;
+    // A river along four forest tiles south-east of the settlement, eastwards.
+    for (let x = st.x; x < st.x + 4; x++) river(s, x, y);
+    const founder = createUnit(s, 'france', 'freeColonist', { kind: 'map', x: st.x + 7, y });
+    founder.moves = 3;
+    const c = foundColony(s, founder.id, 'Rivermouth');
+    const raider = brave(s, st, st.x, y, { task: { kind: 'attack', colonyId: c.id } });
+    processBraves(s);
+    expect({ x: raider.x, y: raider.y }).toEqual({ x: st.x + 3, y });
+  });
+
+  it('a defending brave steps at the river cost along a river, off it, and on a road (the cheaper wins)', () => {
+    const { s, st } = openGround();
+    const x = st.x + 2;
+    const y = st.y;
+    river(s, x, y);
+    expect(braveStepCost(s, x, y, x + 1, y, true)).toBe(RIVER_MOVE_COST);
+    expect(braveStepCost(s, x, y + 1, x, y, true)).toBe(RIVER_MOVE_COST);
+    tileAt(s, x, y + 1)!.r = tileAt(s, x, y + 2)!.r = true;
+    expect(braveStepCost(s, x, y + 2, x, y + 1, true)).toBe(ROAD_MOVE_COST);
+    expect(braveStepCost(s, x, y + 2, x, y + 1, true)).toBeLessThanOrEqual(RIVER_MOVE_COST);
   });
 });
