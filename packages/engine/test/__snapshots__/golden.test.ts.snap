@@ -1,5 +1,5 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`golden hashes (games stay bit-identical) > generated map, seed 7, 150 rounds 1`] = `"fa70dd40a0b32936"`;
+exports[`golden hashes (games stay bit-identical) > generated map, seed 7, 150 rounds 1`] = `"09b59e7bcc01a07d"`;
 
-exports[`golden hashes (games stay bit-identical) > stored americas map, seed 1492, 60 rounds 1`] = `"5536b2ea655ef483"`;
+exports[`golden hashes (games stay bit-identical) > stored americas map, seed 1492, 60 rounds 1`] = `"8fa691c620eb1b57"`;

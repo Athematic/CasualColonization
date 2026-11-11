@@ -310,10 +310,10 @@ describe('the pact at war (N7, N9)', () => {
 });
 
 describe('computer players and the switch', () => {
-  it('are shared per level as N11 says', () => {
+  it('are shared per level as N11 says (Combative makes none: Simon, 11 November 2026)', () => {
     expect(LEVEL_COOPERATION.creative.defence).toBe(1);
     expect(LEVEL_COOPERATION.competent.defence).toBe(0.5);
-    expect(LEVEL_COOPERATION.combative.defence).toBe(1);
+    expect(LEVEL_COOPERATION.combative.defence).toBe(0);
     expect(LEVEL_COOPERATION.naive.defence).toBe(0);
   });
 
@@ -322,7 +322,7 @@ describe('computer players and the switch', () => {
     for (let i = 0; i < 300 * 4 && !s.gameOver && !allTreaties(s).some((t) => t.kind === 'defence'); i++) applyCommand(s, { type: 'endTurn' });
     const pacts = allTreaties(s).filter((t) => t.kind === 'defence');
     expect(pacts.length).toBeGreaterThan(0);
-    for (const t of pacts) expect(['creative', 'competent', 'combative']).toContain(player(s, t.parties[0].id as NationId).ai);
+    for (const t of pacts) expect(['creative', 'competent']).toContain(player(s, t.parties[0].id as NationId).ai);
     const back = deserialize(serialize(s));
     expect(serialize(back)).toBe(serialize(s));
     expect(JSON.parse(JSON.stringify(s.braves))).toEqual(s.braves);

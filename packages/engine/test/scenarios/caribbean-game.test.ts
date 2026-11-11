@@ -16,12 +16,12 @@ describe('a full computer game in the Caribbean', () => {
   let played: GameState | undefined;
   const play = () => (played ??= playArenaGame(2024, line, 300, 'medium', undefined, false, undefined, false, true, true, { scenario: 'caribbean' }).state);
 
-  it('ends in autumn 1750, by prosperity (England with the Arawak), with every nation still loyal', () => {
+  it('ends in autumn 1750, by prosperity (the Netherlands and England together, with the Arawak and the Kalinago), with every nation still loyal', () => {
     const s = play();
     expect(s.gameOver?.turn).toBe(201);
-    expect(s.gameOver?.reason).toBe('The year 1750 has come, and the age of the chartered companies is over. In peace and partnership with the Arawak, England wins by prosperity.');
-    expect(s.gameOver?.winners).toEqual(['england']);
-    expect(s.gameOver?.partners).toEqual(['arawak']);
+    expect(s.gameOver?.reason).toBe('The year 1750 has come, and the age of the chartered companies is over. In peace and partnership with the Arawak and the Kalinago, the Netherlands and England win together by prosperity.');
+    expect(s.gameOver?.winners).toEqual(['netherlands', 'england']);
+    expect(s.gameOver?.partners).toEqual(['arawak', 'kalinago']);
     expect(s.gameOver?.winner).toBeDefined();
     for (const p of s.players) expect(p.independence).toBe('none');
     expect(s.players.some((p) => p.id === 'crown')).toBe(false);
@@ -34,7 +34,8 @@ describe('a full computer game in the Caribbean', () => {
 
   it('every nation takes part: colonies, colonists and trade', () => {
     const s = play();
-    for (const p of s.players) {
+    // The nations of the line; a chartered company founded during the game has no Founding Fathers.
+    for (const p of s.players.filter((o) => ALL.includes(o.id))) {
       expect(p.coloniesFounded, p.id).toBeGreaterThan(0);
       expect(Object.values(s.colonies).some((c) => c.owner === p.id), p.id).toBe(true);
       expect(p.fathers.length, p.id).toBeGreaterThan(0);

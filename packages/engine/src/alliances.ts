@@ -72,13 +72,13 @@ export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace
  * `exchange` (step 3): the level's share of `proposeExchange`: Creative seeks a cultural exchange,
  * Competent at 0.6, Combative and Naive never propose one.
  * `defence` (step 4): the level's share of `proposeDefence`: Creative seeks a mutual defence pact,
- * Competent at 0.5, Combative with peoples near its enemies (and, to reach the ladder's rung, an
- * exchange with those peoples only), Naive never proposes.
+ * Competent at 0.5, Combative and Naive never propose one (Simon, 11 November 2026: Combative,
+ * which makes no land use or exchange for the ladder, makes no defence pacts).
  */
 export const LEVEL_COOPERATION: Record<AiLevel, { propose: number; accept: number; together: number; people: number; peopleAccept: number; land: number; exchange: number; defence: number }> = {
   naive: { propose: 0, accept: 0.5, together: 0, people: 0, peopleAccept: 0.8, land: 0, exchange: 0, defence: 0 },
   competent: { propose: 0.6, accept: 0.8, together: 0, people: 0.8, peopleAccept: 1, land: 0.8, exchange: 0.6, defence: 0.5 },
-  combative: { propose: 0.5, accept: 0.7, together: 0, people: 0.5, peopleAccept: 0.7, land: 0, exchange: 0, defence: 1 },
+  combative: { propose: 0.5, accept: 0.7, together: 0, people: 0.5, peopleAccept: 0.7, land: 0, exchange: 0, defence: 0 },
   creative: { propose: 1, accept: 1, together: 1, people: 1, peopleAccept: 1, land: 1, exchange: 1, defence: 1 },
 };
 
