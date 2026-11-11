@@ -35,7 +35,11 @@ export interface PlayerSystems {
   homePort: boolean;
   /** Crosses bring immigrants to the docks (europe.ts `processImmigration`); the recruit pool. */
   immigration: boolean;
-  /** The Crown raises taxes on sales in Europe (europe.ts, `mechanics.taxes`); boycotts. */
+  /**
+   * The Crown raises taxes on sales in Europe (europe.ts, `mechanics.taxes`); boycotts. As before
+   * this table, the Crown's own colonies (retaken from rebels) are taxed on what their custom
+   * houses sell.
+   */
   taxes: boolean;
   /**
    * Under a Crown: the Royal Expeditionary Force grows, the King demands gold and declares royal
@@ -92,7 +96,7 @@ export const PLAYER_SYSTEMS: Readonly<Record<PlayerKind, Readonly<PlayerSystems>
     war: false, relations: false, alliances: false, peoples: false, visitedByBraves: true, events: false, ranked: false, ai: 'company',
   },
   crown: {
-    homePort: true, immigration: false, taxes: false, crown: false, independence: false, congress: false, startingCaravel: false,
+    homePort: true, immigration: false, taxes: true, crown: false, independence: false, congress: false, startingCaravel: false,
     war: true, relations: false, alliances: false, peoples: false, visitedByBraves: false, events: false, ranked: false, ai: 'crown',
   },
   people: {
@@ -110,7 +114,7 @@ export function playerKind(p: Pick<Player, 'id' | 'kind'>): PlayerKind {
 /** The kind of the player an id names, from the id alone (the kinds' ids never overlap). */
 export function kindOfId(id: PlayerId): PlayerKind {
   if (id === 'crown') return 'crown';
-  if (COMPANY_IDS.has(id as NationId)) return 'company';
+  if (COMPANY_IDS.has(id as PlayerId)) return 'company';
   if (Object.hasOwn(TRIBES, id)) return 'people';
   return 'nation';
 }
