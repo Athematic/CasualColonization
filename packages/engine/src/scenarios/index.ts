@@ -10,7 +10,7 @@ import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
 import { DEFAULT_DIFFICULTY, DIFFICULTY, DIFFICULTY_LEVELS, type DifficultyId, type DifficultyRules } from '../rules/difficulty.js';
 import { TRIBES, type NationId, type PeopleDef, type TribeId } from '../rules/nations.js';
-import type { SettlementKindDef } from '../rules/natives.js';
+import { mergeNativeRules, type NativeRules, type SettlementKindDef } from '../rules/natives.js';
 import type { PortCharacter } from '../rules/ports.js';
 import { SCORE_WEIGHTS, type ScoreWeights } from '../rules/score.js';
 import { COLONY_BUILDS, IMMIGRANT_WEIGHTS, PURCHASABLE, TRAINABLE, type UnitTypeId } from '../rules/units.js';
@@ -202,6 +202,41 @@ export function settlementKindOf(s: HasScenario, st: { tribe: TribeId }): Settle
 /** Goods native settlements produce for trade. */
 export function nativeProduceOf(s: HasScenario): readonly GoodId[] {
   return scenarioOf(s).peoples.produce;
+}
+
+const LAND_REACH = new WeakMap<Scenario, { max: number; uniform: boolean }>();
+
+/**
+ * How far the land of a scenario's settlements reaches (`SettlementKindDef.landRadius`, 1 when
+ * absent): the furthest, and whether every kind reaches as far. For natives.ts `nativeLandOwner`.
+ */
+export function landReachIn(scenario: Scenario): { max: number; uniform: boolean } {
+  let reach = LAND_REACH.get(scenario);
+  if (!reach) {
+    const radii = Object.values(scenario.peoples.settlements).map((k) => k?.landRadius ?? 1);
+    const max = Math.max(1, ...radii);
+    LAND_REACH.set(scenario, (reach = { max, uniform: radii.every((r) => r === max) }));
+  }
+  return reach;
+}
+
+/** How far a game's native land reaches (`landReachIn`). */
+export function landReachOf(s: HasScenario): { max: number; uniform: boolean } {
+  return landReachIn(scenarioOf(s));
+}
+
+const NATIVE_RULE_TABLES = new WeakMap<Scenario, NativeRules>();
+
+/** The native rules of a scenario: the engine's NATIVE_RULES with its `peoples.rules` merged over them. */
+export function nativeRulesIn(scenario: Scenario): NativeRules {
+  let rules = NATIVE_RULE_TABLES.get(scenario);
+  if (!rules) NATIVE_RULE_TABLES.set(scenario, (rules = mergeNativeRules(scenario.peoples.rules)));
+  return rules;
+}
+
+/** The native rules of a game (braves, tension thresholds, demands, burial grounds, surrender, missions). */
+export function nativeRulesOf(s: HasScenario): NativeRules {
+  return nativeRulesIn(scenarioOf(s));
 }
 
 /** Buildings in play, in production order. */

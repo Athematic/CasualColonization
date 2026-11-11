@@ -182,6 +182,8 @@ describe('a full computer game on the stored Caribbean map', () => {
     expect(s.config.map).toBe('caribbean');
     expect(s.gameOver?.turn).toBe(201);
     expect(s.gameOver?.winner).toBeDefined();
-    for (const p of s.players) expect(p.coloniesFounded, p.id).toBeGreaterThan(0);
+    // A company chartered in the last years may not have founded one yet (the West India Company
+    // in this game since Beta 2's treaties with peoples: chartered three turns before the end).
+    for (const p of s.players) if (!p.company || p.company.founded < 180) expect(p.coloniesFounded, p.id).toBeGreaterThan(0);
   }, 180_000);
 });

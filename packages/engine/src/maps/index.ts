@@ -32,7 +32,7 @@ import { parseRivers } from '../rivers.js';
 import { entryPoints, newSettlement, settlementGround, sprinkleExtras, type EntrySide, type GeneratedWorld } from '../mapgen.js';
 import type { GameMap, Settlement, Tile } from '../types.js';
 import { AMERICAS } from '../scenarios/americas.js';
-import { peopleIn, settlementKindIn } from '../scenarios/index.js';
+import { nativeRulesIn, peopleIn, settlementKindIn } from '../scenarios/index.js';
 import type { PeopleRegion, Scenario, StoredMapEntry } from '../scenarios/types.js';
 import { americas } from './americas.js';
 import { australia } from './australia.js';
@@ -152,7 +152,7 @@ function placeRegionSettlements(rng: { rng: number }, map: GameMap, regions: Tri
         if (avoid.some((a) => grid.distance(a.x, a.y, c.x, c.y) < 2)) continue;
         const capital = !capitals.has(r.tribe);
         capitals.add(r.tribe);
-        placed.push(newSettlement(rng, `s${placed.length + 1}`, r.tribe, c.x, c.y, capital, settlementKindIn(scenario, r.tribe), peopleIn(scenario, r.tribe).skills));
+        placed.push(newSettlement(rng, `s${placed.length + 1}`, r.tribe, c.x, c.y, capital, settlementKindIn(scenario, r.tribe), peopleIn(scenario, r.tribe).skills, nativeRulesIn(scenario).firstBraveAfter));
         counts[i]++;
         progress = true;
         break;

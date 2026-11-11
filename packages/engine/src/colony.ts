@@ -30,7 +30,7 @@ import { runCustomHouse } from './europe.js';
 import { modifiers } from './scenarios/modifiers.js';
 import { noteMining } from './mines.js';
 import { noteProduction } from './stats.js';
-import { nativeLandOwner, onColonyFounded } from './natives.js';
+import { nativeLandClosedTo, onColonyFounded } from './natives.js';
 import type { BuildTarget, Colony, GameState, Job, Unit } from './types.js';
 import { buildingsOf, difficultyOf, goodsOf, mechanicsOf, nationOf, unitsOf } from './scenarios/index.js';
 import { addColony, setUnitLoc, removeUnit, colonyList } from './unitindex.js';
@@ -182,7 +182,7 @@ export function colonyOccupancy(s: GameState, colony: Colony): ColonyOccupancy {
   const worked = new Map<number, Unit>();
   for (const p of tiles) {
     const i = p.y * w + p.x;
-    if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y) || nativeLandOwner(s, p.x, p.y)) closed.add(i);
+    if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y) || nativeLandClosedTo(s, colony.owner, p.x, p.y)) closed.add(i);
     const v = tileWorkedBy(s, p.x, p.y);
     if (v) worked.set(i, v);
   }
@@ -285,8 +285,9 @@ function validateJob(s: GameState, colony: Colony, u: Unit, job: Job): void {
     const worker = tileWorkedBy(s, job.x, job.y);
     if (worker && worker.id !== u.id) fail('Someone already works that tile.');
     if (settlementAt(s, job.x, job.y)) fail('Natives live on that tile.');
-    const owner = nativeLandOwner(s, job.x, job.y);
-    if (owner) fail(`This land belongs to the ${TRIBES[owner.tribe].name}. Buy it or take it first.`);
+    // Native land is worked once bought or taken, or while leased to the colony's nation (N5).
+    const owner = nativeLandClosedTo(s, colony.owner, job.x, job.y);
+    if (owner) fail(`This land belongs to the ${TRIBES[owner.tribe].name}. ${mechanicsOf(s).peopleTreaties?.includes('land-use') ? 'Buy it, take it or lease it' : 'Buy it or take it'} first.`);
     if (colonyAt(s, job.x, job.y)) fail('Another colony stands on that tile.');
     if (isWater(tileAt(s, job.x, job.y)) && colony.buildings.docks === 0) fail('Fishing needs Docks.');
     if (tileYield(s, colony, job.x, job.y, job.good, u.type) <= 0) fail('That tile produces none of that.');

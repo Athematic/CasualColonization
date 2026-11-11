@@ -97,8 +97,8 @@ function playTo(s: GameState, turn: number): Partial<Record<string, number>> {
 }
 
 describe('victory kinds', () => {
-  it('the Americas: independence by war, then an alliance winning together, then time', () => {
-    expect(AMERICAS.victory).toEqual([{ id: 'independence-war' }, { id: 'concord' }, { id: 'time' }]);
+  it('the Americas: independence by war, then an alliance winning together, then prosperity, then time', () => {
+    expect(AMERICAS.victory).toEqual([{ id: 'independence-war' }, { id: 'concord' }, { id: 'prosperity' }, { id: 'time' }]);
     for (const sc of listScenarios()) for (const rule of sc.victory) expect(getVictory(rule.id), rule.id).toBeDefined();
   });
 

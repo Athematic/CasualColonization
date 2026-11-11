@@ -1,4 +1,4 @@
-import { aBrave, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, TRIBES, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { aBrave, peopleTradeBenefits, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, TRIBES, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import { icon } from '../styles.js';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -112,7 +112,20 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
     if (!st || !colony) continue;
     const tribe = TRIBES[st.tribe].name;
     const what = demandText(d);
-    if (d.kind === 'demand') {
+    if (d.kind === 'treaty') {
+      // A people's own offer of a treaty (native-partners.md N8, N13).
+      list.push({
+        id: `native-${d.id}`,
+        title: `The ${tribe} offer a trade treaty`,
+        required: false,
+        render: (done) =>
+          h('div', { class: 'decision-body' },
+            h('p', null, `${aBrave(tribe)} at ${colony.name} brings an offer from the ${tribe}: a trade treaty. With it, ${peopleTradeBenefits(app.state)}. Taking their land, attacking them or paying them to make war would break faith.`),
+            h('div', { class: 'decision-actions' },
+              h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerNativeDemand', demandId: d.id, accept: true }, true) && done(`Made a trade treaty with the ${tribe}.`) }, 'Accept the treaty'),
+              h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerNativeDemand', demandId: d.id, accept: false }, true) && done('Declined.') }, 'Decline'))),
+      });
+    } else if (d.kind === 'demand') {
       list.push({
         id: `native-${d.id}`,
         title: `The ${tribe} demand tribute at ${colony.name}`,

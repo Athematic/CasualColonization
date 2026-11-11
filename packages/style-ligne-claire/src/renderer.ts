@@ -250,7 +250,19 @@ function hasRoad(s: Readonly<GameState>, x: number, y: number): boolean {
  * meandering strand that runs on smoothly into the neighbour's road (see `roadStrands` in
  * @cc/render-api). Along a river the road follows the river's curve.
  */
-function drawRoads(ctx: Ctx, s: Readonly<GameState>, x: number, y: number, px: number, py: number, z: number, lw: number): void {
+/** A tile leased from a people (`Tile.use`): a faint dashed frame inside the tile, in the leasing nation's colour. */
+function drawLease(ctx: Ctx, color: string, px: number, py: number, z: number, lw: number): void {
+  const inset = z * 0.12;
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw * 0.8;
+  ctx.setLineDash([z * 0.08, z * 0.08]);
+  ctx.strokeRect(px + inset, py + inset, z - 2 * inset, z - 2 * inset);
+  ctx.restore();
+}
+
+function drawRoads(ctx: Ctx,s: Readonly<GameState>, x: number, y: number, px: number, py: number, z: number, lw: number): void {
   const cx = px + z / 2;
   const cy = py + z / 2;
   let mask = 0;
@@ -440,6 +452,8 @@ export class LigneClaireMapRenderer implements MapRenderer {
       if (t.tile.b) this.drawBonusMarker(t, z, lw);
       if (t.tile.lcr) this.drawRumour(t, z, lw);
     }
+    // A people's land leased to a nation (Beta 2, land use): a faint dashed frame in its colour.
+    for (const t of tiles) if (t.tile.use) drawLease(ctx, nationOf(s, t.tile.use).color, t.px, t.py, z, lw);
 
     // 4. A light paper wash over what we know but cannot currently see.
     // One path so overlapping edges are not washed twice.

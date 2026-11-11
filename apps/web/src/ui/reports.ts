@@ -14,6 +14,9 @@ import {
   nationTitle,
   withTerms,
   nativesOverview,
+  nativeRulesOf,
+  tensionLabel,
+  tensionSeverity,
   navalOverview,
   player,
   portName,
@@ -446,7 +449,8 @@ function nativesTab(ctx: ReportContext): Child[] {
   const tribes = nativesOverview(app.state, nation);
   if (!tribes.length) return [card(null, empty('You have not found any native settlements yet.'))];
   type Row = (typeof tribes)[number]['settlements'][number];
-  const moodPill = (t: number, war: boolean) => h('span', { class: `pill ${war || t >= 700 ? 'bad' : t >= 400 ? 'warn' : 'good'}`, title: `Tension ${t} of 1000` }, war ? 'at war' : `${t < 200 ? 'content' : t < 400 ? 'uneasy' : t < 700 ? 'angry' : 'furious'}`);
+  const thresholds = nativeRulesOf(app.state).tension;
+  const moodPill = (t: number, war: boolean) => h('span', { class: `pill ${war ? 'bad' : tensionSeverity(t, thresholds)}`, title: `Tension ${t} of 1000` }, war ? 'at war' : tensionLabel(t, thresholds));
   return [
     h('div', { class: 'report-stats' },
       stat('Tribes met', tribes.length),

@@ -1,6 +1,7 @@
 import { gridOf, type Grid } from '../grid.js';
 import { colonySiteProblem } from '../colony.js';
 import { braveDefence } from '../braves.js';
+import { defendedByFriend } from '../peopletreaties.js';
 import { attack, defencePower, offencePower } from '../combat.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import { RuleError } from '../errors.js';
@@ -335,7 +336,7 @@ export function aiFight(s: GameState, p: Player, u: Unit): boolean {
       return true;
     }
     // Hostile braves next to the unit, when the odds are good.
-    const brave = !isShip(u) ? near.braves.find((b) => s.tribes.find((t) => t.id === b.tribe)?.stance[p.id] === 'war') : undefined;
+    const brave = !isShip(u) ? near.braves.find((b) => s.tribes.find((t) => t.id === b.tribe)?.stance[p.id] === 'war' && !(s.treaties && defendedByFriend(s, p.id, b.tribe))) : undefined;
     if (brave && offencePower(s, u) >= braveDefence(s, brave) * 2.5 * margin) {
       attack(s, u.id, { braveId: brave.id });
       return true;

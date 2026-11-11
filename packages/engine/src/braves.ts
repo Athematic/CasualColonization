@@ -12,13 +12,14 @@ import { chooseDefender, defencePower, promote } from './combat.js';
 import { fail } from './errors.js';
 import { sellPrice } from './europe.js';
 import { noteGoods } from './history.js';
-import { addTension, nativeOffer, tensionOf } from './natives.js';
+import { addTension, nativeOffer, notePeopleTrade, tensionOf } from './natives.js';
 import {
   colonyWorkers,
   inBounds,
   isCoastal,
   isShip,
   isWater,
+  meetPeople,
   message,
   newId,
   player,
@@ -33,29 +34,15 @@ import { track } from './telemetry.js';
 import { BUILDINGS, type BuildingKind } from './rules/buildings.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { UNIT_TYPES } from './rules/units.js';
-import { TRIBES, type NationId } from './rules/nations.js';
-import {
-  BRAVE_CHANCES,
-  BRAVE_EQUIPMENT,
-  BRAVE_KILLED_TENSION,
-  braveCombat,
-  BUY_PRICE_FACTOR,
-  BUY_PRICE_PLENTY,
-  CAPITAL_EXTRA_BRAVES,
-  DEMAND_MET_TENSION,
-  DEMAND_REFUSED_TENSION,
-  DEMAND_WAIT,
-  MAX_BRAVES,
-  TENSION,
-  VISIT_RANGE,
-  WANDER_RADIUS,
-  WANDER_TURNS,
-} from './rules/natives.js';
-import { TERRAIN } from './rules/terrain.js';
+import { isCompanyIdent, TRIBES, type NationId } from './rules/nations.js';
+import { braveCombat } from './rules/natives.js';
+import { landStepCost } from './movement.js';
+import { RIVER_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './rules/terrain.js';
 import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from './types.js';
-import { difficultyOf, goodsOf, nativeProduceOf, peopleOf, settlementKindOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, nativeProduceOf, nativeRulesOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
 import { removeUnit, colonyList, unitList } from './unitindex.js';
+import { aiAcceptsPeopleOffer, answerPeopleOffer, defenceEnemy, defencePartner, hasPeopleTrade, notePeopleContact, peopleBraveTradeFactor, peopleBuyFactor, peopleGatherFactor, peopleHostile, peopleTreatyRules, peopleTreatyText, peopleWouldOffer } from './peopletreaties.js';
 
 /** The kind of a settlement in its game's scenario (camp, village, city…), with its numbers. */
 export function settlementKind(s: GameState, st: Settlement): SettlementKindDef {
@@ -68,7 +55,7 @@ export function bravesOf(s: GameState): Record<string, Brave> {
 
 /** Braves a settlement keeps out at most. */
 export function maxBraves(s: GameState, st: Settlement): number {
-  return settlementKind(s, st).braves + (st.capital ? CAPITAL_EXTRA_BRAVES : 0);
+  return settlementKind(s, st).braves + (st.capital ? nativeRulesOf(s).capitalExtraBraves : 0);
 }
 
 /** The braves standing on a tile. */
@@ -115,12 +102,12 @@ export function killBrave(s: GameState, b: Brave, killer?: NationId, atWar = fal
   home.braveTimer = Math.max(home.braveTimer ?? 0, settlementKind(s, home).respawn);
   if (!killer || killer === 'crown') return;
   if (atWar) {
-    addTension(home, killer, Math.round(BRAVE_KILLED_TENSION / 3));
+    addTension(home, killer, Math.round(nativeRulesOf(s).braveKilledTension / 3));
     return;
   }
   for (const st of Object.values(s.settlements)) {
     if (st.tribe !== b.tribe) continue;
-    addTension(st, killer, st.id === home.id ? BRAVE_KILLED_TENSION : Math.round(BRAVE_KILLED_TENSION / 3));
+    addTension(st, killer, st.id === home.id ? nativeRulesOf(s).braveKilledTension : Math.round(nativeRulesOf(s).braveKilledTension / 3));
   }
 }
 
@@ -130,6 +117,11 @@ export function killBrave(s: GameState, b: Brave, killer?: NationId, atWar = fal
 /** Goods a settlement gathers from its land each round. */
 export function settlementProduce(s: GameState, st: Settlement): Partial<Record<GoodId, number>> {
   const kind = settlementKind(s, st);
+  // A people that trades by treaty gathers more for sale (N4).
+  const more = peopleGatherFactor(s, st.tribe);
+  // A tile leased to a nation still gives its people something (N5); read only where a tile is leased.
+  let leased = 1;
+  if (s.treaties) leased = peopleTreatyRules(s).landUse.gather;
   const sums: Partial<Record<GoodId, number>> = {};
   const land = gridOf(s).withinOffsets(st.x, st.y, 1);
   for (let k = 0; k < land.length; k += 2) {
@@ -139,12 +131,12 @@ export function settlementProduce(s: GameState, st: Settlement): Partial<Record<
     const yields = tile.f && def.forest ? def.forest.yields : def.yields;
     for (const g of nativeProduceOf(s)) {
       const y = yields[g] ?? 0;
-      if (y > 0) sums[g] = (sums[g] ?? 0) + y * (kind.gather?.[g] ?? 1);
+      if (y > 0) sums[g] = (sums[g] ?? 0) + y * (kind.gather?.[g] ?? 1) * (tile.use ? leased : 1);
     }
   }
   const out: Partial<Record<GoodId, number>> = {};
   for (const g of nativeProduceOf(s)) {
-    const n = Math.round((sums[g] ?? 0) * kind.produceRate);
+    const n = Math.round((sums[g] ?? 0) * kind.produceRate * more);
     if (n > 0) out[g] = n;
   }
   return out;
@@ -166,25 +158,25 @@ export function settlementForSale(s: GameState, st: Settlement): { good: GoodId;
   return nativeProduceOf(s).map((good) => ({ good, amount: st.goods?.[good] ?? 0 })).filter((r) => r.amount > 0);
 }
 
-/** Price per unit a settlement asks a nation for one of its goods: dearer when tense, cheaper when it has plenty. */
+/** Price per unit a settlement asks a nation for one of its goods: dearer when tense, cheaper when it has plenty, and with a trade treaty (N4). */
 export function nativeUnitPrice(s: GameState, st: Settlement, good: GoodId, nation: NationId): number {
   const stock = st.goods?.[good] ?? 0;
-  const plenty = stock >= settlementKind(s, st).produceCap * 0.75 ? BUY_PRICE_PLENTY : 1;
+  const plenty = stock >= settlementKind(s, st).produceCap * 0.75 ? nativeRulesOf(s).buyPricePlenty : 1;
   const mood = 1 + tensionOf(st, nation) / 1000;
-  return Math.max(1, Math.round(GOOD_DEFS[good].price * BUY_PRICE_FACTOR * mood * plenty * (st.capital ? 1.1 : 1)));
+  return Math.max(1, Math.round(GOOD_DEFS[good].price * nativeRulesOf(s).buyPriceFactor * mood * plenty * (st.capital ? 1.1 : 1) * peopleBuyFactor(s, nation, st.tribe)));
 }
 
 // ---------------------------------------------------------------------------
 // The native phase
 
-interface PhaseIndex {
+export interface PhaseIndex {
   /** Tiles with a colony, and with European units on land. */
   colonies: Map<number, Colony>;
   units: Map<number, Unit[]>;
   settlements: Set<number>;
 }
 
-function buildIndex(s: GameState): PhaseIndex {
+export function buildIndex(s: GameState): PhaseIndex {
   const w = s.map.width;
   const colonies = new Map<number, Colony>();
   for (const c of colonyList(s)) colonies.set(c.y * w + c.x, c);
@@ -209,6 +201,7 @@ export function processBraves(s: GameState): void {
   const braves = bravesOf(s);
   for (const b of Object.values(braves)) if (!s.settlements[b.home]) delete braves[b.id];
   let total = Object.keys(braves).length;
+  const maxTotal = nativeRulesOf(s).maxBraves;
   const counts = new Map<string, number>();
   for (const b of Object.values(braves)) counts.set(b.home, (counts.get(b.home) ?? 0) + 1);
   for (const st of Object.values(s.settlements)) {
@@ -217,7 +210,7 @@ export function processBraves(s: GameState): void {
       st.braveTimer--;
       continue;
     }
-    if ((counts.get(st.id) ?? 0) >= maxBraves(s, st) || total >= MAX_BRAVES) continue;
+    if ((counts.get(st.id) ?? 0) >= maxBraves(s, st) || total >= maxTotal) continue;
     const b: Brave = { id: newId(s, 'b'), tribe: st.tribe, home: st.id, x: st.x, y: st.y };
     braves[b.id] = b;
     total++;
@@ -232,15 +225,15 @@ export function processBraves(s: GameState): void {
   expireDemands(s);
 }
 
-function equipAtHome(st: Settlement, b: Brave): void {
+function equipAtHome(st: Settlement, b: Brave, equipment: number): void {
   const goods = st.goods;
   if (!goods) return;
-  if (!b.armed && (goods.muskets ?? 0) >= BRAVE_EQUIPMENT) {
-    goods.muskets! -= BRAVE_EQUIPMENT;
+  if (!b.armed && (goods.muskets ?? 0) >= equipment) {
+    goods.muskets! -= equipment;
     b.armed = true;
   }
-  if (!b.mounted && (goods.horses ?? 0) >= BRAVE_EQUIPMENT) {
-    goods.horses! -= BRAVE_EQUIPMENT;
+  if (!b.mounted && (goods.horses ?? 0) >= equipment) {
+    goods.horses! -= equipment;
     b.mounted = true;
   }
 }
@@ -250,7 +243,7 @@ function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
   const st = s.settlements[b.home];
   if (!st) return;
   const home = b.x === st.x && b.y === st.y;
-  if (home) equipAtHome(st, b);
+  if (home) equipAtHome(st, b, nativeRulesOf(s).braveEquipment);
   const points = braveCombat(b).moves * 3;
   if (!b.task) {
     if (home) chooseTask(s, b, st, index);
@@ -280,13 +273,15 @@ function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
     case 'attack': {
       if (task.kind === 'attack' && task.unitId) {
         const target = s.units[task.unitId];
-        if (!target || target.loc.kind !== 'map' || grid.distance(target.loc.x, target.loc.y, st.x, st.y) > VISIT_RANGE) {
+        if (!target || target.loc.kind !== 'map' || grid.distance(target.loc.x, target.loc.y, st.x, st.y) > nativeRulesOf(s).visitRange) {
           delete b.task;
           return;
         }
-        if (grid.distance(b.x, b.y, target.loc.x, target.loc.y) > 1) walk(s, b, target.loc.x, target.loc.y, points, index, false);
+        if (grid.distance(b.x, b.y, target.loc.x, target.loc.y) > 1) walkTo(s, b, target.loc.x, target.loc.y, points, index);
         if (grid.distance(b.x, b.y, target.loc.x, target.loc.y) === 1) {
-          attackUnit(s, b, target);
+          // A brave defending a partner's colony under a mutual defence pact (N7).
+          if (task.defend) track(task.defend, 'natives:defence fight');
+          attackUnit(s, b, target, task.defend);
           if (bravesOf(s)[b.id]) delete b.task;
         }
         return;
@@ -296,7 +291,7 @@ function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
         delete b.task;
         return;
       }
-      if (grid.distance(b.x, b.y, c.x, c.y) > 1) walk(s, b, c.x, c.y, points, index, false);
+      if (grid.distance(b.x, b.y, c.x, c.y) > 1) walkTo(s, b, c.x, c.y, points, index);
       if (grid.distance(b.x, b.y, c.x, c.y) !== 1) return;
       if (task.kind === 'attack') {
         attackColony(s, b, c);
@@ -310,12 +305,13 @@ function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
 /** The nearest colony within reach of a settlement, if any. */
 function nearestColony(s: GameState, st: Settlement): Colony | undefined {
   const grid = gridOf(s);
+  const range = nativeRulesOf(s).visitRange;
   let best: Colony | undefined;
   let bestD = Infinity;
   for (const c of colonyList(s)) {
     if (c.owner === 'crown') continue;
     const d = grid.distance(c.x, c.y, st.x, st.y);
-    if (d <= VISIT_RANGE && d < bestD) {
+    if (d <= range && d < bestD) {
       best = c;
       bestD = d;
     }
@@ -335,7 +331,7 @@ function nearbyEnemy(s: GameState, st: Settlement, index: PhaseIndex): Unit | un
     const y = Math.floor(i / w);
     const d = grid.distance(x, y, st.x, st.y);
     if (d > 3 || d >= bestD || index.colonies.has(i)) continue;
-    const u = units.find((o) => o.owner !== 'crown' && tribe.stance[o.owner] === 'war' && !hasSubmitted(s, st.tribe, o.owner));
+    const u = units.find((o) => o.owner !== 'crown' && !isCompanyIdent(o.owner) && tribe.stance[o.owner] === 'war' && !hasSubmitted(s, st.tribe, o.owner));
     if (u) {
       best = u;
       bestD = d;
@@ -345,34 +341,47 @@ function nearbyEnemy(s: GameState, st: Settlement, index: PhaseIndex): Unit | un
 }
 
 function chooseTask(s: GameState, b: Brave, st: Settlement, index: PhaseIndex): void {
+  const rules = nativeRulesOf(s);
   const tribe = tribeOf(s, st);
   const c = nearestColony(s, st);
   const roll = random(s);
+  // Under a mutual defence pact (N7), braves set out against the partner's enemies near its
+  // colonies: nations at war with both, and the King's troops against a partner in revolt.
+  if (s.treaties) {
+    const enemy = defenceEnemy(s, st, index.units, index.colonies);
+    if (enemy && roll < peopleTreatyRules(s).defence.defend) {
+      b.task = { kind: 'attack', unitId: enemy.id, defend: defencePartner(s, st.tribe) };
+      return;
+    }
+  }
   if (c) {
     const nation = c.owner;
     const t = tensionOf(st, nation);
-    const submitted = hasSubmitted(s, st.tribe, nation);
+    // A people that submitted, and every people towards a chartered company (fix c), neither attacks nor demands.
+    const hostile = !hasSubmitted(s, st.tribe, nation) && !isCompanyIdent(nation);
     const raid = difficultyOf(s, player(s, nation)).raidChance;
-    if (!submitted && tribe.stance[nation] === 'war') {
-      if (roll < BRAVE_CHANCES.attackAtWar * raid) b.task = { kind: 'attack', colonyId: c.id };
-    } else if (!submitted && t >= TENSION.angry) {
-      if (roll < BRAVE_CHANCES.attackAngry * raid) b.task = { kind: 'attack', colonyId: c.id };
-    } else if (!submitted && t >= TENSION.uneasy) {
-      if (roll < BRAVE_CHANCES.demand * raid) b.task = { kind: 'visit', colonyId: c.id, purpose: 'demand' };
-    } else if (t < TENSION.content) {
-      if (roll < BRAVE_CHANCES.gift) b.task = { kind: 'visit', colonyId: c.id, purpose: 'gift' };
-      else if (roll < BRAVE_CHANCES.gift + BRAVE_CHANCES.trade) b.task = { kind: 'visit', colonyId: c.id, purpose: 'trade' };
+    if (hostile && tribe.stance[nation] === 'war') {
+      if (roll < rules.braveChances.attackAtWar * raid) b.task = { kind: 'attack', colonyId: c.id };
+    } else if (hostile && t >= rules.tension.angry) {
+      if (roll < rules.braveChances.attackAngry * raid) b.task = { kind: 'attack', colonyId: c.id };
+    } else if (hostile && t >= rules.tension.uneasy) {
+      if (roll < rules.braveChances.demand * raid) b.task = { kind: 'visit', colonyId: c.id, purpose: 'demand' };
+    } else if (t < rules.tension.content && !peopleHostile(s, nation, st.tribe)) {
+      // A people that feels betrayed (a broken treaty, N8) neither brings gifts nor comes to trade;
+      // a trade treaty brings its braves to trade more often (N4).
+      if (roll < rules.braveChances.gift) b.task = { kind: 'visit', colonyId: c.id, purpose: 'gift' };
+      else if (roll < rules.braveChances.gift + rules.braveChances.trade * peopleBraveTradeFactor(s, nation, st.tribe)) b.task = { kind: 'visit', colonyId: c.id, purpose: 'trade' };
     }
     if (b.task) return;
   }
   if (Object.values(tribe.stance).includes('war')) {
     const enemy = nearbyEnemy(s, st, index);
-    if (enemy && roll < BRAVE_CHANCES.attackAtWar) {
+    if (enemy && roll < rules.braveChances.attackAtWar) {
       b.task = { kind: 'attack', unitId: enemy.id };
       return;
     }
   }
-  if (random(s) < BRAVE_CHANCES.wander) b.task = { kind: 'wander', turns: WANDER_TURNS };
+  if (random(s) < rules.braveChances.wander) b.task = { kind: 'wander', turns: rules.wanderTurns };
 }
 
 /** Whether a brave may step onto a tile: open land, no colony, no other settlement, no European unit. */
@@ -387,41 +396,186 @@ function open(s: GameState, b: Brave, x: number, y: number, index: PhaseIndex): 
   return true;
 }
 
-function stepCost(s: GameState, x: number, y: number): number {
-  const tile = tileAt(s, x, y)!;
-  if (tile.r) return 1;
-  return tile.f ? 6 : TERRAIN[tile.t].moveCost;
+/**
+ * Whether a brave is moving to defend: against an enemy unit, which braves set out against only in
+ * defence, of their own people's land (an enemy in the open near their settlement while the people
+ * is at war, `nearbyEnemy`) or of a partner's colony under a mutual defence pact (N7, `task.defend`).
+ * Raids on colonies, visits, trade and demands are not defence.
+ */
+export function braveDefending(b: Brave): boolean {
+  return b.task?.kind === 'attack' && !!b.task.unitId;
 }
 
 /**
- * Walks greedily towards a tile, as far as the move points allow (a brave can always make one
- * step). Stops next to the target unless `onto` is set.
+ * Move points a brave spends on a step from one tile to a neighbouring one: the same as a unit's
+ * step on land (movement.ts, `landStepCost`): a road's cost from road to road, a river's along a
+ * river that links the two tiles, else the forest's or the terrain's cost. (Braves never stand in
+ * or enter a colony, so a colony's road never counts for them.) A brave moving to defend
+ * (`braveDefending`) always moves as if following a river, because the native peoples know the land
+ * so well: a step costs no more than RIVER_MOVE_COST, and a road or anything cheaper still wins.
  */
-function walk(s: GameState, b: Brave, tx: number, ty: number, points: number, index: PhaseIndex, onto: boolean): void {
+export function braveStepCost(s: GameState, fx: number, fy: number, tx: number, ty: number, defending: boolean): number {
+  const from = tileAt(s, fx, fy)!;
+  const to = tileAt(s, tx, ty)!;
+  const cost = landStepCost(s, from, to, fx, fy, tx, ty, !!from.r, !!to.r);
+  // The native peoples know the land so well that braves moving to defend go as fast as along a river.
+  return defending ? Math.min(cost, RIVER_MOVE_COST) : cost;
+}
+
+/** How far beyond its settlement's visiting range a brave's route may stray. */
+const ROUTE_MARGIN = 3;
+
+// Search buffers for braveRoute, reused between searches like findPath's (movement.ts): a tile's
+// cost and previous tile count only when its stamp is the current search's.
+let routeSize = 0;
+let routeCost = new Float64Array(0);
+let routePrev = new Int32Array(0);
+let routeSeen = new Uint32Array(0);
+let routeDone = new Uint32Array(0);
+let routeGen = 0;
+let routeKey = new Float64Array(256);
+let routeTile = new Int32Array(256);
+const SEQ = 4294967296;
+
+/**
+ * The cheapest route in move points (braveStepCost) for a brave to a tile, or to a tile next to it
+ * unless `onto`, over the tiles it may enter (`open`), within its settlement's visiting range and
+ * ROUTE_MARGIN tiles more (or a tile further than where the brave stands). Returns the steps after
+ * the brave's own tile, empty when it is already there, or null when there is no route. A* with a
+ * binary heap ordered by estimate, then by insertion (as findPath), so it is deterministic.
+ */
+export function braveRoute(s: GameState, b: Brave, tx: number, ty: number, onto: boolean, index: PhaseIndex, defending = braveDefending(b)): { x: number; y: number }[] | null {
   const grid = gridOf(s);
-  let left = points;
-  while (left > 0) {
-    const d = grid.distance(b.x, b.y, tx, ty);
-    if (d === 0 || (!onto && d === 1)) return;
-    let best: { x: number; y: number; d: number } | undefined;
-    const steps = grid.neighbourOffsets(b.x, b.y);
-    for (let k = 0; k < steps.length; k += 2) {
-      const x = b.x + steps[k];
-      const y = b.y + steps[k + 1];
-      const nd = grid.distance(x, y, tx, ty);
-      if (nd >= d || (best && nd >= best.d)) continue;
-      if (!open(s, b, x, y, index)) continue;
-      best = { x, y, d: nd };
-    }
-    if (!best) return;
-    b.x = best.x;
-    b.y = best.y;
-    left -= stepCost(s, best.x, best.y);
+  const goalD = onto ? 0 : 1;
+  if (grid.distance(b.x, b.y, tx, ty) === goalD) return [];
+  const st = s.settlements[b.home];
+  const w = s.map.width;
+  const h = s.map.height;
+  const cx0 = st ? st.x : b.x;
+  const cy0 = st ? st.y : b.y;
+  const reach = Math.max(nativeRulesOf(s).visitRange + ROUTE_MARGIN, grid.distance(b.x, b.y, cx0, cy0) + 1);
+  const size = w * h;
+  if (size !== routeSize || routeGen >= 0xfffffff0) {
+    routeSize = size;
+    routeCost = new Float64Array(size);
+    routePrev = new Int32Array(size);
+    routeSeen = new Uint32Array(size);
+    routeDone = new Uint32Array(size);
+    routeGen = 0;
   }
+  const gen = ++routeGen;
+  const cost = routeCost;
+  const prev = routePrev;
+  const seen = routeSeen;
+  const done = routeDone;
+  const startIdx = b.y * w + b.x;
+  seen[startIdx] = gen;
+  cost[startIdx] = 0;
+  prev[startIdx] = -1;
+  let keys = routeKey;
+  let tiles = routeTile;
+  keys[0] = 0;
+  tiles[0] = startIdx;
+  let heap = 1;
+  let seq = 1;
+  let goal = -1;
+  while (heap > 0) {
+    const idx = tiles[0];
+    heap--;
+    if (heap > 0) {
+      const k = keys[heap];
+      const t = tiles[heap];
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1;
+        if (l >= heap) break;
+        const r = l + 1;
+        const m = r < heap && keys[r] < keys[l] ? r : l;
+        if (keys[m] >= k) break;
+        keys[i] = keys[m];
+        tiles[i] = tiles[m];
+        i = m;
+      }
+      keys[i] = k;
+      tiles[i] = t;
+    }
+    if (done[idx] === gen) continue;
+    done[idx] = gen;
+    const cx = idx % w;
+    const cy = (idx - cx) / w;
+    if (idx !== startIdx && grid.distance(cx, cy, tx, ty) === goalD) {
+      goal = idx;
+      break;
+    }
+    const near = grid.neighbourOffsets(cx, cy);
+    for (let d = 0; d < near.length; d += 2) {
+      const nx = cx + near[d];
+      const ny = cy + near[d + 1];
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const nIdx = ny * w + nx;
+      if (done[nIdx] === gen) continue;
+      if (grid.distance(nx, ny, cx0, cy0) > reach) continue;
+      const c = cost[idx] + braveStepCost(s, cx, cy, nx, ny, defending);
+      if (seen[nIdx] === gen && c >= cost[nIdx]) continue;
+      if (!open(s, b, nx, ny, index)) continue;
+      seen[nIdx] = gen;
+      cost[nIdx] = c;
+      prev[nIdx] = idx;
+      if (heap === keys.length) {
+        const k2 = new Float64Array(heap * 2);
+        k2.set(keys);
+        const t2 = new Int32Array(heap * 2);
+        t2.set(tiles);
+        keys = routeKey = k2;
+        tiles = routeTile = t2;
+      }
+      // Every step costs at least ROAD_MOVE_COST (1), so the tiles left to go never overestimate.
+      const key = (c + Math.max(0, grid.distance(nx, ny, tx, ty) - goalD) * ROAD_MOVE_COST) * SEQ + seq++;
+      let i = heap++;
+      while (i > 0) {
+        const parent = (i - 1) >> 1;
+        if (keys[parent] <= key) break;
+        keys[i] = keys[parent];
+        tiles[i] = tiles[parent];
+        i = parent;
+      }
+      keys[i] = key;
+      tiles[i] = nIdx;
+    }
+  }
+  if (goal < 0) return null;
+  const path: { x: number; y: number }[] = [];
+  for (let cur = goal; cur !== startIdx; cur = prev[cur]) path.push({ x: cur % w, y: (cur - (cur % w)) / w });
+  return path.reverse();
+}
+
+/**
+ * Walks a brave along its route (braveRoute) towards a tile, as far as the move points allow (a
+ * brave can always make one step), stopping next to the target unless `onto` is set. One search a
+ * round: nothing the brave may not enter moves while it walks. Returns false when there is no route.
+ */
+function walk(s: GameState, b: Brave, tx: number, ty: number, points: number, index: PhaseIndex, onto: boolean): boolean {
+  const defending = braveDefending(b);
+  const route = braveRoute(s, b, tx, ty, onto, index, defending);
+  if (!route) return false;
+  let left = points;
+  for (const step of route) {
+    if (left <= 0) break;
+    left -= braveStepCost(s, b.x, b.y, step.x, step.y, defending);
+    b.x = step.x;
+    b.y = step.y;
+  }
+  return true;
+}
+
+/** Walks a brave towards a target of its task; without a route there, it gives the task up and goes home. */
+function walkTo(s: GameState, b: Brave, tx: number, ty: number, points: number, index: PhaseIndex): void {
+  if (!walk(s, b, tx, ty, points, index, false)) delete b.task;
 }
 
 function wanderStep(s: GameState, b: Brave, st: Settlement, points: number, index: PhaseIndex): void {
   const grid = gridOf(s);
+  const radius = nativeRulesOf(s).wanderRadius;
   let left = points;
   let guard = 4;
   while (left > 0 && guard-- > 0) {
@@ -429,13 +583,13 @@ function wanderStep(s: GameState, b: Brave, st: Settlement, points: number, inde
     const options: { x: number; y: number }[] = [];
     for (let k = 0; k < steps.length; k += 2) {
       const p = { x: b.x + steps[k], y: b.y + steps[k + 1] };
-      if (grid.distance(p.x, p.y, st.x, st.y) <= WANDER_RADIUS && open(s, b, p.x, p.y, index)) options.push(p);
+      if (grid.distance(p.x, p.y, st.x, st.y) <= radius && open(s, b, p.x, p.y, index)) options.push(p);
     }
     if (!options.length) return;
     const p = options[randInt(s, options.length)];
+    left -= braveStepCost(s, b.x, b.y, p.x, p.y, false);
     b.x = p.x;
     b.y = p.y;
-    left -= stepCost(s, p.x, p.y);
   }
 }
 
@@ -449,6 +603,7 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
   const nation = c.owner;
   const p = player(s, nation);
   delete b.task;
+  meetPeople(s, nation, st.tribe, c);
   if (purpose === 'gift') {
     const goods = settlementForSale(s, st).filter((r) => r.amount >= 20).sort((x, y) => y.amount - x.amount);
     if (goods.length && random(s) < 0.4) {
@@ -470,15 +625,30 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
     makeDemand(s, b, st, c);
     return;
   }
+  // A brave come to trade is contact (N13); its people, free to make a trade treaty with the
+  // nation, may offer one through it (N8).
+  notePeopleContact(s, nation, st.tribe);
+  if (peopleWouldOffer(s, st, nation)) {
+    if (p.human) {
+      const d = addDemand(s, { kind: 'treaty', nation, colonyId: c.id, settlementId: st.id, braveId: b.id, amount: 0, treaty: 'people-trade' });
+      b.task = { kind: 'wait', demandId: d.id, turns: nativeRulesOf(s).demandWait };
+      track(nation, 'natives:people treaty offered');
+      message(s, `${aBrave(tribe)} at ${c.name} brings an offer from the ${tribe}: ${peopleTreatyText('people-trade')}.`, nation, c);
+      return;
+    }
+    track(nation, 'natives:people treaty offered');
+    answerPeopleOffer(s, nation, st.tribe, 'people-trade', aiAcceptsPeopleOffer(s, nation, st.tribe));
+  }
   // Trade: the brave buys goods the tribe wants, then offers the settlement's own goods.
   for (const g of peopleOf(s, st.tribe).wants) {
     if (NOT_FOR_SALE.has(g) || c.goods[g] < 50) continue;
     const amount = Math.min(100, Math.floor(c.goods[g] / 2));
-    const gold = nativeOffer(s, st, g, amount);
+    const gold = nativeOffer(s, st, g, amount, nation);
     if (gold < 10) continue;
     c.goods[g] -= amount;
     st.gold -= gold;
     p.gold += gold;
+    notePeopleTrade(s, nation, st.tribe, gold);
     noteTrade(s, nation, gold);
     track(nation, 'natives:sold to visiting brave');
     track(nation, 'natives:gold from sales', gold);
@@ -496,7 +666,7 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
   if (p.gold < price) return;
   if (p.human) {
     const d = addDemand(s, { kind: 'offer', nation, colonyId: c.id, settlementId: st.id, braveId: b.id, good: offer.good, amount: offer.amount, price });
-    b.task = { kind: 'wait', demandId: d.id, turns: DEMAND_WAIT };
+    b.task = { kind: 'wait', demandId: d.id, turns: nativeRulesOf(s).demandWait };
     message(s, `${aBrave(tribe)} at ${c.name} offers ${offer.amount} ${GOOD_DEFS[offer.good].name.toLowerCase()} for ${price} gold.`, nation, c);
     return;
   }
@@ -512,6 +682,7 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
 function buyOffer(s: GameState, st: Settlement, c: Colony, good: GoodId, amount: number, price: number): void {
   const p = player(s, c.owner);
   p.gold -= price;
+  notePeopleTrade(s, c.owner, st.tribe, price);
   st.gold += price;
   st.goods![good] = Math.max(0, (st.goods![good] ?? 0) - amount);
   c.goods[good] += amount;
@@ -545,7 +716,7 @@ function makeDemand(s: GameState, b: Brave, st: Settlement, c: Colony): void {
   track(c.owner, 'natives:tribute demanded');
   const p = player(s, c.owner);
   if (p.human) {
-    b.task = { kind: 'wait', demandId: d.id, turns: DEMAND_WAIT };
+    b.task = { kind: 'wait', demandId: d.id, turns: nativeRulesOf(s).demandWait };
     message(s, `${aBrave(tribe)} at ${c.name} demands ${demandText(d)} as tribute.`, c.owner, c);
     return;
   }
@@ -569,8 +740,13 @@ export function aiPaysTribute(s: GameState, b: Brave, c: Colony, d: Pick<NativeD
   const risk = off / (off + def);
   const value = d.good ? d.amount * sellPrice(p, d.good) : d.amount;
   if (!d.good && p.gold < d.amount) return false;
+  // Creative, the peoples' main partner (native-partners.md N11), keeps its partners' goodwill (step 6).
+  if (p.ai === 'creative' && hasPeopleTrade(s, p.id, b.tribe) && value <= PARTNER_TRIBUTE) return true;
   return risk >= 0.35 || value <= 120;
 }
+
+/** The most (gold, or goods at home prices) a Creative computer nation pays a trade partner people's brave without weighing the fight. */
+export const PARTNER_TRIBUTE = 400;
 
 /** Answers a demand (pay or refuse) or an offer (buy or decline). */
 export function resolveDemand(s: GameState, d: NativeDemand, accept: boolean): string {
@@ -583,6 +759,7 @@ export function resolveDemand(s: GameState, d: NativeDemand, accept: boolean): s
   if (b) delete b.task;
   if (!st || !c || c.owner !== d.nation) return 'The natives have gone.';
   const p = player(s, d.nation);
+  if (d.kind === 'treaty') return answerPeopleOffer(s, d.nation, st.tribe, d.treaty ?? 'people-trade', accept);
   if (d.kind === 'offer') {
     if (!accept) return `You decline the ${tribe} offer.`;
     const price = d.price ?? 0;
@@ -609,12 +786,12 @@ export function resolveDemand(s: GameState, d: NativeDemand, accept: boolean): s
       st.gold += n;
       text = `You pay the ${tribe} ${n} gold.`;
     }
-    addTension(st, d.nation, DEMAND_MET_TENSION);
+    addTension(st, d.nation, nativeRulesOf(s).demandMetTension);
     track(d.nation, 'natives:tribute paid');
     message(s, text, d.nation, c);
     return text;
   }
-  addTension(st, d.nation, DEMAND_REFUSED_TENSION);
+  addTension(st, d.nation, nativeRulesOf(s).demandRefusedTension);
   track(d.nation, 'natives:tribute refused');
   const text = `${c.name} refuses the ${tribe} demand. The brave attacks!`;
   message(s, text, d.nation, c);
@@ -694,6 +871,7 @@ export function attackColony(s: GameState, b: Brave, c: Colony): void {
   if (!defender) return;
   const tribe = TRIBES[b.tribe].name;
   const st = s.settlements[b.home];
+  meetPeople(s, c.owner, b.tribe, c);
   track(c.owner, 'natives:raid suffered');
   const off = braveCombat(b).offence * 1.5;
   const def = defencePower(s, defender);
@@ -761,14 +939,19 @@ function pillage(s: GameState, b: Brave, c: Colony): void {
   message(s, `The ${tribe} raid ${c.name} and steal ${gold} gold.`, c.owner, c);
 }
 
-/** A brave attacks a unit in the open. Unarmed units that lose are killed; armed ones lose their arms to the brave. */
-function attackUnit(s: GameState, b: Brave, target: Unit): void {
+/**
+ * A brave attacks a unit in the open. Unarmed units that lose are killed; armed ones lose their arms
+ * to the brave (a King's regular, disarmed, is destroyed, as in combat). `defend`: the partner whose
+ * colony the brave defends (N7), told of the fight.
+ */
+function attackUnit(s: GameState, b: Brave, target: Unit, defend?: NationId): void {
   if (target.loc.kind !== 'map') return;
   const units = unitsAt(s, target.loc.x, target.loc.y).filter((u) => u.owner === target.owner && !isShip(u));
   const defender = chooseDefender(s, units, b);
   if (!defender) return;
   const tribe = TRIBES[b.tribe].name;
   const at = { x: target.loc.x, y: target.loc.y };
+  meetPeople(s, defender.owner, b.tribe, at);
   const off = braveCombat(b).offence * 1.5;
   const def = defencePower(s, defender, b);
   track(defender.owner, 'natives:unit attacked');
@@ -778,9 +961,14 @@ function attackUnit(s: GameState, b: Brave, target: Unit): void {
     message(s, `${unitName(defender)} beats off an attack by the ${tribe}.${promote(s, defender)}`, defender.owner, at);
     return;
   }
-  const stripped = strip(b, defender) ?? (UNIT_TYPES[defender.type].kind === 'artillery' ? hurtArtillery(s, defender) : null);
+  let stripped = strip(b, defender) ?? (UNIT_TYPES[defender.type].kind === 'artillery' ? hurtArtillery(s, defender) : null);
+  if (stripped && defender.type === 'kingsRegular' && defender.role === 'none') {
+    removeUnit(s, defender.id);
+    stripped = `${unitName(defender)} is destroyed`;
+  }
   if (stripped) {
     message(s, `The ${tribe} attack: ${stripped}.`, defender.owner, at);
+    if (defend) message(s, `The ${tribe} fight for you: ${stripped}.`, defend, at);
     return;
   }
   const name = unitName(defender);

@@ -7,22 +7,24 @@
 import { gridOf } from '../grid.js';
 import { buyPrice, portsFor, sellPrice } from '../europe.js';
 import { findPath, goTo, setDestination } from '../movement.js';
-import { nativeOffer, tensionOf, tradeWithSettlement } from '../natives.js';
+import { nativeOffer, settlementName, tensionOf, tradeWithSettlement } from '../natives.js';
+import { nativeUnitPrice, settlementForSale } from '../braves.js';
+import { partnerSettlements, settlementStopOpen } from '../peopletreaties.js';
 import { type ColonyReport } from '../production.js';
 import { aiColonyReport } from './reports.js';
 import { cargoRoomFor, colonyAt, isCoastal, isShip, player, unitPosition, unitsAboard, warehouseCapacity } from '../queries.js';
 import { favouredPartners, favouredUnlocked, FOREIGN_KEEP, hasTradeAgreement, inWaitingPeriod, isFavoured, routesBetween, ROUTES_NEEDED } from '../relations.js';
-import { assignRoute, createRoute, deleteRoute, editRoute, EUROPE_STOP, foreignStopColonies, isForeignStop, routesOf, routeUnits, stopPort } from '../routes.js';
+import { assignRoute, createRoute, deleteRoute, editRoute, EUROPE_STOP, foreignStopColonies, isForeignStop, isSettlementStop, routesOf, routeUnits, stopPort } from '../routes.js';
 import type { NationId } from '../rules/nations.js';
 import { track } from '../telemetry.js';
 import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
 import type { GoodId } from '../rules/goods.js';
 import { aiGoodsOf, aiTurn, goodsOf, mechanicsOf, term } from '../scenarios/index.js';
 import { UNIT_TYPES } from '../rules/units.js';
-import type { Colony, GameState, Player, RouteCargo, RouteStop, TradeRoute, Unit } from '../types.js';
+import type { Colony, GameState, Player, RouteCargo, RouteStop, Settlement, TradeRoute, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import { portNet, wagonSteps } from './foreign.js';
-import { buyFromNatives } from './natives.js';
+import { buyFromNatives, NATIVE_BUY_MARGIN } from './natives.js';
 import { indexedUnitsOf, ownedUnitsView, unitList } from '../unitindex.js';
 
 /** Goods worth carrying away from a colony to sell. */
@@ -199,7 +201,9 @@ export function manageLogistics(s: GameState, p: Player): void {
 /** A route name like "Port to Europe", numbered if the nation already has one by that name. */
 function routeName(s: GameState, p: Player, stops: RouteStop[], except?: string): string {
   const first = s.colonies[stops[0].at]?.name ?? 'Route';
-  const last = stops[stops.length - 1].at === EUROPE_STOP ? term(s, 'homeland') : s.colonies[stops[stops.length - 1].at]?.name ?? 'port';
+  const end = stops[stops.length - 1].at;
+  const settlement = s.settlements[end];
+  const last = end === EUROPE_STOP ? term(s, 'homeland') : s.colonies[end]?.name ?? (settlement ? `the ${settlementName(s, settlement)}` : 'port');
   const base = `${first} to ${last}`;
   const taken = new Set(routesOf(s, p.id).filter((r) => r.id !== except).map((r) => r.name));
   for (let i = 1; ; i++) {
@@ -210,6 +214,16 @@ function routeName(s: GameState, p: Player, stops: RouteStop[], except?: string)
 
 /** Keeps load amounts in step with the colonies' workshops, and ship stops with where goods pile up. */
 function refreshRoute(s: GameState, p: Player, r: TradeRoute, users: Unit[]): void {
+  const atSettlement = r.stops.find((st) => isSettlementStop(s, st));
+  if (atSettlement && !users.some(isShip)) {
+    // A wagon train's route to a partner's settlement: kept while the treaty holds and the trade still pays.
+    const home = r.stops.find((st) => s.colonies[st.at]?.owner === p.id);
+    const st = s.settlements[atSettlement.at];
+    const rules = home && settlementStopOpen(s, p.id, st.id) ? settlementRouteRules(s, p, s.colonies[home.at], st, true) : null;
+    if (!rules) deleteRoute(s, p.id, r.id);
+    else editRoute(s, p.id, r.id, { name: routeName(s, p, [rules.home, rules.stop], r.id), stops: [rules.home, rules.stop] });
+    return;
+  }
   const foreign = r.stops.find((st) => isForeignStop(s, st, p.id));
   let stops: RouteStop[] = r.stops.filter((st) => st.at === EUROPE_STOP || s.colonies[st.at]?.owner === p.id);
   const ship = users.some(isShip);
@@ -530,6 +544,82 @@ function routeWagon(s: GameState, p: Player, wagon: Unit): void {
   nativeTrade(s, p, wagon);
 }
 
+/** Least a partner's settlement must pay for 100 of a good before a wagon train's route calls there to sell it. */
+const SETTLEMENT_ROUTE_OFFER = 40;
+/** Gold a nation must hold before its settlement routes also buy there (a purchase is up to 100 goods). */
+const SETTLEMENT_ROUTE_BUY_GOLD = 1000;
+
+/**
+ * The two stops of a wagon train's route between one of the nation's colonies and a partner's
+ * settlement (N4), or null when it does not pay: the colony's spare goods (50 or more above what it
+ * keeps; for a route already running, also goods the colony makes) that the settlement pays at
+ * least SETTLEMENT_ROUTE_OFFER for, sold there; and, while the
+ * nation has gold and Europe is open to it, the settlement's goods that fetch NATIVE_BUY_MARGIN
+ * times their price at home, bought there and unloaded at the colony for the ship routes.
+ */
+function settlementRouteRules(s: GameState, p: Player, own: Colony, st: Settlement, running = false): { home: RouteStop; stop: RouteStop; gain: number } | null {
+  if (st.gold < 60 || tensionOf(st, p.id) >= 600) return null;
+  const report = aiColonyReport(s, own);
+  let gain = 0;
+  const sells: GoodId[] = [];
+  for (const g of tradeGoods(s)) {
+    if (own.goods[g] - keepFor(own, report, g) < 50 && !(running && report.produced[g] > 0)) continue;
+    const offer = nativeOffer(s, st, g, 100, p.id);
+    if (offer < SETTLEMENT_ROUTE_OFFER) continue;
+    sells.push(g);
+    gain = Math.max(gain, offer);
+  }
+  if (!sells.length) return null;
+  const buys =
+    p.independence === 'none' && p.gold >= SETTLEMENT_ROUTE_BUY_GOLD
+      ? settlementForSale(s, st)
+          .filter((r) => r.amount >= 30 && !p.boycotts[r.good] && homeNet(p, r.good) >= nativeUnitPrice(s, st, r.good, p.id) * NATIVE_BUY_MARGIN)
+          .map((r) => r.good)
+      : [];
+  const load = sells.map((g) => {
+    const keep = keepFor(own, report, g);
+    return keep > 0 ? { good: g, amount: keep } : { good: g };
+  });
+  return {
+    home: { at: own.id, load, unload: buys.map((good) => ({ good })) },
+    stop: { at: st.id, load: buys.map((good) => ({ good })), unload: sells.map((good) => ({ good })) },
+    gain,
+  };
+}
+
+/**
+ * Under a trade treaty with a people (N4), an empty wagon train that would trade with the natives
+ * on its own (nativeTrade) goes on a route instead, between the nation's colony within 8 tiles of
+ * it that has goods to spare and a partner's settlement within 8 tiles of that colony that pays
+ * best for them (`settlementRouteRules`), when the wagon can reach a tile beside it. Returns
+ * whether it did.
+ */
+function routeWagonSettlement(s: GameState, p: Player, wagon: Unit): boolean {
+  const partners = partnerSettlements(s, p.id);
+  if (!partners.length) return false;
+  const grid = gridOf(s);
+  const pos = unitPosition(s, wagon)!;
+  let best: { own: Colony; st: Settlement; score: number } | null = null;
+  for (const own of ownColonies(s, p)) {
+    const away = grid.distance(own.x, own.y, pos.x, pos.y);
+    if (away > 8) continue;
+    for (const st of partners) {
+      const d = grid.distance(own.x, own.y, st.x, st.y);
+      if (d > 8) continue;
+      const rules = settlementRouteRules(s, p, own, st);
+      if (!rules) continue;
+      const score = rules.gain - (d + away) * 5;
+      if (score > 0 && (!best || score > best.score)) best = { own, st, score };
+    }
+  }
+  if (!best || !besideSettlement(s, ghostAt(wagon, best.own), best.st.x, best.st.y)) return false;
+  const rules = settlementRouteRules(s, p, best.own, best.st)!;
+  const route = createRoute(s, p.id, routeName(s, p, [rules.home, rules.stop]), [rules.home, rules.stop]);
+  assignRoute(s, wagon.id, route.id);
+  track(p.id, 'route:settlement route created');
+  return true;
+}
+
 /**
  * Goods a wagon train bought from natives go to the nation's nearest port, where they are
  * unloaded for the ship routes. Returns whether the wagon is busy hauling.
@@ -579,9 +669,11 @@ function nativeTrade(s: GameState, p: Player, wagon: Unit): void {
   const pos = unitPosition(s, wagon)!;
   const cargo = wagon.cargo ?? {};
   const carrying = tradeGoods(s).filter((g) => (cargo[g] ?? 0) > 0);
+  // A partner's settlement within reach: a route there rather than trading on its own (N4).
+  if (!carrying.length && s.treaties && routeWagonSettlement(s, p, wagon)) return;
   const buyers = nativeBuyers(s, p, pos).sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y));
   if (carrying.length) {
-    const st = buyers.find((o) => carrying.some((g) => nativeOffer(s, o, g, Math.min(100, cargo[g]!)) >= 40));
+    const st = buyers.find((o) => carrying.some((g) => nativeOffer(s, o, g, Math.min(100, cargo[g]!), p.id) >= 40));
     if (!st) return;
     if (grid.distance(st.x, st.y, pos.x, pos.y) === 1) {
       if (wagon.moves > 0) tradeWithSettlement(s, wagon.id, st.id);

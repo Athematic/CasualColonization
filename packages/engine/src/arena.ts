@@ -11,11 +11,13 @@ import { colonyWorkers } from './queries.js';
 import type { DifficultyId } from './rules/difficulty.js';
 import type { NationId } from './rules/nations.js';
 import { nationSet, scenarioOf, type Rivals } from './scenarios/index.js';
-import { scoreBreakdown, type ScoreComponent } from './score.js';
+import { finalScores, scoreBreakdown, type ScoreComponent } from './score.js';
+import { prosperityParams, prosperityStanding, type ProsperityCondition } from './prosperity.js';
 import { setFeatureSink } from './telemetry.js';
 import { royalForce } from './independence.js';
 import { isFavoured } from './relations.js';
 import { alliesOf } from './alliances.js';
+import { bound, withPeople } from './treaties.js';
 import type { GameState, MapSize, Player } from './types.js';
 import { colonyList } from './unitindex.js';
 
@@ -104,6 +106,31 @@ export interface RelationsTally {
   sharedBells: number;
   /** Declarations of independence made together with an ally (confederation.ts). */
   confederations: number;
+  /**
+   * Treaties with native peoples (peopletreaties.ts): made, ended (by either side, breaches
+   * included), the nation's breaches of faith, and treaties in force at the end.
+   */
+  peopleTreaties: number;
+  peopleTreatiesEnded: number;
+  peopleBreaches: number;
+  peopleTreatiesAtEnd: number;
+  /** Land use treaties (leases, step 2): made, lapsed for unpaid rent, and the rent paid in gold. */
+  leases: number;
+  leasesLapsed: number;
+  rent: number;
+  /** Cultural exchanges (step 3): made, ended, and colonists taught again by a settlement under one. */
+  exchanges: number;
+  exchangesEnded: number;
+  renewedTeachings: number;
+  /**
+   * Mutual defence pacts (step 4): made, ended, fights of the people's braves for the partner, and
+   * wars the pacts brought (the partner drawn in by an attack on its people, or the people going to
+   * war for an attack on the partner's colony), counted for the partner.
+   */
+  defences: number;
+  defencesEnded: number;
+  defenceFights: number;
+  pactWars: number;
 }
 
 const TALLY: Record<string, keyof RelationsTally> = {
@@ -134,13 +161,26 @@ const TALLY: Record<string, keyof RelationsTally> = {
   'alliance:joint expedition': 'expeditions',
   'alliance:bells received': 'sharedBells',
   'independence:confederation': 'confederations',
+  'natives:people treaty made': 'peopleTreaties',
+  'natives:people treaty ended': 'peopleTreatiesEnded',
+  'natives:faith broken': 'peopleBreaches',
+  'natives:lease made': 'leases',
+  'natives:lease lapsed': 'leasesLapsed',
+  'natives:rent paid': 'rent',
+  'natives:exchange made': 'exchanges',
+  'natives:exchange ended': 'exchangesEnded',
+  'natives:renewed teaching': 'renewedTeachings',
+  'natives:defence made': 'defences',
+  'natives:defence ended': 'defencesEnded',
+  'natives:defence fight': 'defenceFights',
+  'natives:pact war': 'pactWars',
 };
 
 /** Tally keys that add up the amount reported, not the number of reports. */
-const AMOUNTS = new Set<keyof RelationsTally>(['foreignStopSales', 'partnerPortSales', 'refAdded', 'shares', 'dividends', 'sharedBells']);
+const AMOUNTS = new Set<keyof RelationsTally>(['foreignStopSales', 'partnerPortSales', 'refAdded', 'shares', 'dividends', 'sharedBells', 'rent']);
 
 function emptyTally(): RelationsTally {
-  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0, alliances: 0, alliancesLeft: 0, alliesAtEnd: 0, allyWars: 0, companies: 0, shares: 0, dividends: 0, expeditions: 0, sharedBells: 0, confederations: 0 };
+  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0, alliances: 0, alliancesLeft: 0, alliesAtEnd: 0, allyWars: 0, companies: 0, shares: 0, dividends: 0, expeditions: 0, sharedBells: 0, confederations: 0, peopleTreaties: 0, peopleTreatiesEnded: 0, peopleBreaches: 0, peopleTreatiesAtEnd: 0, leases: 0, leasesLapsed: 0, rent: 0, exchanges: 0, exchangesEnded: 0, renewedTeachings: 0, defences: 0, defencesEnded: 0, defenceFights: 0, pactWars: 0 };
 }
 
 /** What one event did to one nation over a game: times it fired, the choices taken (by index) and the computer players' gold value of the outcomes. */
@@ -185,6 +225,19 @@ export interface ArenaEntry {
   won: boolean;
   /** Won together with its allies (the `concord` victory). */
   concord?: boolean;
+  /** Won by prosperity (native-partners.md N10), alone or with others. */
+  prosperity?: boolean;
+  /**
+   * Where the scenario plays for prosperity: the rule's conditions the nation failed at the end
+   * (empty when it qualified), whether or not the game ended that way.
+   */
+  prosperityFails?: ProsperityCondition[];
+  /**
+   * With `prosperityFails`: how the nation stood at the end, in numbers: peoples met, those it was
+   * at war with or had a war with within the rule's years, its partner peoples and the partners the
+   * treaties condition needs.
+   */
+  prosperityCounts?: { met: number; unpeaceful: number; partners: number; needed: number };
   /** Feature uses, when the arena counts them. */
   features?: FeatureCounts;
   /** Relations and trade with the other Europeans (arena games always count them). */
@@ -279,8 +332,15 @@ export function playArenaGame(
   } finally {
     setFeatureSink(previous);
   }
+  const rule = scenarioOf(s).victory.find((v) => v.id === 'prosperity');
+  // Judged on the scores the game ended with (the round's next turn has begun since), as the victory was.
+  const finals = rule ? (s.gameOver?.scores ?? finalScores(s)) : undefined;
   const entries = line.map((l) => {
-    const e = { ...standing(s, seed, l.nation, l.level), relations: endRelations(s, l.nation, tallies.get(l.nation)), ...(events ? { events: eventTallies.get(l.nation) ?? {} } : {}) };
+    const standingThen = rule ? prosperityStanding(s, l.nation, finals!, prosperityParams(rule.params)) : undefined;
+    const fails = standingThen
+      ? { prosperityFails: standingThen.fails, prosperityCounts: { met: standingThen.met.length, unpeaceful: standingThen.notAtPeace.length, partners: standingThen.partners.length, needed: standingThen.needed } }
+      : {};
+    const e = { ...standing(s, seed, l.nation, l.level), relations: endRelations(s, l.nation, tallies.get(l.nation)), ...fails, ...(events ? { events: eventTallies.get(l.nation) ?? {} } : {}) };
     return features ? { ...e, features: { ...counts.get(l.nation), ...endStateFeatures(s, l.nation) } } : e;
   });
   return { state: s, entries };
@@ -295,6 +355,7 @@ function endRelations(s: GameState, nation: NationId, counted?: RelationsTally):
     if (isFavoured(s, rel.a, rel.b)) r.favouredAtEnd++;
   }
   r.alliesAtEnd = alliesOf(s, nation).length;
+  r.peopleTreatiesAtEnd = (s.treaties ?? []).filter((t) => !t.end && withPeople(t) && bound(t, nation)).length;
   return r;
 }
 
@@ -375,9 +436,17 @@ export function playArenaRound(opts: ArenaOptions, game: ArenaGame): ArenaEntry[
   const { state, entries } = playArenaGame(game.seed, game.line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured, opts.events, !opts.noCharter, setup);
   const best = Math.max(...entries.map((e) => e.score));
   // A game that ended names its winners (several after a concord victory); one stopped early: the best score.
+  // A prosperity victory names the winners' partner peoples; several winners otherwise won together (concord).
   const winners = state.gameOver?.winners;
-  const together = !!winners && winners.length > 1;
-  return entries.map((e) => ({ ...e, game: game.game, won: winners?.length ? winners.includes(e.nation) : e.score === best, ...(together && winners!.includes(e.nation) ? { concord: true } : {}) }));
+  const prosperity = !!state.gameOver?.partners?.length;
+  const together = !!winners && winners.length > 1 && !prosperity;
+  return entries.map((e) => ({
+    ...e,
+    game: game.game,
+    won: winners?.length ? winners.includes(e.nation) : e.score === best,
+    ...(together && winners!.includes(e.nation) ? { concord: true } : {}),
+    ...(prosperity && winners!.includes(e.nation) ? { prosperity: true } : {}),
+  }));
 }
 
 export function summarise(entries: ArenaEntry[]): ArenaSummary[] {
@@ -449,6 +518,78 @@ export function formatRelationsLine(entries: ArenaEntry[]): string {
 }
 
 /**
+ * Treaties with native peoples over a run: games with one made, made, ended and broken per game,
+ * in force at the end, and the levels that made them. Empty when none was made.
+ */
+export function peopleTreatyLine(entries: ArenaEntry[]): string {
+  const sum = (k: keyof RelationsTally, list = entries) => list.reduce((n, e) => n + (e.relations?.[k] ?? 0), 0);
+  const made = sum('peopleTreaties');
+  if (!made && !sum('peopleBreaches')) return '';
+  const byGame = new Map<number, ArenaEntry[]>();
+  for (const e of entries) byGame.set(e.game, [...(byGame.get(e.game) ?? []), e]);
+  const games = byGame.size || 1;
+  const withTreaty = [...byGame.values()].filter((g) => g.some((e) => (e.relations?.peopleTreaties ?? 0) > 0)).length;
+  const per = (n: number) => Math.round((n / games) * 10) / 10;
+  const levels = [...new Set(entries.map((e) => e.level))].map((l) => `${l} ${per(sum('peopleTreaties', entries.filter((e) => e.level === l)))}`).join(', ');
+  const leases = sum('leases');
+  const withLease = [...byGame.values()].filter((g) => g.some((e) => (e.relations?.leases ?? 0) > 0)).length;
+  const leaseLevels = [...new Set(entries.map((e) => e.level))].map((l) => `${l} ${per(sum('leases', entries.filter((e) => e.level === l)))}`).join(', ');
+  const land = leases ? `Land use: ${withLease} of ${games} games with a lease, ${per(leases)} made per game (${leaseLevels}), ${per(sum('leasesLapsed'))} lapsed for want of rent, ${Math.round(sum('rent') / games)} gold of rent per game. ` : '';
+  const exchanges = sum('exchanges');
+  const withExchange = [...byGame.values()].filter((g) => g.some((e) => (e.relations?.exchanges ?? 0) > 0)).length;
+  const exchangeLevels = [...new Set(entries.map((e) => e.level))].map((l) => `${l} ${per(sum('exchanges', entries.filter((e) => e.level === l)))}`).join(', ');
+  const exchange = exchanges ? `Cultural exchange: ${withExchange} of ${games} games with one, ${per(exchanges)} made per game (${exchangeLevels}), ${per(sum('exchangesEnded'))} ended, ${per(sum('renewedTeachings'))} colonists taught again per game. ` : '';
+  const defences = sum('defences');
+  const withDefence = [...byGame.values()].filter((g) => g.some((e) => (e.relations?.defences ?? 0) > 0)).length;
+  const defenceLevels = [...new Set(entries.map((e) => e.level))].map((l) => `${l} ${per(sum('defences', entries.filter((e) => e.level === l)))}`).join(', ');
+  const defence = defences ? `Mutual defence: ${withDefence} of ${games} games with a pact, ${per(defences)} made per game (${defenceLevels}), ${per(sum('defencesEnded'))} ended, ${per(sum('defenceFights'))} fights of braves for a partner and ${per(sum('pactWars'))} wars brought by pacts per game. ` : '';
+  return `Treaties with peoples: ${withTreaty} of ${games} games with one, ${per(made)} made per game (${levels}), ${per(sum('peopleTreatiesEnded'))} ended and ${per(sum('peopleBreaches'))} breaches of faith per game, ${per(sum('peopleTreatiesAtEnd'))} in force at the end. ${land}${exchange}${defence}`;
+}
+
+/**
+ * The `prosperity` victory over a run (only where the scenario plays for it): games won by
+ * prosperity and by which levels, and how close the nations came at the end: how many failed each
+ * condition, and how many failed that condition alone.
+ */
+export function prosperityLine(entries: ArenaEntry[]): string {
+  const judged = entries.filter((e) => e.prosperityFails);
+  if (!judged.length) return '';
+  const byGame = new Map<number, ArenaEntry[]>();
+  for (const e of entries) byGame.set(e.game, [...(byGame.get(e.game) ?? []), e]);
+  const games = byGame.size || 1;
+  const won = [...byGame.values()].filter((g) => g.some((e) => e.prosperity));
+  const winners = won.map((g) => g.filter((e) => e.prosperity).map((e) => e.level).join(' + ')).join(', ');
+  const conditions: ProsperityCondition[] = ['peace', 'burned', 'treaties', 'score'];
+  const failing = conditions.map((c) => `${c} ${judged.filter((e) => e.prosperityFails!.includes(c)).length}`).join(', ');
+  const alone = conditions.map((c) => `${c} ${judged.filter((e) => e.prosperityFails!.length === 1 && e.prosperityFails![0] === c).length}`).join(', ');
+  const qualified = judged.filter((e) => !e.prosperityFails!.length).length;
+  return `Prosperity: ${won.length} of ${games} games won by prosperity${winners ? ` (${winners})` : ''}; at the end ${qualified} of ${judged.length} nations qualified; failing each condition: ${failing}; failing only that one: ${alone}. `;
+}
+
+/**
+ * A Markdown table of the `prosperity` victory per level (only where the scenario plays for it):
+ * nations, wins by prosperity and nations qualifying at the end, how many failed each condition and
+ * failed it alone, and on average the peoples met, those not at peace (at war, or a war within the
+ * rule's years), the partner peoples held and the partners needed.
+ */
+export function formatProsperity(entries: ArenaEntry[]): string {
+  const judged = entries.filter((e) => e.prosperityFails);
+  if (!judged.length) return '';
+  const conditions: ProsperityCondition[] = ['peace', 'burned', 'treaties', 'score'];
+  const head = `| Level | Nations | Won | Qualified | ${conditions.map((c) => `Failing ${c}`).join(' | ')} | ${conditions.map((c) => `only ${c}`).join(' | ')} | Peoples met | not at peace | partners | needed |`;
+  const rule = `| --- | ${Array(3 + conditions.length * 2 + 4).fill('---:').join(' | ')} |`;
+  const avg = (rows: ArenaEntry[], f: (e: ArenaEntry) => number) => String(Math.round((rows.reduce((n, e) => n + f(e), 0) / rows.length) * 10) / 10);
+  const rows = [...new Set(judged.map((e) => e.level))].map((level) => {
+    const all = judged.filter((e) => e.level === level);
+    const fail = conditions.map((c) => all.filter((e) => e.prosperityFails!.includes(c)).length);
+    const only = conditions.map((c) => all.filter((e) => e.prosperityFails!.length === 1 && e.prosperityFails![0] === c).length);
+    const counts = (k: 'met' | 'unpeaceful' | 'partners' | 'needed') => avg(all, (e) => e.prosperityCounts?.[k] ?? 0);
+    return `| ${level[0].toUpperCase()}${level.slice(1)} | ${all.length} | ${all.filter((e) => e.prosperity).length} | ${all.filter((e) => !e.prosperityFails!.length).length} | ${fail.join(' | ')} | ${only.join(' | ')} | ${counts('met')} | ${counts('unpeaceful')} | ${counts('partners')} | ${counts('needed')} |`;
+  });
+  return [head, rule, ...rows].join('\n');
+}
+
+/**
  * Alliances and concord over a run: games with at least one alliance made, alliances made and
  * standing at the end per game, and games won together (the `concord` victory).
  */
@@ -468,6 +609,8 @@ export function allianceLine(entries: ArenaEntry[]): string {
   const bells = entries.reduce((n, e) => n + (e.relations?.sharedBells ?? 0), 0);
   return `Alliances: ${withAlliance} of ${games} games with an alliance, ${Math.round((made / games) * 10) / 10} made per game, ${Math.round((expeditions / games) * 10) / 10} joint expeditions and ${Math.round(bells / games)} shared bells per game; ${concord} of ${games} games won together (concord). ` +
     `Confederations: ${rows.filter((g) => g.some((e) => (e.relations?.confederations ?? 0) > 0)).length} of ${games} games. ` +
+    prosperityLine(entries) +
+    peopleTreatyLine(entries) +
     `Companies: ${withCompany} of ${games} games with a chartered company, ${Math.round((founded / games) * 10) / 10} founded per game, ${Math.round(dividends / games)} gold of dividends per game.`;
 }
 
@@ -494,7 +637,7 @@ export function formatCrown(entries: ArenaEntry[]): string {
 
 /** A Markdown table of the average points per score component for each level. */
 export function formatScoreSplit(entries: ArenaEntry[]): string {
-  const keys: ScoreComponent[] = ['colonists', 'experts', 'buildings', 'production', 'liberty', 'fathers', 'wealth', 'peace', 'independence', 'companies'];
+  const keys: ScoreComponent[] = ['colonists', 'experts', 'buildings', 'production', 'liberty', 'fathers', 'wealth', 'peace', 'peoples', 'independence', 'companies'];
   const levels = [...new Set(entries.map((e) => e.level))];
   const head = `| Level | ${keys.join(' | ')} | Total |`;
   const rule = `| --- | ${keys.map(() => '---:').join(' | ')} | ---: |`;

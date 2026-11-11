@@ -15,7 +15,7 @@ import { noteTrade } from './stats.js';
 import { cargoRoomFor, colonyAt, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
 import { random } from './rng.js';
 import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, term, turnAfterYears, yearValue } from './scenarios/index.js';
-import type { CompanyId, NationId } from './rules/nations.js';
+import { COMPANY_IDS, type NationId, type TribeId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, treatyBetween } from './treaties.js';
 import { aiAcceptsAlliance, aiAcceptsExpedition, allianceProblem, expeditionProblem, isAllied, leaveAlliance, makeAlliance, makeExpedition } from './alliances.js';
@@ -41,8 +41,8 @@ export const FOREIGN_KEEP = 50;
 
 const SALT = 0x0fa7_0e1d;
 
-/** A small seeded stream for one pair of nations and one purpose; independent of `GameState.rng`. */
-function stream(s: GameState, a: NationId, b: NationId, purpose: string): { rng: number } {
+/** A small seeded stream for one pair (two nations, or a nation and a people) and one purpose; independent of `GameState.rng`. */
+function stream(s: GameState, a: string, b: string, purpose: string): { rng: number } {
   // FNV-1a over the purpose and the pair (in a fixed order), mixed with the game seed.
   const [x, y] = [a, b].sort();
   let h = 0x811c9dc5 ^ SALT;
@@ -61,6 +61,23 @@ export function pairRandom(s: GameState, a: NationId, b: NationId, purpose: stri
   return random(stream(s, a, b, purpose));
 }
 
+/**
+ * A seeded number in [0, 1) for a nation and a native people and one purpose, from a stream of
+ * their own (never `GameState.rng`): the hidden thresholds of treaties with peoples are drawn from
+ * it each time they are needed and never stored (native-partners.md N3).
+ */
+export function peoplePairRandom(s: GameState, nation: NationId, people: TribeId, purpose: string): number {
+  return random(stream(s, nation, people, `people|${purpose}`));
+}
+
+/**
+ * A seeded number in [0, 1) for one native settlement and one purpose, from a stream of its own
+ * (never `GameState.rng`): when a settlement teaches again under a cultural exchange, and what.
+ */
+export function settlementRandom(s: GameState, settlementId: string, purpose: string): number {
+  return random(stream(s, 'settlement', settlementId, `settlement|${purpose}`));
+}
+
 /** A whole number from base − spread to base + spread, both included. */
 function around(r: { rng: number }, v: { base: number; spread: number }): number {
   return v.base - v.spread + Math.floor(random(r) * (2 * v.spread + 1));
@@ -70,13 +87,10 @@ export function relationKey(a: NationId, b: NationId): string {
   return [a, b].sort().join('|');
 }
 
-/** Whether two nations can have relations at all: two different European nations (no Crown, no company). */
+/** Whether two nations can have relations at all: two different European nations (no Crown, no company: companies make no agreements). */
 function europeanPair(a: NationId, b: NationId): boolean {
   return a !== b && a !== 'crown' && b !== 'crown' && !COMPANY_IDS.has(a) && !COMPANY_IDS.has(b);
 }
-
-/** Company ids (rules/nations.ts CompanyId): companies make no agreements with nations. */
-const COMPANY_IDS: ReadonlySet<string> = new Set<CompanyId>(['hudsonsBay', 'westIndia', 'mississippi', 'darien', 'courlandCompany']);
 
 /** The relation between two nations, created (with its seeded thresholds) when first needed. */
 export function relation(s: GameState, a: NationId, b: NationId): Relation {

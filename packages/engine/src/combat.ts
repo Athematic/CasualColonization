@@ -3,10 +3,12 @@ import { fail } from './errors.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { hasModifier, modifiers, mulOf } from './scenarios/modifiers.js';
-import { nationOf, nationTitle, settlementKindOf, term, Term } from './scenarios/index.js';
+import { mechanicsOf, nationOf, nationTitle, nativeRulesOf, settlementKindOf, term, Term } from './scenarios/index.js';
 import { canAttack } from './movement.js';
 import { braveDefence, braveName, bravesOf, killBrave } from './braves.js';
 import { addTension, settlementName } from './natives.js';
+import { breakFaith, callToDefence, defendedByFriend, defencePartner } from './peopletreaties.js';
+import { notePeopleWarEnded, noteSettlementBurned } from './prosperity.js';
 import { sonsOfLiberty } from './production.js';
 import {
   colonyAt,
@@ -33,7 +35,6 @@ import { isCompanyId } from './companies.js';
 import { STOCKADE_DEFENCE } from './rules/buildings.js';
 import { AMBUSH_BONUS, BOMBARD_CHANCE, CAPTURE_CHANCE, REPAIR_COST, RIVER_DEFENCE } from './rules/combat.js';
 import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
-import { SURRENDER_CHANCE, SURRENDER_TRIBUTE } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
 import type { Colony, GameState, Unit } from './types.js';
@@ -352,6 +353,8 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
   if (!player(s, u.owner).human && (isFavoured(s, u.owner, enemy) || (s.treaties && warOnFriend(s, u.owner, enemy)))) fail('Computer players never attack a Favoured Nation or an ally.');
   // Privateers sail under no flag, so their attacks do not start wars.
   if (u.type !== 'privateer') declareWar(s, u.owner, enemy);
+  // A people with a defence pact with the colony's owner comes to its defence (native-partners.md N7).
+  if (colony && s.treaties) callToDefence(s, colony, u);
 
   const off = offencePower(s, u, defender);
   const def = defencePower(s, defender, target.colonyId ? undefined : pos);
@@ -407,15 +410,33 @@ function captureColony(s: GameState, attacker: Unit, colony: Colony): string {
   return `${nationOf(s, attacker.owner).name} captures ${colony.name}!`;
 }
 
-/** Attacking a tribe makes it an enemy, and ends any submission to the attacker. */
+/**
+ * Attacking a tribe makes it an enemy, ends any submission to the attacker, and breaks faith with
+ * it (its treaties end). An attack on a people with a mutual defence pact is war with its partner
+ * (native-partners.md N7); a partner allied with the attacker sees it leave the alliance (N9).
+ */
 function hostile(s: GameState, tribeId: TribeId, nation: NationId, at: { x: number; y: number }, cause: string): void {
   const tribe = s.tribes.find((t) => t.id === tribeId)!;
+  // Attacking a partner breaks faith with it (native-partners.md N8).
+  breakFaith(s, nation, tribeId, 'attack');
+  const partner = s.treaties ? defencePartner(s, tribeId) : undefined;
+  if (partner && partner !== nation && nation !== 'crown' && player(s, nation).stance[partner] !== 'war') {
+    track(partner, 'natives:pact war');
+    message(s, `${nationOf(s, partner).name} stands by its pact with the ${TRIBES[tribeId].name}: the attack on them is war.`);
+    noteHistory(s, 'war', [nation, partner], `${nationOf(s, partner).name} goes to war with ${nationOf(s, nation).name} to defend the ${TRIBES[tribeId].name}, its partners in a mutual defence pact.`);
+    declareWar(s, nation, partner);
+  }
   if (tribe.submitted?.includes(nation)) tribe.submitted = tribe.submitted.filter((n) => n !== nation);
   if (tribe.stance[nation] !== 'war') {
     tribe.stance[nation] = 'war';
     message(s, `The ${TRIBES[tribeId].name} now consider ${nationOf(s, nation).name} an enemy.`, nation, at);
     noteHistory(s, 'tribe', [nation], `War with the ${TRIBES[tribeId].name}, after ${cause}.`, { secret: true, at });
   }
+}
+
+/** Computer players never attack a people whose defence partner is their Favoured Nation or ally (N9, as for nations). */
+function noFriendsPeople(s: GameState, nation: NationId, people: TribeId): void {
+  if (s.treaties && !player(s, nation).human && defendedByFriend(s, nation, people)) fail('Computer players never attack a people defended by a Favoured Nation or an ally.');
 }
 
 /** A European unit attacks a brave in the open. The brave defends with its own values and the terrain. */
@@ -425,6 +446,7 @@ function attackBrave(s: GameState, u: Unit, braveId: string): CombatResult {
   const pos = unitPosition(s, u)!;
   if (!b || grid.distance(b.x, b.y, pos.x, pos.y) !== 1) fail('The brave is not next to the unit.');
   if (isShip(u)) fail('Ships cannot attack braves on land.');
+  noFriendsPeople(s, u.owner, b.tribe);
   const atWar = s.tribes.find((t) => t.id === b.tribe)?.stance[u.owner] === 'war';
   hostile(s, b.tribe, u.owner, b, `an attack on one of their braves`);
   const off = offencePower(s, u);
@@ -469,6 +491,7 @@ function attackSettlement(s: GameState, u: Unit, settlementId: string): CombatRe
   const st = s.settlements[settlementId];
   const pos = unitPosition(s, u)!;
   if (!st || grid.distance(st.x, st.y, pos.x, pos.y) !== 1) fail('The settlement is not next to the unit.');
+  noFriendsPeople(s, u.owner, st.tribe);
   hostile(s, st.tribe, u.owner, st, `an attack on the ${settlementName(s, st)}`);
   for (const other of Object.values(s.settlements)) if (other.tribe === st.tribe) addTension(other, u.owner, other.id === st.id ? 300 : 150);
   const off = offenceVsSettlement(s, u);
@@ -492,6 +515,8 @@ function destroySettlement(s: GameState, u: Unit, settlementId: string): string 
   delete s.settlements[st.id];
   for (const b of Object.values(bravesOf(s))) if (b.home === st.id) delete bravesOf(s)[b.id];
   track(u.owner, 'combat:settlement burned');
+  const burnedTribe = s.tribes.find((t) => t.id === st.tribe);
+  if (burnedTribe) noteSettlementBurned(s, burnedTribe, u.owner);
   const plunder = st.gold;
   player(s, u.owner).gold += plunder;
   let text = `The ${settlementName(s, st)} has been burned. ${plunder} gold was plundered.`;
@@ -518,21 +543,23 @@ function destroySettlement(s: GameState, u: Unit, settlementId: string): string 
 
 /**
  * When a tribe's capital burns, its other settlements may submit to the attacker (one seeded roll
- * per tribe; never after a desecrated burial ground). They make peace, forget their anger, pay a
+ * per tribe; never after a desecrated burial ground; only with `mechanics.surrender`). They make peace, forget their anger, pay a
  * tribute, no longer attack or make demands, and give their land freely. Attacking the tribe
  * again ends it. Otherwise they fight on.
  */
 function surrender(s: GameState, tribeId: TribeId, nation: NationId, at: { x: number; y: number }): string {
-  if (nation === 'crown') return '';
+  if (nation === 'crown' || !mechanicsOf(s).surrender) return '';
+  const rules = nativeRulesOf(s);
   const tribe = s.tribes.find((t) => t.id === tribeId)!;
   const rest = Object.values(s.settlements).filter((o) => o.tribe === tribeId);
-  if (!rest.length || tribe.burial?.includes(nation) || random(s) >= SURRENDER_CHANCE) return '';
+  if (!rest.length || tribe.burial?.includes(nation) || random(s) >= rules.surrenderChance) return '';
+  if (tribe.stance[nation] === 'war') notePeopleWarEnded(s, tribe, nation);
   tribe.stance[nation] = 'peace';
   tribe.submitted = [...(tribe.submitted ?? []).filter((n) => n !== nation), nation];
   let tribute = 0;
   for (const o of rest) {
     o.tension[nation] = 0;
-    const gold = Math.floor(o.gold * SURRENDER_TRIBUTE);
+    const gold = Math.floor(o.gold * rules.surrenderTribute);
     o.gold -= gold;
     tribute += gold;
   }

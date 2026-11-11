@@ -55,6 +55,8 @@ import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
 import { aiGoodsOf, aiTurn } from '../scenarios/index.js';
 import { ownedUnitsView, colonyList } from '../unitindex.js';
+import { peopleTreatiesOn } from '../peopletreaties.js';
+import { peopleAffairs } from './natives.js';
 
 /** Goods the computer players export, and so weigh in tax decisions and port choice (the scenario's `ai.goods.export`). */
 export const exportGoods = (s: GameState): readonly GoodId[] => aiGoodsOf(s).export;
@@ -106,6 +108,7 @@ export function foreignAffairs(s: GameState, p: Player, prof: AiProfile, strengt
   if (companiesOn(s)) safely(() => companyAffairs(s, p, prof));
   if (s.treaties && alliancesOn(s)) safely(() => jointExpedition(s, p, prof));
   if (s.treaties && confederationOn(s)) safely(() => confederate(s, p));
+  if (peopleTreatiesOn(s)) safely(() => peopleAffairs(s, p, prof));
   pruneTriangles(s, p);
 }
 

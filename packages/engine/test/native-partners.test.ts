@@ -1,0 +1,553 @@
+/**
+ * Beta 2, step 0 (docs/design/native-partners.md, section 5): a people as a treaty party, read
+ * through the party helpers; the standing record per nation and people (N3); native rules as
+ * scenario data (`peoples.rules`) with switches for burial grounds and surrender; land's reach per
+ * settlement kind (N6); and the five fixes of today's native rules.
+ */
+import { describe, expect, it } from 'vitest';
+import './mechanics-variants.js';
+import {
+  addTreaty,
+  AMERICAS,
+  addTension,
+  applyCommand,
+  bravesOf,
+  buyFromSettlement,
+  buyLand,
+  goodRelations,
+  nativeProduceOf,
+  notePeopleTrade,
+  peopleRelationKey,
+  peopleRelationOf,
+  peopleThreshold,
+  tradeWithSettlement,
+  yearsOfGoodRelations,
+  colonySiteProblem,
+  foundColony,
+  foundCompany,
+  inciteTribe,
+  pendingDemands,
+  tensionOf,
+  CARIBBEAN,
+  gridOf,
+  landPrice,
+  joinCongress,
+  learnSkill,
+  modifiers,
+  nationOf,
+  nativeLandOwner,
+  UNIT_TYPES,
+  player,
+  createUnit,
+  isWater,
+  NATIVE_RULES,
+  nativeRulesIn,
+  nativeRulesOf,
+  neighbours,
+  processNatives,
+  registerScenario,
+  removeUnit,
+  takeLand,
+  tensionLabel,
+  tensionSeverity,
+  tileAt,
+  type Scenario,
+  type Settlement,
+  allTreaties,
+  bound,
+  boundPeople,
+  createGame,
+  describeTreaty,
+  deserialize,
+  endTreaty,
+  nationParty,
+  partyIsNation,
+  partyIsPeople,
+  partyName,
+  peopleParty,
+  sameParty,
+  serialize,
+  treatyName,
+  treatyNations,
+  treatyPeoples,
+  withPeople,
+  type GameState,
+  type NationId,
+} from '../src/index.js';
+import { resolveRumour } from '../src/rumours.js';
+
+function game(seed = 42, humans: NationId[] = ['england']): GameState {
+  return createGame({ seed, mapSize: 'small', nations: ['england', 'france'], humans });
+}
+
+describe('a people as a treaty party (N1)', () => {
+  it('reads parties through the helpers', () => {
+    const nation = nationParty('france');
+    const people = peopleParty('arawak');
+    expect(partyIsNation(nation)).toBe(true);
+    expect(partyIsPeople(nation)).toBe(false);
+    expect(partyIsPeople(people)).toBe(true);
+    expect(partyIsNation(people)).toBe(false);
+    expect(sameParty(people, peopleParty('arawak'))).toBe(true);
+    expect(sameParty(people, peopleParty('sioux'))).toBe(false);
+    const s = game();
+    expect(partyName(s, nation)).toBe('France');
+    expect(partyName(s, people)).toBe('the Arawak');
+  });
+
+  it('binds one nation and one people, and European treaty code skips the people', () => {
+    const s = game();
+    s.turn = 30;
+    const t = addTreaty(s, 'people-trade', [nationParty('france'), peopleParty('arawak')]);
+    expect(t).toMatchObject({ id: 't1', kind: 'people-trade', parties: [{ kind: 'nation', id: 'france' }, { kind: 'people', id: 'arawak' }] });
+    expect(treatyNations(t)).toEqual(['france']);
+    expect(treatyPeoples(t)).toEqual(['arawak']);
+    expect(bound(t, 'france')).toBe(true);
+    expect(bound(t, 'england')).toBe(false);
+    expect(boundPeople(t, 'arawak')).toBe(true);
+    expect(boundPeople(t, 'sioux')).toBe(false);
+    expect(withPeople(t)).toBe(true);
+    expect(treatyName(t)).toBe('Trade treaty');
+    expect(describeTreaty(s, t)).toMatch(/^France and the Arawak, since /);
+    // A European treaty still takes bare nation ids, and has no people.
+    const trade = addTreaty(s, 'trade', ['england', 'france']);
+    expect(withPeople(trade)).toBe(false);
+    expect(treatyPeoples(trade)).toEqual([]);
+    s.turn = 40;
+    endTreaty(s, t, 'cancelled', 'france');
+    expect(describeTreaty(s, t)).toMatch(/^France and the Arawak, .* to .*, cancelled by France$/);
+    // The record stays a plain JSON tree.
+    const back = deserialize(serialize(s));
+    expect(allTreaties(back)).toEqual(allTreaties(s));
+    expect(serialize(back)).toBe(serialize(s));
+  });
+
+  it('names every kind of treaty with a people', () => {
+    const s = game();
+    const names = (['people-trade', 'land-use', 'exchange', 'defence'] as const).map((k) => treatyName(addTreaty(s, k, [nationParty('england'), peopleParty('sioux')])));
+    expect(names).toEqual(['Trade treaty', 'Land use', 'Cultural exchange', 'Mutual defence']);
+  });
+});
+
+function landBeside(s: GameState, x: number, y: number): { x: number; y: number } {
+  const n = neighbours(s, x, y).find(
+    (p) => !isWater(tileAt(s, p.x, p.y)) && !Object.values(s.colonies).some((c) => c.x === p.x && c.y === p.y) && !Object.values(s.settlements).some((o) => o.x === p.x && o.y === p.y),
+  );
+  if (!n) throw new Error('no land');
+  return n;
+}
+
+const tribeOf = (s: GameState, st: Settlement) => s.tribes.find((t) => t.id === st.tribe)!;
+
+/** A hidden copy of the Americas with other native rules, for these tests. */
+const RULES_SCENARIO: Scenario = {
+  ...AMERICAS,
+  id: 'test-native-rules',
+  name: 'test-native-rules',
+  hidden: true,
+  peoples: { ...AMERICAS.peoples, rules: { tension: { war: 500 }, braveChances: { gift: 0.5 }, firstBraveAfter: 9 } },
+};
+registerScenario(RULES_SCENARIO);
+
+describe('native rules as scenario data (peoples.rules)', () => {
+  it('are the engine defaults in the Americas and the Caribbean', () => {
+    expect(nativeRulesOf(game())).toBe(NATIVE_RULES);
+    expect(nativeRulesIn(CARIBBEAN)).toBe(NATIVE_RULES);
+    expect(NATIVE_RULES.tension).toEqual({ content: 200, uneasy: 300, angry: 600, war: 800 });
+  });
+
+  it('merge a scenario override over the defaults, the tables field by field', () => {
+    const rules = nativeRulesIn(RULES_SCENARIO);
+    expect(rules.tension).toEqual({ ...NATIVE_RULES.tension, war: 500 });
+    expect(rules.braveChances).toEqual({ ...NATIVE_RULES.braveChances, gift: 0.5 });
+    expect(rules.firstBraveAfter).toBe(9);
+    expect(rules.maxBraves).toBe(NATIVE_RULES.maxBraves);
+  });
+
+  it('are what the engine reads: a new map, and war at the scenario threshold', () => {
+    const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['england'], scenario: 'test-native-rules' });
+    for (const st of Object.values(s.settlements)) expect(st.braveTimer).toBe(9);
+    const st = Object.values(s.settlements)[0];
+    st.tension.england = 560;
+    processNatives(s);
+    expect(tribeOf(s, st).stance.england).toBe('war');
+    const americas = game();
+    const other = Object.values(americas.settlements)[0];
+    other.tension.england = 560;
+    processNatives(americas);
+    expect(tribeOf(americas, other).stance.england).not.toBe('war');
+  });
+});
+
+describe('switches for burial grounds and surrender (framework row 23)', () => {
+  it('burial grounds: on in the Americas and the Caribbean, never drawn when off', () => {
+    expect(AMERICAS.mechanics.burialGrounds).toBe(true);
+    expect(CARIBBEAN.mechanics.burialGrounds).toBe(true);
+    const s = createGame({ seed: 3, mapSize: 'small', nations: ['england', 'france'], humans: ['england'], difficulty: 'viceroy', scenario: 'test-no-burial-grounds' });
+    const st = Object.values(s.settlements)[0];
+    const at = landBeside(s, st.x, st.y);
+    for (let i = 0; i < 1500; i++) {
+      const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', ...at });
+      resolveRumour(s, u);
+      removeUnit(s, u.id);
+    }
+    expect(s.tribes.some((t) => t.burial?.length)).toBe(false);
+  });
+
+  it('surrender: on in the Americas and the Caribbean; when off, a burned capital never brings it', () => {
+    expect(AMERICAS.mechanics.surrender).toBe(true);
+    expect(CARIBBEAN.mechanics.surrender).toBe(true);
+    let burned = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const s = createGame({ seed, mapSize: 'small', nations: ['england', 'france'], humans: ['england'], scenario: 'test-no-surrender' });
+      const capital = Object.values(s.settlements).find((st) => st.capital && Object.values(s.settlements).some((o) => o.tribe === st.tribe && !o.capital));
+      if (!capital) continue;
+      capital.defenders = 1;
+      const spot = landBeside(s, capital.x, capital.y);
+      let guard = 0;
+      while (s.settlements[capital.id] && guard++ < 50) {
+        const art = createUnit(s, 'england', 'artillery', { kind: 'map', ...spot });
+        art.moves = 3;
+        applyCommand(s, { type: 'attack', unitId: art.id, target: { settlementId: capital.id } });
+      }
+      if (s.settlements[capital.id]) continue;
+      burned++;
+      expect(tribeOf(s, capital).submitted).toBeUndefined();
+    }
+    expect(burned).toBeGreaterThan(2);
+  });
+});
+
+/** A hidden copy of the Americas whose every settlement's land reaches two tiles. */
+const WIDE: Scenario = {
+  ...AMERICAS,
+  id: 'test-wide-land',
+  name: 'test-wide-land',
+  hidden: true,
+  peoples: {
+    ...AMERICAS.peoples,
+    settlements: Object.fromEntries(Object.entries(AMERICAS.peoples.settlements).map(([k, v]) => [k, { ...v, landRadius: 2 }])),
+  },
+};
+registerScenario(WIDE);
+
+describe("native land's reach (N6, fix a)", () => {
+  /** A land tile exactly `d` tiles from a settlement and further from every other one. */
+  function tileAtDistance(s: GameState, d: number): { st: Settlement; x: number; y: number } {
+    const grid = gridOf(s);
+    for (const st of Object.values(s.settlements)) {
+      for (let i = 0; i < s.map.tiles.length; i++) {
+        const x = i % s.map.width;
+        const y = Math.floor(i / s.map.width);
+        if (grid.distance(st.x, st.y, x, y) !== d || isWater(tileAt(s, x, y))) continue;
+        if (Object.values(s.settlements).some((o) => o !== st && grid.distance(o.x, o.y, x, y) <= d)) continue;
+        return { st, x, y };
+      }
+    }
+    throw new Error('no tile');
+  }
+
+  it('is one tile in the Americas and the Caribbean (landRadius absent)', () => {
+    expect(Object.values(AMERICAS.peoples.settlements).every((k) => (k!.landRadius ?? 1) === 1)).toBe(true);
+    expect(Object.values(CARIBBEAN.peoples.settlements).every((k) => (k!.landRadius ?? 1) === 1)).toBe(true);
+    const s = game();
+    const near = tileAtDistance(s, 1);
+    expect(nativeLandOwner(s, near.x, near.y)).toBe(near.st);
+    const far = tileAtDistance(s, 2);
+    expect(nativeLandOwner(s, far.x, far.y)).toBeUndefined();
+    expect(landPrice(s, 'england', far.x, far.y)).toBe(0);
+  });
+
+  it('follows the settlement kind: with landRadius 2 the second ring is the people\'s, to buy', () => {
+    const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['england'], scenario: 'test-wide-land' });
+    const far = tileAtDistance(s, 2);
+    expect(nativeLandOwner(s, far.x, far.y)).toBe(far.st);
+    expect(landPrice(s, 'england', far.x, far.y)).toBeGreaterThan(0);
+    const beyond = tileAtDistance(s, 3);
+    expect(nativeLandOwner(s, beyond.x, beyond.y)).toBeUndefined();
+    // A bought tile is nobody's.
+    player(s, 'england').gold = 10_000;
+    buyLand(s, 'england', far.x, far.y);
+    expect(nativeLandOwner(s, far.x, far.y)).toBeUndefined();
+  });
+
+  it('gives a tile within reach of two settlements to the nearer one', () => {
+    const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['england'], scenario: 'test-wide-land' });
+    const grid = gridOf(s);
+    for (let i = 0; i < s.map.tiles.length; i++) {
+      const x = i % s.map.width;
+      const y = Math.floor(i / s.map.width);
+      const owner = nativeLandOwner(s, x, y);
+      if (!owner) continue;
+      const d = grid.distance(owner.x, owner.y, x, y);
+      expect(d).toBeLessThanOrEqual(2);
+      expect(Object.values(s.settlements).every((o) => grid.distance(o.x, o.y, x, y) >= d)).toBe(true);
+    }
+  });
+});
+
+describe("France's teaching as a modifier (fix d)", () => {
+  /** A petty criminal of `nation` next to a settlement that still teaches. */
+  function criminal(s: GameState, nation: NationId) {
+    const st = Object.values(s.settlements).find((o) => o.skill)!;
+    const u = createUnit(s, nation, 'pettyCriminal', { kind: 'map', ...landBeside(s, st.x, st.y) });
+    u.moves = 1;
+    return { st, u };
+  }
+
+  it('is data: France holds the nativesTeach modifier in both scenarios, and the text still says so', () => {
+    for (const scenario of [AMERICAS, CARIBBEAN]) {
+      const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['england'], scenario: scenario.id });
+      expect(modifiers(s, 'france', 'nativesTeach')).toEqual([{ hook: 'nativesTeach', units: ['pettyCriminal'] }]);
+      expect(modifiers(s, 'england', 'nativesTeach')).toEqual([]);
+      expect(nationOf(s, 'france').bonus.text).toMatch(/teach more readily/);
+    }
+  });
+
+  it('lets a French petty criminal learn, and nobody else\'s', () => {
+    const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['england', 'france'] });
+    const french = criminal(s, 'france');
+    learnSkill(s, french.u.id, french.st.id);
+    expect(UNIT_TYPES[s.units[french.u.id].type].skill).toBeGreaterThan(0);
+    const english = criminal(s, 'england');
+    expect(() => learnSkill(s, english.u.id, english.st.id)).toThrow(/will not teach a petty criminal/);
+  });
+});
+
+describe('mood labels at the real thresholds (fix b)', () => {
+  it('change word where the braves change what they do', () => {
+    const { content, uneasy, angry, war } = NATIVE_RULES.tension;
+    expect(tensionLabel(0)).toBe('content');
+    expect(tensionLabel(content - 1)).toBe('content');
+    expect(tensionLabel(content)).toBe('wary');
+    expect(tensionLabel(uneasy - 1)).toBe('wary');
+    // Demands for tribute from 300.
+    expect(tensionLabel(uneasy)).toBe('uneasy');
+    expect(tensionLabel(angry - 1)).toBe('uneasy');
+    // Attacks from 600.
+    expect(tensionLabel(angry)).toBe('angry');
+    expect(tensionLabel(war - 1)).toBe('angry');
+    // War from 800.
+    expect(tensionLabel(war)).toBe('furious');
+    expect([tensionSeverity(uneasy - 1), tensionSeverity(uneasy), tensionSeverity(angry)]).toEqual(['good', 'warn', 'bad']);
+  });
+
+  it('follow a scenario\'s thresholds', () => {
+    const tension = nativeRulesIn(RULES_SCENARIO).tension;
+    expect(tensionLabel(550)).toBe('uneasy');
+    expect(tensionLabel(550, tension)).toBe('furious');
+  });
+
+  it('name the mood in the land-taking message', () => {
+    const s = game();
+    const st = Object.values(s.settlements)[0];
+    const at = landBeside(s, st.x, st.y);
+    st.tension.england = 200;
+    // Conquistador: 250 more, so 450: braves demand tribute but do not yet attack.
+    expect(takeLand(s, 'england', at.x, at.y)).toMatch(/are uneasy\.$/);
+  });
+});
+
+describe("Pocahontas's peace holds after a desecrated burial ground (fix e)", () => {
+  it('forgives the burial ground, so the people stays at peace', () => {
+    const s = game();
+    const st = Object.values(s.settlements)[0];
+    const tribe = tribeOf(s, st);
+    tribe.burial = ['england', 'france'];
+    tribe.stance.england = 'war';
+    tribe.stance.france = 'war';
+    for (const o of Object.values(s.settlements)) if (o.tribe === st.tribe) o.tension.england = o.tension.france = 1000;
+    joinCongress(s, player(s, 'england'), 'pocahontas');
+    expect(tribe.stance.england).toBe('peace');
+    expect(tribe.burial).toEqual(['france']);
+    for (let i = 0; i < 5; i++) processNatives(s);
+    expect(tribe.stance.england).toBe('peace');
+    expect(st.tension.england).toBeLessThan(NATIVE_RULES.tension.war);
+    // Only the nation that gained Pocahontas is forgiven.
+    expect(tribe.stance.france).toBe('war');
+  });
+
+  it('leaves no empty burial list behind', () => {
+    const s = game();
+    const tribe = s.tribes[0];
+    tribe.burial = ['england'];
+    joinCongress(s, player(s, 'england'), 'pocahontas');
+    expect(tribe.burial).toBeUndefined();
+    expect(serialize(deserialize(serialize(s)))).toBe(serialize(s));
+  });
+});
+
+describe('chartered companies are spared by the peoples (fix c)', () => {
+  /** A game with the Hudson's Bay Company founded and a company colony 2–3 tiles from a settlement. */
+  function withCompanyColony() {
+    const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['england', 'france'] });
+    s.turn = 300;
+    player(s, 'england').gold = 10_000;
+    foundCompany(s, 'england', 'hudsonsBay');
+    const grid = gridOf(s);
+    for (const st of Object.values(s.settlements)) {
+      for (let i = 0; i < s.map.tiles.length; i++) {
+        const x = i % s.map.width;
+        const y = Math.floor(i / s.map.width);
+        const d = grid.distance(x, y, st.x, st.y);
+        if (d < 2 || d > 3 || colonySiteProblem(s, x, y)) continue;
+        const u = createUnit(s, 'hudsonsBay', 'freeColonist', { kind: 'map', x, y });
+        u.moves = 3;
+        const c = foundColony(s, u.id, 'Fort Test');
+        return { s, st, c };
+      }
+    }
+    throw new Error('no site');
+  }
+
+  it('raise no tension: not by founding nearby, nor by the pressure of their colonies', () => {
+    const { s, st } = withCompanyColony();
+    expect(tensionOf(st, 'hudsonsBay')).toBe(0);
+    addTension(st, 'hudsonsBay', 500);
+    expect(st.tension.hudsonsBay).toBeUndefined();
+    for (let i = 0; i < 20; i++) processNatives(s);
+    expect(tensionOf(st, 'hudsonsBay')).toBe(0);
+    expect(tribeOf(s, st).stance.hudsonsBay).not.toBe('war');
+  });
+
+  it('are never raided, threatened or attacked by braves, even by a people at war with them', () => {
+    const { s, st, c } = withCompanyColony();
+    // Force the worst case past the rules: furious and at war.
+    for (const o of Object.values(s.settlements)) o.tension.hudsonsBay = 1000;
+    for (const t of s.tribes) t.stance.hudsonsBay = 'war';
+    const attacks: string[] = [];
+    for (let i = 0; i < 60; i++) {
+      processNatives(s);
+      for (const b of Object.values(bravesOf(s))) {
+        if (b.task?.kind === 'attack' && (b.task.colonyId === c.id || (b.task.unitId && s.units[b.task.unitId]?.owner === 'hudsonsBay'))) attacks.push(b.id);
+      }
+      expect(pendingDemands(s, 'hudsonsBay')).toEqual([]);
+    }
+    expect(attacks).toEqual([]);
+    expect(s.colonies[c.id]).toBeDefined();
+    expect(st).toBeDefined();
+  });
+
+  it('cannot be the target of inciting', () => {
+    const { s, st } = withCompanyColony();
+    const m = createUnit(s, 'france', 'freeColonist', { kind: 'map', ...landBeside(s, st.x, st.y) });
+    m.role = 'missionary';
+    m.moves = 3;
+    player(s, 'france').gold = 10_000;
+    expect(() => inciteTribe(s, m.id, st.id, 'hudsonsBay')).toThrow(/rival European nation/);
+    expect(tensionOf(st, 'hudsonsBay')).toBe(0);
+  });
+
+  it('never find a burial ground', () => {
+    const { s, st } = withCompanyColony();
+    const at = landBeside(s, st.x, st.y);
+    for (let i = 0; i < 1500; i++) {
+      const u = createUnit(s, 'hudsonsBay', 'freeColonist', { kind: 'map', ...at });
+      resolveRumour(s, u);
+      removeUnit(s, u.id);
+    }
+    expect(s.tribes.some((t) => t.burial?.includes('hudsonsBay'))).toBe(false);
+  });
+});
+
+describe('standing with a people (peopleRelations, N3)', () => {
+  /** A wagon train of `nation` with 100 trade goods next to a settlement. */
+  function wagonBeside(s: GameState, nation: NationId, st: Settlement) {
+    const w = createUnit(s, nation, 'wagonTrain', { kind: 'map', ...landBeside(s, st.x, st.y) });
+    w.cargo = { tradeGoods: 100 };
+    w.moves = 2;
+    return w;
+  }
+
+  it('is not written until a nation trades with a people, so other games keep their save text', () => {
+    const s = game();
+    for (let i = 0; i < 3; i++) processNatives(s);
+    expect(s.peopleRelations).toBeUndefined();
+    expect(JSON.parse(serialize(s)).peopleRelations).toBeUndefined();
+    expect(peopleRelationOf(s, 'england', Object.values(s.settlements)[0].tribe)).toBeUndefined();
+  });
+
+  it('counts the gold of sales and purchases, both ways, per nation and people', () => {
+    const s = game();
+    const st = Object.values(s.settlements)[0];
+    st.gold = 5000;
+    const w = wagonBeside(s, 'england', st);
+    const before = player(s, 'england').gold;
+    tradeWithSettlement(s, w.id, st.id, 'tradeGoods');
+    const sold = player(s, 'england').gold - before;
+    expect(sold).toBeGreaterThan(0);
+    const rel = peopleRelationOf(s, 'england', st.tribe)!;
+    expect(rel).toMatchObject({ nation: 'england', people: st.tribe, volume: sold, goodSince: s.turn });
+    expect(Object.keys(s.peopleRelations!)).toEqual([peopleRelationKey('england', st.tribe)]);
+    // A purchase adds what was paid.
+    const good = nativeProduceOf(s)[0];
+    st.goods = { ...st.goods, [good]: 100 };
+    player(s, 'england').gold = 10_000;
+    buyFromSettlement(s, w.id, st.id, good, 50);
+    const paid = 10_000 - player(s, 'england').gold;
+    expect(paid).toBeGreaterThan(0);
+    expect(rel.volume).toBe(sold + paid);
+    expect(peopleRelationOf(s, 'france', st.tribe)).toBeUndefined();
+  });
+
+  it('is not kept for the Crown or a company, nor for trade without gold', () => {
+    const s = game();
+    const tribe = Object.values(s.settlements)[0].tribe;
+    notePeopleTrade(s, 'crown', tribe, 100);
+    notePeopleTrade(s, 'hudsonsBay', tribe, 100);
+    notePeopleTrade(s, 'england', tribe, 0);
+    expect(s.peopleRelations).toBeUndefined();
+  });
+
+  it('tracks the run of good relations: ended by anger or war, begun again by peace and calm', () => {
+    const s = game();
+    const st = Object.values(s.settlements)[0];
+    const people = st.tribe;
+    const all = Object.values(s.settlements).filter((o) => o.tribe === people);
+    notePeopleTrade(s, 'england', people, 50);
+    const rel = peopleRelationOf(s, 'england', people)!;
+    expect(rel.goodSince).toBe(s.turn);
+    expect(goodRelations(s, 'england', people)).toBe(true);
+    s.turn += 20;
+    expect(yearsOfGoodRelations(s, 'england', people)).toBeGreaterThan(0);
+    // Uneasy on average: the run ends at the round's check.
+    for (const o of all) o.tension.england = 400;
+    processNatives(s);
+    expect(rel.goodSince).toBeUndefined();
+    expect(yearsOfGoodRelations(s, 'england', people)).toBe(0);
+    // Calm again: a new run begins.
+    for (const o of all) o.tension.england = 0;
+    processNatives(s);
+    expect(rel.goodSince).toBe(s.turn);
+    // War ends it whatever the tension.
+    tribeOf(s, st).stance.england = 'war';
+    expect(goodRelations(s, 'england', people)).toBe(false);
+  });
+
+  it('draws hidden thresholds per pair from the seed, the same each time, and never stores them', () => {
+    const s = game();
+    const tribe = Object.values(s.settlements)[0].tribe;
+    const v = { base: 20, spread: 5 };
+    const a = peopleThreshold(s, 'england', tribe, 'test', v);
+    expect(peopleThreshold(s, 'england', tribe, 'test', v)).toBe(a);
+    expect(a).toBeGreaterThanOrEqual(15);
+    expect(a).toBeLessThanOrEqual(25);
+    const rng = s.rng;
+    const draws = new Set<number>();
+    for (const n of ['england', 'france'] as const) for (const p of ['sioux', 'arawak', 'aztec', 'inca'] as const) draws.add(peopleThreshold(s, n, p, 'test', v));
+    expect(draws.size).toBeGreaterThan(1);
+    expect(s.rng).toBe(rng);
+    expect(s.peopleRelations).toBeUndefined();
+  });
+
+  it('survives a save and load as a plain JSON tree', () => {
+    const s = game();
+    const tribe = Object.values(s.settlements)[0].tribe;
+    notePeopleTrade(s, 'england', tribe, 120);
+    notePeopleTrade(s, 'france', tribe, 30);
+    processNatives(s);
+    const back = deserialize(serialize(s));
+    expect(back.peopleRelations).toEqual(s.peopleRelations);
+    expect(serialize(back)).toBe(serialize(s));
+  });
+});

@@ -18,7 +18,7 @@
 // way and the results are gathered in game order, so the tables are identical.
 import { availableParallelism } from 'node:os';
 import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads';
-import { AI_LEVELS, arenaGames, DEFAULT_SCENARIO, DIFFICULTY_LEVELS, formatArena, getScenario, listScenarios, formatCrown, formatEvents, formatFeatures, formatRelations, formatScoreSplit, formatRelationsLine, playArenaRound, runArena, summarise, type AiLevel, type ArenaEntry, type ArenaOptions, type DifficultyId, type MapSize, type Rivals } from '../packages/engine/src/index.ts';
+import { AI_LEVELS, arenaGames, DEFAULT_SCENARIO, DIFFICULTY_LEVELS, formatArena, getScenario, listScenarios, formatCrown, formatEvents, formatFeatures, formatProsperity, formatRelations, formatScoreSplit, formatRelationsLine, playArenaRound, runArena, summarise, type AiLevel, type ArenaEntry, type ArenaOptions, type DifficultyId, type MapSize, type Rivals } from '../packages/engine/src/index.ts';
 
 if (!isMainThread) {
   // A worker: plays the games it is sent (by number) and sends back their rows.
@@ -79,10 +79,24 @@ async function main(): Promise<void> {
     const declared = rows.filter((r) => r.declared !== undefined).map((r) => `${r.level} ${r.independence}`).join(', ');
     const alliances = rows.reduce((n, r) => n + (r.relations?.alliances ?? 0), 0) / 2;
     const concord = rows.filter((r) => r.concord).map((r) => r.level).join(' + ');
+    const prosperity = rows.filter((r) => r.prosperity).map((r) => r.level).join(' + ');
+    const near = rows.filter((r) => r.prosperityFails?.length === 1).map((r) => `${r.level} ${r.prosperityFails![0]}`).join(', ');
     const confederation = rows.filter((r) => (r.relations?.confederations ?? 0) > 0).map((r) => r.level).join(' + ');
     const companies = rows.reduce((n, r) => n + (r.relations?.companies ?? 0), 0);
+    const peopleMade = rows.reduce((n, r) => n + (r.relations?.peopleTreaties ?? 0), 0);
+    const peopleEnded = rows.reduce((n, r) => n + (r.relations?.peopleTreatiesEnded ?? 0), 0);
+    const breaches = rows.reduce((n, r) => n + (r.relations?.peopleBreaches ?? 0), 0);
+    const leases = rows.reduce((n, r) => n + (r.relations?.leases ?? 0), 0);
+    const lapsed = rows.reduce((n, r) => n + (r.relations?.leasesLapsed ?? 0), 0);
+    const exchanges = rows.reduce((n, r) => n + (r.relations?.exchanges ?? 0), 0);
+    const exchangesEnded = rows.reduce((n, r) => n + (r.relations?.exchangesEnded ?? 0), 0);
+    const renewed = rows.reduce((n, r) => n + (r.relations?.renewedTeachings ?? 0), 0);
+    const defences = rows.reduce((n, r) => n + (r.relations?.defences ?? 0), 0);
+    const defencesEnded = rows.reduce((n, r) => n + (r.relations?.defencesEnded ?? 0), 0);
+    const defenceFights = rows.reduce((n, r) => n + (r.relations?.defenceFights ?? 0), 0);
+    const pactWars = rows.reduce((n, r) => n + (r.relations?.pactWars ?? 0), 0);
     const last = Math.max(...rows.map((r) => r.lastTurn ?? 0));
-    console.error(`  game ${g + 1}/${options.games} (seed ${rows[0].seed}, to turn ${last}): ${line}  | agreements ${half('agreements')}, favoured ${half('favoured')}, wars ${wars} (royal ${royal}), alliances ${alliances}, companies ${companies}${declared ? `, independence: ${declared}` : ''}${confederation ? `, confederation: ${confederation}` : ''}${concord ? `, concord: ${concord}` : ''}`);
+    console.error(`  game ${g + 1}/${options.games} (seed ${rows[0].seed}, to turn ${last}): ${line}  | agreements ${half('agreements')}, favoured ${half('favoured')}, wars ${wars} (royal ${royal}), alliances ${alliances}, companies ${companies}, people treaties ${peopleMade} (ended ${peopleEnded}, breaches ${breaches}), leases ${leases} (lapsed ${lapsed}), exchanges ${exchanges} (ended ${exchangesEnded}, taught again ${renewed}), defence pacts ${defences} (ended ${defencesEnded}, fights ${defenceFights}, wars ${pactWars})${declared ? `, independence: ${declared}` : ''}${confederation ? `, confederation: ${confederation}` : ''}${concord ? `, concord: ${concord}` : ''}${prosperity ? `, prosperity: ${prosperity}` : ''}${near ? `, prosperity missed on one condition: ${near}` : ''}`);
   };
   const result = jobs === 1 ? runArena(options, report) : await runParallel(options, jobs, report);
   if (args.includes('--json')) console.log(JSON.stringify(result, null, 2));
@@ -92,6 +106,8 @@ async function main(): Promise<void> {
     console.log(`Relations and trade between the Europeans, average per nation per game:\n\n${formatRelations(result.summary)}\n\n${formatRelationsLine(result.entries)}\n`);
     console.log(`The Crown: independence, the Royal Expeditionary Force (land units) against the old formula, demands and royal wars, average per nation per game:\n\n${formatCrown(result.entries)}\n`);
     if (options.events) console.log(`${formatEvents(result.entries)}\n`);
+    const prosperity = formatProsperity(result.entries);
+    if (prosperity) console.log(`Prosperity at the end, per level (every nation judged, whatever ended the game):\n\n${prosperity}\n`);
     if (features) {
       // Columns in the order the levels were listed, so tables from different runs line up.
       const byLevel = [...new Set(levels)].map((level) => ({ level, features: result.summary.find((r) => r.level === level)?.features ?? {} }));

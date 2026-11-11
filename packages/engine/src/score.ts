@@ -9,6 +9,7 @@ import type { ScoreWeights } from './rules/score.js';
 import type { GameState, Player } from './types.js';
 import { companyScoreShare, sharesIn } from './companies.js';
 import { ownedUnitsView, colonyList } from './unitindex.js';
+import { bound, partyIsPeople } from './treaties.js';
 
 /** The Americas end after the autumn turn of this year (other scenarios: their calendar's `end`). */
 export const LAST_YEAR = AMERICAS_CALENDAR.end.year;
@@ -25,6 +26,8 @@ export type ScoreComponent =
   | 'wealth'
   | 'peace'
   | 'independence'
+  /** Treaties with native peoples in force (Beta 2); only while the scenario weighs them. */
+  | 'peoples'
   /** Shares in chartered companies (companies.ts): the holder's part of each company's score. Only for shareholders. */
   | 'companies';
 
@@ -105,6 +108,11 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreW
     line('peace', 'Peace and cooperation', agreements + tribes, 'agreements and tribes', agreements * w.tradeAgreement + favoured * w.favoured + tribes * w.peacefulTribe),
     line('independence', 'Independence won', p.independence === 'won' ? 1 : 0, 'won', p.independence === 'won' ? w.independence : 0),
   ];
+  if (w.peopleTreaty) {
+    let treaties = 0;
+    for (const t of s.treaties ?? []) if (!t.end && bound(t, p.id) && t.parties.some(partyIsPeople)) treaties++;
+    lines.push(line('peoples', 'Treaties with native peoples', treaties, 'treaties', treaties * w.peopleTreaty));
+  }
   // A company cannot win: its score counts for its shareholders, by their shares.
   if (s.players.length > s.config.nations.length && p.kind !== 'company') {
     let held = 0;
