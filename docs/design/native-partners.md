@@ -1,6 +1,6 @@
 # Design note: Native peoples as partners (Beta 2)
 
-Status: **decided** (11 November 2026); **step 0 built** (section 8); **step 1 built** (section 9). Simon agreed to every recommendation N1–N14 and to the five fixes of today's native rules in step 0 (section 5). He added one direction for N1: native peoples are to become a **nation type of their own** later (section 4, after the table), so the people party must be built to grow into that. Builds on Beta 1, [cooperation.md](cooperation.md) (built), and reuses its shapes: the `Treaty` record, scenario data and mechanics switches for every new rule, computer behaviour per level at seeded chances with targets a scenario can change, and `gameOver.winners`. The 0.9 scenario framework ([scenario-framework.md](scenario-framework.md), [SCENARIOS.md](../SCENARIOS.md)) applies throughout. Australia ([australia.md](australia.md)) is the scenario that will lean on this most, so the shapes chosen here must serve it later.
+Status: **decided** (11 November 2026); **step 0 built** (section 8); **step 1 built** (section 9); **step 2 built** (section 10). Simon agreed to every recommendation N1–N14 and to the five fixes of today's native rules in step 0 (section 5). He added one direction for N1: native peoples are to become a **nation type of their own** later (section 4, after the table), so the people party must be built to grow into that. Builds on Beta 1, [cooperation.md](cooperation.md) (built), and reuses its shapes: the `Treaty` record, scenario data and mechanics switches for every new rule, computer behaviour per level at seeded chances with targets a scenario can change, and `gameOver.winners`. The 0.9 scenario framework ([scenario-framework.md](scenario-framework.md), [SCENARIOS.md](../SCENARIOS.md)) applies throughout. Australia ([australia.md](australia.md)) is the scenario that will lean on this most, so the shapes chosen here must serve it later.
 
 ## 1. Goal
 
@@ -263,3 +263,57 @@ Treaties with peoples, with the switch on:
 - **Combative** lost 57–66 points on the seed-1000 runs and gained 12 on seed 2000; on seed 1000 almost all of the drop is its independence line (fewer wars won), the line that varies most between games. No level is clearly weaker or stronger; a changed game moves by about 200 points either way, and with the switch on nearly every game changes. Step 6 tunes against N12 with larger samples.
 - Alliances, concord and companies move within their noise (Americas 24 games: an alliance in 8 → 9 games, concord 3 → 2; the Caribbean: companies in 8 → 11 of 16).
 - The 24-game Americas run with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1` ran clean, every game line the same as without the checks. A Playwright smoke of the built web game with Google Fonts blocked (a head start to 1700 in the Americas and the Caribbean, Foreign Affairs opened) had no page errors; the Native peoples card showed a partner first ("Partners in trade", "Trade treaty") and Propose buttons with their reasons.
+
+## 10. Implementation (step 2, November 2026)
+
+Built on branch `beta2/step2`. Code: `peopletreaties.ts` (the lease: unlocking, the tiles, rent, rent day and lapse, release, the words), with hooks in `natives.ts` (`nativeLandClosedTo`, buying and taking leased land, the pressure in `processNatives`), `braves.ts` (gathering), `colony.ts` (`colonyOccupancy` and `validateJob` open leased tiles to the lessee's colonies), `ai/natives.ts` (`leaseLand`), `ai/advanced.ts` (no buying of land already leased), `alliances.ts` (`proposeLandUse`, `LEVEL_COOPERATION.land`), `arena.ts` and `scripts/tournament.ts` (counts); state in `types.ts` (`Tile.use`, `LandUseTerms` in `TreatyTerms`); scenario data in `scenarios/types.ts` (`PeopleLandUseRules`, `Cooperation.proposeLandUse`), `americas.ts` and `caribbean.ts`; in the web game `ui/diplomacy.ts`, `ui/natives.ts`, `ui/colony.ts`, `app.ts` and `style.css`; in the renderers `style-ligne-claire` (and so the sprite style) and `style-schematic`. Tests: `test/land-use.test.ts` (17 tests: the switch, unlocking on the ladder and its own draw, land and rent needed, the answer and the first year's rent, refusal, working a leased tile and only the lessee, rent day, lapse with workers moved, rent day taking in and letting go of land, half gathering, half pressure, buying against taking, the people's own ending, the levels, a computer game that leases and works the land with a plain JSON save, the switch off).
+
+### What was built
+
+- **The lease** (`land-use`, N5): a `Treaty` between `nationParty(nation)` and `peopleParty(people)` with terms `{ kind: 'land-use', rent, due }`. It covers the people's land beside the nation's colonies (each colony's work area; `nativeLandOwner`, so not bought or taken; not leased to another nation): each such tile carries `Tile.use = nation`, absent otherwise. The land stays the people's: `nativeLandOwner` still names its settlement.
+- **Unlocking (N2, N3):** a trade treaty with the people first (the ladder), then years of good relations against a hidden threshold of its own (`landUse.years`, 12 ± 4), drawn per pair from `peoplePairRandom` (`'land years'`) and scaled by the temperament. Then the shared checks (contact, peace, not submitted, no waiting or hostility), land of the people beside a colony, and the first year's rent in hand. All shown in words (`peopleTreatyProblem(s, nation, people, 'land-use')`).
+- **Answers (N8):** as for a trade treaty: refused while a settlement is angry or within `landYears` of land taken, otherwise at `accept` times the temperament.
+- **Rent:** per tile a year, `landUse.rent` (0.05) times the average `landPrice` of the tiles when the lease is made (kind, capital, tension, Peter Minuit), at least 1 gold; kept in the terms. The first year is paid at once; each tile's rent goes to the settlement whose land it is. On rent day (a year after the making, then yearly) the lease takes in the people's land beside new colonies and lets go of tiles no colony of the nation is beside (workers there find other work), and the nation pays for the tiles it has then. A message names the rent paid.
+- **Lapse:** a nation that cannot pay on rent day loses the lease: `why: 'lapsed'`, ended by the people (saved as `by`, not shown, as for every lapsed treaty), no breach, no waiting; the tiles go back and their workers take the best job left in their colony (or wait at the gate).
+- **Working:** `nativeLandClosedTo(s, nation, x, y)` is native land not leased to that nation; colonies read it in `colonyOccupancy` and `validateJob`, so a leased tile is open to the lessee's colonies (the computer players' job search included, through the occupancy) and closed to everyone else's.
+- **Gathering:** a settlement gathers `landUse.gather` (0.5) times as much from a leased tile.
+- **Tension:** a colony with land leased from a people in its work area presses `landUse.pressure` (0.5) times as hard on that people's settlements (`leasedFromBeside`, worked out once a round, empty without a lease).
+- **Buying and taking:** a leased tile can be bought at the usual price; it leaves the lease (`Tile.use` cleared) and the rest holds. Taking one is a breach (step 1's `breakFaith`): every treaty with the people ends, the other leased tiles go back. The taken tile is the taker's first, so its worker stays.
+- **Endings:** any end of a lease (breach, the people's anger or war, lapse) releases its tiles. A lease without a trade treaty in force ends too (in practice they end together).
+- **Computer nations (N11):** on the foreign review, a nation with a trade treaty proposes land use at `proposeLandUse` (0.5) times `LEVEL_COOPERATION.land` (Creative 1, Competent 0.8, Combative and Naive 0), only with three years' rent and 300 gold in hand, drawn from the pair's own stream. `acquireLand` no longer buys tiles leased to the nation.
+- **Interface (N13):** Foreign Affairs' Native peoples card shows "Land use (n tiles, r gold a tile a year)" and, beside a trade treaty, a "Lease land" button with its reason in the title; a note explains leases. The settlement dialog and the trading dialog show the lease, its tiles, rent and next rent day. On the colony screen a leased tile is marked (`.cell.leased`), worked like the colony's own, and clicking native land offers "Lease their land beside your colonies" next to buying and taking. The map marks leased tiles with a faint dashed frame in the lessee's colour (read from `Tile.use`, which the render API's `LayerTile` already carries: no new field).
+- **Tournaments:** the per-game line adds "leases n (lapsed m)"; the summary adds "Land use: n of N games with a lease, made per game (by level), lapsed, gold of rent per game". Leases also count among "people treaties" made and ended.
+
+### Choices made while building (for Simon)
+
+1. **One lease per nation and people covers all their land beside its colonies,** not tiles chosen one by one; new colonies' land joins on the next rent day, not at once.
+2. **Rent is per tile, its rate set when the lease is made** (a twentieth of the land's price then); the yearly total follows the tiles leased. So buying a leased tile lowers the rent, and a lease whose tiles were all bought stays in force at no rent.
+3. **A lapse sets no waiting:** the nation may ask again as soon as it can pay. Computer nations lapse fairly often (0.4 a game, a third of their leases): they keep no rent reserve after the lease is made. A reserve would be a step 6 tuning.
+4. **Peoples do not offer leases themselves;** only trade treaties come through a visiting brave. The nation asks for land.
+5. **"Colonies on leased land press half as hard"** is read as: a colony with at least one tile leased from that people beside it presses half on each of that people's settlements within reach.
+6. **Leased tiles are drawn for every viewer** (treaties are public, as claims are).
+7. **The tournament counts** of people treaties now include leases, so "made per game" rose in both scenarios.
+
+### Measurements
+
+Every commit before the switching one kept the bench games "same" (`npm run bench -- --verify`, with and without `--scenario caribbean`). The switching commit (`[outcomes]`) re-recorded 3 of 4 Americas bench hashes and 1 of 4 Caribbean ones, one golden hash and the Caribbean game's snapshot.
+
+Tournaments, `npm run tournament -- --turns 609 --play-on --events --seed 1000` (the Caribbean `--turns 202`), land use off → on, average score:
+
+| Run | Games changed | Combative | Competent | Creative | Naive |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Americas, 24 games | 14 of 24 | 624.5 → 617.8 | 502.5 → 514.9 | 507.1 → 494.9 | 246.2 → 249.8 |
+| Americas, 48 games | 31 of 48 | 605.3 → 580.1 | 478.5 → 483.0 | 454.6 → 448.4 | 267.2 → 263.5 |
+| Caribbean, 16 games | 10 of 16 | 99.9 → 94.6 | 104.0 → 107.3 | 124.6 → 121.3 | 63.2 → 62.8 |
+
+Leases, with the switch on:
+
+| Run | Games with a lease | Made per game (Creative, Competent) | Lapsed per game | Rent per game |
+| --- | ---: | --- | ---: | ---: |
+| Americas, 24 games | 14 of 24 | 1.1 (0.7, 0.5) | 0.4 | 4,190 gold |
+| Americas, 48 games | 31 of 48 | 1.1 (0.6, 0.5) | 0.4 | 3,478 gold |
+| Caribbean, 16 games | 11 of 16 | 1.3 (0.9, 0.4) | 0.2 | 1,088 gold |
+
+- **Against N12:** land use in about half the Americas four-level games: 14 of 24 and 31 of 48 (58% and 65%), with the engine's numbers, untuned. Only Creative and Competent lease, as N11 says.
+- **Scores** move within the noise of the games that change (a changed game moves by about 200 points either way); Combative lost 25 points on 48 games and 7 on 24. In a probe game the computer colonies worked about a third of their leased tiles: they work them where the job search values them.
+- The 24-game Americas run with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1` ran clean, every game line the same as without the checks. A Playwright smoke of the built web game with Google Fonts blocked (a head start to 1700 in the Americas and the Caribbean, a lease set up in the state, Foreign Affairs and a colony screen opened) had no page errors; the Native peoples card showed "Land use (3 tiles, 7 gold a tile a year)" and a "Lease land" button with its reason, and the colony screen three leased cells.
