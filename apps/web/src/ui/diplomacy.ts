@@ -14,7 +14,6 @@ import {
   sharePrice,
   sharesIn,
   sharesProblem,
-  bound,
   canDeclareIndependence,
   describeTreaty,
   colonyWorkers,
@@ -59,6 +58,19 @@ import {
   systemsOf,
   TRIBES,
   withPeople,
+  anyPlayingPeople,
+  isPeoplePlayer,
+  pairAtWar,
+  partyBinds,
+  pairBenefits,
+  pairKinds,
+  pairStanding,
+  pairTreaties,
+  pairTreatyProblem,
+  peopleTreatyText,
+  sideName,
+  standingOf,
+  type PeopleTreatyKind,
   type PlayerId,
   type Player,
   type TribeId,
@@ -83,8 +95,10 @@ export class DiplomacyScreen implements Screen {
     const me = app.me;
     clear(this.body);
 
+    // A playing people (Beta 3 step 4) has no European relations: its diplomacy is the card of treaties with peoples.
+    const people = isPeoplePlayer(me);
     const nations = s.players.filter((p) => p.id !== me.id && systemsOf(p).relations);
-    const europe = h('div', { class: 'card' },
+    const europe = people ? null : h('div', { class: 'card' },
       h('h3', null, 'European nations'),
       nations.length
         ? h('ul', { class: 'nation-relations' }, nations.map((p) => this.nationRow(p)))
@@ -94,7 +108,8 @@ export class DiplomacyScreen implements Screen {
     const treaties = this.treatyCard();
     const companies = this.companyCard();
 
-    const natives = this.nativesCard();
+    const natives = people ? null : this.nativesCard();
+    const pairs = this.pairCard();
 
     const cost = nextFatherCost(s, me);
     // The viewer's own council: the Congress, or a people's council naming its own product (native-nations.md T8).
@@ -114,7 +129,9 @@ export class DiplomacyScreen implements Screen {
     const mechanics = mechanicsOf(s);
     let independence: HTMLElement | null;
     // A scenario without independence (or without a royal army) shows neither.
-    if (!mechanics.independence) {
+    if (!systemsOf(me).independence) {
+      independence = null;
+    } else if (!mechanics.independence) {
       independence = mechanics.ref
         ? h('div', { class: 'card' }, h('h3', null, 'Royal forces'), h('p', { class: 'small' }, `Royal forces: ${describeForce(me.ref)}.`))
         : null;
@@ -140,7 +157,7 @@ export class DiplomacyScreen implements Screen {
         h('h2', null, 'Foreign affairs'),
         h('span', { class: 'muted' }, `Gold ${me.gold.toLocaleString()}`),
         h('button', { class: 'btn close', onclick: () => app.closeScreen(), 'aria-label': 'Close foreign affairs' }, 'Close')),
-      h('div', { class: 'diplomacy-grid' }, europe, treaties, companies, natives, congress, independence),
+      h('div', { class: 'diplomacy-grid' }, europe, pairs, treaties, companies, natives, congress, independence),
     );
   }
 
@@ -306,6 +323,79 @@ export class DiplomacyScreen implements Screen {
   }
 
   /**
+   * Diplomacy with a playing people (native-nations.md T11, Beta 3 step 4), in a game where one
+   * plays: for a people, every European nation and every other people it has met; for a nation,
+   * every playing people. Each row has war or peace, the standing in words from the viewer's side,
+   * the treaties in force (each can be ended, breaking faith), a proposal waiting for an answer,
+   * and a Propose button per kind with its reason in the title.
+   */
+  private pairCard(): HTMLElement | null {
+    const app = this.app;
+    const s = app.state;
+    const me = app.me;
+    if (!anyPlayingPeople(s) || !peopleTreatiesOn(s)) return null;
+    const amPeople = isPeoplePlayer(me);
+    const ids: PlayerId[] = [];
+    for (const p of s.players) {
+      if (p.id === me.id || p.finished) continue;
+      if (amPeople ? systemsOf(p).peoples || isPeoplePlayer(p) : isPeoplePlayer(p)) ids.push(p.id);
+    }
+    if (amPeople) for (const t of s.tribes) if (!ids.includes(t.id) && t.id !== me.id && standingOf(s, me.id, t.id)) ids.push(t.id);
+    if (!ids.length) return null;
+    const row = (id: PlayerId) => {
+      const player = s.players.find((p) => p.id === id);
+      const war = pairAtWar(s, me.id, id);
+      const inForce = pairTreaties(s, me.id, id);
+      const pending = standingOf(s, me.id, id)?.proposal;
+      const theirs = pending?.by === id;
+      const name = sideName(s, id);
+      const buttons: (HTMLElement | null)[] = [];
+      if (player) {
+        if (war) buttons.push(h('button', { class: 'btn tiny', disabled: !app.isMyTurn(), onclick: () => app.dispatch({ type: 'proposePeace', nation: id }) }, 'Propose peace'));
+        else buttons.push(h('button', { class: 'btn tiny', disabled: !app.isMyTurn(), onclick: () => void this.war(id) }, 'Declare war'));
+      }
+      if (!war) {
+        for (const kind of pairKinds(s, me.id, id)) {
+          if (inForce.some((t) => t.kind === kind)) continue;
+          const why = pairTreatyProblem(s, me.id, id, kind);
+          buttons.push(h('button', { class: 'btn tiny', 'data-action': `propose-pair-${kind}`, disabled: !!why || !app.isMyTurn(), title: why ?? `Offer ${name} ${peopleTreatyText(kind)}: ${pairBenefits(s, me.id, id, kind)}.`, onclick: () => app.dispatch({ type: 'proposePairTreaty', to: id, kind }) }, `Propose ${peopleTreatyText(kind).replace(/^an? /, '')}`));
+        }
+      }
+      for (const t of inForce) {
+        const kind = t.kind as PeopleTreatyKind;
+        buttons.push(h('button', { class: 'btn tiny', disabled: !app.isMyTurn(), onclick: () => void this.endPair(id, kind) }, `End ${treatyName(t).toLowerCase()}`));
+      }
+      return h('li', { class: 'nation-relation', 'data-pair': id },
+        h('div', { class: 'nation-head' },
+          h('strong', null, h('span', { class: 'flag', style: `background:${player ? nationOf(s, id).color : TRIBES[id as TribeId].color}` }), ' ', name.replace(/^the /, 'The ')),
+          h('span', { class: 'muted small' }, player ? (player.human ? 'player' : AI_LEVEL_INFO[player.ai ?? 'naive'].name) : 'not played'),
+          h('span', { class: `pill ${war ? 'bad' : 'good'}` }, war ? 'At war' : 'At peace')),
+        h('div', { class: 'relation-facts small' },
+          h('span', { class: 'pill' }, pairStanding(s, me.id, id)),
+          h('span', null, inForce.length ? inForce.map((t) => treatyName(t)).join(', ') : 'No treaties')),
+        pending && !theirs ? h('p', { class: 'muted small' }, `Your proposal of ${peopleTreatyText(pending.kind)} is waiting for an answer.`) : null,
+        theirs ? h('div', { class: 'proposal row wrap' },
+          h('span', { class: 'small' }, `${name.replace(/^the /, 'The ')} propose ${peopleTreatyText(pending!.kind)}.`),
+          h('button', { class: 'btn tiny primary', disabled: !app.isMyTurn(), onclick: () => app.dispatch({ type: 'answerPairProposal', from: id, accept: true }) }, 'Accept'),
+          h('button', { class: 'btn tiny', disabled: !app.isMyTurn(), onclick: () => app.dispatch({ type: 'answerPairProposal', from: id, accept: false }) }, 'Turn down')) : null,
+        h('div', { class: 'row wrap nation-actions' }, buttons));
+    };
+    return h('div', { class: 'card pairs' },
+      h('h3', null, amPeople ? 'Nations and peoples' : 'Native nations'),
+      h('ul', { class: 'nation-relations' }, ids.map(row)),
+      h('p', { class: 'muted small' }, amPeople
+        ? 'After years of good relations and trade, you may make a trade treaty with a European nation, then land use, a cultural exchange and a mutual defence pact; with another people a trade treaty and a mutual defence pact. Ending a treaty, or going to war, breaks faith: trust is slow to come back.'
+        : 'A people that plays as a nation makes treaties itself: you propose and it answers, or it proposes to you. Ending a treaty, or going to war, breaks faith.'));
+  }
+
+  private async endPair(other: PlayerId, kind: PeopleTreatyKind): Promise<void> {
+    const s = this.app.state;
+    if (await confirmDialog(`End ${peopleTreatyText(kind)}?`, `Ending ${peopleTreatyText(kind)} with ${sideName(s, other)} breaks faith: no new treaty between you for years, and they will distrust you for longer.`, 'End it', 'Keep it')) {
+      this.app.dispatch({ type: 'endPairTreaty', with: other, kind });
+    }
+  }
+
+  /**
    * Treaties: those in force between any European nations, or between a nation and a native
    * people (they are public), yours first, then your past ones, most recent first. A party is
    * named by `describeTreaty` ("France and the Kalinago").
@@ -316,9 +406,10 @@ export class DiplomacyScreen implements Screen {
     const all = allTreaties(s);
     if (!all.length) return null;
     const current = all.filter((t) => !t.end);
-    const mine = current.filter((t) => bound(t, me));
-    const others = current.filter((t) => !bound(t, me));
-    const past = all.filter((t) => t.end && bound(t, me)).reverse().slice(0, 8);
+    // A playing people is bound as a people party (partyBinds reads either kind).
+    const mine = current.filter((t) => partyBinds(t, me));
+    const others = current.filter((t) => !partyBinds(t, me));
+    const past = all.filter((t) => t.end && partyBinds(t, me)).reverse().slice(0, 8);
     const item = (t: (typeof all)[number]) =>
       h('li', { class: `treaty treaty-${t.kind}${t.end ? ' past' : ''}`, 'data-treaty': t.id }, h('strong', null, treatyName(t)), ' ', h('span', { class: 'small' }, describeTreaty(s, t)));
     return h('div', { class: 'card treaties' },
