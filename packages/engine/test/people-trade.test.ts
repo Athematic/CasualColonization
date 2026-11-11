@@ -65,8 +65,8 @@ import {
 const TREATIES: Scenario = { ...AMERICAS, id: 'test-people-trade', name: 'test-people-trade', hidden: true, mechanics: { ...AMERICAS.mechanics, peopleTreaties: ['people-trade'] } };
 // The Americas switch them on themselves.
 it('are on in the Americas and the Caribbean', () => {
-  expect(AMERICAS.mechanics.peopleTreaties).toEqual(['people-trade']);
-  expect(CARIBBEAN.mechanics.peopleTreaties).toEqual(['people-trade']);
+  expect(AMERICAS.mechanics.peopleTreaties).toEqual(['people-trade', 'land-use']);
+  expect(CARIBBEAN.mechanics.peopleTreaties).toEqual(['people-trade', 'land-use']);
   expect(CARIBBEAN.peopleTreaties?.trade?.volume).toEqual({ min: 0, max: 0 });
 });
 registerScenario(TREATIES);
