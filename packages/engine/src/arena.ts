@@ -10,9 +10,9 @@ import { createGame } from './game.js';
 import { colonyWorkers } from './queries.js';
 import type { DifficultyId } from './rules/difficulty.js';
 import type { NationId, PlayerId, TribeId } from './rules/nations.js';
-import { nationSet, scenarioOf, type Rivals } from './scenarios/index.js';
+import { calendarOf, nationSet, scenarioOf, yearValue, type Rivals } from './scenarios/index.js';
 import { finalScores, peopleScores, scoreBreakdown, type ScoreComponent } from './score.js';
-import { continuityStanding, goodLifeStanding, peopleCount } from './peoplevictory.js';
+import { continuityStanding, goodLifeStanding, homelandHealth, homelandKept, peopleCount } from './peoplevictory.js';
 import { colonyList as allColonies } from './unitindex.js';
 import { prosperityParams, prosperityStanding, type ProsperityCondition } from './prosperity.js';
 import { setFeatureSink } from './telemetry.js';
@@ -59,9 +59,10 @@ export interface ArenaOptions {
    */
   playOn?: boolean;
   /**
-   * Native peoples playing as nations (`GameConfig.peoples`, native-nations.md T4), all at the
-   * computer people's level (`--peoples`). Missing means none, as before; the tournament passes
-   * the scenario's playable peoples when it has some.
+   * Native peoples playing as nations (`GameConfig.peoples`, native-nations.md T4), each at one of
+   * the run's levels, rotating as the nations' do (`--peoples`; Beta 3 step 9's people profiles).
+   * Missing means none, as before; the tournament passes the scenario's playable peoples when it
+   * has some.
    */
   peoples?: TribeId[];
 }
@@ -69,6 +70,8 @@ export interface ArenaOptions {
 /** A playing people's standing at the end of an arena game (only in games with playing peoples). */
 export interface ArenaPeopleEntry {
   people: TribeId;
+  /** The computer level it played at. */
+  level: AiLevel;
   /** Towns at the end; 0 when the people is out of the game. */
   towns: number;
   /** Its people (units and town folk) at the end, and at the start. */
@@ -83,6 +86,14 @@ export interface ArenaPeopleEntry {
   /** The continuity and good-life conditions it failed at the end (each empty when it qualified). */
   continuityFails: string[];
   goodLifeFails: string[];
+  /** Share of its starting homeland kept, and the homeland's average land health (100 without land health). */
+  kept: number;
+  health: number;
+  /** Treaties in force at the end (a league counted once) and whether it belonged to a league, with the league's years. */
+  treaties: number;
+  league?: number;
+  /** Gold in hand at the end (gold only from trade with Europeans, T10). */
+  gold: number;
 }
 
 /** What an arena game with playing peoples adds to its first row: the peoples, the Europeans' colonies and the game's time. */
@@ -321,9 +332,10 @@ export function playArenaGame(
   noFavoured = false,
   events = false,
   charter = true,
-  setup: { scenario?: string; rivals?: Rivals; playOn?: boolean; peoples?: TribeId[] } = {},
+  setup: { scenario?: string; rivals?: Rivals; playOn?: boolean; peoples?: TribeId[]; peopleLevels?: AiLevel[] } = {},
 ): { state: GameState; entries: Omit<ArenaEntry, 'game' | 'won'>[]; ms: number } {
-  const ai = Object.fromEntries(line.map((l) => [l.nation, l.level]));
+  // Playing peoples at their levels (`peopleLevels`, in the order of `peoples`), when given.
+  const ai = Object.fromEntries([...line.map((l) => [l.nation, l.level]), ...(setup.peopleLevels ? (setup.peoples ?? []).map((id, i) => [id, setup.peopleLevels![i]]) : [])]);
   const config = {
     seed,
     mapSize,
@@ -404,6 +416,7 @@ export function peoplesGame(s: GameState, ms: number): ArenaPeoplesGame {
     .filter((p) => p.kind === 'people')
     .map((p) => ({
       people: p.id as TribeId,
+      level: p.ai ?? 'naive',
       towns: towns.get(p.id) ?? 0,
       population: peopleCount(s, p.id),
       start: s.homelands?.[p.id as TribeId]?.people ?? 0,
@@ -412,10 +425,26 @@ export function peoplesGame(s: GameState, ms: number): ArenaPeoplesGame {
       ...(ways[p.id] ? { way: ways[p.id] } : {}),
       continuityFails: continuityStanding(s, p.id, params('continuity')).fails,
       goodLifeFails: goodLifeStanding(s, p.id, params('good-life')).fails,
+      ...peopleEndState(s, p.id),
     }));
   const colonies: ArenaPeoplesGame['colonies'] = {};
   for (const p of s.players) if (p.kind !== 'people' && p.id !== 'crown') colonies[p.id] = { now: towns.get(p.id) ?? 0, founded: p.coloniesFounded };
   return { peoples, colonies, ms, ways };
+}
+
+/** A playing people's homeland, land, treaties, league and gold at the end of a game. */
+function peopleEndState(s: GameState, id: PlayerId): Pick<ArenaPeopleEntry, 'kept' | 'health' | 'treaties' | 'league' | 'gold'> {
+  const home = homelandKept(s, id);
+  const live = (s.treaties ?? []).filter((t) => !t.end && t.parties.some((q) => q.id === id));
+  const league = live.find((t) => t.kind === 'league');
+  const cal = calendarOf(s);
+  return {
+    kept: home.start ? home.kept / home.start : 0,
+    health: homelandHealth(s, id),
+    treaties: live.length,
+    ...(league ? { league: yearValue(s.turn, cal) - yearValue(league.start, cal) } : {}),
+    gold: s.players.find((q) => q.id === id)?.gold ?? 0,
+  };
 }
 
 /** A nation's relations tally, completed with the end state: Favoured Nation partners and trade volume. */
@@ -504,7 +533,10 @@ export function arenaGames(opts: ArenaOptions): ArenaGame[] {
 
 /** Plays one game of an arena run and gives its rows, the winners marked. */
 export function playArenaRound(opts: ArenaOptions, game: ArenaGame): ArenaEntry[] {
-  const setup = { scenario: opts.scenario, rivals: opts.rivals, playOn: opts.playOn, peoples: opts.peoples };
+  const n = opts.levels.length;
+  // Each playing people at a level, rotating with the games as the nations' levels do.
+  const peopleLevels = opts.peoples?.map((_, i) => opts.levels[(i + game.game) % n]);
+  const setup = { scenario: opts.scenario, rivals: opts.rivals, playOn: opts.playOn, peoples: opts.peoples, peopleLevels };
   const { state, entries, ms } = playArenaGame(game.seed, game.line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured, opts.events, !opts.noCharter, setup);
   const best = Math.max(...entries.map((e) => e.score));
   // A game that ended names its winners (several after a concord victory); one stopped early: the best score.

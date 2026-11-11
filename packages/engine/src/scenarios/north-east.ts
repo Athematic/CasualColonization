@@ -32,6 +32,7 @@ import { AMERICAS } from './americas.js';
 import type { Calendar } from './calendar.js';
 import type { NationEntry, PeopleOverride, PlayablePeople, Scenario } from './types.js';
 import { HUDSONS_BAY, WEST_INDIA } from './companies.js';
+import { flag, knob } from '../tune.js';
 
 const without = <T>(list: readonly T[], ...drop: T[]): T[] => list.filter((x) => !drop.includes(x));
 
@@ -291,8 +292,8 @@ export const NORTH_EAST: Scenario = {
   ai: {
     // The computer Europeans keep to the Americas' dates, though the game starts in 1000.
     dates: true,
-    landing: Number(process.env.CC_LANDING ?? 18),
-    siteTerrain: { tundra: Number(process.env.CC_TUNDRA ?? 1) },
+    landing: knob('CC_LANDING', 18),
+    siteTerrain: { tundra: knob('CC_TUNDRA', 1) },
     goods: AMERICAS.ai.goods,
   },
   mechanics: {
@@ -313,9 +314,9 @@ export const NORTH_EAST: Scenario = {
     confederation: true,
     peopleTreaties: ['people-trade', 'land-use', 'exchange', 'defence'],
     // The peoples' economy (T10, T12): hard years, the land's health by region, epidemics after contact.
-    ...(process.env.CC_OFF ? {} : { hardYears: { chance: 1 / 8 },
-    landHealth: { regionSize: 8, renewal: 40, recovery: 5, floor: 0.2 },
-    epidemics: { chance: 1 / 25, years: 3, loss: 1, reach: 8 } }),
+    ...(flag('CC_OFF', 'h') ? {} : { hardYears: { chance: 1 / 8 } }),
+    ...(flag('CC_OFF', 'l') ? {} : { landHealth: { regionSize: 8, renewal: 40, recovery: 5, floor: 0.2 } }),
+    ...(flag('CC_OFF', 'e') ? {} : { epidemics: { chance: 1 / knob('CC_EPI', 25), years: knob('CC_EPY', 3), loss: 1, reach: knob('CC_EPR', 8) } }),
   },
   // Both sides judged at the end year, in the decided order (T14).
   victory: [
