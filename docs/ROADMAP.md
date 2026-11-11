@@ -173,6 +173,16 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
   6. Ligne claire on hexagons, or it stays square-only (L).
   Stored maps can be read as offset hexagon rows (alternate rows shifted half a tile) with a review pass per map. A first candidate is a new scenario without square-tuned history, such as Vinland, rather than converting the Americas.
 - Network play (the deterministic engine already supports replays).
+- Converting all Scenarios to use haxagonal tiles
+
+## Generating Sprites locally
+
+Test free image generation running on the Mac to generate sprites.
+
+## More Hill Climbing
+
+Consider other candidates for Hill Climbing, such as:
+- **Using the concept of Deep Modules** to refactor code to be more easy to maintain, while repeated games ensures that nothing breaks.
 
 ## Agentic sprite pack generator
 
@@ -182,6 +192,7 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
 
 ## Long-term ambition
 
+- **3D modelled game world:** Add a new way to render the games besides the existing graphical styles - a full 3D map, 3D units, etc. use Fable 5.2 for this.
 - **Play on past 1850 in the Civilization II style:** tech trees, new diplomacy, new units. This is a project in itself and only starts when the list above runs dry.
 
 ## Parked
