@@ -79,6 +79,7 @@ The Australia map (geography preview with the current rules; ships arrive from t
   6. Ligne claire on hexagons, or it stays square-only (L).
   Stored maps can be read as offset hexagon rows (alternate rows shifted half a tile) with a review pass per map. A first candidate is a new scenario without square-tuned history, such as Vinland, rather than converting the Americas.
 - Native peoples as a nation type (Simon's idea, November 2026): native peoples become playable nations of their own kind, with their own units, buildings and council members and no Home Port. A new way to play: start as a native people around the year 1000, with the Europeans arriving later to complicate matters. Builds on Beta 2, whose people treaty party is designed to grow into this type ([design/native-partners.md](design/native-partners.md), section 4). Needs its own design note. Roughly XL.
+- Native peoples' knowledge of the land (Simon's idea, November 2026; for discussion in a later session): braves moving to defend move as if following a river from Beta 2 on, because the native peoples know the land so well. Expand on this advantage later, for example braves losing it on tilled fields (plowed land) or on railroads once they appear.
 - Network play (the deterministic engine already supports replays).
 - Converting all Scenarios to use haxagonal tiles
 
