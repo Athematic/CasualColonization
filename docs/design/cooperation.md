@@ -1,6 +1,6 @@
 # Design note: Cooperation between Europeans (Beta 1)
 
-Status: **built** (November 2026): steps 0–5 (sections 6 and 7) and step 6, the tuning (section 8). Some choices made while building it are provisional and listed for Simon in section 9. Simon decided all of C1–C11 on 10 November 2026: as recommended, except C9 (the clean-up happens now) and C11 (lower targets). This note builds on [favoured-nation.md](favoured-nation.md), the first step towards cooperation, and on the 0.9 scenario framework ([scenario-framework.md](scenario-framework.md)): every new rule here is scenario data or a mechanics switch from the start. Beta 2, native peoples as partners, gets its own note but should reuse the shapes chosen here (question C9).
+Status: **built** (November 2026): steps 0–5 (sections 6 and 7) and step 6, the tuning (section 8). The choices made while building it are in section 9; Simon confirmed them on 11 November 2026, except concord's share. Simon decided all of C1–C11 on 10 November 2026: as recommended, except C9 (the clean-up happens now) and C11 (lower targets). This note builds on [favoured-nation.md](favoured-nation.md), the first step towards cooperation, and on the 0.9 scenario framework ([scenario-framework.md](scenario-framework.md)): every new rule here is scenario data or a mechanics switch from the start. Beta 2, native peoples as partners, gets its own note but should reuse the shapes chosen here (question C9).
 
 ## 1. Goal
 
@@ -223,14 +223,14 @@ Average scores per level, before → after:
 - **Joint expeditions:** still none between computer players; alliances form after most Lost City Rumours are found.
 - **Concord** stays at 0.65 of the total score: it is already above C11's rate in the Americas, and the alliance rate is a little above too, so raising it to 0.7 is the obvious next step if Simon wants fewer shared wins. Left for him to decide (section 9).
 
-## 9. For Simon: provisional decisions to confirm
+## 9. Decisions made while building
 
-Choices made while building Beta 1 that the decisions C1–C11 did not settle. Each is easy to change.
+Choices made while building Beta 1 that the decisions C1–C11 did not settle. Simon confirmed all of them on 11 November 2026, except item 4 (concord's share), which is still open. Each is easy to change.
 
 1. **Alliances can have more than two members** (one alliance per nation; a member invites a nation that belongs to none).
 2. **An alliance holds at most half of the nations taking part** (at least two), so it is a bloc, not the whole table.
 3. **Concord needs a nation outside the alliance**, and is checked only **at the end year** (the calendar's end), not earlier.
-4. **Concord's share** stays at 0.65; the tournaments give a shared win in about one Americas game in 12, more than C11's one in 30–40. 0.7 would bring it closer.
+4. **Concord's share (open)** stays at 0.65; the tournaments give a shared win in about one Americas game in 12, more than C11's one in 30–40. 0.7 would bring it closer.
 5. **An alliance survives independence:** a nation that has won its independence keeps its allies, and can still make an alliance.
 6. **Allies garrison and trade in each other's colonies but don't work in them** (C1 left it open).
 7. **Favoured Nation with an ally ends only by leaving the alliance**, not on its own.
