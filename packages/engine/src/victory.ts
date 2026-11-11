@@ -28,6 +28,7 @@ import { calendarOf, lastTurn, nationOf, scenarioOf, term } from './scenarios/in
 import { treatyNations } from './treaties.js';
 import { peopleList, prosperityParams, prosperityWinners } from './prosperity.js';
 import type { NationId } from './rules/nations.js';
+import { systemsOf } from './playerkind.js';
 import type { GameState, Player } from './types.js';
 import { removeUnit, unitList } from './unitindex.js';
 
@@ -159,7 +160,7 @@ registerVictory({
     if (moment.kind !== 'warEnded') return null;
     if (s.config.playOn) {
       // Arena play-on: the game goes on while any nation still plays.
-      if (s.players.some((p) => p.id !== 'crown' && p.kind !== 'company' && !p.finished)) return null;
+      if (s.players.some((p) => systemsOf(p).ranked && !p.finished)) return null;
       const scores = finalScores(s);
       return { turn: s.turn, reason: term(s, 'gameOver.playOn'), winner: leader(scores), scores };
     }

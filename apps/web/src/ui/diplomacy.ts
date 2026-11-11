@@ -54,6 +54,7 @@ import {
   tradeTies,
   treatyName,
   treatiesWithPeople,
+  systemsOf,
   TRIBES,
   withPeople,
   type NationId,
@@ -80,7 +81,7 @@ export class DiplomacyScreen implements Screen {
     const me = app.me;
     clear(this.body);
 
-    const nations = s.players.filter((p) => p.id !== me.id && p.id !== 'crown' && p.kind !== 'company');
+    const nations = s.players.filter((p) => p.id !== me.id && systemsOf(p).relations);
     const europe = h('div', { class: 'card' },
       h('h3', null, 'European nations'),
       nations.length

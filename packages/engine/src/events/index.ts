@@ -14,6 +14,7 @@ import { calendarOf, formatDate, nationOf, nationTitle, scenarioOf, yearOf } fro
 import { buildingName } from '../rules/buildings.js';
 import { GOOD_DEFS } from '../rules/goods.js';
 import { TRIBES, type NationId } from '../rules/nations.js';
+import { systemsOf } from '../playerkind.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import { track, tracking } from '../telemetry.js';
 import type { GameState, Player } from '../types.js';
@@ -253,7 +254,7 @@ export function answerEvent(s: GameState, nation: NationId, pendingId: string, c
  */
 export function fireEvent(s: GameState, def: EventDef, nation: NationId, given?: EventVars): boolean {
   const p = s.players.find((x) => x.id === nation);
-  if (!p || nation === 'crown') return false;
+  if (!p || !systemsOf(p).events) return false;
   const r = eventStream(s, `fire ${def.id} ${nation} ${s.turn}`);
   const v = given ? { ...given } : def.target(s, nation, r);
   if (!v) return false;
@@ -289,7 +290,7 @@ export function fireEvent(s: GameState, def: EventDef, nation: NationId, given?:
 
 /** Fires a historical (world) event for every nation still taking part. */
 function fireWorld(s: GameState, def: EventDef): void {
-  for (const p of s.players) if (p.kind !== 'company') fireEvent(s, def, p.id);
+  for (const p of s.players) if (systemsOf(p).events) fireEvent(s, def, p.id);
   // Marked as fired even if no nation had a target, so it stays once-only.
   eventsState(s).fired[def.id] = s.turn;
 }
@@ -313,7 +314,7 @@ function drawHistorical(s: GameState): void {
 function drawRandom(s: GameState): void {
   const defs = eventDefs(s).filter((d) => d.kind === 'random' && !d.hidden);
   for (const p of s.players) {
-    if (p.id === 'crown' || p.kind === 'company' || !colonyList(s).some((c) => c.owner === p.id)) continue;
+    if (!systemsOf(p).events || !colonyList(s).some((c) => c.owner === p.id)) continue;
     if (eventRandom(s, `random ${s.turn} ${p.id}`) >= RANDOM_EVENT_RATE) continue;
     const options: { def: EventDef; vars: EventVars; weight: number }[] = [];
     for (const def of defs) {

@@ -33,6 +33,7 @@ import {
   settlementName,
   nativeRulesOf,
   tensionLabel,
+  systemsOf,
   TRIBES,
   type GoodId,
   type NationId,
@@ -186,7 +187,7 @@ export async function inciteDialog(app: App, u: Unit, settlementId: string): Pro
   const s = app.state;
   const st = s.settlements[settlementId];
   const price = incitePrice(s, st);
-  const rivals = s.players.filter((p) => p.id !== u.owner && p.id !== 'crown' && p.kind !== 'company').map((p) => p.id as NationId);
+  const rivals = s.players.filter((p) => p.id !== u.owner && systemsOf(p).peoples).map((p) => p.id as NationId);
   const nation = await choose(
     'Incite the natives',
     `For ${price} gold the ${TRIBES[st.tribe].name} will turn against a rival nation: their anger with it rises sharply, and they may go to war. You have ${app.me.gold} gold.`,

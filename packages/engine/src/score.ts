@@ -7,7 +7,8 @@ import { UNIT_TYPES } from './rules/units.js';
 import { recentProduction } from './stats.js';
 import type { ScoreWeights } from './rules/score.js';
 import type { GameState, Player } from './types.js';
-import { companyScoreShare, sharesIn } from './companies.js';
+import { companyScoreShare, isCompany, sharesIn } from './companies.js';
+import { systemsOf } from './playerkind.js';
 import { ownedUnitsView, colonyList } from './unitindex.js';
 import { bound, partyIsPeople } from './treaties.js';
 
@@ -114,11 +115,11 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreW
     lines.push(line('peoples', 'Treaties with native peoples', treaties, 'treaties', treaties * w.peopleTreaty));
   }
   // A company cannot win: its score counts for its shareholders, by their shares.
-  if (s.players.length > s.config.nations.length && p.kind !== 'company') {
+  if (s.players.length > s.config.nations.length && systemsOf(p).ranked) {
     let held = 0;
     let points = 0;
     for (const co of s.players) {
-      if (co.kind !== 'company') continue;
+      if (!isCompany(co)) continue;
       const share = sharesIn(co, p.id);
       if (!share.held) continue;
       held += share.held;
@@ -139,6 +140,6 @@ export function score(s: GameState, p: Player, w: ScoreWeights = scoreWeightsOf(
  */
 export function finalScores(s: GameState): Partial<Record<Player['id'], number>> {
   const out: Partial<Record<Player['id'], number>> = {};
-  for (const p of s.players) if (p.id !== 'crown' && p.kind !== 'company') out[p.id] = p.finished ? p.finished.score : score(s, p);
+  for (const p of s.players) if (systemsOf(p).ranked) out[p.id] = p.finished ? p.finished.score : score(s, p);
   return out;
 }

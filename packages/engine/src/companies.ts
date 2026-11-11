@@ -19,6 +19,7 @@
  * companies is not touched.
  */
 import type { NationId } from './rules/nations.js';
+import { playerKind } from './playerkind.js';
 import { mechanicsOf, scenarioOf } from './scenarios/index.js';
 import type { CompanyEntry, CompanyRules } from './scenarios/types.js';
 import type { GameState, Player } from './types.js';
@@ -51,7 +52,7 @@ export function companyCharters(s: GameState): readonly CompanyEntry[] {
 
 /** Whether a player is a chartered company. */
 export function isCompany(p: Player | undefined): boolean {
-  return p?.kind === 'company';
+  return !!p && playerKind(p) === 'company';
 }
 
 /** Whether the nation id names a company taking part in the game. */
@@ -59,14 +60,14 @@ export function isCompanyId(s: GameState, id: NationId): boolean {
   return isCompany(s.players.find((p) => p.id === id));
 }
 
-/** A European nation: neither the Crown nor a company. */
+/** A European nation: neither the Crown nor a company (nor a playing people). */
 export function isNation(p: Player): boolean {
-  return p.id !== 'crown' && p.kind !== 'company';
+  return playerKind(p) === 'nation';
 }
 
 /** The companies taking part (founded so far), in the order founded. */
 export function companies(s: GameState): Player[] {
-  return s.players.filter((p) => p.kind === 'company');
+  return s.players.filter(isCompany);
 }
 
 /** Shares a nation holds in a company, and all the company's shares. */
