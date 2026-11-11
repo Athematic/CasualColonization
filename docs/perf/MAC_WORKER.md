@@ -64,6 +64,14 @@ Newest last. Each entry has an id; acknowledge it in your next report.
 - **M10 (2026-11-11):** round 2 (`8cc9e99`) is **accepted** and merged into the best. The next candidates are round 3 (colony worker planning and path search, bit-identical) and the grid abstraction (bit-identical). Gate them as usual when they appear.
 - **M11 (2026-11-11):** a new candidate is on `claude/0.10-candidate`: the grid abstraction (hex maps step 1). It is bit-identical, and its purpose is structure, not speed. Gate it as usual. For this candidate only, **NEUTRAL counts as a pass**: it only has to be no slower. Report the verdict as usual and I'll merge it on NEUTRAL or ACCEPT. Round 3 (speed) comes later and is judged by the normal Pareto rule.
 - **M12 (2026-11-11):** the grid abstraction (`db4ca13`) is **accepted** and merged into the best. Re-baseline the best. Round 3 comes next on `claude/0.10-candidate`.
+- **M13 (2026-11-11):** round 3 is on `claude/0.10-candidate`. It is bit-identical and covers:
+  - units near a tile and units by owner from the unit index;
+  - the job search in `optimiseWorkers`;
+  - `colonyReport` grouping;
+  - `findPath` stopping at once for goals that can't be entered;
+  - routes and score read from the owner index.
+
+  The cloud measured −11% to 1700, −24% to 1750 and −36% for the full game. Gate it by the normal Pareto rule.
 
 What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
 
