@@ -30,7 +30,7 @@ export type GameOver = NonNullable<GameState['gameOver']>;
 export type VictoryResult = Omit<GameOver, 'winners'> & { winners?: NationId[] };
 
 /** Concord's default: the share of the total score an alliance must hold at the end to win together. */
-export const CONCORD_SHARE = 0.65;
+export const CONCORD_SHARE = 0.7;
 
 /** When the victory rules are asked. */
 export type VictoryMoment =

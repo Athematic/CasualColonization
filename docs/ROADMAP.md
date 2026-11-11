@@ -137,7 +137,7 @@ Builds on 0.4.
 
 Each beta gets design notes first.
 
-Beta 1, cooperation between Europeans: design in [design/cooperation.md](design/cooperation.md) (C1–C11 decided by Simon, November 2026). Built: steps 0–6; the choices made while building are in its section 9, confirmed by Simon except concord's share.
+Beta 1, cooperation between Europeans: design in [design/cooperation.md](design/cooperation.md) (C1–C11 decided by Simon, November 2026). Built: steps 0–6; the choices made while building are in its section 9, confirmed by Simon (concord's share raised to 0.7).
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |

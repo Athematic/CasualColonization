@@ -1,6 +1,6 @@
 # Design note: Cooperation between Europeans (Beta 1)
 
-Status: **built** (November 2026): steps 0–5 (sections 6 and 7) and step 6, the tuning (section 8). The choices made while building it are in section 9; Simon confirmed them on 11 November 2026, except concord's share. Simon decided all of C1–C11 on 10 November 2026: as recommended, except C9 (the clean-up happens now) and C11 (lower targets). This note builds on [favoured-nation.md](favoured-nation.md), the first step towards cooperation, and on the 0.9 scenario framework ([scenario-framework.md](scenario-framework.md)): every new rule here is scenario data or a mechanics switch from the start. Beta 2, native peoples as partners, gets its own note but should reuse the shapes chosen here (question C9).
+Status: **built** (November 2026): steps 0–5 (sections 6 and 7) and step 6, the tuning (section 8). The choices made while building it are in section 9; Simon confirmed them on 11 November 2026 and raised concord's share to 0.7. Simon decided all of C1–C11 on 10 November 2026: as recommended, except C9 (the clean-up happens now) and C11 (lower targets). This note builds on [favoured-nation.md](favoured-nation.md), the first step towards cooperation, and on the 0.9 scenario framework ([scenario-framework.md](scenario-framework.md)): every new rule here is scenario data or a mechanics switch from the start. Beta 2, native peoples as partners, gets its own note but should reuse the shapes chosen here (question C9).
 
 ## 1. Goal
 
@@ -117,7 +117,7 @@ Code: `packages/engine/src/treaties.ts` (the record), `alliances.ts` (the rules)
 ### Victory (step 2, C3, C6)
 
 - `gameOver.winners: NationId[]`, best first, written for every ending (empty when nobody wins or the person retires); `winner` stays the first. A victory kind may return `winners`; otherwise they are its `winner`.
-- `concord`: at the end of the calendar, the alliance whose members hold more than `params.share` of the total score (default 0.65) wins together, members ranked by their own score; with a share below one half the larger of two qualifying alliances wins. The Americas list `[independence-war, concord, time]`, the Caribbean `[concord, time]`.
+- `concord`: at the end of the calendar, the alliance whose members hold more than `params.share` of the total score (default 0.7) wins together, members ranked by their own score; with a share below one half the larger of two qualifying alliances wins. The Americas list `[independence-war, concord, time]`, the Caribbean `[concord, time]`.
 - The game-over screen names every winner ("… win together"); the arena's `won` reads `winners` (the best score only for a game stopped early, so ties no longer count twice) and marks `concord`; the tournament prints alliances and concord per game, alliance columns in the relations table, and a line "Alliances: n of N games with an alliance … won together".
 
 ### Measurements
@@ -221,16 +221,16 @@ Average scores per level, before → after:
 - **No level is clearly weaker.** Creative's average in all-Creative games moved by less than its noise (about 8 points over 96 games); a game that changes at all changes by about 200 points either way, so 24 games say little about a level's average.
 - **Companies:** in the Caribbean a company is now a sound investment. One founded at turn 34 paid its founder 1,762 gold in dividends on its 1,000 and was worth 20 points at the end; late ones (after turn 150) paid back 200–430 gold and 5–8 points (at 400 gold a point, the capital is worth 2.5). In the Americas, companies still come late (the founding chance and the companies' years are unchanged, to keep them in about one game in ten), and pay more in gold and a little less in score, because they grow more slowly while keeping a treasury.
 - **Joint expeditions:** still none between computer players; alliances form after most Lost City Rumours are found.
-- **Concord** stays at 0.65 of the total score: it is already above C11's rate in the Americas, and the alliance rate is a little above too, so raising it to 0.7 is the obvious next step if Simon wants fewer shared wins. Left for him to decide (section 9).
+- **Concord** is now 0.7 of the total score (it was 0.65; Simon's decision, section 9). The same tournaments with 0.7: concord in 4 of 48 Americas games (as with 0.65) and 2 of 96 all-Creative games (3 with 0.65); nothing else changed. The share moves the rate little because concord mostly comes after the other nations lost their wars of independence: the allies then held 70–80% of the score (74%, 76% and 80% in three of the four games, 70.2% in the fourth). A share of 0.75 would have left about 2 of 48 (one in 24), 0.8 about 1 of 48.
 
 ## 9. Decisions made while building
 
-Choices made while building Beta 1 that the decisions C1–C11 did not settle. Simon confirmed all of them on 11 November 2026, except item 4 (concord's share), which is still open. Each is easy to change.
+Choices made while building Beta 1 that the decisions C1–C11 did not settle. Simon confirmed all of them on 11 November 2026, and raised concord's share to 0.7 (item 4). Each is easy to change.
 
 1. **Alliances can have more than two members** (one alliance per nation; a member invites a nation that belongs to none).
 2. **An alliance holds at most half of the nations taking part** (at least two), so it is a bloc, not the whole table.
 3. **Concord needs a nation outside the alliance**, and is checked only **at the end year** (the calendar's end), not earlier.
-4. **Concord's share (open)** stays at 0.65; the tournaments give a shared win in about one Americas game in 12, more than C11's one in 30–40. 0.7 would bring it closer.
+4. **Concord's share is 0.7** (`CONCORD_SHARE`, was 0.65). It still gives a shared win in about one Americas game in 12, more than C11's one in 30–40, because concord mostly follows lost wars of independence (section 8); 0.75 would give about one in 24.
 5. **An alliance survives independence:** a nation that has won its independence keeps its allies, and can still make an alliance.
 6. **Allies garrison and trade in each other's colonies but don't work in them** (C1 left it open).
 7. **Favoured Nation with an ally ends only by leaving the alliance**, not on its own.

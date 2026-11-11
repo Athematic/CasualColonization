@@ -145,7 +145,7 @@ The numbers of the Crown and the war (REF growth, demands, royal wars, mercenari
 - `time`: the game ends after the calendar's last turn; the highest score wins.
 - `independence-war`: winning the war ends the game with that winner; losing it ends the game once no person is left to play. With `GameConfig.playOn` the nation is finished instead and the others play on.
 
-- `concord`: at the end of the calendar, an alliance whose members together hold more than `params.share` of the total score (default 0.65, `CONCORD_SHARE`) wins together; its members are the winners, ranked by their own score. List it before `time`.
+- `concord`: at the end of the calendar, an alliance whose members together hold more than `params.share` of the total score (default 0.7, `CONCORD_SHARE`) wins together; its members are the winners, ranked by their own score. List it before `time`.
 
 `gameOver.winners` lists every winner, best first (several after `concord`, none when nobody won); `gameOver.winner` is the first of them. A kind may return `winners`; otherwise they are its `winner`.
 
