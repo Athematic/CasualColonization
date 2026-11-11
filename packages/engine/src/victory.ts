@@ -37,7 +37,7 @@ export type VictoryMoment =
   /** After a round, once the turn counter has moved on. */
   | { kind: 'round' }
   /** A nation's War of Independence has just ended; `text` is the news. */
-  | { kind: 'warEnded'; nation: NationId; outcome: 'won' | 'lost'; text: string };
+  | { kind: 'warEnded'; nation: NationId; outcome: 'won' | 'lost'; text: string; together?: NationId[] };
 
 export interface VictoryKind {
   id: string;
@@ -139,7 +139,16 @@ registerVictory({
       const scores = finalScores(s);
       return { turn: s.turn, reason: term(s, 'gameOver.playOn'), winner: leader(scores), scores };
     }
-    if (moment.outcome === 'won') return { turn: s.turn, reason: moment.text, winner: moment.nation, scores: finalScores(s) };
+    if (moment.outcome === 'won') {
+      const scores = finalScores(s);
+      // A confederation (confederation.ts) wins together, best score first.
+      if (moment.together && moment.together.length > 1) {
+        const order = s.config.nations;
+        const winners = [...moment.together].sort((a, b) => (scores[b] ?? 0) - (scores[a] ?? 0) || order.indexOf(a) - order.indexOf(b));
+        return { turn: s.turn, reason: moment.text, winner: winners[0], winners, scores };
+      }
+      return { turn: s.turn, reason: moment.text, winner: moment.nation, scores };
+    }
     const humansLeft = s.players.some((o) => o.human && o.independence !== 'lost');
     return humansLeft ? null : { turn: s.turn, reason: moment.text, scores: finalScores(s) };
   },

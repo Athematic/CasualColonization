@@ -5,6 +5,8 @@ import {
   alliesOf,
   allianceRules,
   allTreaties,
+  confederationOn,
+  confederationProblem,
   expeditionProblem,
   companyCharters,
   companyRules,
@@ -163,7 +165,7 @@ export class DiplomacyScreen implements Screen {
     const moodClass = war || /hostile/.test(mood) ? 'bad' : /rebuilt|cool/.test(mood) ? 'warn' : 'good';
     const pending = rel.proposal;
     const theirs = pending && pending.from === p.id;
-    const kindName = (k: string) => (k === 'trade' ? 'a trade agreement' : k === 'alliance' ? 'an alliance' : k === 'expedition' ? 'a joint expedition' : 'Favoured Nation status');
+    const kindName = (k: string) => (k === 'trade' ? 'a trade agreement' : k === 'alliance' ? 'an alliance' : k === 'expedition' ? 'a joint expedition' : k === 'confederation' ? 'declaring independence together' : 'Favoured Nation status');
     const allied = isAllied(s, me.id, p.id);
     const theirAllies = alliesOf(s, p.id).filter((n) => n !== me.id);
     const buttons: (HTMLElement | null)[] = [];
@@ -188,6 +190,10 @@ export class DiplomacyScreen implements Screen {
         const why = expeditionProblem(s, me.id, p.id);
         const cost = allianceRules(s).expeditionCost;
         buttons.push(h('button', { class: 'btn tiny', 'data-action': 'joint-expedition', disabled: !!why, title: why ?? `Fund a seasoned scout together, ${Math.ceil(cost / 2)} gold each, and share the gold it finds`, onclick: () => app.dispatch({ type: 'proposeExpedition', nation: p.id }) }, 'Joint expedition'));
+        if (confederationOn(s) && me.independence === 'none' && p.independence === 'none') {
+          const no = confederationProblem(s, me.id, p.id);
+          buttons.push(h('button', { class: 'btn tiny', 'data-action': 'confederation', disabled: !!no, title: no ?? `Declare independence together with ${nationOf(s, p.id).name}, and fight the Crown's armies side by side`, onclick: () => void this.confederate(p.id) }, 'Declare independence together'));
+        }
         buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.leaveAlliance(p) }, 'Leave alliance'));
       }
       else if (favoured) buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.cancelFavoured(p) }, 'Cancel Favoured Nation'));
@@ -282,6 +288,17 @@ export class DiplomacyScreen implements Screen {
     const people = p.human && this.app.me.human;
     const text = `Cancelling ends the trade agreement and every trade route between you. All goods carried by either side's ships and wagon trains next to the other's colonies are seized.${people ? ' Between two players there is no waiting period: you can agree again at once.' : ` Relations with ${nationOf(this.app.state, p.id).name} will stay hostile for years, and no new agreement will be possible for a long time.`}`;
     if (await confirmDialog('Cancel Favoured Nation status?', text, 'Cancel it', 'Keep it')) this.app.dispatch({ type: 'cancelFavoured', nation: p.id });
+  }
+
+  private async confederate(nation: NationId): Promise<void> {
+    const s = this.app.state;
+    const ok = await confirmDialog(
+      `Declare independence together with ${nationOf(s, nation).name}?`,
+      `If ${nationOf(s, nation).name} agrees, both of you declare at once. Trade with ${term(s, 'homeland')} ends and everything there is lost; each Crown sends its ${term(s, 'ref')}. The war is one: it is won when every royal army is beaten, and lost when together you hold half your colonies or fewer.`,
+      'Propose it',
+      'Not yet',
+    );
+    if (ok) this.app.dispatch({ type: 'proposeConfederation', nation });
   }
 
   private async leaveAlliance(p: Player): Promise<void> {

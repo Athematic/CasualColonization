@@ -57,12 +57,12 @@ import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangle
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { stopPort } from '../routes.js';
 import { maybeIncite } from './natives.js';
-import { armyForIndependence, colonyDefences, supportParts, rebelColonyDefence, rebelPower, crownAffairs, defenceShort, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
+import { armyForIndependence, expectedSupport, colonyDefences, supportParts, rebelColonyDefence, rebelPower, crownAffairs, defenceShort, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
 import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './plan.js';
 import { equippedPrice, trainEquipped } from './outfit.js';
-import type { AiProfile } from './profiles.js';
+import { AI_PROFILES, type AiProfile } from './profiles.js';
 import { buildRoads, equipPioneer, pioneerToolsWanted } from './roads.js';
-import { aiGoodsOf, aiTurn, goodsOf, scenarioOf } from '../scenarios/index.js';
+import { aiGoodsOf, aiTurn, goodsOf, mechanicsOf, scenarioOf } from '../scenarios/index.js';
 
 const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
 
@@ -1338,6 +1338,25 @@ function abandonOutposts(s: GameState, p: Player): void {
     if (!weak.has(c.id) || c.buildings.stockade > 0 || colonyWorkers(s, c).length > OUTPOST_COLONISTS) continue;
     safely(() => void abandonColony(s, c.id));
   }
+}
+
+/**
+ * Whether a computer nation would declare independence now, by the checks `independence` makes
+ * (without giving up outposts first): the judge of a confederation proposal (confederation.ts).
+ * Its level's profile; the Creative level's plan is the Competent one it starts from.
+ */
+export function readyToDeclare(s: GameState, nation: Player['id']): boolean {
+  const p = s.players.find((o) => o.id === nation);
+  if (!p || p.human || !p.ai || p.ai === 'naive' || p.kind === 'company' || p.independence !== 'none') return false;
+  const plan = AI_PROFILES[p.ai].independence;
+  if (!plan || !mechanicsOf(s).independence || s.turn < aiTurn(s, plan.minTurn)) return false;
+  const colonies = ownColonies(s, p);
+  if (!colonies.length || rebelShare(s, p.id) < plan.minShare) return false;
+  const armed = countOwned(s, p, isArmed);
+  const fortified = colonies.filter((c) => c.buildings.stockade > 0).length;
+  if (armed < colonies.length * plan.armyPerColony || fortified < colonies.length / 3) return false;
+  const support = expectedSupport(s, p);
+  return readyToFight(s, p, plan.ratio, support) && canDeclareIndependence(s, p.id) === null;
 }
 
 function independence(s: GameState, p: Player, prof: AiProfile): void {

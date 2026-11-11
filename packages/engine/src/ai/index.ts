@@ -1,10 +1,14 @@
 import { runCrown } from '../independence.js';
 import { mechanicsOf } from '../scenarios/index.js';
 import type { GameState, Player } from '../types.js';
-import { runAdvanced } from './advanced.js';
+import { readyToDeclare, runAdvanced } from './advanced.js';
+import { setConfederationJudge } from '../confederation.js';
 import { creativeProfile } from './creative.js';
 import { runNaive } from './naive.js';
 import { AI_PROFILES, COMPANY_PROFILE, type AiProfile } from './profiles.js';
+
+// A computer nation answers a proposal to declare independence together by its readiness (confederation.ts).
+setConfederationJudge((s, nation) => readyToDeclare(s, nation));
 
 /** Plays one turn for a computer-controlled nation at its level. */
 export function runAi(s: GameState, p: Player): void {

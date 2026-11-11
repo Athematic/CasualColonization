@@ -419,7 +419,7 @@ export interface GameMessage {
   at?: { x: number; y: number };
 }
 
-export type ProposalKind = 'trade' | 'favoured' | 'alliance' | 'expedition';
+export type ProposalKind = 'trade' | 'favoured' | 'alliance' | 'expedition' | 'confederation';
 
 /**
  * Relations between two European nations (see relations.ts and docs/design/favoured-nation.md).
@@ -453,7 +453,7 @@ export interface Relation {
  * agreement, Favoured Nation status and, from Beta 1, an alliance. Beta 2's treaties with native
  * peoples are meant to reuse the record.
  */
-export type TreatyKind = 'trade' | 'favoured' | 'alliance';
+export type TreatyKind = 'trade' | 'favoured' | 'alliance' | 'confederation';
 
 /** How a treaty ended. */
 export interface TreatyEnd {
@@ -462,7 +462,7 @@ export interface TreatyEnd {
    * Cancelled by one side, ended by a war between the parties, lapsed (Favoured Nation at a
    * declaration of independence), or left: an alliance's last members but one left it.
    */
-  why: 'cancelled' | 'war' | 'lapsed' | 'left';
+  why: 'cancelled' | 'war' | 'lapsed' | 'left' | 'concluded';
   /** The nation that ended it, when one did. */
   by?: NationId;
 }

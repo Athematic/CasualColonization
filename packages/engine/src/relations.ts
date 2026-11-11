@@ -249,15 +249,38 @@ export function proposeAlliance(s: GameState, from: NationId, to: NationId): str
   return propose(s, 'alliance', from, to);
 }
 
-const KIND_NAME: Record<ProposalKind, string> = { trade: 'a trade agreement', favoured: 'Favoured Nation status', alliance: 'an alliance', expedition: 'a joint expedition' };
+const KIND_NAME: Record<ProposalKind, string> = { trade: 'a trade agreement', favoured: 'Favoured Nation status', alliance: 'an alliance', expedition: 'a joint expedition', confederation: 'declaring independence together' };
 
 /** What a proposal of each kind needs, how a computer player answers it, and what accepting it does. */
-const KINDS: Record<ProposalKind, { problem: typeof tradeProblem; accepts: typeof aiAcceptsTrade; make: typeof makeTradeAgreement }> = {
+interface KindRules {
+  problem: (s: GameState, from: NationId, to: NationId) => string | null;
+  accepts: (s: GameState, ai: NationId, from: NationId) => boolean;
+  make: (s: GameState, a: NationId, b: NationId) => string;
+}
+
+/** Registers a proposal kind whose rules live in a module relations.ts must not import (confederation.ts). */
+export function registerProposalKind(kind: ProposalKind, rules: KindRules): void {
+  KINDS[kind] = rules;
+}
+
+/** Proposes `kind` to `to` after checking its rules; for kinds registered from elsewhere. */
+export function proposeKind(s: GameState, kind: ProposalKind, from: NationId, to: NationId): string {
+  const rules = KINDS[kind];
+  if (!rules) fail('There is no such proposal.');
+  const problem = rules.problem(s, from, to);
+  if (problem) fail(problem);
+  track(from, `cmd:propose ${kind}`);
+  return propose(s, kind, from, to);
+}
+
+const KINDS: Partial<Record<ProposalKind, KindRules>> = {};
+const BUILT_IN: Record<'trade' | 'favoured' | 'alliance' | 'expedition', KindRules> = {
   trade: { problem: (s, a, b) => tradeProblem(s, a, b), accepts: (s, a, b) => aiAcceptsTrade(s, a, b), make: (s, a, b) => makeTradeAgreement(s, a, b) },
   favoured: { problem: (s, a, b) => favouredProblem(s, a, b), accepts: (s, a, b) => aiAcceptsFavoured(s, a, b), make: (s, a, b) => makeFavoured(s, a, b) },
   alliance: { problem: (s, a, b) => allianceProblem(s, a, b), accepts: (s, a, b) => aiAcceptsAlliance(s, a, b), make: (s, a, b) => makeAlliance(s, a, b) },
   expedition: { problem: (s, a, b) => expeditionProblem(s, a, b), accepts: (s, a, b) => aiAcceptsExpedition(s, a, b), make: (s, a, b) => makeExpedition(s, a, b) },
 };
+Object.assign(KINDS, BUILT_IN);
 
 /** Proposes a joint expedition to an ally (alliances.ts): each pays half, the gold found is shared. */
 export function proposeExpedition(s: GameState, from: NationId, to: NationId): string {
@@ -274,14 +297,14 @@ function propose(s: GameState, kind: ProposalKind, from: NationId, to: NationId)
     message(s, `${nationTitle(s, from)} proposes ${KIND_NAME[kind]}.`, to);
     return `Your proposal of ${KIND_NAME[kind]} has been sent to ${nationOf(s, to).name}.`;
   }
-  const yes = KINDS[kind].accepts(s, to, from);
+  const yes = KINDS[kind]!.accepts(s, to, from);
   if (!yes) {
     track(from, 'diplomacy:proposal turned down');
     const text = `${nationTitle(s, to)} turns down ${KIND_NAME[kind]}.`;
     message(s, text, from);
     return text;
   }
-  return KINDS[kind].make(s, from, to);
+  return KINDS[kind]!.make(s, from, to);
 }
 
 /** A person answers a proposal from `from`. */
@@ -298,9 +321,9 @@ export function answerProposal(s: GameState, nation: NationId, from: NationId, a
     return `You turn down ${KIND_NAME[p.kind]} with ${nationOf(s, from).name}.`;
   }
   // Check again: things may have changed since the proposal was made.
-  const problem = KINDS[p.kind].problem(s, from, nation);
+  const problem = KINDS[p.kind]!.problem(s, from, nation);
   if (problem) fail(problem);
-  return KINDS[p.kind].make(s, from, nation);
+  return KINDS[p.kind]!.make(s, from, nation);
 }
 
 export function makeTradeAgreement(s: GameState, a: NationId, b: NationId): string {

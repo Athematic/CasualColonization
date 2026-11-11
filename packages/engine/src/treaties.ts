@@ -59,7 +59,7 @@ export function endTreaty(s: GameState, t: Treaty, why: TreatyEnd['why'], by?: N
   t.end = by ? { turn: s.turn, why, by } : { turn: s.turn, why };
 }
 
-const TREATY_NAME: Record<TreatyKind, string> = { trade: 'Trade agreement', favoured: 'Favoured Nation status', alliance: 'Alliance' };
+const TREATY_NAME: Record<TreatyKind, string> = { trade: 'Trade agreement', favoured: 'Favoured Nation status', alliance: 'Alliance', confederation: 'Confederation' };
 
 /** The treaty's name for the diplomacy screen ("Trade agreement"). */
 export function treatyName(t: Treaty): string {
@@ -72,6 +72,6 @@ export function describeTreaty(s: GameState, t: Treaty): string {
   const names = treatyNations(t).map((n) => nationOf(s, n).name);
   const who = names.length > 2 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names.join(' and ');
   if (!t.end) return `${who}, since ${formatDate(t.start, cal)}`;
-  const how = t.end.why === 'war' ? 'ended by war' : t.end.why === 'lapsed' ? 'lapsed' : t.end.why === 'left' ? 'left' : 'cancelled';
+  const how = t.end.why === 'war' ? 'ended by war' : t.end.why === 'lapsed' ? 'lapsed' : t.end.why === 'left' ? 'left' : t.end.why === 'concluded' ? 'its war over' : 'cancelled';
   return `${who}, ${formatDate(t.start, cal)} to ${formatDate(t.end.turn, cal)}, ${how}${t.end.by && t.end.why !== 'lapsed' ? ` by ${nationOf(s, t.end.by).name}` : ''}`;
 }

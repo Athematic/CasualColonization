@@ -28,6 +28,8 @@ import { type NationId } from './rules/nations.js';
 import { checkVictory, finishNation } from './victory.js';
 import { crownSideOf } from './world.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
+import { concludeConfederation, confederationOf } from './confederation.js';
+import { treatyNations } from './treaties.js';
 import { removeUnit } from './unitindex.js';
 
 /** Share of all colonists, across every colony, who support independence. */
@@ -210,7 +212,46 @@ function endRebellion(s: GameState, p: Player): void {
   delete p.mercenaryOffer;
 }
 
+/**
+ * A confederation's war (confederation.ts) is one war: won once every member's royal troops are
+ * beaten, lost once the members together hold half the colonies they held at the declaration or
+ * fewer (and the Crown has taken one), with the same outcome for all of them.
+ */
+function checkConfederationOutcome(s: GameState, members: Player[]): void {
+  const beaten = (p: Player) => p.ref.regulars + p.ref.dragoons + p.ref.artillery === 0 && !Object.values(s.units).some((u) => u.owner === 'crown' && u.against === p.id && !isShip(u));
+  const ids = new Set(members.map((m) => m.id));
+  let outcome: 'won' | 'lost' | null = null;
+  if (members.every(beaten)) outcome = 'won';
+  else {
+    const held = Object.values(s.colonies).filter((c) => ids.has(c.owner)).length;
+    const lost = Object.values(s.colonies).filter((c) => c.owner === 'crown' && c.takenFrom && ids.has(c.takenFrom)).length;
+    const had = members.reduce((n, m) => n + (m.coloniesAtDeclaration ?? 1), 0);
+    if (lost > 0 && held <= Math.floor(had / 2)) outcome = 'lost';
+  }
+  if (!outcome) return;
+  const names = members.map((m) => nationOf(s, m.id).name);
+  const all = `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  for (const m of members) {
+    m.independence = outcome;
+    track(m.id, `independence:${outcome}`);
+    endRebellion(s, m);
+    if (outcome === 'won') for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === m.id) removeUnit(s, u.id);
+  }
+  const t = confederationOf(s, members[0].id);
+  if (t) concludeConfederation(s, t);
+  const text = outcome === 'won' ? `The confederation of ${all} has won the ${term(s, 'independenceWar')}! New nations are born.` : `The rebellion of the confederation of ${all} has been crushed.`;
+  message(s, text);
+  noteHistory(s, 'independence', members.map((m) => m.id), text);
+  if (s.config.playOn) for (const m of members) finishNation(s, m);
+  checkVictory(s, { kind: 'warEnded', nation: members[0].id, outcome, text, together: members.map((m) => m.id) });
+}
+
 function checkOutcome(s: GameState, p: Player): void {
+  const con = s.treaties ? confederationOf(s, p.id) : undefined;
+  if (con) {
+    const members = treatyNations(con).map((n) => player(s, n));
+    if (members.every((m) => m.independence === 'declared')) return checkConfederationOutcome(s, members);
+  }
   const ref = p.ref;
   const royalsLeft = Object.values(s.units).some((u) => u.owner === 'crown' && u.against === p.id && !isShip(u));
   if (ref.regulars + ref.dragoons + ref.artillery === 0 && !royalsLeft) {

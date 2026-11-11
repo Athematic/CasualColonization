@@ -34,6 +34,10 @@ import {
   turnAfterYears,
   WAITING_YEARS,
   attack,
+  confederationOf,
+  makeConfederation,
+  processIndependence,
+  removeUnit,
   player,
   shareBells,
   splitFind,
@@ -51,10 +55,12 @@ import {
 import { foreignAffairs } from '../src/ai/foreign.js';
 
 /** The Americas with alliances on; and a copy whose computer players cooperate eagerly. */
-const ALLIED: Scenario = { ...AMERICAS, id: 'test-alliances', name: 'test-alliances', hidden: true, mechanics: { ...AMERICAS.mechanics, alliances: true }, victory: [{ id: 'independence-war' }, { id: 'concord', params: { share: 0.6 } }, { id: 'time' }] };
+const ALLIED: Scenario = { ...AMERICAS, id: 'test-alliances', name: 'test-alliances', hidden: true, mechanics: { ...AMERICAS.mechanics, alliances: true, confederation: false }, victory: [{ id: 'independence-war' }, { id: 'concord', params: { share: 0.6 } }, { id: 'time' }] };
 const EAGER: Scenario = { ...ALLIED, id: 'test-alliances-eager', name: 'test-alliances-eager', ai: { ...AMERICAS.ai, cooperation: { proposeAlliance: 1, acceptAlliance: 1 } } };
 const NONE: Scenario = { ...AMERICAS, id: 'test-no-alliances', name: 'test-no-alliances', hidden: true, mechanics: { ...AMERICAS.mechanics, alliances: false } };
+const CONFED: Scenario = { ...ALLIED, id: 'test-confederation', name: 'test-confederation', mechanics: { ...ALLIED.mechanics, confederation: true } };
 registerScenario(ALLIED);
+registerScenario(CONFED);
 registerScenario(NONE);
 registerScenario(EAGER);
 
@@ -450,6 +456,72 @@ describe('alliances: shared bells and joint expeditions (step 4)', () => {
     expect(ok(s, 'england', { type: 'proposeExpedition', nation: 'france' }).text).toMatch(/turns down/);
     fr.gold = 5000;
     expect(ok(s, 'england', { type: 'proposeExpedition', nation: 'france' }).text).toMatch(/joint expedition/);
+  });
+});
+
+describe('confederation: declaring independence together (step 5)', () => {
+  function rebels(s: GameState) {
+    const a = site(s);
+    const b = site(s, [a]);
+    const plymouth = found(s, 'england', a, 'Plymouth');
+    const quebec = found(s, 'france', b, 'Québec');
+    plymouth.liberty = 10_000;
+    quebec.liberty = 10_000;
+    makeAlliance(s, 'england', 'france');
+    return { plymouth, quebec };
+  }
+
+  it('is refused where the scenario has no confederation, and between nations not allied', () => {
+    const s = game();
+    rebels(s);
+    expect(refused(s, 'england', { type: 'proposeConfederation', nation: 'france' })).toMatch(/cannot declare independence together/);
+    const t = game({ scenario: 'test-confederation' });
+    expect(refused(t, 'england', { type: 'proposeConfederation', nation: 'spain' })).toMatch(/Only allies/);
+  });
+
+  it('makes both allies declare at once, as one confederation', () => {
+    const s = game({ scenario: 'test-confederation' });
+    rebels(s);
+    ok(s, 'england', { type: 'proposeConfederation', nation: 'france' });
+    expect(player(s, 'england').independence).toBe('none');
+    ok(s, 'france', { type: 'answerProposal', nation: 'england', accept: true });
+    expect(player(s, 'england').independence).toBe('declared');
+    expect(player(s, 'france').independence).toBe('declared');
+    expect(confederationOf(s, 'france')?.kind).toBe('confederation');
+    expect(isAllied(s, 'england', 'france')).toBe(true);
+  });
+
+  it('wins together once every member’s royal army is beaten, and both are the winners', () => {
+    const s = game({ scenario: 'test-confederation' });
+    rebels(s);
+    makeConfederation(s, 'england', 'france');
+    for (const n of ['england', 'france'] as const) player(s, n).ref = { regulars: 0, dragoons: 0, artillery: 0, menOfWar: 0 };
+    for (const u of Object.values(s.units)) if (u.owner === 'crown') removeUnit(s, u.id);
+    processIndependence(s);
+    expect(player(s, 'england').independence).toBe('won');
+    expect(player(s, 'france').independence).toBe('won');
+    expect(s.gameOver?.winners.slice().sort()).toEqual(['england', 'france']);
+    expect(confederationOf(s, 'england')).toBeUndefined();
+  });
+
+  it('loses together once the members hold half their colonies or fewer', () => {
+    const s = game({ scenario: 'test-confederation', humans: ['england', 'france', 'spain'] });
+    const { quebec } = rebels(s);
+    makeConfederation(s, 'england', 'france');
+    // France's only colony falls: the two hold one of their two colonies.
+    quebec.owner = 'crown';
+    quebec.takenFrom = 'france';
+    processIndependence(s);
+    expect(player(s, 'england').independence).toBe('lost');
+    expect(player(s, 'france').independence).toBe('lost');
+  });
+
+  it('a computer ally answers by its own readiness for independence', () => {
+    const s = game({ scenario: 'test-confederation', humans: ['england'] });
+    rebels(s);
+    // France has no army and no stockades: not ready.
+    expect(ok(s, 'england', { type: 'proposeConfederation', nation: 'france' }).text).toMatch(/turns down/);
+    expect(player(s, 'france').independence).toBe('none');
   });
 });
 

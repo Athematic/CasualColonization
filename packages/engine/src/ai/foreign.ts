@@ -46,6 +46,7 @@ import type { Colony, GameState, Player, ProposalKind, Unit } from '../types.js'
 import { allianceRules, alliancesOn, allianceOf, expeditionProblem, allianceProblem, alliesOf, cooperationOf, isAllied, LEVEL_COOPERATION, leaveAlliance, warOnFriend } from '../alliances.js';
 import { proposeAlliance, proposeExpedition } from '../relations.js';
 import { startWar } from '../diplomacy.js';
+import { confederationOn, confederationProblem, proposeConfederation, readyForIndependence } from '../confederation.js';
 import { companies, companiesOn, companyCharters, companyRules } from '../companies.js';
 import { buyShares, foundCompany, foundProblem, sharePrice, sharesProblem } from '../chartered.js';
 import type { AiLevel } from './profiles.js';
@@ -102,6 +103,7 @@ export function foreignAffairs(s: GameState, p: Player, prof: AiProfile, strengt
   if (s.treaties && alliancesOn(s)) safely(() => joinAlliesWars(s, p, prof, strength, army));
   if (companiesOn(s)) safely(() => companyAffairs(s, p, prof));
   if (s.treaties && alliancesOn(s)) safely(() => jointExpedition(s, p, prof));
+  if (s.treaties && confederationOn(s)) safely(() => confederate(s, p));
   pruneTriangles(s, p);
 }
 
@@ -238,6 +240,23 @@ function jointExpedition(s: GameState, p: Player, prof: AiProfile): void {
   for (const a of allies) {
     if (expeditionProblem(s, p.id, a) || pairRandom(s, p.id, a, `${p.id} expedition ${s.turn}`) >= chance) continue;
     proposeExpedition(s, p.id, a);
+    return;
+  }
+}
+
+/**
+ * Declaring independence together (confederation.ts): only when this nation is ready to declare
+ * now and an ally can too (a computer ally then answers by its own readiness), at a seeded chance
+ * per review, the scenario's `confederation` times the level's share of proposing alliances.
+ * Both being ready on the same review is rare, which keeps confederations rare between computers.
+ */
+function confederate(s: GameState, p: Player): void {
+  const allies = alliesOf(s, p.id);
+  if (!allies.length || !readyForIndependence(s, p.id)) return;
+  const chance = cooperationOf(s).confederation * LEVEL_COOPERATION[p.ai ?? 'naive'].propose;
+  for (const a of allies) {
+    if (confederationProblem(s, p.id, a) || pairRandom(s, p.id, a, `${p.id} confederation ${s.turn}`) >= chance) continue;
+    proposeConfederation(s, p.id, a);
     return;
   }
 }

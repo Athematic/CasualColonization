@@ -24,6 +24,7 @@ import { proposePeace, startWar } from './diplomacy.js';
 import { answerProposal, cancelFavoured, cancelTrade, proposeAlliance, proposeExpedition, proposeFavoured, proposeTrade } from './relations.js';
 import { leaveAlliance, tradeInColony } from './alliances.js';
 import { buyShares, foundCompany } from './chartered.js';
+import { proposeConfederation } from './confederation.js';
 import { abandonColony, retire } from './leaving.js';
 import { declareIndependence } from './independence.js';
 import { answerDemand } from './crown.js';
@@ -111,6 +112,8 @@ export type Command =
   | { type: 'leaveAlliance' }
   /** Proposes a joint expedition to an ally: each pays half, the gold it finds is shared (alliances.ts). */
   | { type: 'proposeExpedition'; nation: NationId }
+  /** Proposes to an ally that both declare independence now, together (confederation.ts). */
+  | { type: 'proposeConfederation'; nation: NationId }
   /** Founds a chartered company from the scenario's list, or buys new shares in one (companies.ts). */
   | { type: 'foundCompany'; company: NationId }
   | { type: 'buyShares'; company: NationId; count: number }
@@ -417,6 +420,9 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'proposeExpedition':
         text = proposeExpedition(s, nation, cmd.nation);
+        break;
+      case 'proposeConfederation':
+        text = proposeConfederation(s, nation, cmd.nation);
         break;
       case 'foundCompany':
         track(nation, 'cmd:foundCompany');

@@ -148,6 +148,11 @@ export interface Mechanics {
    * `nations.companies`, buy shares and receive dividends. Absent means off.
    */
   companies?: boolean;
+  /**
+   * Allies may declare independence together, as one confederation (confederation.ts); needs
+   * `alliances` and `independence`. Absent means off.
+   */
+  confederation?: boolean;
 }
 
 /** A whole number of years from `base − spread` to `base + spread`, drawn from the game seed. */
@@ -195,6 +200,8 @@ export interface Cooperation {
   buyShares: number;
   /** Chance per review that a nation with allies and gold to spare proposes a joint expedition. */
   jointExpedition: number;
+  /** Chance per review that a nation ready for independence proposes to an ally that is ready too to declare together. */
+  confederation: number;
 }
 
 /** One way the game can end: a registered victory kind (victory.ts) and its data. */
