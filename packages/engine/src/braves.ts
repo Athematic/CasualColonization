@@ -40,7 +40,7 @@ import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from '.
 import { difficultyOf, goodsOf, nativeProduceOf, nativeRulesOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
 import { removeUnit } from './unitindex.js';
-import { aiAcceptsPeopleOffer, answerPeopleOffer, peopleBraveTradeFactor, peopleBuyFactor, peopleGatherFactor, peopleHostile, peopleTreatyText, peopleWouldOffer } from './peopletreaties.js';
+import { aiAcceptsPeopleOffer, answerPeopleOffer, notePeopleContact, peopleBraveTradeFactor, peopleBuyFactor, peopleGatherFactor, peopleHostile, peopleTreatyText, peopleWouldOffer } from './peopletreaties.js';
 
 /** The kind of a settlement in its game's scenario (camp, village, city…), with its numbers. */
 export function settlementKind(s: GameState, st: Settlement): SettlementKindDef {
@@ -464,7 +464,9 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
     makeDemand(s, b, st, c);
     return;
   }
-  // A people free to make a trade treaty with the nation may offer one through the brave (N8).
+  // A brave come to trade is contact (N13); its people, free to make a trade treaty with the
+  // nation, may offer one through it (N8).
+  notePeopleContact(s, nation, st.tribe);
   if (peopleWouldOffer(s, st, nation)) {
     if (p.human) {
       const d = addDemand(s, { kind: 'treaty', nation, colonyId: c.id, settlementId: st.id, braveId: b.id, amount: 0, treaty: 'people-trade' });
