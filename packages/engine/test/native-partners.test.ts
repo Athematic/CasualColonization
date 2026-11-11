@@ -10,7 +10,12 @@ import {
   addTreaty,
   AMERICAS,
   applyCommand,
+  buyLand,
   CARIBBEAN,
+  gridOf,
+  landPrice,
+  nativeLandOwner,
+  player,
   createUnit,
   isWater,
   NATIVE_RULES,
@@ -185,5 +190,73 @@ describe('switches for burial grounds and surrender (framework row 23)', () => {
       expect(tribeOf(s, capital).submitted).toBeUndefined();
     }
     expect(burned).toBeGreaterThan(2);
+  });
+});
+
+/** A hidden copy of the Americas whose every settlement's land reaches two tiles. */
+const WIDE: Scenario = {
+  ...AMERICAS,
+  id: 'test-wide-land',
+  name: 'test-wide-land',
+  hidden: true,
+  peoples: {
+    ...AMERICAS.peoples,
+    settlements: Object.fromEntries(Object.entries(AMERICAS.peoples.settlements).map(([k, v]) => [k, { ...v, landRadius: 2 }])),
+  },
+};
+registerScenario(WIDE);
+
+describe("native land's reach (N6, fix a)", () => {
+  /** A land tile exactly `d` tiles from a settlement and further from every other one. */
+  function tileAtDistance(s: GameState, d: number): { st: Settlement; x: number; y: number } {
+    const grid = gridOf(s);
+    for (const st of Object.values(s.settlements)) {
+      for (let i = 0; i < s.map.tiles.length; i++) {
+        const x = i % s.map.width;
+        const y = Math.floor(i / s.map.width);
+        if (grid.distance(st.x, st.y, x, y) !== d || isWater(tileAt(s, x, y))) continue;
+        if (Object.values(s.settlements).some((o) => o !== st && grid.distance(o.x, o.y, x, y) <= d)) continue;
+        return { st, x, y };
+      }
+    }
+    throw new Error('no tile');
+  }
+
+  it('is one tile in the Americas and the Caribbean (landRadius absent)', () => {
+    expect(Object.values(AMERICAS.peoples.settlements).every((k) => (k!.landRadius ?? 1) === 1)).toBe(true);
+    expect(Object.values(CARIBBEAN.peoples.settlements).every((k) => (k!.landRadius ?? 1) === 1)).toBe(true);
+    const s = game();
+    const near = tileAtDistance(s, 1);
+    expect(nativeLandOwner(s, near.x, near.y)).toBe(near.st);
+    const far = tileAtDistance(s, 2);
+    expect(nativeLandOwner(s, far.x, far.y)).toBeUndefined();
+    expect(landPrice(s, 'england', far.x, far.y)).toBe(0);
+  });
+
+  it('follows the settlement kind: with landRadius 2 the second ring is the people\'s, to buy', () => {
+    const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['england'], scenario: 'test-wide-land' });
+    const far = tileAtDistance(s, 2);
+    expect(nativeLandOwner(s, far.x, far.y)).toBe(far.st);
+    expect(landPrice(s, 'england', far.x, far.y)).toBeGreaterThan(0);
+    const beyond = tileAtDistance(s, 3);
+    expect(nativeLandOwner(s, beyond.x, beyond.y)).toBeUndefined();
+    // A bought tile is nobody's.
+    player(s, 'england').gold = 10_000;
+    buyLand(s, 'england', far.x, far.y);
+    expect(nativeLandOwner(s, far.x, far.y)).toBeUndefined();
+  });
+
+  it('gives a tile within reach of two settlements to the nearer one', () => {
+    const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['england'], scenario: 'test-wide-land' });
+    const grid = gridOf(s);
+    for (let i = 0; i < s.map.tiles.length; i++) {
+      const x = i % s.map.width;
+      const y = Math.floor(i / s.map.width);
+      const owner = nativeLandOwner(s, x, y);
+      if (!owner) continue;
+      const d = grid.distance(owner.x, owner.y, x, y);
+      expect(d).toBeLessThanOrEqual(2);
+      expect(Object.values(s.settlements).every((o) => grid.distance(o.x, o.y, x, y) >= d)).toBe(true);
+    }
   });
 });

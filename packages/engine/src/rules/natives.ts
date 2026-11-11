@@ -34,6 +34,13 @@ export interface SettlementKindDef {
   gather?: Partial<Record<GoodId, number>>;
   /** Gold to incite its people against a nation (a capital ×1.5). */
   incitePrice: number;
+  /**
+   * How far its land reaches, in tiles from the settlement (native-partners.md N6); absent means 1,
+   * the eight tiles around it, as in the original. Read only through natives.ts `nativeLandOwner`
+   * (a tile within reach of several settlements is the nearest one's), so a stored map can give
+   * each tile its people later without the rest changing.
+   */
+  landRadius?: number;
   /** Price of a tile of its land at no tension, and what a capital adds. */
   landPrice: { base: number; capital: number };
   /** Treasure found when it is burned: `base` plus 0 to `spread` − 1 gold. */

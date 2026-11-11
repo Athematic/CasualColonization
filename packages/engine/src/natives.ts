@@ -14,7 +14,7 @@ import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
-import { difficultyOf, goodsOf, mechanicsOf, nationOf, nativeProduceOf, nativeRulesOf, peopleOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, landReachOf, mechanicsOf, nationOf, nativeProduceOf, nativeRulesOf, peopleOf } from './scenarios/index.js';
 import { removeUnit } from './unitindex.js';
 
 /**
@@ -187,12 +187,28 @@ function tribeOf(s: GameState, st: Settlement) {
   return s.tribes.find((t) => t.id === st.tribe)!;
 }
 
-/** The settlement whose land this tile is, unless a European has bought or taken it. */
+/**
+ * The settlement whose land this tile is, unless a European has bought or taken it: the nearest
+ * settlement whose land reaches the tile (its kind's `landRadius`, 1 when absent: the eight tiles
+ * around it), the first in the settlements' order on a tie. The one place that knows how far
+ * native land reaches (N6).
+ */
 export function nativeLandOwner(s: GameState, x: number, y: number): Settlement | undefined {
   const grid = gridOf(s);
   const tile = tileAt(s, x, y);
   if (!tile || tile.claim || TERRAIN[tile.t].water) return undefined;
-  return Object.values(s.settlements).find((st) => grid.distance(st.x, st.y, x, y) === 1);
+  const reach = landReachOf(s);
+  let best: Settlement | undefined;
+  let bestD = Infinity;
+  for (const id in s.settlements) {
+    const st = s.settlements[id];
+    const d = grid.distance(st.x, st.y, x, y);
+    if (d < 1 || d > reach.max || d >= bestD) continue;
+    if (!reach.uniform && d > (settlementKind(s, st).landRadius ?? 1)) continue;
+    best = st;
+    bestD = d;
+  }
+  return best;
 }
 
 export function landPrice(s: GameState, nation: NationId, x: number, y: number): number {
