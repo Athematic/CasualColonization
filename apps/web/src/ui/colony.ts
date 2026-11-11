@@ -307,8 +307,8 @@ export class ColonyScreen implements Screen {
     // Land leased to the colony's nation (land use, N5) is worked like its own, and stays the people's.
     const leased = !!native && tile.use === colony.owner;
     const job = worker?.loc.kind === 'colony' ? (worker.loc.job as Extract<Job, { kind: 'tile' }>) : undefined;
-  return h('button', {
-      class: `cell${extraClass}worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}${leased ? ' leased' : native ? ' native' : ''}`,
+    return h('button', {
+      class: `cell${extraClass}${worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}${leased ? ' leased' : native ? ' native' : ''}`,
       style,
       'data-leased': leased ? 'true' : undefined,
       title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : leased ? ` (land of the ${TRIBES[native!.tribe].name}, leased to you)` : native ? ` (land of the ${TRIBES[native.tribe].name})` : ''}${note}`,

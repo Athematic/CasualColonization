@@ -2359,3 +2359,7 @@ button.report-chip {
 .hex-flower .cell .yield {
   font-size: 0.75rem;
 }
+
+.cell.hex.closed .yield {
+  color: #1b1a17;
+}
