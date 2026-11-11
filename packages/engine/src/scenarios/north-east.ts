@@ -291,6 +291,8 @@ export const NORTH_EAST: Scenario = {
   ai: {
     // The computer Europeans keep to the Americas' dates, though the game starts in 1000.
     dates: true,
+    landing: Number(process.env.CC_LANDING ?? 18),
+    siteTerrain: { tundra: Number(process.env.CC_TUNDRA ?? 1) },
     goods: AMERICAS.ai.goods,
   },
   mechanics: {
@@ -311,9 +313,9 @@ export const NORTH_EAST: Scenario = {
     confederation: true,
     peopleTreaties: ['people-trade', 'land-use', 'exchange', 'defence'],
     // The peoples' economy (T10, T12): hard years, the land's health by region, epidemics after contact.
-    hardYears: { chance: 1 / 8 },
+    ...(process.env.CC_OFF ? {} : { hardYears: { chance: 1 / 8 },
     landHealth: { regionSize: 8, renewal: 40, recovery: 5, floor: 0.2 },
-    epidemics: { chance: 1 / 25, years: 3, loss: 1, reach: 8 },
+    epidemics: { chance: 1 / 25, years: 3, loss: 1, reach: 8 } }),
   },
   // Both sides judged at the end year, in the decided order (T14).
   victory: [

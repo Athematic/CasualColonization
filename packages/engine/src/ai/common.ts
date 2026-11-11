@@ -20,7 +20,7 @@ import {
   unitsAt,
 } from '../queries.js';
 import type { Brave, Colony, GameState, Player, Tile, Unit } from '../types.js';
-import { goodsOf } from '../scenarios/index.js';
+import { goodsOf, scenarioOf } from '../scenarios/index.js';
 import { ownedUnitsView, colonyList } from '../unitindex.js';
 
 /** Runs an AI action, ignoring moves the rules turn down. */
@@ -139,7 +139,9 @@ function landValue(s: GameState, i: number, tile: Tile): number {
   if (known !== undefined) return known;
   let best = 0;
   for (const g of goodsOf(s)) if (g !== 'food') best = Math.max(best, baseTileYield(tile, g));
-  const value = baseTileYield(tile, 'food') * 1.2 + best * 0.6;
+  // A scenario may hold some land poorer than its yields say (`ai.siteTerrain`: the North-east's barrens).
+  const weight = scenarioOf(s).ai.siteTerrain?.[tile.t] ?? 1;
+  const value = (baseTileYield(tile, 'food') * 1.2 + best * 0.6) * weight;
   search?.land.set(i, value);
   return value;
 }
@@ -345,10 +347,14 @@ export function aiFight(s: GameState, p: Player, u: Unit): boolean {
   return false;
 }
 
+/** The least site score a nation's first landing looks for: the scenario's `ai.landing`, or 18. */
+export const LANDING_SCORE = 18;
+
 export function landingSpot(s: GameState, p: Player, ship: Unit): { x: number; y: number } | null {
   const pos = unitPosition(s, ship)!;
   const colony = nearestColony(s, p, pos.x, pos.y, true);
   if (colony && findPath(s, ship, colony.x, colony.y)) return { x: colony.x, y: colony.y };
+  const least = scenarioOf(s).ai.landing ?? LANDING_SCORE;
   // Breadth-first search over water for a tile next to a promising site.
   const w = s.map.width;
   const seen = new Set([pos.y * w + pos.x]);
@@ -358,7 +364,7 @@ export function landingSpot(s: GameState, p: Player, ship: Unit): { x: number; y
     for (const n of neighbours(s, cur.x, cur.y)) {
       const tile = tileAt(s, n.x, n.y)!;
       if (!isWater(tile)) {
-        if (siteScore(s, n.x, n.y) > 18 && !(cur.x === pos.x && cur.y === pos.y)) return cur;
+        if (siteScore(s, n.x, n.y) > least && !(cur.x === pos.x && cur.y === pos.y)) return cur;
         continue;
       }
       const i = n.y * w + n.x;
@@ -439,7 +445,10 @@ export function disembarkAll(s: GameState, ship: Unit): boolean {
     const score = siteScore(s, n.x, n.y);
     if (!best || score > best.score) best = { ...n, score };
   }
-  if (!best || best.score < 10) return false;
+  // A first landing, where the scenario asks for better land than the nearest coast (`ai.landing`), waits for it.
+  const first = scenarioOf(s).ai.landing;
+  const least = first !== undefined && !colonyList(s).some((c) => c.owner === ship.owner) ? first : 10;
+  if (!best || best.score < least) return false;
   const dir = gridOf(s).directionTowards(ship.loc.x, ship.loc.y, best.x, best.y)!;
   let landed = false;
   for (const u of passengers) {

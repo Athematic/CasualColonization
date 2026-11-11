@@ -869,6 +869,19 @@ export interface ScenarioAi {
    */
   dates?: boolean;
   /**
+   * The least site score (ai/common.ts `siteScore`) a nation's first landing looks for along the
+   * coast from where its ships arrive (absent: 18, any fair site). Higher where the nearest coasts
+   * are poor and better land lies further on (the North-east: Newfoundland's and Labrador's
+   * barrens before the St. Lawrence valley and New England).
+   */
+  landing?: number;
+  /**
+   * Weights on what a tile of each terrain is worth to the computer players looking for colony
+   * sites (ai/common.ts `siteScore`; absent: 1). Below 1 where the land is poorer than its yields
+   * say: the North-east's tundra (boreal forest and barrens), whose short seasons the yields do not show.
+   */
+  siteTerrain?: Partial<Record<TerrainId, number>>;
+  /**
    * The land is islands: when no good site lies within walking distance, the advanced computer
    * players send a settler by ship to a site on another island (ai/advanced.ts). Absent: settlers
    * walk, as on the Americas' continents.
