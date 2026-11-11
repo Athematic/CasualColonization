@@ -7,6 +7,7 @@ import { cooperationOf, LEVEL_COOPERATION } from '../alliances.js';
 import { companyRules } from '../companies.js';
 import { creativeProfile } from './creative.js';
 import { runNaive } from './naive.js';
+import { rentReserve } from './natives.js';
 import { AI_PROFILES, COMPANY_PROFILE, type AiProfile } from './profiles.js';
 
 // A computer nation proposes to declare independence together when ready itself, and answers by its
@@ -24,7 +25,13 @@ export function runAi(s: GameState, p: Player): void {
   const level = p.ai ?? 'naive';
   if (level === 'naive') return runNaive(s, p);
   const base = inScenario(s, AI_PROFILES[level]);
-  runAdvanced(s, p, base.adaptive ? creativeProfile(s, p, base) : base);
+  runAdvanced(s, p, withRentReserve(s, p, base.adaptive ? creativeProfile(s, p, base) : base));
+}
+
+/** The profile with its reserve raised by the rent its leases will ask (ai/natives.ts rentReserve), so the rent is not spent. */
+function withRentReserve(s: GameState, p: Player, prof: AiProfile): AiProfile {
+  const rent = rentReserve(s, p);
+  return rent > 0 ? { ...prof, reserve: prof.reserve + rent } : prof;
 }
 
 /**
