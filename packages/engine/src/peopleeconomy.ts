@@ -41,6 +41,7 @@ import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { wayOf } from './rules/peoples.js';
 import { bornType, buildingsOf, calendarOf, nationTypeOf, peopleEconomyOf, peopleOf, scenarioOf, settlementKindIn, yearOf } from './scenarios/index.js';
 import { track } from './telemetry.js';
+import { addOf, modifiers } from './scenarios/modifiers.js';
 import type { Colony, GameState, Job, Unit } from './types.js';
 import { colonyList, removeUnit, setUnitLoc } from './unitindex.js';
 
@@ -61,7 +62,8 @@ export function yearlyNeed(s: GameState, colony: Colony, pop = colonyWorkers(s, 
 
 /** Food a town can keep in store: the economy's base and its drying racks', smokehouse's and storage pits'. */
 export function storeCapacity(s: GameState, colony: Colony): number {
-  let n = peopleEconomyOf(s).storeBase;
+  // The people's council may keep more (the Keepers of the Stores).
+  let n = peopleEconomyOf(s).storeBase + addOf(modifiers(s, colony.owner, 'townStore'));
   for (const k of buildingsOf(s, colony.owner)) {
     const store = BUILDINGS[k].store;
     const level = colony.buildings[k] ?? 0;

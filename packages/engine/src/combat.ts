@@ -322,7 +322,8 @@ export function promote(s: GameState, u: Unit): string {
   // A people's townsperson who wins a fight may become a warrior, armed or not (native-nations.md T6).
   const people = kindOfId(u.owner) === 'people';
   if (people) {
-    if (!s.units[u.id] || u.type !== 'townsperson' || random(s) >= 0.2) return '';
+    // The War Leaders (a people's council) make it certain.
+    if (!s.units[u.id] || u.type !== 'townsperson' || (!hasModifier(s, u.owner, 'alwaysPromote') && random(s) >= 0.2)) return '';
     u.type = 'warrior';
     return ` The victors become ${UNIT_TYPES.warrior.name.toLowerCase()}s.`;
   }

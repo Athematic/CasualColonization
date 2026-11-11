@@ -21,5 +21,25 @@ export function congress(members: readonly FatherId[]): Council {
   };
 }
 
+/**
+ * A playing people's council (native-nations.md T8, T9; Beta 3 step 3), the engine's when a scenario
+ * defines no `people` council. **Drafted for Simon's review.** Five categories for the people's
+ * economy (T10): the household (births and stores), the land (gardens, fishing, hunting and the
+ * land's health), knowledge (teaching and crafts), defence and peace. Its product is the council
+ * house's (bells in the engine), called counsel; its members cost what the Congress's do.
+ */
+export const PEOPLE_COUNCIL: Council = {
+  categories: ['household', 'land', 'knowledge', 'defence', 'peace'],
+  members: [
+    'clanMothers', 'keepersOfTheStores', 'keepersOfTheFields', 'huntLeaders', 'weirBuilders', 'elders', 'toolmakers',
+    'canoeBuilders', 'runners', 'warLeaders', 'speakers', 'garakontie', 'thayendanegea',
+  ],
+  text: { council: 'Council', councilShort: 'Council', member: 'council member', members: 'council members', product: 'counsel' },
+  // A computer people fills its stores and keeps its land first (T10).
+  aiPreference: ['keepersOfTheStores', 'clanMothers', 'huntLeaders', 'keepersOfTheFields', 'elders', 'speakers', 'weirBuilders', 'warLeaders'],
+  // No hall picture of its own yet: the web game draws a plain council house (step 10 brings art).
+  hall: 'ui/council-house',
+};
+
 /** Councils the engine supplies when a scenario does not define them, by id. */
-export const ENGINE_COUNCILS: Readonly<Record<string, Council>> = {};
+export const ENGINE_COUNCILS: Readonly<Record<string, Council>> = { people: PEOPLE_COUNCIL };

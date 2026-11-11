@@ -14,6 +14,7 @@
  * Expeditionary Force, independence, Congress or caravel. Its computer play is step 9; until then
  * a computer people ends its turn.
  */
+import { offerFathers } from './fathers.js';
 import { bestJob, canBuild } from './colony.js';
 import { claimTownLand, planTownBuild, schoolOf } from './peopleeconomy.js';
 import { BUILDINGS } from './rules/buildings.js';
@@ -41,9 +42,11 @@ export function addPeoplePlayer(s: GameState, id: TribeId, human: boolean): Play
   p.gold = 0;
   if (human) p.difficulty = s.difficulty;
   else p.ai = s.config.ai?.[id] ?? 'naive';
-  // No Crown, no immigration and no Congress (playerkind.ts): nothing of initCrown, recruitPool or offerFathers.
+  // No Crown and no immigration (playerkind.ts): nothing of initCrown or recruitPool.
   p.crossesRequired = 0;
   s.players.push(p);
+  // Its own council's first candidates (rules/councils.ts PEOPLE_COUNCIL, step 3).
+  offerFathers(s, p);
   // Difficulty is read for the people as for any player (raids, prices); this checks it resolves.
   difficultyOf(s, p);
 

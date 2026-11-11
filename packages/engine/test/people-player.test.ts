@@ -30,6 +30,7 @@ import {
   colonyReport,
   colonySiteProblem,
   colonyWorkers,
+  councilOf,
   createGame,
   createUnit,
   deserialize,
@@ -126,7 +127,7 @@ function play(s: GameState, rounds: number): GameState {
   return s;
 }
 
-/** Nothing of Europe on the people: no market, Crown, taxes, REF, immigration, Congress or caravel. */
+/** Nothing of Europe on the people: no market, Crown, taxes, REF, immigration, Congress or caravel; its own council. */
 function expectNoEurope(s: GameState): void {
   const p = people(s);
   expect(p.market).toEqual({});
@@ -141,9 +142,12 @@ function expectNoEurope(s: GameState): void {
   expect(p.crosses).toBe(0);
   expect(p.recruitPool).toEqual([]);
   expect(p.recruited).toBe(0);
-  expect(p.fathers).toEqual([]);
-  expect(p.fatherOffer).toEqual({});
-  expect(p.currentFather).toBeNull();
+  // Its own council, never the Congress (step 3).
+  const council = councilOf(s, p.id)!.members;
+  for (const id of [...p.fathers, ...(Object.values(p.fatherOffer) as string[]), ...(p.currentFather ? [p.currentFather] : [])]) {
+    expect(council, id).toContain(id);
+    expect(AMERICAS.councils.congress.members, id).not.toContain(id);
+  }
   expect(p.gold).toBe(0);
   const own = unitList(s).filter((u) => u.owner === p.id);
   expect(own.filter((u) => u.loc.kind === 'europe' || u.loc.kind === 'sailing')).toEqual([]);

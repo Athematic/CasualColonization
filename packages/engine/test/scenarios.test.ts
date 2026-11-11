@@ -210,7 +210,7 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
   it('has a council for each nation type, with members in its categories', () => {
     // The European nations' council is the scenario's; a people's may be the engine's (rules/councils.ts).
     expect(Object.hasOwn(sc.councils, councilIdOf(sc, 'european'))).toBe(true);
-    for (const type of ['european'] as const) {
+    for (const type of ['european', 'people'] as const) {
       const council = councilById(sc, councilIdOf(sc, type))!;
       expect(council, type).toBeDefined();
       expect(council.categories.length).toBeGreaterThan(0);

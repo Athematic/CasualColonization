@@ -25,6 +25,7 @@ import { message } from './queries.js';
 import { wayOf } from './rules/peoples.js';
 import type { GoodId } from './rules/goods.js';
 import { calendarOf, mechanicsOf, peopleEconomyOf, turnOfYear, yearOf } from './scenarios/index.js';
+import { addOf, modifiers } from './scenarios/modifiers.js';
 import type { Colony, GameState, LandState, Tile } from './types.js';
 import { colonyList } from './unitindex.js';
 
@@ -128,14 +129,30 @@ export function processLand(s: GameState): void {
   if (next === year) return;
   const rules = mechanicsOf(s).landHealth;
   if (rules && land.health && land.taken) {
+    const extra = extraRecovery(s, land);
     for (let r = 0; r < land.health.length; r++) {
       const taken = land.taken[r];
       const h = land.health[r];
-      land.health[r] = taken > rules.renewal ? Math.max(0, h - (taken - rules.renewal)) : Math.min(100, h + rules.recovery);
+      land.health[r] = taken > rules.renewal ? Math.max(0, h - (taken - rules.renewal)) : Math.min(100, h + rules.recovery + (extra.get(r) ?? 0));
       land.taken[r] = 0;
     }
   }
   drawHardYears(s, next);
+}
+
+/**
+ * Health regions regain beyond `recovery` in a year they are not over-hunted: where a player whose
+ * council rests the land (`landRecovery`, the Hunt Leaders) has a town, the most any such player adds.
+ */
+function extraRecovery(s: GameState, land: LandState): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const c of colonyList(s)) {
+    const add = addOf(modifiers(s, c.owner, 'landRecovery'));
+    if (add <= 0) continue;
+    const r = regionOf(land, c.x, c.y);
+    out.set(r, Math.max(out.get(r) ?? 0, add));
+  }
+  return out;
 }
 
 /** Draws a year's hard years and tells the players with towns or colonies in a hard region. */

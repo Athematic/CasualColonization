@@ -78,7 +78,9 @@ export type Effect =
   /** The nation's units of one type become another (Bartolomé de las Casas: converts become free colonists). */
   | { kind: 'convertUnits'; from: UnitTypeId; to: UnitTypeId }
   /** All the nation's boycotts end without arrears (Jakob Fugger). */
-  | { kind: 'liftBoycotts' };
+  | { kind: 'liftBoycotts' }
+  /** The nation makes peace with every player it is at war with, but the Crown (Garakontié). */
+  | { kind: 'makePeace' };
 
 export interface EventChoice {
   label: string;

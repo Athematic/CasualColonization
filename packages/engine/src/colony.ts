@@ -30,7 +30,7 @@ import { GOOD_DEFS, emptyGoods, type GoodId } from './rules/goods.js';
 import { TRIBES, type PlayerId } from './rules/nations.js';
 import { COLONY_BUILDS, PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId } from './rules/units.js';
 import { runCustomHouse } from './europe.js';
-import { modifiers } from './scenarios/modifiers.js';
+import { addOf, modifiers } from './scenarios/modifiers.js';
 import { noteMining } from './mines.js';
 import { noteProduction } from './stats.js';
 import { nativeLandClosedTo, onColonyFounded } from './natives.js';
@@ -605,7 +605,12 @@ function teachWays(s: GameState, colony: Colony, teacher: Unit, students: Unit[]
     message(s, `In ${colony.name}, a ${before.toLowerCase()} has learned from an elder to be a ${UNIT_TYPES[skill].name.toLowerCase()}.`, colony.owner, colony);
     return;
   }
-  teacher.teach = TEACH_TURNS[(UNIT_TYPES[teacher.type].teach ?? 1) - 1];
+  teacher.teach = elderTeachTurns(s, colony, teacher);
+}
+
+/** Turns an elder needs to teach: a schoolhouse's, less what the people's council takes off (the Elders), at least 1. */
+function elderTeachTurns(s: GameState, colony: Colony, teacher: Unit): number {
+  return Math.max(1, TEACH_TURNS[(UNIT_TYPES[teacher.type].teach ?? 1) - 1] + addOf(modifiers(s, colony.owner, 'teachTurns')));
 }
 
 /** Counts the furs and game a colony's workers and centre took this turn against their regions' renewal (land.ts). */
@@ -629,8 +634,9 @@ function processSchool(s: GameState, colony: Colony): void {
   for (const teacher of workers.filter(isTeacher)) {
     const level = UNIT_TYPES[teacher.type].teach ?? 1;
     teacher.teach = (teacher.teach ?? 0) + 1;
-    if (teacher.teach < TEACH_TURNS[level - 1]) continue;
-    if (UNIT_TYPES[teacher.type].teachesWays) {
+    const ways = UNIT_TYPES[teacher.type].teachesWays;
+    if (teacher.teach < (ways ? elderTeachTurns(s, colony, teacher) : TEACH_TURNS[level - 1])) continue;
+    if (ways) {
       teachWays(s, colony, teacher, workers.filter((w) => !isTeacher(w)));
       continue;
     }

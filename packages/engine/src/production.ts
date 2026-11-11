@@ -111,7 +111,13 @@ export function workerTileYield(s: GameState, colony: Colony, tile: Tile | undef
   if (expert) amount *= 2;
   // A people's worker's ways (rules/peoples.ts): a hunter hunts, a fisher fishes, a gardener gardens.
   const ways = def.ways;
-  if (ways) amount *= ways[wayOf(tile, good, peopleEconomyOf(s).gardens)] ?? 1;
+  // A people's council may make one way yield more (the Weir Builders, the Keepers of the Fields).
+  const wayMods = modifiers(s, colony.owner, 'wayYield');
+  if (ways || wayMods.length) {
+    const way = wayOf(tile, good, peopleEconomyOf(s).gardens);
+    if (ways) amount *= ways[way] ?? 1;
+    for (const m of wayMods) if (m.way === way) amount = Math.round(amount * m.mul);
+  }
   for (const m of modifiers(s, colony.owner, 'tileYield')) if (m.good === good) amount *= m.mul;
   // Converts know the land: better at farming, fishing and trapping.
   if (unitType === 'nativeConvert' && (good === 'food' || good === 'sugar' || good === 'tobacco' || good === 'cotton' || good === 'furs')) amount += 1;
