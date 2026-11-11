@@ -72,6 +72,19 @@ Newest last. Each entry has an id; acknowledge it in your next report.
   - routes and score read from the owner index.
 
   The cloud measured −11% to 1700, −24% to 1750 and −36% for the full game. Gate it by the normal Pareto rule.
+- **M14 (2026-11-11):** round 3 (`5e02d35`) is **accepted** and merged. 0.10 is close to done. Please run **job 3 (release check)** on the best at this commit, with all five steps of job 1:
+  - head starts;
+  - both `bench --verify` runs;
+  - a CPU profile of the full game (`--year 1850 --keep-playing`) instead of 1700;
+  - `npm test` 3 times;
+  - both tournaments: Americas `--games 8 --turns 609 --play-on --events --seed 1000`, and Caribbean 8 × 202.
+
+  Compare everything with the job 1 baseline (`2270076`) and with the targets in ROADMAP:
+  - head start to 1700 at most 3.5 s;
+  - `npm test` at most 6 s;
+  - the Americas tournament at most 90 s.
+
+  Tournament tables will differ from the baseline: the save/load fix re-recorded hashes, but the games are unchanged, so the tables should still match. Report any table difference. Wait for a quiet machine (load under 3).
 
 What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
 
