@@ -1,4 +1,5 @@
 import { anyPlayingPeople, onPairWar, pactPlayersOf } from './peoplediplomacy.js';
+import { nationsPresent } from './presence.js';
 import { gridOf } from './grid.js';
 import { fail } from './errors.js';
 import { noteHistory } from './history.js';
@@ -375,7 +376,7 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
   if (colony && kindOfId(colony.owner) === 'people') colony.foughtAt = s.turn;
   // The nation attacked: a colony's owner (its allies' garrison defends it), else the defender's.
   const enemy = colony ? colony.owner : defender.owner;
-  if (s.players.length > s.config.nations.length && (!systemsOfId(enemy).war || !systemsOfId(u.owner).war)) fail('Chartered companies are neutral: they are not attacked and do not attack.');
+  if (s.players.length > nationsPresent(s) && (!systemsOfId(enemy).war || !systemsOfId(u.owner).war)) fail('Chartered companies are neutral: they are not attacked and do not attack.');
   if (!player(s, u.owner).human && (isFavoured(s, u.owner, enemy) || (s.treaties && warOnFriend(s, u.owner, enemy)))) fail('Computer players never attack a Favoured Nation or an ally.');
   // Privateers sail under no flag, so their attacks do not start wars.
   if (u.type !== 'privateer') declareWar(s, u.owner, enemy);

@@ -125,7 +125,8 @@ export function relation(s: GameState, a: PlayerId, b: PlayerId): Relation {
 
 /** Draws every pair's hidden thresholds at the start of a game. */
 export function initRelations(s: GameState): void {
-  const nations = s.config.nations;
+  // Nations still to arrive (arrivals.ts) get theirs when they arrive.
+  const nations = s.arrivals ? s.config.nations.filter((n) => !s.arrivals!.some((a) => a.nation === n)) : s.config.nations;
   for (let i = 0; i < nations.length; i++) for (let j = i + 1; j < nations.length; j++) relation(s, nations[i], nations[j]);
 }
 

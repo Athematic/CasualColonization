@@ -19,6 +19,7 @@ import { processRoutes } from './routes.js';
 import { maxMoves, message, unitName, unitPosition } from './queries.js';
 import { calendarOf, formatDate } from './scenarios/index.js';
 import { checkVictory } from './victory.js';
+import { processArrivals } from './arrivals.js';
 import { recordStats } from './stats.js';
 import type { GameState, Player, Unit } from './types.js';
 import { indexedUnitsOf, colonyList, unitList } from './unitindex.js';
@@ -70,10 +71,21 @@ export function endTurn(s: GameState): void {
   runAiUntilHuman(s);
 }
 
-/** AI players move until a human is up; with no humans at all, one full round is played. */
+/**
+ * AI players move until a human is up; with no humans at all, one full round is played. While a
+ * person's nation has yet to arrive and no other person is in the game (arrivals.ts), the computer
+ * plays on until it arrives, as through a head start.
+ */
 export function runAiUntilHuman(s: GameState): void {
   let safety = s.players.length;
-  while ((!s.players[s.current].human || s.players[s.current].finished) && safety-- > 0) {
+  let waiting = awaitingPerson(s);
+  while (!s.players[s.current].human || s.players[s.current].finished) {
+    // Waiting for a person's nation: once it is in, up to a round more reaches its turn.
+    if (waiting) {
+      waiting = awaitingPerson(s);
+      safety = s.players.length;
+    }
+    if (safety-- <= 0) break;
     const p = s.players[s.current];
     const t = perfStart();
     if (!p.finished) runAi(s, p);
@@ -81,6 +93,11 @@ export function runAiUntilHuman(s: GameState): void {
     finishPlayerTurn(s, s.players[s.current]);
     advance(s);
   }
+}
+
+/** Whether the game waits for a person's nation to arrive, with no other person in it to play. */
+function awaitingPerson(s: GameState): boolean {
+  return !!s.arrivals && !s.gameOver && s.arrivals.some((a) => s.config.humans.includes(a.nation)) && !s.players.some((p) => p.human && !p.finished);
 }
 
 function finishPlayerTurn(s: GameState, p: Player): void {
@@ -129,6 +146,8 @@ function advance(s: GameState): void {
     s.turn++;
     checkVictory(s, { kind: 'round' });
     message(s, `${formatDate(s.turn, calendarOf(s))} begins.`);
+    // Nations arriving this year enter before the round's first turn (arrivals.ts, T18).
+    if (s.arrivals) processArrivals(s);
   }
   beginPlayerTurn(s, s.players[s.current]);
 }

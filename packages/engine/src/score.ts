@@ -1,4 +1,5 @@
 import { sellPrice } from './europe.js';
+import { nationsPresent } from './presence.js';
 import { sonsOfLiberty } from './production.js';
 import { AMERICAS_CALENDAR, buildingsOf, goodsOf, scoreWeightsOf, Term } from './scenarios/index.js';
 import { hasTradeAgreement, isFavoured } from './relations.js';
@@ -117,7 +118,7 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreW
     lines.push(line('peoples', 'Treaties with native peoples', treaties, 'treaties', treaties * w.peopleTreaty));
   }
   // A company cannot win: its score counts for its shareholders, by their shares.
-  if (s.players.length > s.config.nations.length && systemsOf(p).ranked) {
+  if (s.players.length > nationsPresent(s) && systemsOf(p).ranked) {
     let held = 0;
     let points = 0;
     for (const co of s.players) {

@@ -2,7 +2,7 @@ import { applyCommand, type Command, type CommandResult } from './commands.js';
 import { initialMarket, randomImmigrant } from './europe.js';
 import { placeOnMap } from './movement.js';
 import { createUnit, message, reveal } from './queries.js';
-import type { PlayerId } from './rules/nations.js';
+import type { NationId, PlayerId } from './rules/nations.js';
 import { DEFAULT_DIFFICULTY, resolveDifficulty } from './rules/difficulty.js';
 import { beginPlayerTurn, runAiUntilHuman } from './turn.js';
 import type { GameConfig, GameState, Player } from './types.js';
@@ -16,6 +16,7 @@ import { modifiers } from './scenarios/modifiers.js';
 import { systemsOf, systemsOfId } from './playerkind.js';
 import { addPeoplePlayer } from './peopleplayer.js';
 import { initLand } from './land.js';
+import { laterArrivals } from './arrivals.js';
 
 /** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
 export const SAVE_VERSION = 3;
@@ -54,29 +55,16 @@ export function createGame(config: GameConfig): GameState {
     difficulty: resolveDifficulty(config.difficulty),
     relations: {},
   };
+  const entries = entryPoints(s.map, config.nations.length, world.entryRows, world.entrySide);
+  const heading = world.entrySide === 'west' ? 'east' : 'west';
+  // Nations that arrive later (NationEntry.arrives, native-nations.md T18) wait with their entry
+  // points (arrivals.ts) and have no relations yet; the others enter now, in the order chosen.
+  const arrivals = laterArrivals(s, entries);
+  if (arrivals) s.arrivals = arrivals;
   initRelations(s);
 
-  const entries = entryPoints(s.map, config.nations.length, world.entryRows, world.entrySide);
   config.nations.forEach((nation, i) => {
-    const entry = entries[i];
-    const p = newPlayer(s, nation, config.humans.includes(nation), entry);
-    if (!p.human) p.ai = config.ai?.[nation] ?? 'naive';
-    // The difficulty sets the economics of the people's nations, also while the computer plays
-    // them during a head start; other computer players stay at Conquistador (see rules/difficulty.ts).
-    if (p.human || config.headStart?.humans.includes(nation) || config.difficultyForAll) {
-      p.difficulty = s.difficulty;
-      const rules = difficultyOf(s, { difficulty: s.difficulty });
-      p.gold = rules.startingGold;
-      p.crossesRequired = Math.round(p.crossesRequired * rules.crosses);
-    }
-    initCrown(s, p);
-    s.players.push(p);
-    p.recruitPool = [randomImmigrant(s), randomImmigrant(s), randomImmigrant(s)];
-    offerFathers(s, p);
-    reveal(s, nation, entry.x, entry.y, 1);
-    if (systemsOf(p).startingCaravel) startingUnits(s, nation, entry);
-    const heading = world.entrySide === 'west' ? 'east' : 'west';
-    message(s, term(s, 'arrival', { nation: nationOf(s, nation).name, heading }), nation, entry);
+    if (!arrivals?.some((a) => a.nation === nation)) enterNation(s, nation, entries[i], heading);
   });
 
   // Peoples playing as nations (native-nations.md T3, T4) take their turns after the nations.
@@ -87,6 +75,34 @@ export function createGame(config: GameConfig): GameState {
   beginPlayerTurn(s, s.players[0]);
   runAiUntilHuman(s);
   return s;
+}
+
+/**
+ * A nation enters the game at its entry point: its player record with its computer level and
+ * difficulty, its Crown, recruits and first council offer, its view of the entry and its starting
+ * units, and the arrival message. At setup it joins the end of the turn order; a nation arriving
+ * later (arrivals.ts) is put at `at`.
+ */
+export function enterNation(s: GameState, nation: NationId, entry: { x: number; y: number }, heading: 'east' | 'west', at = s.players.length): Player {
+  const config = s.config;
+  const p = newPlayer(s, nation, config.humans.includes(nation), entry);
+  if (!p.human) p.ai = config.ai?.[nation] ?? 'naive';
+  // The difficulty sets the economics of the people's nations, also while the computer plays
+  // them during a head start; other computer players stay at Conquistador (see rules/difficulty.ts).
+  if (p.human || config.headStart?.humans.includes(nation) || config.difficultyForAll) {
+    p.difficulty = s.difficulty;
+    const rules = difficultyOf(s, { difficulty: s.difficulty });
+    p.gold = rules.startingGold;
+    p.crossesRequired = Math.round(p.crossesRequired * rules.crosses);
+  }
+  initCrown(s, p);
+  s.players.splice(at, 0, p);
+  p.recruitPool = [randomImmigrant(s), randomImmigrant(s), randomImmigrant(s)];
+  offerFathers(s, p);
+  reveal(s, nation, entry.x, entry.y, 1);
+  if (systemsOf(p).startingCaravel) startingUnits(s, nation, entry);
+  message(s, term(s, 'arrival', { nation: nationOf(s, nation).name, heading }), nation, entry);
+  return p;
 }
 
 export function newPlayer(s: GameState, nation: PlayerId, human: boolean, entry: { x: number; y: number }): Player {

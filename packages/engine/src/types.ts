@@ -681,6 +681,15 @@ export interface AllianceTerms {
  * Caches beside the state (unitindex.ts) are rebuilt from a loaded state in the same order.
  * test/roundtrip.test.ts plays games with a save and load after every round and checks this.
  */
+/** A European nation not yet in the game (GameState.arrivals). */
+export interface PendingArrival {
+  nation: NationId;
+  /** The first turn of its year of arrival (`NationEntry.arrives`). */
+  turn: number;
+  /** Its entry point, given at setup as if it had been there from the start. */
+  entry: { x: number; y: number };
+}
+
 export interface GameState {
   version: 3;
   config: GameConfig;
@@ -740,6 +749,13 @@ export interface GameState {
    * health: missing otherwise (the Americas and the Caribbean).
    */
   land?: LandState;
+  /**
+   * European nations still to arrive (native-nations.md T18, arrivals.ts), first to arrive first:
+   * each the turn it arrives on and the entry point it was given at setup. Written only in
+   * scenarios whose nations have `NationEntry.arrives`, and emptied away as they arrive; missing
+   * otherwise (the Americas and the Caribbean).
+   */
+  arrivals?: PendingArrival[];
   /** Silver and ore dug so far from mining tiles, by "x,y" (see mines.ts). Missing means none. */
   mined?: Record<string, number>;
   /** Set the first time a cheat is used and never cleared. Missing means the game is not cheated. */

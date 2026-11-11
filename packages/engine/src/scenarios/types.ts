@@ -685,6 +685,13 @@ export interface NationIdentity {
  */
 export interface NationEntry extends PlayerEntry {
   id: NationId;
+  /**
+   * The year the nation arrives (native-nations.md T18; arrivals.ts): until its first turn of that
+   * year it is not in the game (no player, units, colonies, turns or diplomacy); then its expedition
+   * arrives at its entry point, as at the start. Missing, or a year the game starts in or before,
+   * means it is there from the start. Not read for companies (they have `from`) or the Crown.
+   */
+  arrives?: number;
 }
 
 /**

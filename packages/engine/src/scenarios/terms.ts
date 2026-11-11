@@ -54,6 +54,8 @@ export const AMERICAS_TEXT = {
   // ---- Templates ----
   /** The first message of a game, to each nation: {nation} and {heading}. */
   arrival: "Your Majesty's expedition for {nation} has reached {colonyLand}. Sail {heading} to find land!",
+  /** To everyone else when a nation arrives later in the game (NationEntry.arrives): {nation}. */
+  'arrival.news': 'Ships of {nation} have reached {colonyLand}.',
 
   /** Lost City Rumours (rumours.ts): messages, and the history entries of the notable ones. */
   'rumour.nothing': 'The rumour proves to be nothing more than tall tales.',
