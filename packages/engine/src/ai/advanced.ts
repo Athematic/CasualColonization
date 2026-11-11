@@ -354,16 +354,46 @@ function carrySeaSettler(s: GameState, p: Player, ship: Unit, here: Colony | und
   return true;
 }
 
-function adjacentTileTowards(s: GameState, u: Unit, tx: number, ty: number): { x: number; y: number } | null {
-  let best: { x: number; y: number; len: number } | null = null;
+/**
+ * The neighbour of a tile with the shortest route (fewest steps) for the unit, the first of equals
+ * in the grid's order; the unit's own tile when it is one. Water for a ship, land for anyone else,
+ * never a colony. `route.path`, when given, receives the route found to it (for setDestination,
+ * while nothing changes).
+ *
+ * A route takes at least as many steps as the grid's distance (each step goes to a neighbour), so
+ * the neighbours are searched nearest first, and a neighbour that could at best tie with the
+ * shortest route so far (and comes later in the grid's order) or lose to it is not searched: the
+ * answer is the one a search of every neighbour in order gives.
+ */
+function adjacentTileTowards(s: GameState, u: Unit, tx: number, ty: number, route?: { path?: { x: number; y: number }[] }): { x: number; y: number } | null {
+  const pos = unitPosition(s, u);
+  const ship = isShip(u);
+  const grid = gridOf(s);
+  const candidates: { n: { x: number; y: number }; order: number; dist: number }[] = [];
   for (const n of neighbours(s, tx, ty)) {
     const t = tileAt(s, n.x, n.y)!;
-    if (isWater(t) !== isShip(u) || colonyAt(s, n.x, n.y)) continue;
-    const pos = unitPosition(s, u);
-    if (pos && pos.x === n.x && pos.y === n.y) return n;
-    const path = findPath(s, u, n.x, n.y);
-    if (path && (!best || path.length < best.len)) best = { ...n, len: path.length };
+    if (isWater(t) !== ship || colonyAt(s, n.x, n.y)) continue;
+    if (pos && pos.x === n.x && pos.y === n.y) {
+      if (route) route.path = [];
+      return n;
+    }
+    candidates.push({ n, order: candidates.length, dist: pos ? grid.distance(pos.x, pos.y, n.x, n.y) : 0 });
   }
+  if (!pos) return null;
+  candidates.sort((a, b) => a.dist - b.dist || a.order - b.order);
+  let best: { x: number; y: number; len: number } | null = null;
+  let bestOrder = -1;
+  let bestPath: { x: number; y: number }[] | undefined;
+  for (const c of candidates) {
+    if (best && (c.dist > best.len || (c.dist === best.len && c.order > bestOrder))) break;
+    const path = findPath(s, u, c.n.x, c.n.y);
+    if (path && (!best || path.length < best.len || (path.length === best.len && c.order < bestOrder))) {
+      best = { ...c.n, len: path.length };
+      bestOrder = c.order;
+      bestPath = path;
+    }
+  }
+  if (route) route.path = bestPath;
   return best;
 }
 
@@ -889,9 +919,10 @@ function soldierTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
       attack(s, u.id, { colonyId: target.id });
       return;
     }
-    const step = adjacentTileTowards(s, u, target.x, target.y);
+    const route: { path?: { x: number; y: number }[] } = {};
+    const step = adjacentTileTowards(s, u, target.x, target.y, route);
     if (step) {
-      setDestination(s, u.id, step);
+      setDestination(s, u.id, step, route.path);
       return;
     }
   }
@@ -1031,9 +1062,15 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
   targets.sort((a, b) => a.d - b.d);
   for (const t of targets.slice(0, 6)) {
     const settlement = Object.values(s.settlements).some((st) => st.x === t.x && st.y === t.y);
-    const goal = settlement ? adjacentTileTowards(s, u, t.x, t.y) : findPath(s, u, t.x, t.y) ? t : null;
+    const route: { path?: { x: number; y: number }[] } = {};
+    let goal: { x: number; y: number } | null;
+    if (settlement) goal = adjacentTileTowards(s, u, t.x, t.y, route);
+    else {
+      route.path = findPath(s, u, t.x, t.y) ?? undefined;
+      goal = route.path ? t : null;
+    }
     if (goal) {
-      setDestination(s, u.id, { x: goal.x, y: goal.y });
+      setDestination(s, u.id, { x: goal.x, y: goal.y }, route.path);
       return;
     }
   }
@@ -1105,8 +1142,9 @@ function missionaryTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void
     establishMission(s, u.id, st.id);
     return;
   }
-  const step = adjacentTileTowards(s, u, st.x, st.y);
-  if (step) setDestination(s, u.id, step);
+  const route: { path?: { x: number; y: number }[] } = {};
+  const step = adjacentTileTowards(s, u, st.x, st.y, route);
+  if (step) setDestination(s, u.id, step, route.path);
 }
 
 function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
@@ -1130,9 +1168,10 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
         learnSkill(s, u.id, teacher.id);
         return;
       }
-      const step = adjacentTileTowards(s, u, teacher.x, teacher.y);
+      const route: { path?: { x: number; y: number }[] } = {};
+      const step = adjacentTileTowards(s, u, teacher.x, teacher.y, route);
       if (step) {
-        setDestination(s, u.id, step);
+        setDestination(s, u.id, step, route.path);
         return;
       }
     }
@@ -1317,9 +1356,10 @@ function privateer(s: GameState, p: Player, ship: Unit): boolean {
     .filter((o) => prey(o) && o.loc.kind === 'map' && grid.distance(o.loc.x, o.loc.y, pos.x, pos.y) <= 8)
     .sort((a, b) => grid.distance((a.loc as { x: number }).x, (a.loc as { y: number }).y, pos.x, pos.y) - grid.distance((b.loc as { x: number }).x, (b.loc as { y: number }).y, pos.x, pos.y))[0];
   if (near && near.loc.kind === 'map') {
-    const step = adjacentTileTowards(s, ship, near.loc.x, near.loc.y);
+    const route: { path?: { x: number; y: number }[] } = {};
+    const step = adjacentTileTowards(s, ship, near.loc.x, near.loc.y, route);
     if (step) {
-      setDestination(s, ship.id, step);
+      setDestination(s, ship.id, step, route.path);
       return true;
     }
   }
@@ -1463,8 +1503,9 @@ function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
         const pos = unitPosition(s, u)!;
         if (grid.distance(st.x, st.y, pos.x, pos.y) === 1 && u.moves > 0) safely(() => attack(s, u.id, { settlementId: st.id }));
         else {
-          const step = adjacentTileTowards(s, u, st.x, st.y);
-          if (step) safely(() => setDestination(s, u.id, step));
+          const route: { path?: { x: number; y: number }[] } = {};
+          const step = adjacentTileTowards(s, u, st.x, st.y, route);
+          if (step) safely(() => setDestination(s, u.id, step, route.path));
         }
       }
     }
