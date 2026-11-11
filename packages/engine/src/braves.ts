@@ -12,7 +12,7 @@ import { chooseDefender, defencePower, promote } from './combat.js';
 import { fail } from './errors.js';
 import { sellPrice } from './europe.js';
 import { noteGoods } from './history.js';
-import { addTension, nativeOffer, tensionOf } from './natives.js';
+import { addTension, nativeOffer, notePeopleTrade, tensionOf } from './natives.js';
 import {
   colonyWorkers,
   inBounds,
@@ -468,6 +468,7 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
     c.goods[g] -= amount;
     st.gold -= gold;
     p.gold += gold;
+    notePeopleTrade(s, nation, st.tribe, gold);
     noteTrade(s, nation, gold);
     track(nation, 'natives:sold to visiting brave');
     track(nation, 'natives:gold from sales', gold);
@@ -501,6 +502,7 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
 function buyOffer(s: GameState, st: Settlement, c: Colony, good: GoodId, amount: number, price: number): void {
   const p = player(s, c.owner);
   p.gold -= price;
+  notePeopleTrade(s, c.owner, st.tribe, price);
   st.gold += price;
   st.goods![good] = Math.max(0, (st.goods![good] ?? 0) - amount);
   c.goods[good] += amount;

@@ -15,7 +15,7 @@ import { noteTrade } from './stats.js';
 import { cargoRoomFor, colonyAt, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
 import { random } from './rng.js';
 import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, term, turnAfterYears, yearValue } from './scenarios/index.js';
-import { COMPANY_IDS, type NationId } from './rules/nations.js';
+import { COMPANY_IDS, type NationId, type TribeId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, treatyBetween } from './treaties.js';
 import { aiAcceptsAlliance, aiAcceptsExpedition, allianceProblem, expeditionProblem, isAllied, leaveAlliance, makeAlliance, makeExpedition } from './alliances.js';
@@ -40,8 +40,8 @@ export const FOREIGN_KEEP = 50;
 
 const SALT = 0x0fa7_0e1d;
 
-/** A small seeded stream for one pair of nations and one purpose; independent of `GameState.rng`. */
-function stream(s: GameState, a: NationId, b: NationId, purpose: string): { rng: number } {
+/** A small seeded stream for one pair (two nations, or a nation and a people) and one purpose; independent of `GameState.rng`. */
+function stream(s: GameState, a: string, b: string, purpose: string): { rng: number } {
   // FNV-1a over the purpose and the pair (in a fixed order), mixed with the game seed.
   const [x, y] = [a, b].sort();
   let h = 0x811c9dc5 ^ SALT;
@@ -58,6 +58,15 @@ function stream(s: GameState, a: NationId, b: NationId, purpose: string): { rng:
  */
 export function pairRandom(s: GameState, a: NationId, b: NationId, purpose: string): number {
   return random(stream(s, a, b, purpose));
+}
+
+/**
+ * A seeded number in [0, 1) for a nation and a native people and one purpose, from a stream of
+ * their own (never `GameState.rng`): the hidden thresholds of treaties with peoples are drawn from
+ * it each time they are needed and never stored (native-partners.md N3).
+ */
+export function peoplePairRandom(s: GameState, nation: NationId, people: TribeId, purpose: string): number {
+  return random(stream(s, nation, people, `people|${purpose}`));
 }
 
 /** A whole number from base − spread to base + spread, both included. */

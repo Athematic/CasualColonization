@@ -450,6 +450,34 @@ export interface Relation {
 }
 
 /**
+ * A nation's standing with one native people (native-partners.md N3), as `Relation` is between two
+ * nations: the years of good relations and the trade that unlock treaties with the people (against
+ * hidden thresholds drawn per pair from the seed, never stored), and the waiting and hostility
+ * after a broken treaty. Turn numbers, not years. Written lazily (natives.ts `peopleRelation`) when
+ * the nation first trades with the people; step 0 keeps `goodSince` and `volume`, the treaties of
+ * later steps the rest.
+ */
+export interface PeopleRelation {
+  nation: NationId;
+  people: TribeId;
+  /**
+   * Turn the current run of good relations began (at peace with the people, its settlements
+   * content on average); missing while relations are not good. Checked once a round.
+   */
+  goodSince?: number;
+  /** Gold that has changed hands in trade with the people's settlements and braves, both ways, over the game. */
+  volume: number;
+  /** After a broken treaty: the people makes no new treaty with the nation before this turn. */
+  waitUntil?: number;
+  /** After a broken treaty: the people treats the nation as hostile until this turn. */
+  hostileUntil?: number;
+  /** Treaties with the people broken so far; seeds the next waiting and hostility draws. */
+  breaks?: number;
+  /** A proposal waiting for an answer: made by the nation to the people, or offered by the people. */
+  proposal?: { kind: PeopleTreatyKind; from: 'nation' | 'people'; turn: number };
+}
+
+/**
  * The kinds of treaty: between European nations (docs/design/cooperation.md, C9) a trade
  * agreement, Favoured Nation status, an alliance and a confederation; between one nation and one
  * native people (docs/design/native-partners.md, N1) the `PeopleTreatyKind`s. A kind says what is
@@ -556,6 +584,12 @@ export interface GameState {
   relations: Record<string, Relation>;
   /** Treaties between European nations, in force and past, in the order made (treaties.ts). Missing until the first one. */
   treaties?: Treaty[];
+  /**
+   * Each nation's standing with each native people (natives.ts, native-partners.md N3), keyed by
+   * `peopleRelationKey(nation, people)` ("france|arawak"). Written lazily, when a nation first
+   * trades with a people; missing until then.
+   */
+  peopleRelations?: Record<string, PeopleRelation>;
   /** Trade routes by id; missing means none. */
   routes?: Record<string, TradeRoute>;
   /** Native braves on the map, by id. Missing (older saves) means none yet; settlements send them out. */

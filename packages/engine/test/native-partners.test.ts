@@ -12,7 +12,16 @@ import {
   addTension,
   applyCommand,
   bravesOf,
+  buyFromSettlement,
   buyLand,
+  goodRelations,
+  nativeProduceOf,
+  notePeopleTrade,
+  peopleRelationKey,
+  peopleRelationOf,
+  peopleThreshold,
+  tradeWithSettlement,
+  yearsOfGoodRelations,
   colonySiteProblem,
   foundColony,
   foundCompany,
@@ -438,5 +447,107 @@ describe('chartered companies are spared by the peoples (fix c)', () => {
       removeUnit(s, u.id);
     }
     expect(s.tribes.some((t) => t.burial?.includes('hudsonsBay'))).toBe(false);
+  });
+});
+
+describe('standing with a people (peopleRelations, N3)', () => {
+  /** A wagon train of `nation` with 100 trade goods next to a settlement. */
+  function wagonBeside(s: GameState, nation: NationId, st: Settlement) {
+    const w = createUnit(s, nation, 'wagonTrain', { kind: 'map', ...landBeside(s, st.x, st.y) });
+    w.cargo = { tradeGoods: 100 };
+    w.moves = 2;
+    return w;
+  }
+
+  it('is not written until a nation trades with a people, so other games keep their save text', () => {
+    const s = game();
+    for (let i = 0; i < 3; i++) processNatives(s);
+    expect(s.peopleRelations).toBeUndefined();
+    expect(JSON.parse(serialize(s)).peopleRelations).toBeUndefined();
+    expect(peopleRelationOf(s, 'england', Object.values(s.settlements)[0].tribe)).toBeUndefined();
+  });
+
+  it('counts the gold of sales and purchases, both ways, per nation and people', () => {
+    const s = game();
+    const st = Object.values(s.settlements)[0];
+    st.gold = 5000;
+    const w = wagonBeside(s, 'england', st);
+    const before = player(s, 'england').gold;
+    tradeWithSettlement(s, w.id, st.id, 'tradeGoods');
+    const sold = player(s, 'england').gold - before;
+    expect(sold).toBeGreaterThan(0);
+    const rel = peopleRelationOf(s, 'england', st.tribe)!;
+    expect(rel).toMatchObject({ nation: 'england', people: st.tribe, volume: sold, goodSince: s.turn });
+    expect(Object.keys(s.peopleRelations!)).toEqual([peopleRelationKey('england', st.tribe)]);
+    // A purchase adds what was paid.
+    const good = nativeProduceOf(s)[0];
+    st.goods = { ...st.goods, [good]: 100 };
+    player(s, 'england').gold = 10_000;
+    buyFromSettlement(s, w.id, st.id, good, 50);
+    const paid = 10_000 - player(s, 'england').gold;
+    expect(paid).toBeGreaterThan(0);
+    expect(rel.volume).toBe(sold + paid);
+    expect(peopleRelationOf(s, 'france', st.tribe)).toBeUndefined();
+  });
+
+  it('is not kept for the Crown or a company, nor for trade without gold', () => {
+    const s = game();
+    const tribe = Object.values(s.settlements)[0].tribe;
+    notePeopleTrade(s, 'crown', tribe, 100);
+    notePeopleTrade(s, 'hudsonsBay', tribe, 100);
+    notePeopleTrade(s, 'england', tribe, 0);
+    expect(s.peopleRelations).toBeUndefined();
+  });
+
+  it('tracks the run of good relations: ended by anger or war, begun again by peace and calm', () => {
+    const s = game();
+    const st = Object.values(s.settlements)[0];
+    const people = st.tribe;
+    const all = Object.values(s.settlements).filter((o) => o.tribe === people);
+    notePeopleTrade(s, 'england', people, 50);
+    const rel = peopleRelationOf(s, 'england', people)!;
+    expect(rel.goodSince).toBe(s.turn);
+    expect(goodRelations(s, 'england', people)).toBe(true);
+    s.turn += 20;
+    expect(yearsOfGoodRelations(s, 'england', people)).toBeGreaterThan(0);
+    // Uneasy on average: the run ends at the round's check.
+    for (const o of all) o.tension.england = 400;
+    processNatives(s);
+    expect(rel.goodSince).toBeUndefined();
+    expect(yearsOfGoodRelations(s, 'england', people)).toBe(0);
+    // Calm again: a new run begins.
+    for (const o of all) o.tension.england = 0;
+    processNatives(s);
+    expect(rel.goodSince).toBe(s.turn);
+    // War ends it whatever the tension.
+    tribeOf(s, st).stance.england = 'war';
+    expect(goodRelations(s, 'england', people)).toBe(false);
+  });
+
+  it('draws hidden thresholds per pair from the seed, the same each time, and never stores them', () => {
+    const s = game();
+    const tribe = Object.values(s.settlements)[0].tribe;
+    const v = { base: 20, spread: 5 };
+    const a = peopleThreshold(s, 'england', tribe, 'test', v);
+    expect(peopleThreshold(s, 'england', tribe, 'test', v)).toBe(a);
+    expect(a).toBeGreaterThanOrEqual(15);
+    expect(a).toBeLessThanOrEqual(25);
+    const rng = s.rng;
+    const draws = new Set<number>();
+    for (const n of ['england', 'france'] as const) for (const p of ['sioux', 'arawak', 'aztec', 'inca'] as const) draws.add(peopleThreshold(s, n, p, 'test', v));
+    expect(draws.size).toBeGreaterThan(1);
+    expect(s.rng).toBe(rng);
+    expect(s.peopleRelations).toBeUndefined();
+  });
+
+  it('survives a save and load as a plain JSON tree', () => {
+    const s = game();
+    const tribe = Object.values(s.settlements)[0].tribe;
+    notePeopleTrade(s, 'england', tribe, 120);
+    notePeopleTrade(s, 'france', tribe, 30);
+    processNatives(s);
+    const back = deserialize(serialize(s));
+    expect(back.peopleRelations).toEqual(s.peopleRelations);
+    expect(serialize(back)).toBe(serialize(s));
   });
 });

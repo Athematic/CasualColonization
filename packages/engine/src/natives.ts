@@ -14,8 +14,9 @@ import { isCompanyIdent, TRIBES, type NationId, type TribeId } from './rules/nat
 import { NATIVE_RULES, type TensionThresholds } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
-import type { Colony, GameState, Settlement, Unit } from './types.js';
-import { difficultyOf, goodsOf, landReachOf, mechanicsOf, nationOf, nativeProduceOf, nativeRulesOf, peopleOf } from './scenarios/index.js';
+import type { Colony, GameState, PeopleRelation, Settlement, Unit } from './types.js';
+import { calendarOf, difficultyOf, goodsOf, landReachOf, mechanicsOf, nationOf, nativeProduceOf, nativeRulesOf, peopleOf, yearValue } from './scenarios/index.js';
+import { peoplePairRandom } from './relations.js';
 import { removeUnit } from './unitindex.js';
 
 /**
@@ -128,6 +129,7 @@ export function tradeWithSettlement(s: GameState, unitId: string, settlementId: 
   }
   addTension(st, u.owner, -15);
   player(s, u.owner).gold += gold;
+  notePeopleTrade(s, u.owner, st.tribe, gold);
   noteTrade(s, u.owner, gold);
   noteDeal(s, u, st, 'sold');
   track(u.owner, 'cmd:tradeNatives');
@@ -156,6 +158,7 @@ export function buyFromSettlement(s: GameState, unitId: string, settlementId: st
   const p = player(s, u.owner);
   if (p.gold < price) fail(`The ${TRIBES[st.tribe].name} ask ${price} gold for ${n} ${GOOD_DEFS[good].name.toLowerCase()}.`);
   p.gold -= price;
+  notePeopleTrade(s, u.owner, st.tribe, price);
   st.gold += price;
   st.goods![good] = stock - n;
   u.cargo = u.cargo ?? {};
@@ -381,6 +384,7 @@ export function processNatives(s: GameState): void {
   const t = perfStart();
   processBraves(s);
   perfEnd('natives > braves', t);
+  updatePeopleRelations(s);
 }
 
 // ---------------------------------------------------------------------------
@@ -467,4 +471,91 @@ export function settlementActions(s: GameState, unitId: string, settlementId: st
   if (!dir) return [];
   const option = describeMove(s, unitId, dir);
   return option.kind === 'settlement' ? option.actions : [];
+}
+
+// ---------------------------------------------------------------------------
+// Standing with a people (native-partners.md N3)
+
+/** The key of a nation's standing with a people in `GameState.peopleRelations`: "france|arawak". */
+export function peopleRelationKey(nation: NationId, people: TribeId): string {
+  return `${nation}|${people}`;
+}
+
+/** A nation's standing with a people, if it has been written (it is written on the first trade). */
+export function peopleRelationOf(s: GameState, nation: NationId, people: TribeId): PeopleRelation | undefined {
+  return s.peopleRelations?.[peopleRelationKey(nation, people)];
+}
+
+/** Whether a nation can stand in relations with a people: a European nation, neither the Crown nor a company. */
+function standsWithPeoples(nation: NationId): boolean {
+  return nation !== 'crown' && !isCompanyIdent(nation);
+}
+
+/**
+ * Whether a nation's relations with a people are good now: at peace with it, and its settlements
+ * content on average (below the `content` threshold). A people with no settlements left has none.
+ */
+export function goodRelations(s: GameState, nation: NationId, people: TribeId): boolean {
+  const tribe = s.tribes.find((t) => t.id === people);
+  if (!tribe || tribe.stance[nation] === 'war') return false;
+  let n = 0;
+  let sum = 0;
+  for (const id in s.settlements) {
+    const st = s.settlements[id];
+    if (st.tribe !== people) continue;
+    n++;
+    sum += tensionOf(st, nation);
+  }
+  return n > 0 && sum / n < nativeRulesOf(s).tension.content;
+}
+
+/** A nation's standing with a people, written now if it was not yet (with the run of good relations, if any, starting now). */
+export function peopleRelation(s: GameState, nation: NationId, people: TribeId): PeopleRelation {
+  const key = peopleRelationKey(nation, people);
+  const list = (s.peopleRelations = s.peopleRelations ?? {});
+  let rel = list[key];
+  if (!rel) {
+    rel = { nation, people, volume: 0 };
+    if (goodRelations(s, nation, people)) rel.goodSince = s.turn;
+    list[key] = rel;
+  }
+  return rel;
+}
+
+/** Notes gold that changed hands in trade between a nation and a people (sales and purchases, at settlements and with braves). */
+export function notePeopleTrade(s: GameState, nation: NationId, people: TribeId, gold: number): void {
+  if (gold <= 0 || !standsWithPeoples(nation)) return;
+  peopleRelation(s, nation, people).volume += gold;
+}
+
+/** Whole years of the current run of good relations between a nation and a people (0 while they are not good). */
+export function yearsOfGoodRelations(s: GameState, nation: NationId, people: TribeId): number {
+  const since = peopleRelationOf(s, nation, people)?.goodSince;
+  if (since === undefined) return 0;
+  const cal = calendarOf(s);
+  return yearValue(s.turn, cal) - yearValue(since, cal);
+}
+
+/**
+ * A hidden threshold for a nation and a people, `base − spread` to `base + spread`, drawn from the
+ * pair's own seeded stream for `purpose` each time it is asked for and never stored (as Favoured
+ * Nation's and alliances' thresholds are). For the treaties of later steps.
+ */
+export function peopleThreshold(s: GameState, nation: NationId, people: TribeId, purpose: string, v: { base: number; spread: number }): number {
+  return v.base - v.spread + Math.floor(peoplePairRandom(s, nation, people, purpose) * (2 * v.spread + 1));
+}
+
+/**
+ * Once a round, after the braves: keeps each written standing's run of good relations. Only
+ * records already written are looked at, so a game without native trade keeps no record at all.
+ */
+function updatePeopleRelations(s: GameState): void {
+  const list = s.peopleRelations;
+  if (!list) return;
+  for (const key in list) {
+    const rel = list[key];
+    const good = goodRelations(s, rel.nation, rel.people);
+    if (good && rel.goodSince === undefined) rel.goodSince = s.turn;
+    else if (!good && rel.goodSince !== undefined) delete rel.goodSince;
+  }
 }
