@@ -43,6 +43,7 @@ import { wayOf } from './rules/peoples.js';
 import { bornType, buildingsOf, calendarOf, nationTypeOf, peopleEconomyOf, peopleOf, scenarioOf, settlementKindIn, yearOf } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import { addOf, modifiers } from './scenarios/modifiers.js';
+import { peopleProfileOf } from './ai/profiles.js';
 import type { Colony, GameState, Job, Unit } from './types.js';
 import { colonyList, removeUnit, setUnitLoc } from './unitindex.js';
 
@@ -51,9 +52,11 @@ export function isPeopleTown(colony: Pick<Colony, 'owner'>): boolean {
   return kindOfId(colony.owner) === 'people';
 }
 
-/** Years of food a people's towns keep as their reserve. */
+/** Years of food a people's towns keep as their reserve: the people's own or the economy's, times its computer profile's share (T10: Combative keeps half). */
 export function storeYearsOf(s: GameState, people: PlayerId): number {
-  return peopleOf(s, people as TribeId).storeYears ?? peopleEconomyOf(s).storeYears;
+  const years = peopleOf(s, people as TribeId).storeYears ?? peopleEconomyOf(s).storeYears;
+  const prof = peopleProfileOf(s.players, people);
+  return prof ? years * prof.stores : years;
 }
 
 /** Food a town's people eat in a year. */
@@ -285,16 +288,15 @@ export function claimLand(s: GameState, people: PlayerId, x: number, y: number):
 }
 
 // ---------------------------------------------------------------------------
-// A town's builds when a computer people plays it (colony automation until step 9)
+// A town's builds when a computer people plays it, and iron tools
 
-/** The order a computer people's towns build in when nothing is set: stores, walls, housing, a landing, workshops, the smokehouse. */
-const TOWN_PLAN: readonly BuildingKind[] = ['storagePits', 'longhouse', 'palisade', 'canoeLanding', 'workshop', 'dryingRacks'];
-
-/** Picks a computer people's town's next build when it has none (the first of the plan it can build). */
+/** Picks a computer people's town's next build when it has none: the first its profile's plan (ai/profiles.ts) can build. */
 export function planTownBuild(s: GameState, colony: Colony, canBuild: (target: { kind: 'building'; id: BuildingKind }) => boolean): void {
-  if (colony.build || player(s, colony.owner).human) return;
+  if (colony.build) return;
+  const prof = peopleProfileOf(s.players, colony.owner);
+  if (!prof) return;
   const own = buildingsOf(s, colony.owner);
-  for (const id of TOWN_PLAN) {
+  for (const id of prof.plan) {
     if (!own.includes(id)) continue;
     const t = { kind: 'building' as const, id };
     if (canBuild(t)) {
@@ -302,4 +304,20 @@ export function planTownBuild(s: GameState, colony: Colony, canBuild: (target: {
       return;
     }
   }
+}
+
+/** Iron tools a people's town puts to its building work a turn, each worth a unit of the work (hammers). */
+export const TOOLS_PER_TURN = 4;
+
+/**
+ * Iron tools from European trade speed a people's building work (T10: goods only from Europeans,
+ * taken up as they served): while a town builds, up to `TOOLS_PER_TURN` of the tools in its store
+ * become as many units of the work each turn (colony.ts, before the build is checked).
+ */
+export function useTools(colony: Colony): void {
+  if (!colony.build || colony.build.kind !== 'building' || !isPeopleTown(colony)) return;
+  const n = Math.min(TOOLS_PER_TURN, colony.goods.tools ?? 0);
+  if (n <= 0) return;
+  colony.goods.tools -= n;
+  colony.hammers += n;
 }

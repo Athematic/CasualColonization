@@ -7,7 +7,7 @@ import { track } from './telemetry.js';
 import { buildingCapacityPerWorker, centreProduction, colonyReport, foodToGrow, libertyBonus, tileYield, type ColonyReport } from './production.js';
 import { kindOfId, systemsOf } from './playerkind.js';
 import { noteTaken } from './land.js';
-import { claimTownLand, foodCapacity, growPeopleTown, housingOf, isPeopleTown, townDwellers, peopleLandClosedTo, planTownBuild, schoolOf, skillOfWork } from './peopleeconomy.js';
+import { claimTownLand, foodCapacity, growPeopleTown, housingOf, isPeopleTown, townDwellers, peopleLandClosedTo, planTownBuild, schoolOf, skillOfWork, useTools } from './peopleeconomy.js';
 import {
   colonyAt,
   colonyPopulation,
@@ -287,7 +287,7 @@ function jobValue(colony: Colony, u: Unit, job: Job, amount: number, foodNet: nu
  * food first while the town is short, then the town's building work, then food for its stores and
  * growth; goods only while there is room to keep them. A worker's own way counts (`amount` holds it).
  */
-function townJobValue(s: GameState, colony: Colony, job: Job, amount: number, foodNet: number, report: ColonyReport): number {
+export function townJobValue(s: GameState, colony: Colony, job: Job, amount: number, foodNet: number, report: ColonyReport): number {
   if (job.kind === 'building' && BUILDINGS[job.building].school) return -1;
   const product = job.kind === 'tile' ? job.good : BUILDINGS[job.building].output!;
   if (product === 'food') {
@@ -546,6 +546,8 @@ export function processColony(s: GameState, colony: Colony): void {
   noteProduction(s, colony.owner, report.produced);
   noteMining(s, colony, report.workers);
   colony.hammers += report.produced.hammers;
+  // A people's town puts its iron tools to its building work (peopleeconomy.ts).
+  if (town) useTools(colony);
 
   if (colony.build) {
     const cost = buildTargetCost(colony.build, colony);
