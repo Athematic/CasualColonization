@@ -31,6 +31,7 @@ import {
   serialize,
   settlementAt,
   settlementName,
+  settlementTeaches,
   nativeRulesOf,
   tensionLabel,
   term,
@@ -65,7 +66,7 @@ import { REPORT_TABS, ReportsScreen } from './ui/reports.js';
 import { RoutesScreen } from './ui/routes.js';
 import { Sidebar } from './ui/sidebar.js';
 import { showTurnStart, sortNews } from './ui/turnstart.js';
-import { inciteDialog, leaseLine, nativeTradeDialog } from './ui/natives.js';
+import { exchangeLine, inciteDialog, leaseLine, nativeTradeDialog, speakLabel } from './ui/natives.js';
 
 /**
  * Turns of movement a unit needs to walk a path: the rest of this turn's moves first (or a fresh
@@ -586,21 +587,24 @@ export class App {
 
   private async visitSettlement(u: Unit, settlementId: string, actions: SettlementAction[]): Promise<void> {
     const st = this.state.settlements[settlementId];
+    // The skill taught: the settlement's own, or a renewed one under a cultural exchange (N7).
+    const skill = settlementTeaches(this.state, st, this.viewer);
     const labels = {
-      speak: 'Speak with the chief',
+      speak: speakLabel(this.state, this.viewer, st),
       mission: st.mission ? `A ${nationOf(this.state, st.mission).adjective} mission is already here` : 'Establish a mission',
-      learn: st.skill ? `Live among the natives (learn: ${st.skill.replace(/([A-Z])/g, ' $1').toLowerCase()})` : 'Live among the natives (nothing left to teach)',
+      learn: skill ? `Live among the natives (learn: ${skill.replace(/([A-Z])/g, ' $1').toLowerCase()})` : 'Live among the natives (nothing left to teach)',
       trade: 'Trade: sell and buy goods',
       denounce: st.mission ? `Denounce the ${nationOf(this.state, st.mission).adjective} mission` : 'Denounce a rival mission',
       incite: `Incite the natives against a rival (${incitePrice(this.state, st)} gold)`,
       attack: 'Attack the settlement',
     } as const;
     const mood = tensionLabel(st.tension[this.viewer] ?? 0, nativeRulesOf(this.state).tension);
-    // A lease of the people's land (land use, N5) is shown with its rent.
+    // A lease of the people's land (land use, N5) is shown with its rent, a cultural exchange (N7) with when it teaches again.
     const lease = leaseLine(this, this.viewer, st.tribe);
-    const text = lease ? h('div', null, h('p', null, `The people here are ${mood}. What will you do?`), lease) : `The people here are ${mood}. What will you do?`;
+    const exchange = exchangeLine(this, this.viewer, st);
+    const text = lease || exchange ? h('div', null, h('p', null, `The people here are ${mood}. What will you do?`), lease, exchange) : `The people here are ${mood}. What will you do?`;
     const choice = await choose(settlementName(this.state, st), text, [
-      ...actions.map((a) => ({ label: labels[a], value: a, disabled: (a === 'learn' && !st.skill) || (a === 'mission' && !!st.mission) })),
+      ...actions.map((a) => ({ label: labels[a], value: a, disabled: (a === 'learn' && !skill) || (a === 'mission' && !!st.mission) })),
       { label: 'Leave', value: null },
     ]);
     if (!choice) return;

@@ -41,6 +41,7 @@ import {
   peopleTreatyOn,
   peopleTreatyProblem,
   landUseBenefits,
+  exchangeBenefits,
   leasedTiles,
   leaseTerms,
   peopleTreatyRules,
@@ -251,6 +252,10 @@ export class DiplomacyScreen implements Screen {
       const whyLand = landOn && trading && !leasing ? peopleTreatyProblem(s, me.id, t.id, 'land-use') : null;
       const lease = leasing && leaseTerms(leasing);
       const leaseText = lease ? `Land use (${leasedTiles(s, me.id, t.id).length} tiles, ${lease.rent} gold a tile a year)` : null;
+      // A cultural exchange (N7) is the other rung on trade.
+      const exchangeOn = treaties && peopleTreatyOn(s, 'exchange');
+      const exchanging = inForce.some((x) => x.kind === 'exchange');
+      const whyExchange = exchangeOn && trading && !exchanging ? peopleTreatyProblem(s, me.id, t.id, 'exchange') : null;
       return h('tr', { 'data-people': t.id },
         h('td', null, h('span', { class: 'flag', style: `background:${TRIBES[t.id].color}` }), ' ', name),
         h('td', null, String(settlements.length)),
@@ -263,6 +268,9 @@ export class DiplomacyScreen implements Screen {
             : !inForce.length ? '—' : null,
           landOn && trading && !leasing && !war
             ? [' ', h('button', { class: 'btn tiny', 'data-action': 'propose-land-use', disabled: !!whyLand || !app.isMyTurn(), title: whyLand ?? `Ask the ${name} to lease you their land beside your colonies: ${landUseBenefits(s)}.`, 'aria-label': `Propose land use to the ${name}`, onclick: () => app.dispatch({ type: 'proposePeopleTreaty', people: t.id, kind: 'land-use' }) }, 'Lease land')]
+            : null,
+          exchangeOn && trading && !exchanging && !war
+            ? [' ', h('button', { class: 'btn tiny', 'data-action': 'propose-exchange', disabled: !!whyExchange || !app.isMyTurn(), title: whyExchange ?? `Offer the ${name} a cultural exchange: ${exchangeBenefits(s)}.`, 'aria-label': `Propose a cultural exchange to the ${name}`, onclick: () => app.dispatch({ type: 'proposePeopleTreaty', people: t.id, kind: 'exchange' }) }, 'Propose exchange')]
             : null) : null,
         h('td', null, String(missions)),
         h('td', null, h('div', { class: 'row' }, [100, 500].map((gold) =>
@@ -278,7 +286,8 @@ export class DiplomacyScreen implements Screen {
       !rows.length ? h('p', { class: 'muted small' }, 'You have not met any native peoples yet.') : null,
       h('p', { class: 'muted small' }, 'Colonies near native land raise tension, especially as they grow. Trade, gifts and missions calm it; uneasy tribes demand tribute, angry ones raid and furious ones go to war.'),
       treaties ? h('p', { class: 'muted small' }, `After years of good relations${peopleTreatyRules(s).trade.volume.max > 0 ? ' and trade' : ''}, a people you have met (a scout’s visit, a mission or trade) may agree to a trade treaty, or offer one through a visiting brave: ${peopleTradeBenefits(s)}. Taking a partner’s land, attacking it or paying it to make war breaks faith: every treaty with that people ends, and it will not trust you again for many years.`) : null,
-      treaties && peopleTreatyOn(s, 'land-use') ? h('p', { class: 'muted small' }, `With a trade treaty and more years of good relations, a people may lease you its land: ${landUseBenefits(s)}. The rent is paid each year; if you cannot pay, the lease lapses. You may still buy a leased tile; taking one breaks faith.`) : null);
+      treaties && peopleTreatyOn(s, 'land-use') ? h('p', { class: 'muted small' }, `With a trade treaty and more years of good relations, a people may lease you its land: ${landUseBenefits(s)}. The rent is paid each year; if you cannot pay, the lease lapses. You may still buy a leased tile; taking one breaks faith.`) : null,
+      treaties && peopleTreatyOn(s, 'exchange') ? h('p', { class: 'muted small' }, `With a trade treaty and more years of good relations, a people may agree to a cultural exchange: ${exchangeBenefits(s)}. It ends with the trade treaty.`) : null);
   }
 
   /**

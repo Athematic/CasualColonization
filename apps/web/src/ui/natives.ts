@@ -8,6 +8,14 @@ import {
   peopleTreatiesOn,
   landUseTreaty,
   leasedTiles,
+  chiefAgainTurn,
+  exchangeTreaty,
+  settlementTeaches,
+  teachAgainTurn,
+  UNIT_TYPES,
+  yearValue,
+  type GameState,
+  type Settlement,
   leaseTerms,
   GOOD_DEFS,
   goodsOf,
@@ -46,6 +54,51 @@ export function leaseLine(app: App, nation: NationId, people: TribeId): HTMLElem
   const n = leasedTiles(s, nation, people).length;
   return h('p', { class: 'small', 'data-lease': t.id },
     `Land use with the ${TRIBES[people].name} since ${formatDate(t.start, cal)}: your colonies work ${n} ${n === 1 ? 'tile' : 'tiles'} of their land for ${terms.rent} gold a tile a year (${terms.rent * n} gold, next due ${formatDate(terms.due, cal)}). The land stays theirs.`);
+}
+
+/** Whole years from now to a turn, at least 1. */
+function yearsUntil(s: GameState, turn: number): number {
+  const cal = calendarOf(s);
+  return Math.max(1, Math.ceil(yearValue(turn, cal) - yearValue(s.turn, cal)));
+}
+
+function yearsText(n: number): string {
+  return `${n} ${n === 1 ? 'year' : 'years'}`;
+}
+
+/**
+ * When a settlement teaches the nation again under a cultural exchange (N7), in words: "teaches
+ * again in n years", or the skill it teaches now. Null without an exchange with its people.
+ */
+export function teachingLine(s: GameState, nation: NationId, st: Settlement): string | null {
+  if (!exchangeTreaty(s, nation, st.tribe)) return null;
+  const skill = settlementTeaches(s, st, nation);
+  if (skill) return st.skill ? `It still teaches ${UNIT_TYPES[skill].name.toLowerCase()}s.` : `It teaches again: a colonist may live among them and become a ${UNIT_TYPES[skill].name}.`;
+  const at = teachAgainTurn(s, st);
+  return at === undefined ? 'It has nothing to teach now.' : `It teaches again in ${yearsText(yearsUntil(s, at))} (${formatDate(at, calendarOf(s))}).`;
+}
+
+/**
+ * The nation's cultural exchange with a settlement's people (N7), in one paragraph: since when,
+ * when the settlement teaches again and when its chief welcomes the nation's scouts again. Null
+ * without one.
+ */
+export function exchangeLine(app: App, nation: NationId, st: Settlement): HTMLElement | null {
+  const s = app.state;
+  const t = exchangeTreaty(s, nation, st.tribe);
+  if (!t) return null;
+  const chief = chiefAgainTurn(s, st, nation);
+  const chiefText = chief === undefined ? '' : chief <= s.turn ? ' Its chief welcomes your scouts again.' : ` Its chief welcomes your scouts again in ${yearsText(yearsUntil(s, chief))}.`;
+  return h('p', { class: 'small', 'data-exchange': t.id },
+    `Cultural exchange with the ${TRIBES[st.tribe].name} since ${formatDate(t.start, calendarOf(s))}. ${teachingLine(s, nation, st)}${chiefText}`);
+}
+
+/** The label of "Speak with the chief" for a scout: again under a cultural exchange, or when the chief has spoken already. */
+export function speakLabel(s: GameState, nation: NationId, st: Settlement): string {
+  if (!st.visited.includes(nation)) return 'Speak with the chief';
+  const at = chiefAgainTurn(s, st, nation);
+  if (at === undefined) return 'Speak with the chief (he has spoken with your scouts)';
+  return at <= s.turn ? 'Speak with the chief again (welcome under your cultural exchange)' : `Speak with the chief (welcome again in ${yearsText(yearsUntil(s, at))})`;
 }
 
 /**
@@ -94,6 +147,7 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
       treaty ? h('p', { class: 'small', 'data-treaty': treaty.id }, `Trade treaty with the ${TRIBES[st.tribe].name} since ${formatDate(treaty.start, calendarOf(s))}: ${peopleTradeBenefits(s)}.`) : null,
       standing ? h('p', { class: 'muted small' }, `The ${TRIBES[st.tribe].name}: ${standing.toLowerCase()}. No trade treaty yet (Foreign Affairs).`) : null,
       leaseLine(app, unit.owner, st.tribe),
+      exchangeLine(app, unit.owner, st),
       options.length ? null : h('p', { class: 'muted' }, 'You have nothing to sell, and they have nothing for sale.'));
     const choice: Deal | null = await choose<Deal>(`Trade with the ${settlementName(s, st)}`, text, [...options, { label: traded ? 'Done' : 'Leave', value: null as unknown as Deal }]);
     if (!choice) return traded;

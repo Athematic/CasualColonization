@@ -20,6 +20,7 @@ import {
   exchangeTreaty,
   exchangeUnlocked,
   gridOf,
+  isWater,
   hasExchange,
   hasPeopleTrade,
   learnSkill,
@@ -90,7 +91,7 @@ function beside(s: GameState, nation: NationId, st: Settlement, type: Parameters
     const x = i % s.map.width;
     const y = Math.floor(i / s.map.width);
     const t = s.map.tiles[i];
-    if (grid.distance(x, y, st.x, st.y) !== 1 || t.t === 'ocean' || t.t === 'sea' || t.t === 'lake') continue;
+    if (grid.distance(x, y, st.x, st.y) !== 1 || isWater(t)) continue;
     if (Object.values(s.settlements).some((o) => o.x === x && o.y === y)) continue;
     const u = createUnit(s, nation, type, { kind: 'map', x, y });
     u.moves = 3;

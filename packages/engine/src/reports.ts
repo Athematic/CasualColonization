@@ -13,6 +13,7 @@ import { settlementName, tensionLabel, tensionOf } from './natives.js';
 import { colonyReport, foodToGrow, libertyBonus, type ColonyReport } from './production.js';
 import { colonyAt, colonyWorkers, isShip, player, unitName, unitPosition, unitsAboard, unitsAt, warehouseCapacity } from './queries.js';
 import { favouredPartners } from './relations.js';
+import { settlementTeaches } from './peopletreaties.js';
 import { BUILDINGS } from './rules/buildings.js';
 import { FATHERS, type FatherId } from './rules/fathers.js';
 import type { GoodId } from './rules/goods.js';
@@ -319,7 +320,7 @@ export interface SettlementOverview {
   name: string;
   tension: number;
   mood: string;
-  /** Skill taught, once a scout of the nation has visited; undefined when not known yet, null when taught. */
+  /** Skill taught, once a scout of the nation has visited (a renewed one under a cultural exchange); undefined when not known yet, null when taught. */
   skill: UnitTypeId | null | undefined;
   /** Goods the settlement wants most, once visited (the settlement's own list if it has one, else its tribe's). */
   wants: GoodId[] | undefined;
@@ -371,7 +372,7 @@ export function nativesOverview(s: GameState, nation: NationId): TribeOverview[]
         name: settlementName(s, st),
         tension: t,
         mood: tensionLabel(t, nativeRulesOf(s).tension),
-        skill: visited ? st.skill : undefined,
+        skill: visited ? settlementTeaches(s, st, nation) : undefined,
         wants: visited ? (own ?? peopleOf(s, st.tribe).wants) : undefined,
         mission: st.mission,
         visited,
