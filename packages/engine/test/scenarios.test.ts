@@ -15,6 +15,7 @@ import {
   hasEventSet,
   HOME_PORTS,
   listScenarios,
+  MAX_WORK_RINGS,
   MAP_SIZES,
   parseStoredMap,
   storedMap,
@@ -135,6 +136,10 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
     for (const m of sc.map.stored) expect(STORED_MAPS.some((d) => d.id === m.id)).toBe(true);
     expect(sc.map.default === 'generated' ? !!sc.map.generator : sc.map.stored.some((e) => e.id === sc.map.default)).toBe(true);
     expect(hasEventSet(sc.events)).toBe(true);
+    // At most two work rings, each gated by a building the scenario has (hex-maps.md H7).
+    const rings = sc.map.workArea?.rings ?? [];
+    expect(rings.length).toBeLessThanOrEqual(MAX_WORK_RINGS);
+    for (const r of rings) if (r.building) expect(sc.buildings).toContain(r.building);
   });
 
   it('maps use only its terrains and place only its peoples', () => {
