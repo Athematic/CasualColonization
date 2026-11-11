@@ -6,6 +6,9 @@
  * polygons from the render API's geometry, with a coastline on the edges between land and water,
  * rivers and roads through the tiles' centres in the grid's six directions, and towns, units and
  * braves at the hex centres.
+ *
+ * Its renderer accepts MapLayerHooks (hex-maps.md step 5), so a sprite pack can paint the ground, relief,
+ * roads, towns and units over it on either grid; without hooks it draws exactly as it always has.
  */
 import { gridOf, nationOf, TERRAIN, TRIBES, UNIT_TYPES, colonyWorkers, type GameState, type Tile, type TerrainId } from '@cc/engine';
 import {
@@ -26,7 +29,10 @@ import {
   unitStacks,
   visibleRange,
   type IconRequest,
+  type LayerTile,
+  type MapLayerHooks,
   type MapRenderer,
+  type MapUnitStack,
   type Scene,
   type StylePlugin,
 } from '@cc/render-api';
@@ -72,8 +78,14 @@ function unitLabel(type: keyof typeof UNIT_TYPES, role: string): string {
 
 class SchematicRenderer implements MapRenderer {
   private ctx: CanvasRenderingContext2D;
-  constructor(private canvas: HTMLCanvasElement) {
+  /** Whether another style paints some layers (any hook given): the tiles are then drawn in two passes. */
+  private layered: boolean;
+  constructor(
+    private canvas: HTMLCanvasElement,
+    private hooks: MapLayerHooks = {},
+  ) {
     this.ctx = canvas.getContext('2d')!;
+    this.layered = Object.keys(hooks).length > 0;
   }
 
   render(scene: Scene): void {
@@ -98,9 +110,10 @@ class SchematicRenderer implements MapRenderer {
       const p = tileToScreen(scene, x, y);
       return [p.x + z / 2, p.y + z / 2];
     };
+    if (this.layered) this.layeredTiles(scene, r, hex);
     for (let y = r.y0; y <= r.y1; y++) {
       for (let x = r.x0; x <= r.x1; x++) {
-        if (!isTileExplored(scene, x, y)) continue;
+        if (this.layered || !isTileExplored(scene, x, y)) continue;
         const tile = s.map.tiles[y * s.map.width + x];
         if (hex) {
           this.hexTile(scene, x, y, tile);
@@ -150,6 +163,10 @@ class SchematicRenderer implements MapRenderer {
     for (let y = r.y0; y <= r.y1; y++) {
       for (let x = r.x0; x <= r.x1; x++) {
         if (!s.map.tiles[y * s.map.width + x]?.r || !isTileExplored(scene, x, y)) continue;
+        if (this.hooks.road) {
+          const p = tileToScreen(scene, x, y);
+          if (this.hooks.road(ctx, { x, y, px: p.x, py: p.y, tile: s.map.tiles[y * s.map.width + x] }, z, s)) continue;
+        }
         const [cx, cy] = centre(x, y);
         const color = isTileVisible(scene, x, y) ? '#5a4630' : '#4a3a28';
         ctx.strokeStyle = color;
@@ -183,6 +200,7 @@ class SchematicRenderer implements MapRenderer {
     for (const st of Object.values(s.settlements)) {
       if (!isTileExplored(scene, st.x, st.y)) continue;
       const p = tileToScreen(scene, st.x, st.y);
+      if (this.hooks.settlement?.(ctx, st, p.x, p.y, z, s)) continue;
       ctx.fillStyle = TRIBES[st.tribe].color;
       ctx.beginPath();
       ctx.arc(p.x + z / 2, p.y + z / 2, z * 0.32, 0, Math.PI * 2);
@@ -192,6 +210,13 @@ class SchematicRenderer implements MapRenderer {
     for (const c of Object.values(s.colonies)) {
       if (!isTileExplored(scene, c.x, c.y)) continue;
       const p = tileToScreen(scene, c.x, c.y);
+      if (this.hooks.colony) {
+        const size = colonyWorkers(s, c).length;
+        if (this.hooks.colony(ctx, c, size, p.x, p.y, z, s)) {
+          if (scene.labels !== false) this.caption(`${c.name} ${size}`, p.x + z / 2, p.y + z * 1.1, Math.max(10, z * 0.22));
+          continue;
+        }
+      }
       ctx.fillStyle = nationOf(s, c.owner).color;
       ctx.fillRect(p.x + z * 0.12, p.y + z * 0.12, z * 0.76, z * 0.76);
       // Walls: one frame for a stockade, a thicker one for a fort, a double frame for a fortress.
@@ -210,6 +235,10 @@ class SchematicRenderer implements MapRenderer {
       const p = tileToScreen(scene, b.x, b.y);
       const cx = p.x + z / 2;
       const cy = p.y + z / 2;
+      if (this.hooks.brave?.(ctx, b, cx, cy, z * 0.86)) {
+        if (b.count > 1) this.badge(String(b.count), p.x + z * 0.85, p.y + z * 0.18, z, TRIBES[b.tribe].color);
+        continue;
+      }
       ctx.fillStyle = TRIBES[b.tribe].color;
       ctx.beginPath();
       ctx.moveTo(cx, cy - z * 0.36);
@@ -228,6 +257,7 @@ class SchematicRenderer implements MapRenderer {
     for (const stack of unitStacks(scene)) {
       const p = tileToScreen(scene, stack.x, stack.y);
       const selected = stack.top.id === scene.selectedUnitId;
+      if (this.hooks.unit && this.hookedUnit(scene, stack, p.x, p.y, selected)) continue;
       ctx.fillStyle = nationOf(s, stack.top.owner).color;
       ctx.beginPath();
       ctx.arc(p.x + z * 0.5, p.y + z * 0.5, z * 0.3, 0, Math.PI * 2);
@@ -267,6 +297,124 @@ class SchematicRenderer implements MapRenderer {
       ctx.fill();
       this.text(String(scene.pathTurns), p.x + z * 0.8, p.y + z * 0.2 + 0.5, r * 1.3, '#000');
     }
+  }
+
+  /**
+   * The tiles when hooks are given, in two passes so nothing a hook draws on one tile is covered by the
+   * next tile's ground: the ground of every tile (hooks first, else the flat colour) with its thin border,
+   * the shore hook, then relief, bonus, rumour, the lease frame and fog per tile.
+   */
+  private layeredTiles(scene: Scene, r: { x0: number; y0: number; x1: number; y1: number }, hex: boolean): void {
+    const { ctx, hooks } = this;
+    const s = scene.state as GameState;
+    const z = scene.camera.zoom;
+    hooks.beginFrame?.(ctx, scene);
+    const tiles: LayerTile[] = [];
+    for (let y = r.y0; y <= r.y1; y++) {
+      for (let x = r.x0; x <= r.x1; x++) {
+        if (!isTileExplored(scene, x, y)) continue;
+        const p = tileToScreen(scene, x, y);
+        tiles.push({ x, y, px: p.x, py: p.y, tile: s.map.tiles[y * s.map.width + x] });
+      }
+    }
+    const shapeOf = (t: LayerTile) => (hex ? () => traceTile(ctx, scene, t.x, t.y) : () => ctx.rect(t.px, t.py, z, z));
+    for (const t of tiles) {
+      const shape = shapeOf(t);
+      const drawn = TERRAIN[t.tile.t].water ? hooks.water?.(ctx, t, z, shape) : hooks.land?.(ctx, t, z, shape, s);
+      ctx.beginPath();
+      shape();
+      if (!drawn) {
+        ctx.fillStyle = tileColor(t.tile);
+        ctx.fill();
+      }
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    hooks.shore?.(ctx, tiles, z, s);
+    for (const t of tiles) {
+      const land = !TERRAIN[t.tile.t].water;
+      if (land && t.tile.p) hooks.plowed?.(ctx, t, z);
+      if (land) hooks.relief?.(ctx, t, z);
+      if (t.tile.b) hooks.bonus?.(ctx, t, z);
+      if (t.tile.lcr && !hooks.rumour?.(ctx, t, z)) this.text('?', t.px + z / 2, t.py + z / 2, z * 0.5, '#ffe28a');
+      if (t.tile.use) {
+        ctx.save();
+        ctx.strokeStyle = nationOf(s, t.tile.use).color;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        if (hex) traceTile(ctx, scene, t.x, t.y, 3.5);
+        else ctx.rect(t.px + 3.5, t.py + 3.5, z - 7, z - 7);
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (!isTileVisible(scene, t.x, t.y)) {
+        ctx.beginPath();
+        shapeOf(t)();
+        ctx.fillStyle = 'rgba(17,20,24,0.35)';
+        ctx.fill();
+      }
+    }
+  }
+
+  /**
+   * A unit stack the unit hook may draw: in a colony smaller towards the top right (the town stays visible),
+   * then the selection ring, the owner's pennant and the stack count from this style. False when the hook declined.
+   */
+  private hookedUnit(scene: Scene, stack: MapUnitStack, px: number, py: number, selected: boolean): boolean {
+    const { ctx } = this;
+    const s = scene.state as GameState;
+    const z = scene.camera.zoom;
+    const inColony = Object.values(s.colonies).some((c) => c.x === stack.x && c.y === stack.y);
+    const ux = inColony ? px + z * 0.74 : px + z / 2;
+    const uy = inColony ? py + z * 0.3 : py + z / 2;
+    const us = inColony ? z * 0.6 : z * 0.86;
+    if (!this.hooks.unit?.(ctx, stack, ux, uy, us)) return false;
+    if (selected) {
+      ctx.beginPath();
+      ctx.ellipse(ux, uy + us * 0.4, us * 0.42, us * 0.14, 0, 0, Math.PI * 2);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffe28a';
+      ctx.stroke();
+    }
+    const color = nationOf(s, stack.top.owner).color;
+    const fx = inColony ? px + z * 0.5 : px + z * 0.12;
+    const fy = py + z * 0.1;
+    ctx.fillStyle = color;
+    ctx.fillRect(fx, fy, z * 0.22, z * 0.16);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#000';
+    ctx.strokeRect(fx, fy, z * 0.22, z * 0.16);
+    if (stack.count > 1) this.badge(String(stack.count), px + z * 0.85, py + z * 0.18, z, color);
+    return true;
+  }
+
+  /** A small dark disc with a number (stack counts over hooked units and braves). */
+  private badge(t: string, x: number, y: number, z: number, ring: string): void {
+    const ctx = this.ctx;
+    const r = Math.max(6, z * 0.13);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#111418';
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = ring;
+    ctx.stroke();
+    this.text(t, x, y + 0.5, r * 1.3, '#fff');
+  }
+
+  /** A name under a hooked town: white text on a dark outline, readable over any ground. */
+  private caption(t: string, x: number, y: number, size: number): void {
+    const ctx = this.ctx;
+    ctx.font = `600 ${Math.round(size)}px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(17,20,24,0.85)';
+    ctx.strokeText(t, x, y);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(t, x, y);
   }
 
   /** A hex tile: its polygon in the terrain's colour, the rumour, a lease's dashed frame, and fog when out of sight. */
@@ -392,7 +540,7 @@ export const schematic: StylePlugin = {
     '--radius': '4px',
   },
   grids: ['square', 'hex'],
-  createMapRenderer: (canvas) => new SchematicRenderer(canvas),
+  createMapRenderer: (canvas, hooks) => new SchematicRenderer(canvas, hooks),
   drawIcon,
   tileColor,
 };

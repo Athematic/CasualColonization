@@ -86,7 +86,10 @@ export interface MapRenderer {
 
 // ---- Layer hooks: letting another style paint some layers of a procedural map ----
 
-/** One explored tile in view, with its top-left corner on screen (CSS px). */
+/**
+ * One explored tile in view, with the top-left corner on screen (CSS px) of its `zoom × zoom` box: the square
+ * itself, or on hexes the box centred on the hex (`tileToScreen`), so `px + z / 2` is the tile's centre on every grid.
+ */
 export interface LayerTile {
   x: number;
   y: number;
@@ -108,8 +111,11 @@ type Ctx2D = CanvasRenderingContext2D;
 export interface MapLayerHooks {
   /** Once per frame, before any layer. */
   beginFrame?(ctx: Ctx2D, scene: Scene): void;
-  /** Water under a tile (land tiles get it too, under their rounded corners), with its details. */
-  water?(ctx: Ctx2D, t: LayerTile, z: number): boolean;
+  /**
+   * Water under a tile (land tiles get it too, under their rounded corners), with its details. `shape`, when the
+   * renderer gives it, traces the tile's outline as a path (on hexes the hex, which a square sprite must be clipped to).
+   */
+  water?(ctx: Ctx2D, t: LayerTile, z: number, shape?: () => void): boolean;
   /** The ground of a land tile. `shape` traces the renderer's outline of the tile (rounded towards water) as a path. */
   land?(ctx: Ctx2D, t: LayerTile, z: number, shape: () => void, state: Readonly<GameState>): boolean;
   /**
