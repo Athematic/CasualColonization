@@ -42,7 +42,7 @@ Each beta gets design notes first.
 
 Beta 1, cooperation between Europeans, is built (design in [design/cooperation.md](design/cooperation.md)); its steps are in [SHIPPED.md](SHIPPED.md#beta-1-cooperation-between-europeans).
 
-Beta 2, native peoples as partners: design in [design/native-partners.md](design/native-partners.md) (status: `planned`; N1–N14 decided by Simon, 11 November 2026, as recommended, with the five fixes of today's native rules in step 0).
+Beta 2, native peoples as partners: design in [design/native-partners.md](design/native-partners.md) (status: `in progress`; N1–N14 decided by Simon, 11 November 2026, as recommended, with the five fixes of today's native rules in step 0). Step 0 is built (M, P1, done; branch `beta2/step0`): a people as a treaty party read through party helpers, `peopleRelations`, `peoples.rules`, the `burialGrounds` and `surrender` switches, `landRadius`, and the five fixes (section 8 of the note). Next: step 1, the trade treaty with a people (L, P1).
 
 ## Scenarios (content)
 

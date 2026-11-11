@@ -28,14 +28,14 @@ If a change is meant to change games, re-record with `npm run test:golden:write`
 | `map` | See [Map settings](#map-settings-and-settlement-kinds). |
 | `terrain` | The terrains in play. The generator and the stored maps may use only these (the conformance test checks it). `ocean` and `highSeas` must be on the list. |
 | `nations` | See [Nations](#nations). |
-| `peoples` | The indigenous peoples in play (`ids`, north to south, the order of the generator's bands), the goods their settlements `produce`, the `settlements` table (one settlement kind for each lifeway), and `overrides` for a people's skills or wants in this scenario only. |
+| `peoples` | The indigenous peoples in play (`ids`, north to south, the order of the generator's bands), the goods their settlements `produce`, the `settlements` table (one settlement kind for each lifeway), `overrides` for a people's skills or wants in this scenario only, and `rules`, changes to the engine's native rules. See [Native rules](#native-rules). |
 | `goods` | Goods in play. The order is the order of keys in markets and warehouses. |
 | `units` | Unit types in play. Europe offers, colonies build and immigrants arrive only from this list. The engine's named slots (treasure, the King's regulars, the starting ship) must be on it. |
 | `buildings` | Buildings in play, in production order (tools are made before the armory uses them). |
 | `council` | The scenario's council (the Americas: the Continental Congress). `categories`, `members` (ids from the catalogue's `FATHERS`) and optional `effects` that replace a member's effects in this scenario. |
 | `ai` | What the computer players need to know: `pace`, `islands` and four goods lists. See [Computer players](#computer-players). |
 | `events` | The id of a registered event set. See [Events](#events). |
-| `mechanics` | Thirteen switches. See [Mechanics switches](#mechanics-switches). |
+| `mechanics` | Fifteen switches. See [Mechanics switches](#mechanics-switches). |
 | `alliances` | Optional overrides of the alliance rules (`ALLIANCE_RULES` in `alliances.ts`): `requires` (the rung an alliance builds on, `'favoured'` or only `'trade'`), `peaceYears` and `volume` (the hidden thresholds that unlock it), `longPeace` (the years of peace with a trade agreement after which "old friends" may ally without the rung or the trade, 150 ± 30), `waitingYears` and `hostilityYears` after leaving one, `sharedBells` (the share of each ally's bells that helps the others' Congress, 0.1) and `expeditionCost` (a joint expedition, 1,200 gold, half each). See [Alliances](#alliances). |
 | `companyRules` | Optional overrides of the chartered companies' rules (`COMPANY_RULES` in `companies.ts`): `capital` (2,000), `foundingShares` (20), `sharePrice` (the least, 100), `dividendEvery` (10 turns), `reserve` (800) and `payout` (0.5 of the gold above the reserve). See [Chartered companies](#chartered-companies). |
 | `victory` | The ways the game can end, in the order they are checked. See [Victory](#victory). |
@@ -108,7 +108,7 @@ The hooks:
 | Production | `tileYield`, `manufactureCapacity`, `buildingOutput`, `bellsBonus`, `foodToGrow`, `autoStockade`, `unlockBuilding` |
 | Europe | `sailTurns`, `shipMoves`, `priceRecovery`, `crossesStep`, `immigrantsExcluded`, `chooseImmigrant`, `startingDocks` |
 | Exploration | `sight`, `rumourOutcome` |
-| Natives | `landPrice`, `nativeGifts`, `conversionChance`, `convertsBecome` |
+| Natives | `landPrice`, `nativeGifts`, `nativesTeach`, `conversionChance`, `convertsBecome` |
 | Combat | `unitOffence`, `offenceVsSettlements`, `armedFromStock`, `alwaysPromote`, `conquestTreasure`, `treasureFee`, `conquestConverts` |
 | Diplomacy | `peaceAccepted` |
 
@@ -118,7 +118,7 @@ A council member's catalogue entry (`FATHERS`) carries its `modifiers` and `onJo
 
 ## Mechanics switches
 
-`Scenario.mechanics` has thirteen switches. A system that is off is skipped where it would run, draws no random numbers, has its commands refused with a reason, is left out of the computer players' plans and is hidden in the web game.
+`Scenario.mechanics` has fifteen switches. A system that is off is skipped where it would run, draws no random numbers, has its commands refused with a reason, is left out of the computer players' plans and is hidden in the web game.
 
 | Switch | Meaning |
 | --- | --- |
@@ -132,11 +132,13 @@ A council member's catalogue entry (`FATHERS`) carries its `modifiers` and `onJo
 | `charter` | `false`, or the colony charter's `{ base, cap }`. It applies when the game uses the charter (`GameConfig.colonyCharter`). |
 | `customHouse` | The custom house can be built. |
 | `missions` | Missions and denouncing. |
+| `burialGrounds` | A Lost City Rumour on tribal land may be a desecrated burial ground: the people goes to war with the nation for good. Off: the outcome is never drawn. |
+| `surrender` | When a people's capital is burned, its other settlements may submit to the attacker (peace, tribute, free land). Off: they fight on. |
 | `alliances` | Alliances between European nations: the rung after Favoured Nation, with a defensive pact, open colonies, shared sight and bells, and joint expeditions. Absent means off. See [Alliances](#alliances). |
 | `companies` | Chartered companies from `nations.companies`: nations found them, buy shares and receive dividends. Absent means off. See [Chartered companies](#chartered-companies). |
 | `confederation` | Allies may declare independence together and fight one war. Needs `alliances` and `independence`. Absent means off. |
 
-The numbers of the Crown and the war (REF growth, demands, royal wars, mercenaries, intervention) are still code. Burial grounds and surrender are not switched.
+The numbers of the Crown and the war (REF growth, demands, royal wars, mercenaries, intervention) are still code.
 
 ## Victory
 
@@ -184,7 +186,32 @@ With `mechanics.companies` on, `Scenario.nations.companies` lists the companies 
 - `crown`: `'entry'` (the Crown's forces sail in from the map's arrival edge) or a fixed edge.
 - `grid`: the shape of the tiles, see [The map grid](#the-map-grid). Optional; squares when absent.
 
-Settlement kinds are rows of `SETTLEMENT_KINDS` (`rules/natives.ts`): `camp`, `village` and `city`, each with its size, braves, respawn time, production rate and cap, incite and land prices, and treasure. A people has a `lifeway` (`nomadic`, `agricultural` or `urban`), and `Scenario.peoples.settlements` gives each lifeway the row it lives in. Every people in play needs its lifeway there. A scenario may write a row of its own.
+Settlement kinds are rows of `SETTLEMENT_KINDS` (`rules/natives.ts`): `camp`, `village` and `city`, each with its size, braves, respawn time, production rate and cap, incite and land prices, treasure and `landRadius`. A people has a `lifeway` (`nomadic`, `agricultural` or `urban`), and `Scenario.peoples.settlements` gives each lifeway the row it lives in. Every people in play needs its lifeway there. A scenario may write a row of its own.
+
+`landRadius` is how far a settlement's land reaches, in tiles (absent means 1: the eight tiles around it, as in the Americas and the Caribbean). A tile within reach of several settlements is the nearest one's. Only `nativeLandOwner` (`natives.ts`) reads it, so buying and taking land, working it, the colony screen and the computer players all follow it.
+
+## Native rules
+
+`Scenario.peoples.rules` changes the engine's native rules (`NATIVE_RULES` in `rules/natives.ts`); fields you leave out keep the engine's values, and the two tables can be changed field by field. The engine reads them with `nativeRulesOf(s)`. The Americas and the Caribbean use the engine's values.
+
+| Field | What it says (engine value) |
+| --- | --- |
+| `capitalExtraBraves`, `maxBraves`, `firstBraveAfter` | Braves a capital keeps out beyond its kind's (1), the most braves on the map (80), and the rounds before a new settlement sends out its first (4). |
+| `braveEquipment` | Muskets or horses a brave takes from its settlement's stock to arm or mount itself (50). |
+| `wanderRadius`, `visitRange`, `wanderTurns` | How far from home a brave wanders (4), the furthest colony it visits or attacks (6), and the rounds it wanders (4). |
+| `braveChances` | Chances per round that an idle brave sets out: `attackAtWar` 0.3, `attackAngry` 0.1, `demand` 0.06, `gift` 0.03, `trade` 0.06, `wander` 0.35 (attacks and demands times the difficulty's `raidChance`). |
+| `tension` | The thresholds the braves and the people act on: `content` 200 (gifts and trade visits below it), `uneasy` 300 (demands), `angry` 600 (attacks), `war` 800. The mood words (`tensionLabel`: content, wary, uneasy, angry, furious) follow them. |
+| `demandWait`, `demandMetTension`, `demandRefusedTension` | Rounds a brave waits for a person's answer (2), and the tension change when a demand is met (−60) or refused (+100). |
+| `braveKilledTension` | Tension a settlement gains when one of its braves is killed (150; a third at the people's other settlements). |
+| `buyPriceFactor`, `buyPricePlenty` | A settlement's price for its goods: the good's starting price times 0.5, more when tense, times 0.8 when it holds plenty. |
+| `burialRadius` | How far tribal land reaches for burial grounds (2), with `mechanics.burialGrounds`. The outcome's weight is in the rumour table. |
+| `surrenderChance`, `surrenderTribute` | With `mechanics.surrender`: the chance a people submits when its capital burns (0.6), and the share of each settlement's gold it pays (0.5). |
+| `denounceChance`, `denounceExpert`, `denounceFailDeath` | Denouncing a rival's mission: the chance (0.4), what a firebrand preacher adds or a rival's one takes away (0.2), and the chance a failed missionary is killed (0.5). |
+| `inciteTension`, `inciteTensionOthers` | Tension towards the target of inciting at this settlement (350) and the people's others (150). |
+
+Chartered companies (`Player.kind: 'company'`) stand outside all of this: the peoples feel no tension towards them, their braves never demand from or attack a company, nobody can incite a people against one, and its explorers find no burial grounds.
+
+**Standing with a people** (`GameState.peopleRelations`, `natives.ts`): a record per nation and people, written on the nation's first trade with that people, with the gold traded both ways (`volume`) and the turn the current run of good relations began (`goodSince`: at peace, the people's settlements content on average). Beta 2's treaties with peoples will unlock on it, against hidden thresholds drawn per pair from the seed (`peopleThreshold`), never stored. See [design/native-partners.md](design/native-partners.md).
 
 ## The map grid
 
