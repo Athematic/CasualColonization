@@ -83,7 +83,8 @@ function config(over: Partial<GameConfig> = {}): GameConfig {
     mapSize: 'medium',
     nations: ['england', 'france', 'netherlands'],
     humans: [],
-    ai: { england: 'creative', france: 'combative', netherlands: 'competent' },
+    // The computer peoples at levels that join leagues (ai/profiles.ts: Naive, the default, keeps out of them).
+    ai: { england: 'creative', france: 'combative', netherlands: 'competent', iroquois: 'creative', cherokee: 'competent' },
     peoples: ['iroquois', 'cherokee'],
     scenario: GAME.id,
     colonyCharter: true,
