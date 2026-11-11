@@ -433,7 +433,7 @@ Mutual defence, with the switch on:
 - Renewed teaching's strength: about ten free experts per exchange per Americas game (Simon, section 11).
 - ~~Combative and the ladder (choice 1).~~ Decided: Combative makes no defence pacts (section 13).
 - ~~Braves' walking round colonies (choice 6).~~ Done: braves' paths and defence speed (section 13).
-- The `prosperity` rates (section 14): the Caribbean's (15 of 16 games, mostly naming the top scorer), and whether the Americas' (3 of 96) wants raising towards one in 20–30, by computer nations seeking treaties with more of the peoples they meet (the treaties condition fails most), not by loosening the rule.
+- The `prosperity` rates (section 14): the Caribbean's (15 of 16 games, always naming the top scorer), and the Americas' (5 of 96, a little above one in 20–30, but every win Competent's: Creative, the main partner in N11, never qualified; the treaties condition fails most, so computer nations seeking treaties with more of the peoples they meet is the lever, not loosening the rule).
 
 ## 13. Braves' paths and defence speed (Simon's decisions, 11 November 2026)
 
@@ -513,31 +513,31 @@ Built on branch `beta2/step5`. Code: `prosperity.ts` (new: the rule's defaults, 
 5. **Peace is measured from the end of the last war,** whoever started it; a war that ended before the record existed (a game saved before this step) is not known.
 6. **The records are written only where the scenario plays for prosperity,** so other scenarios' saves keep their text; a game of the Americas saved before step 5 starts its records when loaded.
 7. **The score weight counts treaties, not peoples:** a nation with all four kinds with one people gets 12 points in the Americas. Per treaty is what N10 says; per partner people would weigh broad partnership over deep.
-8. **Weights:** 3 in the Americas (a trade agreement's), 5 in the Caribbean (its trade agreements'). They raised Creative and Competent by about 6 points in the Americas and 9–13 in the Caribbean.
+8. **Weights:** 3 in the Americas (a trade agreement's), 5 in the Caribbean (its trade agreements'). They raised Creative and Competent by about 6–7 points in the Americas and 10–12 in the Caribbean.
 
 ### Measurements
 
-The code commit kept every bench game "same" (`npm run bench -- --verify`, with and without `--scenario caribbean`). The switching commit (`[outcomes]`) re-recorded all eight bench hashes, both golden hashes and the Caribbean game's snapshot: the score is in each round's statistics. No game plays differently (computer players never read the score): the per-game lines before and after are the same but for the scores and the victory, so the changes below are the weight and the new ending.
+Measured on the base with braves' paths (section 13). The code commits kept every bench game "same" (`npm run bench -- --verify`, with and without `--scenario caribbean`; checked again on the merged base with the switch off). The switching commit (`[outcomes]`, and again the merge) re-recorded all eight bench hashes, both golden hashes and the Caribbean game's snapshot: the score is in each round's statistics. No game plays differently (computer players never read the score): the per-game lines before and after are the same but for the scores and the victory, so the changes below are the weight and the new ending. The Caribbean test game now ends with the Netherlands and England winning together by prosperity, with the Arawak and the Kalinago.
 
-Tournaments, `npm run tournament -- --turns 609 --play-on --events --seed 1000` (the Caribbean `--turns 202 --events`), before → after, average score (wins):
+Tournaments, `npm run tournament -- --turns 609 --play-on --events --seed 1000` (the Caribbean `--turns 202 --events`), prosperity off → on, average score (wins):
 
 | Run | Combative | Competent | Creative | Naive |
 | --- | ---: | ---: | ---: | ---: |
-| Americas, 24 games | 580.3 → 581.6 (12 → 12) | 549.3 → 557.3 (7 → 7) | 523.8 → 529.5 (6 → 6) | 250.0 → 250.4 (0 → 0) |
-| Americas, 48 games | 583.8 → 584.8 (27 → 24) | 506.1 → 512.6 (12 → 14) | 468.2 → 473.6 (9 → 10) | 261.9 → 262.4 (1 → 1) |
-| Americas, 96 games | 608.9 → 610.1 (55 → 52) | 497.8 → 503.7 (24 → 25) | 454.5 → 460.5 (20 → 21) | 259.3 → 259.7 (2 → 2) |
-| Caribbean, 16 games | 96.2 → 96.8 (1 → 0) | 109.3 → 118.3 (5 → 7) | 121.2 → 134.0 (10 → 12) | 63.1 → 64.7 (0 → 1) |
+| Americas, 24 games | 628.4 → 629.5 (16 → 16) | 428.7 → 435.5 (5 → 5) | 464.6 → 472.1 (5 → 5) | 245.8 → 246.6 (1 → 1) |
+| Americas, 48 games | 648.8 → 649.7 (33 → 33) | 483.3 → 489.8 (10 → 10) | 428.5 → 434.6 (7 → 7) | 263.6 → 264.1 (2 → 2) |
+| Americas, 96 games | 639.6 → 640.7 (61 → 59) | 509.3 → 516.0 (23 → 25) | 428.6 → 434.9 (15 → 15) | 257.5 → 258.0 (3 → 3) |
+| Caribbean, 16 games | 99.7 → 100.3 (2 → 1) | 103.6 → 113.9 (5 → 7) | 127.3 → 139.2 (9 → 12) | 59.6 → 61.8 (0 → 1) |
 
-The prosperity victory, and how close the nations came at the end (every nation is judged, whatever ended the game):
+The prosperity victory, and how close the nations came at the end (every nation is judged, whatever ended the game, on the scores the game ended with):
 
-| Run | Games won by prosperity | Nations qualifying | Failing peace | burned | treaties | score | Failing only treaties | only score |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Americas, 24 games | 1 (Competent) | 1 of 96 | 84 | 5 | 92 | 58 | 3 | 0 |
-| Americas, 48 games | 3 (Competent each time) | 3 of 192 | 162 | 11 | 183 | 117 | 7 | 1 |
-| Americas, 96 games | 3 (Competent each time) | 3 of 384 | 329 | 20 | 371 | 244 | 18 | 4 |
-| Caribbean, 16 games | 15 (Creative 11, Competent 7, Naive 1; 4 shared) | 18 of 64 | 16 | 0 | 34 | 40 | 3 | 11 |
+| Run | Games won by prosperity | Nations qualifying | Failing peace | burned | treaties | score | Failing only peace | only treaties | only score |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Americas, 24 games | 0 | 0 of 96 | 87 | 4 | 90 | 59 | 2 | 3 | 0 |
+| Americas, 48 games | 2 (Competent both) | 2 of 192 | 167 | 8 | 183 | 119 | 2 | 4 | 1 |
+| Americas, 96 games | 5 (Competent each time) | 5 of 384 | 326 | 15 | 359 | 238 | 4 | 14 | 6 |
+| Caribbean, 16 games | 15 (Creative 11, Competent 8, Naive 1; 5 shared) | 20 of 64 | 17 | 0 | 29 | 38 | 1 | 1 | 13 |
 
-- **Against N12 (Americas):** 3 of 96 four-level games (1 in 32; 1 of 24 and 3 of 48 on the smaller runs, all three wins in the first 48 games), at the edge of "about once in 20–30", untuned. Every win was Competent's; in two of the three it had the best score anyway, in one (seed 1032) it took the win from Combative (661 against 747). Nobody missed only on peace or burning: the 86% that fail peace (a war with some people met within 30 years) almost all fail treaties too, which is the binding condition (97% fail it; 18 nations missed on treaties alone, 12 of them Competent and 6 Creative, and 4 on score alone). Computer nations hold 3.3 treaties with peoples per game at the end, all nations together.
-- **The Caribbean:** prosperity ends 15 of 16 games, and in 14 of them the best score is among the winners: with three peoples, few wars and treaties with most peoples met, the rule there mostly names the top scorer, adds a co-winner in 4 games, and took the 1 Combative time win. Stricter `params` hardly move it (16 games each: `scoreShare` 0.95, 14 of 16; `treatyShare` 1, 14; both, 13). N12 sets no Caribbean target; step 6 should decide whether the Caribbean keeps `prosperity` and on what terms (for example treaties beyond trade, or a share of all the scenario's peoples rather than of those met).
-- **Concord:** 1 of 48 Americas games as before; 5 → 4 of 96 (seed 1078: the weight moved the alliance's share of the score below 0.7). The Caribbean: none either way.
+- **Against N12 (Americas):** 5 of 96 four-level games, about one in 19 (0 of 24 and 2 of 48 on the smaller runs), just above "about once in 20–30", untuned. Every win was Competent's; in three of the five it had the best score anyway, in two (seeds 1072 and 1085) it took the win from Combative (574 against 625, 797 against 863). Treaties are the binding condition: 93% of nations fail it and 85% fail peace (a war with some people met within the last 30 years), mostly together; 14 nations missed on treaties alone (8 Competent, 5 Creative, 1 Combative), 6 on score alone and 4 on peace alone; nobody on burning alone. Nations hold 3.5 treaties with peoples per game at the end, all nations together. Concord is unchanged (6 of 96; 3 of 24; 4 of 48): no alliance that won together would have needed prosperity.
+- **The Caribbean:** prosperity ends 15 of 16 games, and in every one the best score is among the winners: with three peoples, few wars and treaties with most peoples met, the rule there names the top scorer, adds a co-winner in 5 games, and took 1 of Combative's 2 time wins. On the base before braves' paths, stricter `params` hardly moved it (16 games each: `scoreShare` 0.95, 14 of 16; `treatyShare` 1, 14; both, 13). N12 sets no Caribbean target; step 6 should decide whether the Caribbean keeps `prosperity` and on what terms (for example treaties beyond trade, or a share of all the scenario's peoples rather than of those met).
+- **Score:** the weight adds about 6–7 points to Creative and Competent in the Americas and 10–12 in the Caribbean, 1 or less to Combative and Naive.
 - The 24-game Americas run with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1` ran clean, every game line and the summary the same as without the checks. A Playwright smoke of the built web game with Google Fonts blocked (a new game in the Americas and in the Caribbean, the person's nation given contact and a trade treaty with two peoples and the best score, the turn set one round before the end, the last turn ended so the engine decides) had no page errors; the game-over screen read "… In peace and partnership with the Iroquois and the Cherokee, England wins by prosperity." and "England (you) wins, with the Iroquois and the Cherokee." (the Caribbean: Courland with the Arawak and the Kalinago), the breakdown showed "Treaties with native peoples", and the New game screen listed the victory.
