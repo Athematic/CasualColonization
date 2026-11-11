@@ -174,8 +174,13 @@ describe('the systems table (playerkind.ts)', () => {
     for (const k of ['homePort', 'immigration', 'taxes', 'crown', 'independence', 'congress', 'startingCaravel', 'rumours', 'events', 'ranked'] as const) expect(t[k], k).toBe(false);
     expect(t.war).toBe(true);
     expect(t.ai).toBe('people');
-    // Nations keep every system.
-    for (const [k, v] of Object.entries(PLAYER_SYSTEMS.nation)) if (k !== 'ai') expect(v, k).toBe(true);
+    // Its own council, not the Congress (step 3).
+    expect(t.council).toBe('people');
+    // Nations keep every system, and sit the European council.
+    for (const [k, v] of Object.entries(PLAYER_SYSTEMS.nation)) if (k !== 'ai' && k !== 'council') expect(v, k).toBe(true);
+    expect(PLAYER_SYSTEMS.nation.council).toBe('european');
+    expect(PLAYER_SYSTEMS.company.council).toBeNull();
+    expect(PLAYER_SYSTEMS.crown.council).toBeNull();
   });
 });
 

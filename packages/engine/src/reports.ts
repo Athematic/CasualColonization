@@ -444,7 +444,7 @@ export function fatherJoinTurns(s: GameState, nation: PlayerId): Partial<Record<
   const mine = new Set(player(s, nation).fathers);
   for (const e of s.history ?? []) {
     if (e.kind !== 'father' || e.nations[0] !== nation) continue;
-    for (const id of mine) if (e.text.startsWith(`${FATHERS[id].name} joins `)) out[id] = e.turn;
+    for (const id of mine) if (e.text.startsWith(`${FATHERS[id].name} ${FATHERS[id].plural ? 'join' : 'joins'} `)) out[id] = e.turn;
   }
   return out;
 }

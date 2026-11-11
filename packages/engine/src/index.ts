@@ -6,6 +6,7 @@ export * from './rules/buildings.js';
 export * from './rules/combat.js';
 export * from './rules/nations.js';
 export * from './rules/fathers.js';
+export * from './rules/councils.js';
 export * from './rules/colonyNames.js';
 export * from './rules/difficulty.js';
 export * from './rules/ports.js';

@@ -7,8 +7,8 @@
 import { SaveVersionError } from '../errors.js';
 import { BUILDINGS, PEOPLE_BUILDINGS, type BuildingKind } from '../rules/buildings.js';
 import { PEOPLE_ECONOMY, type PeopleEconomy } from '../rules/peoples.js';
-import { kindOfId } from '../playerkind.js';
-import type { FatherCategory, FatherId } from '../rules/fathers.js';
+import { kindOfId, systemsOfId } from '../playerkind.js';
+import { ENGINE_COUNCILS } from '../rules/councils.js';
 import type { GoodId } from '../rules/goods.js';
 import { DEFAULT_DIFFICULTY, DIFFICULTY, DIFFICULTY_LEVELS, type DifficultyId, type DifficultyRules } from '../rules/difficulty.js';
 import { TRIBES, type PeopleDef, type PlayerId, type TribeId } from '../rules/nations.js';
@@ -21,7 +21,7 @@ import { AMERICAS } from './americas.js';
 import { CARIBBEAN } from './caribbean.js';
 import type { Calendar } from './calendar.js';
 import { AMERICAS_TEXT, capitalise, fillTemplate, type TermKey } from './terms.js';
-import type { Mechanics, NationEntry, NationTypeSelection, PlayerEntry, PlayablePeople, Rivals, RumourEntry, Scenario, ScenarioAi } from './types.js';
+import type { Council, CouncilId, CouncilTextKey, Mechanics, NationEntry, NationTypeSelection, PlayerEntry, PlayablePeople, Rivals, RumourEntry, Scenario, ScenarioAi } from './types.js';
 
 export * from './types.js';
 export * from './calendar.js';
@@ -315,9 +315,43 @@ export function newColonyBuildings(s: HasScenario, owner: PlayerId): Record<Buil
   return out as Record<BuildingKind, number>;
 }
 
-/** The scenario's council categories and members (catalogue order). */
-export function councilOf(s: HasScenario): { categories: readonly FatherCategory[]; members: readonly FatherId[] } {
-  return scenarioOf(s).council;
+/**
+ * The id of a nation type's council (native-nations.md T8): `nationTypes.european.council` or the
+ * people's selection's `council`; missing, `congress` and `people`.
+ */
+export function councilIdOf(x: ScenarioLike, type: 'european' | 'people'): CouncilId {
+  const scenario = asScenario(x);
+  if (type === 'european') return scenario.nationTypes?.european?.council ?? 'congress';
+  return (scenario.nationTypes?.people ?? PEOPLE_SELECTION).council ?? 'people';
+}
+
+/** A council by id: the scenario's, else the engine's (a people's council, rules/councils.ts). */
+export function councilById(scenario: Scenario, id: CouncilId): Council | undefined {
+  return Object.hasOwn(scenario.councils, id) ? scenario.councils[id] : ENGINE_COUNCILS[id];
+}
+
+/**
+ * The council a player sits: a nation's (the Congress), a playing people's; none for a company or
+ * the Crown (playerkind.ts `council`).
+ */
+export function councilOf(x: ScenarioLike, player: PlayerId): Council | undefined {
+  const type = systemsOfId(player).council;
+  return type ? councilById(asScenario(x), councilIdOf(x, type)) : undefined;
+}
+
+/**
+ * A council's word for itself (`Council.text`), else the scenario's term (`council`,
+ * `councilShort`, `member`, `members`); its product is "bells" unless it names its own.
+ */
+export function councilText(x: ScenarioLike, player: PlayerId, key: CouncilTextKey): string {
+  const own = councilOf(x, player)?.text?.[key];
+  if (own !== undefined) return own;
+  return key === 'product' ? 'bells' : term(x, key);
+}
+
+/** `councilText` with a capital first letter. */
+export function CouncilText(x: ScenarioLike, player: PlayerId, key: CouncilTextKey): string {
+  return capitalise(councilText(x, player, key));
 }
 
 /**

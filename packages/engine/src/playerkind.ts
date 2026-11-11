@@ -48,8 +48,13 @@ export interface PlayerSystems {
   crown: boolean;
   /** May declare independence (independence.ts, rebellion.ts, confederation.ts). */
   independence: boolean;
-  /** Collects liberty bells for the Continental Congress (fathers.ts); allies' shared bells. */
+  /** Its council is the Continental Congress, whose bells allies share (alliances.ts). */
   congress: boolean;
+  /**
+   * The nation type whose council it sits (fathers.ts, native-nations.md T8): its towns' and
+   * colonies' product pays for members of `councilOf(s, id)`. None for a company or the Crown.
+   */
+  council: 'european' | 'people' | null;
   /** Starts the game with a caravel carrying a soldier and a pioneer (game.ts `startingUnits`); a people starts with its towns (peopleplayer.ts). */
   startingCaravel: boolean;
   /**
@@ -86,26 +91,26 @@ export interface PlayerSystems {
 
 /**
  * The systems table. A people (T1, T10): no home port or market, no immigration, no Crown (taxes,
- * demands, royal wars, the Royal Expeditionary Force), no independence, no Congress (its own
- * council comes in step 3), no caravel. War and peace between any players (T11). It is not a
+ * demands, royal wars, the Royal Expeditionary Force), no independence, no Congress but its own
+ * council (step 3), no caravel. War and peace between any players (T11). It is not a
  * European to the peoples nobody plays (T2: no tension, missions or inciting against it), and
  * European relations, alliances, events and ranking are not its (steps 4 and 7 widen what is due).
  */
 export const PLAYER_SYSTEMS: Readonly<Record<PlayerKind, Readonly<PlayerSystems>>> = {
   nation: {
-    homePort: true, immigration: true, taxes: true, crown: true, independence: true, congress: true, startingCaravel: true,
+    homePort: true, immigration: true, taxes: true, crown: true, independence: true, congress: true, council: 'european', startingCaravel: true,
     war: true, relations: true, alliances: true, peoples: true, visitedByBraves: true, rumours: true, events: true, ranked: true, ai: 'level',
   },
   company: {
-    homePort: true, immigration: true, taxes: false, crown: false, independence: false, congress: false, startingCaravel: true,
+    homePort: true, immigration: true, taxes: false, crown: false, independence: false, congress: false, council: null, startingCaravel: true,
     war: false, relations: false, alliances: false, peoples: false, visitedByBraves: true, rumours: true, events: false, ranked: false, ai: 'company',
   },
   crown: {
-    homePort: true, immigration: false, taxes: true, crown: false, independence: false, congress: false, startingCaravel: false,
+    homePort: true, immigration: false, taxes: true, crown: false, independence: false, congress: false, council: null, startingCaravel: false,
     war: true, relations: false, alliances: false, peoples: false, visitedByBraves: false, rumours: true, events: false, ranked: false, ai: 'crown',
   },
   people: {
-    homePort: false, immigration: false, taxes: false, crown: false, independence: false, congress: false, startingCaravel: false,
+    homePort: false, immigration: false, taxes: false, crown: false, independence: false, congress: false, council: 'people', startingCaravel: false,
     war: true, relations: false, alliances: false, peoples: false, visitedByBraves: false, rumours: false, events: false, ranked: false, ai: 'people',
   },
 };

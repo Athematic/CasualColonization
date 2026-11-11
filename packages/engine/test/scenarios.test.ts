@@ -9,6 +9,8 @@ import {
   deserialize,
   DIFFICULTY,
   FATHER_CATEGORIES,
+  councilById,
+  councilIdOf,
   FATHERS,
   getScenario,
   GOODS,
@@ -69,9 +71,9 @@ describe('the Americas scenario is today’s tables', () => {
     expect(AMERICAS.peoples.ids).toEqual(Object.keys(TRIBES).slice(0, 8));
     expect(AMERICAS.peoples.overrides).toBeUndefined();
     expect(AMERICAS.peoples.produce).toEqual(NATIVE_PRODUCE);
-    expect(AMERICAS.council.members).toEqual(Object.keys(FATHERS).slice(0, 25));
-    expect(AMERICAS.council.members).toHaveLength(25);
-    expect(AMERICAS.council.categories).toEqual(FATHER_CATEGORIES);
+    expect(AMERICAS.councils.congress.members).toEqual(Object.keys(FATHERS).slice(0, 25));
+    expect(AMERICAS.councils.congress.members).toHaveLength(25);
+    expect(AMERICAS.councils.congress.categories).toEqual(FATHER_CATEGORIES);
   });
 
   it('units and buildings: all of them, in catalogue order', () => {
@@ -123,7 +125,7 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
     const unique = (ids: readonly string[]) => expect(new Set(ids).size).toBe(ids.length);
     unique(sc.goods);
     unique(sc.peoples.ids);
-    unique(sc.council.members);
+    for (const c of Object.values(sc.councils)) unique(c.members);
     unique(sc.units);
     unique(sc.buildings);
     for (const u of sc.units) expect(UNIT_TYPES[u]).toBeDefined();
@@ -131,7 +133,7 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
     for (const g of sc.goods) expect(GOODS).toContain(g);
     for (const t of sc.peoples.ids) expect(TRIBES[t]).toBeDefined();
     for (const t of sc.peoples.ids) expect(sc.peoples.settlements[TRIBES[t].lifeway], `a settlement kind for the ${TRIBES[t].lifeway} ${t}`).toBeDefined();
-    for (const f of sc.council.members) expect(FATHERS[f]).toBeDefined();
+    for (const c of Object.values(sc.councils)) for (const f of c.members) expect(FATHERS[f]).toBeDefined();
     unique(sc.terrain);
     unique(sc.map.stored.map((e) => e.id));
     for (const t of sc.terrain) expect(TERRAIN[t]).toBeDefined();
@@ -205,9 +207,15 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
     for (const list of Object.values(sc.ai.goods)) for (const g of list) expect(sc.goods).toContain(g);
   });
 
-  it('has a council with members in its categories', () => {
-    expect(sc.council.categories.length).toBeGreaterThan(0);
-    for (const f of sc.council.members) expect(sc.council.categories).toContain(FATHERS[f].category);
+  it('has a council for each nation type, with members in its categories', () => {
+    // The European nations' council is the scenario's; a people's may be the engine's (rules/councils.ts).
+    expect(Object.hasOwn(sc.councils, councilIdOf(sc, 'european'))).toBe(true);
+    for (const type of ['european'] as const) {
+      const council = councilById(sc, councilIdOf(sc, type))!;
+      expect(council, type).toBeDefined();
+      expect(council.categories.length).toBeGreaterThan(0);
+      for (const f of council.members) expect(council.categories).toContain(FATHERS[f].category);
+    }
   });
 
   it('switches mechanics on consistently', () => {

@@ -109,9 +109,9 @@ describe('the Caribbean scenario', () => {
 
 describe('the Caribbean council', () => {
   it('has fourteen Founding Fathers of the period and three new members', () => {
-    expect(CARIBBEAN.council.members).toHaveLength(17);
-    for (const id of ['henryMorgan', 'williamDampier', 'mariaSibyllaMerian'] as const) expect(CARIBBEAN.council.members).toContain(id);
-    for (const id of ['henryHudson', 'hernanCortes', 'simonBolivar', 'pocahontas'] as const) expect(CARIBBEAN.council.members).not.toContain(id);
+    expect(CARIBBEAN.councils.congress.members).toHaveLength(17);
+    for (const id of ['henryMorgan', 'williamDampier', 'mariaSibyllaMerian'] as const) expect(CARIBBEAN.councils.congress.members).toContain(id);
+    for (const id of ['henryHudson', 'hernanCortes', 'simonBolivar', 'pocahontas'] as const) expect(CARIBBEAN.councils.congress.members).not.toContain(id);
   });
 
   it('Henry Morgan: privateers × 1.5', () => {

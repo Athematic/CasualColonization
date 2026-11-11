@@ -16,7 +16,8 @@
  * Imports only the leaf rule tables, like the Americas, so any engine module can import the registry.
  */
 import { EUROPEAN_BUILDINGS } from '../rules/buildings.js';
-import { FATHER_CATEGORIES, type FatherId } from '../rules/fathers.js';
+import type { FatherId } from '../rules/fathers.js';
+import { congress } from '../rules/councils.js';
 import { GOODS, type GoodId } from '../rules/goods.js';
 import { NATIONS, type CompanyId, type NationId } from '../rules/nations.js';
 import { SETTLEMENT_KINDS } from '../rules/natives.js';
@@ -330,7 +331,8 @@ export const CARIBBEAN: Scenario = {
   goods: GOODS_IN_PLAY,
   units: without(EUROPEAN_UNIT_TYPES, 'expertFurTrapper', 'masterFurTrader'),
   buildings: without(EUROPEAN_BUILDINGS, 'furTrader'),
-  council: { categories: [...FATHER_CATEGORIES], members: COUNCIL },
+  // The Congress's rules with the period's members, named the Colonial Council by the terms below.
+  councils: { congress: congress(COUNCIL) },
   events: 'caribbean',
   ai: {
     // 202 turns instead of 609: the computer players' plans come about three times sooner.

@@ -7,7 +7,8 @@
  */
 import { EUROPEAN_BUILDINGS } from '../rules/buildings.js';
 import { COLONY_CHARTER } from '../rules/difficulty.js';
-import { AMERICAS_FATHERS, FATHER_CATEGORIES } from '../rules/fathers.js';
+import { AMERICAS_FATHERS } from '../rules/fathers.js';
+import { congress } from '../rules/councils.js';
 import { GOODS } from '../rules/goods.js';
 import type { Modifier } from '../rules/modifiers.js';
 import { HOME_PORTS, NATION_ORDER, NATIONS, TRIBE_ORDER, type AmericasNationId, type NationId } from '../rules/nations.js';
@@ -149,7 +150,8 @@ export const AMERICAS: Scenario = {
   goods: [...GOODS],
   units: [...EUROPEAN_UNIT_TYPES],
   buildings: [...EUROPEAN_BUILDINGS],
-  council: { categories: [...FATHER_CATEGORIES], members: [...AMERICAS_FATHERS] },
+  // The Continental Congress (rules/councils.ts), the European nations' council.
+  councils: { congress: congress(AMERICAS_FATHERS) },
   events: 'americas',
   ai: {
     // The pace the computer players' turn thresholds were tuned for (scenarios/index.ts aiTurn).

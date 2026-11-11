@@ -10,7 +10,7 @@
  */
 import type { BuildingKind } from '../rules/buildings.js';
 import type { DifficultyId, DifficultyRules } from '../rules/difficulty.js';
-import type { FatherCategory, FatherId } from '../rules/fathers.js';
+import type { CouncilCost, FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
 import type { PeopleEconomy } from '../rules/peoples.js';
 import type { Modifier, RumourOutcome } from '../rules/modifiers.js';
@@ -71,14 +71,21 @@ export interface Scenario {
    * Selections per nation type (native-nations.md T6, T7): the unit types and buildings a playing
    * people uses, from the same global catalogues. `units` and `buildings` above are the European
    * nations' selection. Missing means the engine's placeholder selection (`nationTypeOf`).
+   * `european.council` names the European nations' council (missing: `congress`).
    */
-  nationTypes?: { people?: NationTypeSelection };
+  nationTypes?: { european?: { council?: CouncilId }; people?: NationTypeSelection };
   /**
    * A playing people's stores and gardens (native-nations.md T10; rules/peoples.ts), merged over
    * the engine's PEOPLE_ECONOMY. Absent fields keep the engine's values.
    */
   peopleEconomy?: Partial<PeopleEconomy>;
-  council: Council;
+  /**
+   * The scenario's councils, keyed by id (native-nations.md T8): the Americas' Continental Congress
+   * is `congress`. Each nation type names its council (`nationTypes`; missing: `congress` for the
+   * European nations, `people` for a playing people). A people's council the scenario does not
+   * define is the engine's `PEOPLE_COUNCIL` (rules/councils.ts).
+   */
+  councils: Record<CouncilId, Council>;
   /** What the computer players need to know about the scenario's content. */
   ai: ScenarioAi;
   /** Id of a registered event set (events/index.ts). `config.eventSet` overrides it (tests). */
@@ -672,8 +679,13 @@ export interface PlayerEntry extends NationIdentity {
   port: PortEntry;
 }
 
+/** A council's id in `Scenario.councils`. */
+export type CouncilId = string;
+
 /** What one nation type uses from the global catalogues (native-nations.md T6, T7). */
 export interface NationTypeSelection {
+  /** Its council in `Scenario.councils` (T8). Missing: `people`. */
+  council?: CouncilId;
   /** Unit types, in catalogue order: what its towns build and what its braves become. */
   units: readonly UnitTypeId[];
   /** Buildings, in catalogue order: what its towns have and build. */
@@ -726,8 +738,13 @@ export interface ScenarioPeoples {
   rules?: NativeRulesOverride;
 }
 
-/** The scenario's council (the Americas: the Continental Congress's Founding Fathers). */
+/**
+ * A council (native-nations.md T8; the Americas: the Continental Congress's Founding Fathers). Its
+ * product pays for its members: liberty bells in the engine (`Player.bells`, `fatherBells`), named
+ * by the council's `text.product`.
+ */
 export interface Council {
+  /** Its categories, open strings: one candidate of each is offered at a time, in this order. */
   categories: FatherCategory[];
   /** Ids in the global catalogue (FATHERS), in catalogue order. */
   members: FatherId[];
@@ -736,7 +753,23 @@ export interface Council {
    * listed here has the catalogue's modifiers and joining effects.
    */
   effects?: Partial<Record<FatherId, MemberEffects>>;
+  /**
+   * Its words where they differ from the scenario's terms (`council`, `councilShort`, `member`,
+   * `members`, `product`): the Congress uses the scenario's terms, a people's council its own.
+   */
+  text?: Partial<Record<CouncilTextKey, string>>;
+  /** Members of a category become likelier late in the game (the Congress: political +2 after turn 120, scaled by `aiTurn`). */
+  late?: { category: FatherCategory; turn: number; add: number };
+  /** The order computer players choose candidates in (missing: the Congress's, `CONGRESS_AI_PREFERENCE`). */
+  aiPreference?: FatherId[];
+  /** What the next member costs (missing: the Congress's rule, `CONGRESS_COST`). */
+  cost?: CouncilCost;
+  /** The sprite id of its hall's backdrop; missing: the scenario's `art.councilHall`. */
+  hall?: string;
 }
+
+/** The words a council may name for itself (`councilText`). */
+export type CouncilTextKey = 'council' | 'councilShort' | 'member' | 'members' | 'product';
 
 /** What a council member does: passive modifiers while in the council, and effects once on joining. */
 export interface MemberEffects {

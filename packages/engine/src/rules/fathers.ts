@@ -1,7 +1,15 @@
 import type { Effect } from '../events/types.js';
 import type { Modifier } from './modifiers.js';
+import type { PlayerId } from './nations.js';
 
-export type FatherCategory = 'trade' | 'exploration' | 'military' | 'political' | 'religious';
+/**
+ * A council's categories are open (native-nations.md T8): each council names its own (scenarios/types.ts
+ * `Council.categories`). The Continental Congress's five are `CongressCategory`.
+ */
+export type FatherCategory = string;
+
+/** The Continental Congress's five categories (the Americas and the Caribbean). */
+export type CongressCategory = 'trade' | 'exploration' | 'military' | 'political' | 'religious';
 
 export type FatherId =
   | 'adamSmith'
@@ -45,6 +53,17 @@ export interface FatherDef {
   modifiers?: Modifier[];
   /** Applied once, in order, when the father joins (the events' effects, events/effects.ts). */
   onJoin?: Effect[];
+  /** The name is plural, a collective figure ("The Clan Mothers join the Council"). */
+  plural?: boolean;
+  /** Offered only to these players (a named person of one people sits only in that people's council). Absent: anyone. */
+  peoples?: PlayerId[];
+  /**
+   * How the member is shown: `emblem` draws a neutral emblem with its initials, never a face (native-nations.md
+   * T9: no invented likenesses). Absent: a portrait (the sprite pack's, else the procedural figure).
+   */
+  portrait?: 'emblem';
+  /** Where the member is documented (a work and its publisher), for the catalogue's readers. */
+  source?: string;
 }
 
 const f = (id: FatherId, name: string, category: FatherCategory, effect: string, weight = 5, more: Partial<FatherDef> = {}): FatherDef => ({ id, name, category, effect, weight, ...more });
@@ -167,9 +186,31 @@ export const AMERICAS_FATHERS: FatherId[] = [
   'williamBrewster', 'williamPenn', 'jeanDeBrebeuf', 'juanDeSepulveda', 'bartolomeDeLasCasas',
 ];
 
-export const FATHER_CATEGORIES: FatherCategory[] = ['trade', 'exploration', 'military', 'political', 'religious'];
+export const FATHER_CATEGORIES: CongressCategory[] = ['trade', 'exploration', 'military', 'political', 'religious'];
 
-/** Liberty bells needed for the next father, given how many have joined. */
-export function fatherCost(joined: number, nations: number): number {
-  return Math.round((60 + 50 * joined + 12 * joined * joined) * (0.85 + nations * 0.03));
+/**
+ * The order computer players choose the Congress's candidates in; a candidate not on the list is
+ * taken only when nothing on it is offered (the first offered).
+ */
+export const CONGRESS_AI_PREFERENCE: FatherId[] = [
+  'thomasJefferson', 'williamBrewster', 'peterStuyvesant', 'pocahontas', 'thomasPaine', 'williamPenn', 'adamSmith',
+  'simonBolivar', 'hernandoDeSoto', 'ferdinandMagellan', 'laSalle', 'paulRevere', 'georgeWashington',
+];
+
+/**
+ * What the next member of a council costs in its product: `(base + step × joined + square ×
+ * joined²) × (0.85 + 0.03 × nations)`, rounded. The Congress's rule is 60, 50, 12.
+ */
+export interface CouncilCost {
+  base: number;
+  step: number;
+  square: number;
+}
+
+/** The Continental Congress's cost rule. */
+export const CONGRESS_COST: CouncilCost = { base: 60, step: 50, square: 12 };
+
+/** Liberty bells needed for the next father, given how many have joined (a council's own cost rule, else the Congress's). */
+export function fatherCost(joined: number, nations: number, rule: CouncilCost = CONGRESS_COST): number {
+  return Math.round((rule.base + rule.step * joined + rule.square * joined * joined) * (0.85 + nations * 0.03));
 }
