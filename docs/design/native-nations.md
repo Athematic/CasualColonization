@@ -18,7 +18,7 @@ Folded in from the roadmap:
 - The framework's **lifeway**: only today's fixed-settlement lifeways in Beta 3; Australia's seasonal lifeway later.
 
 **Non-goals:**
-- Hex maps (a Beta 4 candidate). The Vinland map is drawn so it can move to hexagons later, but Beta 3 plays on squares.
+- Hex maps (Beta 4). The Vinland map is drawn so it can move to hexagons; Beta 3 plays it on squares, and Beta 4 makes Vinland hex-only (Simon, 11 November 2026).
 - Australia (after Beta 3). Its peoples need the seasonal lifeway and Country, which this note keeps open but does not build.
 - Rebalancing the Americas or the Caribbean. Both stay bit-identical while their peoples are not played (section 4, T21).
 - Network play.

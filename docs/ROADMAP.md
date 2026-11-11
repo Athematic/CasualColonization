@@ -54,13 +54,37 @@ Folded in from elsewhere on this roadmap:
 - Vinland, around 1000 (from Scenarios), as the scenario: one map seen from either side, the Norse around 1000 and the Europeans from 1492.
 - The framework's lifeway: only today's fixed-settlement lifeways; Australia's seasonal lifeway later.
 
-Not in it: hex maps (a Beta 4 candidate) and Australia, which follows Beta 3.
+Not in it: hex maps (Beta 4) and Australia, which follows Beta 4 on hexes.
+
+## Beta 4: Hex maps
+
+Status: `idea, agreed in outline` (Simon, 11 November 2026). A scenario can be played on hexagons. Builds the hex steps listed under Later (step 1, the grid abstraction, was done in 0.10) and proves them on Vinland, which Beta 3 builds. The Americas and the Caribbean stay square. Gets its own design note first. About XL.
+
+Simon's decisions on the outline:
+- **Vinland is hex-only** in Beta 4; its square version is dropped.
+- **Australia is built on hexes from the start**, so the order is Beta 3 → Beta 4 → Australia.
+- **No map editor** in Beta 4, unless it helps make the Vinland and Australia maps; the full editor stays Later.
+- **No locally generated hex terrain tiles** in Beta 4: local generation on the Mac may come in Beta 5 or 6. A placeholder sprite pack (flat colours, simple silhouettes, with a missing-ids check) carries the sprite style on hexes until then.
+- **Ligne claire is tried on hexes.**
+
+| Step | What | Size | Prio |
+| --- | --- | --- | --- |
+| 0 | Design note and decisions | S | P1 |
+| 1 | Hexagon rules and a hidden test scenario: 6 directions, a work area of 6, movement keys | M | P1 |
+| 2 | Rivers and roads on hexes (core: today's river masks are square-only): 6-direction masks, river and road movement for units, the path search and braves, conversion of stored river masks | M | P1 |
+| 3 | The schematic style on hexes, with rivers and roads along hex edges; a hex scenario playable | M | P1 |
+| 4 | Vinland on hexes: its map as offset hexagon rows with a review pass; computer players retuned with tournaments; the Mac speed gate on a hex scenario | M–L | P1 |
+| 5 | Placeholder sprite pack and missing-ids check; the sprite style on hexes | M | P2 |
+| 6 | Ligne claire on hexes | L | P2 |
+| 7 | Railroads along hex edges (optional; they don't exist yet) | M | P3 |
+
+Not in Beta 4: converting the Americas and the Caribbean (later, one scenario at a time, each with tournaments), the interface redesign, locally generated terrain sprites.
 
 ## Scenarios (content)
 
 Scenario content, built on the 0.9 framework.
 
-Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](design/australia.md). Comes after the cooperation betas, so Federation can be a peaceful way to win. Australia follows Beta 3 (native nations), which builds the council system and leaves the shapes for its peoples.
+Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](design/australia.md). Comes after the cooperation betas, so Federation can be a peaceful way to win. Australia follows Beta 3 (native nations), which builds the council system and leaves the shapes for its peoples, and Beta 4, so it is built on hexagons from the start (Simon, 11 November 2026).
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
@@ -82,7 +106,7 @@ The Australia map (geography preview with the current rules; ships arrive from t
   - Done: packs and styles can bring their own interface CSS (`css`, `cssFiles`, `fallbackCss: false`).
   - Next: packs that use no hand-drawn graphics at all. A pack option (for example `fallback: 'placeholder'`) draws a plain placeholder (a flat tile colour, or a simple silhouette per category) instead of the procedural drawing for missing sprites. Packs can also supply sprite versions of the layers that are always procedural today: rivers (pieces per direction and size), coastline ink, fog edges, colony and unit flags, captions and badges. Plus a check that lists which ids a pack is missing.
 - A map editor in the game.
-- Hex maps as a scenario option (Simon's idea, November 2026): a scenario chooses square or hexagon tiles; the Americas stay square. Not a rewrite: most rules go through one grid definition, so the work is mostly in drawing and balance. Roughly XL in all, comparable to 0.9:
+- Hex maps as a scenario option (Simon's idea, November 2026; planned as Beta 4, see above): a scenario chooses square or hexagon tiles; the Americas stay square. Not a rewrite: most rules go through one grid definition, so the work is mostly in drawing and balance. Roughly XL in all, comparable to 0.9:
   1. Grid as an engine abstraction, squares unchanged (M; done in 0.10, see [SHIPPED.md](SHIPPED.md#010-faster-turns-done)).
   2. Hexagon rules and a test scenario on hexes: 6 directions, a colony works 6 tiles instead of 8, no diagonal shortcuts, 6 movement keys (M).
   3. The schematic style draws hexagons (clicking, camera, terrain, coasts, rivers and roads along hex edges), so a hex scenario is playable (M).
