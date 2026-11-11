@@ -377,10 +377,11 @@ export const CARIBBEAN: Scenario = {
   // peace and alliance: mutual defence comes sooner here (10 +/- 3 years of good relations, not
   // 16 +/- 4) and the computer nations seek it twice as readily (ai.cooperation.proposeDefence).
   peopleTreaties: { trade: { volume: { min: 0, max: 0 } }, offer: 0.5, defence: { years: { base: 10, spread: 3 } } },
-  victory: [{ id: 'concord' }, { id: 'time' }],
+  victory: [{ id: 'concord' }, { id: 'prosperity' }, { id: 'time' }],
   rumours: AMERICAS.rumours,
-  // A century of trade: wealth and trade agreements weigh more than in the Americas (1/800, 3, 4).
-  score: { wealth: 1 / 500, tradeAgreement: 5, favoured: 6 },
+  // A century of trade: wealth and trade agreements (with nations and with peoples) weigh more than
+  // in the Americas (1/800, 3, 4 and 3).
+  score: { wealth: 1 / 500, tradeAgreement: 5, favoured: 6, peopleTreaty: 5 },
   text: {
     colonyLand: 'the West Indies',
     council: 'Colonial Council',

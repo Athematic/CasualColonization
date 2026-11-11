@@ -7,6 +7,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   AMERICAS,
+  CARIBBEAN,
+  prosperityLine,
+  type ArenaEntry,
   applyCommand,
   calendarOf,
   checkVictory,
@@ -95,6 +98,26 @@ function landBeside(s: GameState, x: number, y: number): { x: number; y: number 
   if (!n) throw new Error('no land beside');
   return n;
 }
+
+describe('prosperity: the scenarios', () => {
+  it('the Americas and the Caribbean play for it after concord, and weigh treaties with peoples', () => {
+    expect(AMERICAS.victory.map((v) => v.id)).toEqual(['independence-war', 'concord', 'prosperity', 'time']);
+    expect(CARIBBEAN.victory.map((v) => v.id)).toEqual(['concord', 'prosperity', 'time']);
+    expect(SCORE_WEIGHTS.peopleTreaty).toBe(3);
+    expect(CARIBBEAN.score?.peopleTreaty).toBe(5);
+  });
+
+  it('marks a prosperity win, not a concord one, in the arena line', () => {
+    const rows = [
+      { game: 0, level: 'creative', prosperity: true, prosperityFails: [] },
+      { game: 0, level: 'naive', prosperityFails: ['treaties'] },
+      { game: 1, level: 'creative', prosperityFails: ['peace', 'score'] },
+      { game: 1, level: 'naive', prosperityFails: ['score'] },
+    ] as unknown as ArenaEntry[];
+    expect(prosperityLine(rows)).toBe('Prosperity: 1 of 2 games won by prosperity (creative); at the end 1 of 4 nations qualified; failing each condition: peace 1, burned 0, treaties 1, score 2; failing only that one: peace 0, burned 0, treaties 1, score 1. ');
+    expect(prosperityLine(rows.map((r) => ({ ...r, prosperityFails: undefined })))).toBe('');
+  });
+});
 
 describe('prosperity: the conditions', () => {
   it('a nation at peace with the peoples it met, with treaties with half of them and the best score, wins', () => {

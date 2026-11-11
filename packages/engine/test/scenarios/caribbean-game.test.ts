@@ -16,10 +16,12 @@ describe('a full computer game in the Caribbean', () => {
   let played: GameState | undefined;
   const play = () => (played ??= playArenaGame(2024, line, 300, 'medium', undefined, false, undefined, false, true, true, { scenario: 'caribbean' }).state);
 
-  it('ends by time in autumn 1750, with every nation still loyal', () => {
+  it('ends in autumn 1750, by prosperity (England with the Arawak), with every nation still loyal', () => {
     const s = play();
     expect(s.gameOver?.turn).toBe(201);
-    expect(s.gameOver?.reason).toBe('The year 1750 has come, and the age of the chartered companies is over.');
+    expect(s.gameOver?.reason).toBe('The year 1750 has come, and the age of the chartered companies is over. In peace and partnership with the Arawak, England wins by prosperity.');
+    expect(s.gameOver?.winners).toEqual(['england']);
+    expect(s.gameOver?.partners).toEqual(['arawak']);
     expect(s.gameOver?.winner).toBeDefined();
     for (const p of s.players) expect(p.independence).toBe('none');
     expect(s.players.some((p) => p.id === 'crown')).toBe(false);

@@ -182,8 +182,9 @@ export const AMERICAS: Scenario = {
     peopleTreaties: ['people-trade', 'land-use', 'exchange', 'defence'],
   },
   // Winning the War of Independence ends the game; otherwise it ends after autumn 1850, won by an
-  // alliance holding most of the score together, or else by the highest score.
-  victory: [{ id: 'independence-war' }, { id: 'concord' }, { id: 'time' }],
+  // alliance holding most of the score together, or by every nation that prospered in peace and
+  // partnership with the native peoples (prosperity.ts, Beta 2), or else by the highest score.
+  victory: [{ id: 'independence-war' }, { id: 'concord' }, { id: 'prosperity' }, { id: 'time' }],
   rumours: AMERICAS_RUMOURS,
   // No `difficulty` or `score`: the Americas play by the engine's own DIFFICULTY and SCORE_WEIGHTS.
   // The Americas' terms are the defaults every scenario starts from (scenarios/terms.ts).

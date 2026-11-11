@@ -38,7 +38,7 @@ export const SCORE_WEIGHTS = {
    * Per treaty with a native people in force (any kind: trade, land use, exchange, defence; Beta 2,
    * native-partners.md N10). 0 leaves the line out of the breakdown.
    */
-  peopleTreaty: 0,
+  peopleTreaty: 3,
   /** Per native settlement the nation has met whose tension is below `tensionBelow`. */
   peacefulTribe: 1,
   /** Tension (0 content, 1000 furious) under which a settlement counts as at peace. */
