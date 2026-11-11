@@ -88,7 +88,7 @@ export function learnSkill(s: GameState, unitId: string, settlementId: string): 
   const def = UNIT_TYPES[u.type];
   if (def.kind !== 'colonist' || u.role !== 'none') fail('Only unarmed, unequipped colonists can learn from natives.');
   if (def.skill > 0) fail('This colonist is already an expert.');
-  if (u.type === 'pettyCriminal' && u.owner !== 'france') fail('The natives will not teach a petty criminal.');
+  if (u.type === 'pettyCriminal' && !modifiers(s, u.owner, 'nativesTeach').some((m) => m.units.includes(u.type))) fail('The natives will not teach a petty criminal.');
   if (!st.skill) fail('This settlement has nothing more to teach.');
   const skill = st.skill;
   u.type = skill;

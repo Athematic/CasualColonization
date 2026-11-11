@@ -69,7 +69,7 @@ export const AMERICAS_GENERATOR: GeneratorSettings = {
 /** What each nation's bonus does (its text is NATIONS[id].bonus), read at the engine's hook points (rules/modifiers.ts). */
 const BONUSES: Partial<Record<NationId, Modifier[]>> = {
   england: [{ hook: 'crossesStep', set: 12 }],
-  france: [{ hook: 'nativeGifts', add: 0.15 }],
+  france: [{ hook: 'nativeGifts', add: 0.15 }, { hook: 'nativesTeach', units: ['pettyCriminal'] }],
   netherlands: [{ hook: 'priceRecovery', set: 0.2 }],
   spain: [{ hook: 'offenceVsSettlements', mul: 1.5 }],
   portugal: [{ hook: 'shipMoves', add: 1 }],

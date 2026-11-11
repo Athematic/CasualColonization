@@ -14,7 +14,11 @@ import {
   CARIBBEAN,
   gridOf,
   landPrice,
+  learnSkill,
+  modifiers,
+  nationOf,
   nativeLandOwner,
+  UNIT_TYPES,
   player,
   createUnit,
   isWater,
@@ -258,5 +262,33 @@ describe("native land's reach (N6, fix a)", () => {
       expect(d).toBeLessThanOrEqual(2);
       expect(Object.values(s.settlements).every((o) => grid.distance(o.x, o.y, x, y) >= d)).toBe(true);
     }
+  });
+});
+
+describe("France's teaching as a modifier (fix d)", () => {
+  /** A petty criminal of `nation` next to a settlement that still teaches. */
+  function criminal(s: GameState, nation: NationId) {
+    const st = Object.values(s.settlements).find((o) => o.skill)!;
+    const u = createUnit(s, nation, 'pettyCriminal', { kind: 'map', ...landBeside(s, st.x, st.y) });
+    u.moves = 1;
+    return { st, u };
+  }
+
+  it('is data: France holds the nativesTeach modifier in both scenarios, and the text still says so', () => {
+    for (const scenario of [AMERICAS, CARIBBEAN]) {
+      const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['england'], scenario: scenario.id });
+      expect(modifiers(s, 'france', 'nativesTeach')).toEqual([{ hook: 'nativesTeach', units: ['pettyCriminal'] }]);
+      expect(modifiers(s, 'england', 'nativesTeach')).toEqual([]);
+      expect(nationOf(s, 'france').bonus.text).toMatch(/teach more readily/);
+    }
+  });
+
+  it('lets a French petty criminal learn, and nobody else\'s', () => {
+    const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['england', 'france'] });
+    const french = criminal(s, 'france');
+    learnSkill(s, french.u.id, french.st.id);
+    expect(UNIT_TYPES[s.units[french.u.id].type].skill).toBeGreaterThan(0);
+    const english = criminal(s, 'england');
+    expect(() => learnSkill(s, english.u.id, english.st.id)).toThrow(/will not teach a petty criminal/);
   });
 });

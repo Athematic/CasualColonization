@@ -133,7 +133,7 @@ const N = {
     adjective: 'French',
     color: NATIONS.france.color,
     // The French made treaties with the Kalinago (1660) and traded with them throughout the century.
-    bonus: { text: 'Cooperation: native settlements give better gifts and teach more readily.', modifiers: [{ hook: 'nativeGifts', add: 0.15 }] },
+    bonus: { text: 'Cooperation: native settlements give better gifts and teach more readily.', modifiers: [{ hook: 'nativeGifts', add: 0.15 }, { hook: 'nativesTeach', units: ['pettyCriminal'] }] },
     colonyNames: [
       'Saint-Pierre', 'Fort-Royal', 'Basse-Terre', 'Cap-Français', 'Port-de-Paix', 'Léogâne', 'Petit-Goâve', 'Saint-Louis',
       'Les Cayes', 'Port-au-Prince', 'Cayenne', 'Marigot', 'Grand-Bourg', 'Le Carbet', 'La Trinité', 'Le Marin', 'Sainte-Anne',

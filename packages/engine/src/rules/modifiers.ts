@@ -62,6 +62,8 @@ export type Modifier =
   | { hook: 'landPrice'; set: number }
   /** Added to the chance a chief gives a gift (France +0.15). */
   | { hook: 'nativeGifts'; add: number }
+  /** Unit types native settlements teach although they otherwise refuse to (France: petty criminals). */
+  | { hook: 'nativesTeach'; units: UnitTypeId[] }
   /** A mission's chance to win a convert, multiplied (Jean de Brébeuf × 2). */
   | { hook: 'conversionChance'; mul: number }
   /** What a mission's converts become (Bartolomé de las Casas: free colonists). */
