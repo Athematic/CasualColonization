@@ -5,11 +5,13 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./packs/ligne-claire-painted": "./packs/ligne-claire-painted.ts"
+    "./packs/ligne-claire-painted": "./packs/ligne-claire-painted.ts",
+    "./packs/placeholder": "./packs/placeholder.ts"
   },
   "dependencies": {
     "@cc/engine": "0.1.0",
     "@cc/render-api": "0.1.0",
-    "@cc/style-ligne-claire": "0.1.0"
+    "@cc/style-ligne-claire": "0.1.0",
+    "@cc/style-schematic": "0.1.0"
   }
 }

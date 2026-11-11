@@ -2,12 +2,15 @@ import type { GridKind } from '@cc/engine';
 import { drawCongressHallBackdrop, drawsGrid, FATHER_FIGURE_ASPECT, getStyle, listStyles, registerStyle, type IconRequest, type StylePlugin } from '@cc/render-api';
 import ligneClaire from '@cc/style-ligne-claire';
 import ligneClairePainted from '@cc/style-sprites/packs/ligne-claire-painted';
+import placeholder from '@cc/style-sprites/packs/placeholder';
 import schematic from '@cc/style-schematic';
 
 // Built-in styles. A new style only needs to implement StylePlugin and be registered here.
 registerStyle(ligneClaire);
 registerStyle(ligneClairePainted);
 registerStyle(schematic);
+// The sprite style with the placeholder pack (no images): draws squares and hexes (hex-maps.md H15).
+registerStyle(placeholder);
 
 // The painted pack falls back to plain Ligne claire wherever a sprite is missing or offline.
 export const DEFAULT_STYLE = ligneClairePainted.id;
@@ -25,8 +28,9 @@ export function activeStyle(): StylePlugin {
 }
 
 /**
- * The style that draws the map of a game on this grid: the chosen one when it can, else the
- * schematic style, which draws every grid (hex-maps.md H14). Panels and icons keep the chosen style.
+ * The style that draws the map of a game on this grid: the chosen one when it can (the schematic and
+ * placeholder styles draw hexes), else the schematic style, which draws every grid (hex-maps.md H14).
+ * Panels and icons keep the chosen style.
  */
 export function mapStyleFor(grid: GridKind): StylePlugin {
   return drawsGrid(active, grid) ? active : schematic;

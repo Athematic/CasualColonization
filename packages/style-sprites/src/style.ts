@@ -5,6 +5,10 @@
  * its layers (renderers without hook support just draw themselves). Icons try the pack first and
  * hand anything else to the fallback's drawIcon. Nothing is fetched until the style is used; the
  * manifest and images then load in the background, and views redraw as they arrive.
+ *
+ * The style draws the grids its fallback's renderer draws (`grids`): over Ligne claire squares only, over the
+ * schematic style squares and hexes. With `fallback: 'placeholder'` missing sprites and icons are plain
+ * placeholders (placeholder.ts) instead of the fallback's drawing.
  */
 import { UNIT_TYPES } from '@cc/engine';
 import { FATHER_FIGURE_ASPECT, type IconRequest, type MapRenderer, type Scene, type StylePlugin } from '@cc/render-api';
@@ -12,6 +16,7 @@ import { SpriteIds } from './ids.js';
 import { createLayerHooks } from './layers.js';
 import { completePack, type SpritePack } from './pack.js';
 import { Painter } from './painter.js';
+import { placeholderBackdrop, placeholderIcon, placeholderPennant } from './placeholder.js';
 import { browserEnv, spriteBase, transitionsOverride } from './source.js';
 import { SpriteStore, type StoreEnv } from './store.js';
 
@@ -38,6 +43,8 @@ function contextScale(ctx: CanvasRenderingContext2D): number {
 }
 
 function resolveBase(pack: SpritePack): string | null {
+  // A pack without images stays without them, whatever ?sprites= says.
+  if (pack.source.base === null) return null;
   let storage: Storage | undefined;
   try {
     storage = typeof localStorage !== 'undefined' ? localStorage : undefined;
@@ -81,6 +88,7 @@ export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts
   const theme = pack.theme === 'inherit' ? fallback.theme : pack.theme;
   const ink = theme['--ink'];
   const procedural = new Set(pack.procedural ?? []);
+  const ph = pack.fallback === 'placeholder';
   let painter: Painter | undefined;
 
   /** Created on first use, so a style that is never chosen loads nothing. */
@@ -127,7 +135,21 @@ export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts
 
   function drawIcon(ctx: CanvasRenderingContext2D, icon: IconRequest, size: number): void {
     if (!procedural.has('icons') && drawSpriteIcon(ctx, icon, size)) return;
+    if (ph && !procedural.has('icons')) {
+      placeholderIcon(ctx, icon, size);
+      if (icon.kind === 'unit' && fliesPennant(icon) && pack.rules.unitIcon.pennant && size >= pack.rules.unitIcon.pennant.minIcon) {
+        placeholderPennant(ctx, 0, 0, size * pack.rules.unitIcon.pennant.size, icon.color);
+      }
+      return;
+    }
     fallback.drawIcon(ctx, icon, size);
+  }
+
+  /** Sprites are nation-neutral: the owner's pennant on ships, soldiers and artillery. */
+  function fliesPennant(icon: Extract<IconRequest, { kind: 'unit' }>): boolean {
+    const kind = UNIT_TYPES[icon.type].kind;
+    const military = icon.role === 'soldier' || icon.role === 'dragoon';
+    return (kind === 'ship' && icon.type !== 'privateer') || (kind === 'colonist' && military) || kind === 'artillery';
   }
 
   function drawSpriteIcon(ctx: CanvasRenderingContext2D, icon: IconRequest, size: number): boolean {
@@ -138,11 +160,9 @@ export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts
         const r = pack.rules.unitIcon;
         const box = size * r.scale;
         if (!p.square(ctx, ids.unit(icon.type, icon.role), (size - box) / 2, (size - box) / 2, box, dpr)) return false;
-        // Sprites are nation-neutral: the owner's pennant on ships, soldiers and artillery.
-        const kind = UNIT_TYPES[icon.type].kind;
-        const military = icon.role === 'soldier' || icon.role === 'dragoon';
-        const flies = (kind === 'ship' && icon.type !== 'privateer') || (kind === 'colonist' && military) || kind === 'artillery';
-        if (flies && r.pennant && size >= r.pennant.minIcon) p.tinted(ctx, ids.overlay('pennant'), 0, 0, size * r.pennant.size, dpr, icon.color);
+        if (fliesPennant(icon) && r.pennant && size >= r.pennant.minIcon && !p.tinted(ctx, ids.overlay('pennant'), 0, 0, size * r.pennant.size, dpr, icon.color) && ph) {
+          placeholderPennant(ctx, 0, 0, size * r.pennant.size, icon.color);
+        }
         return true;
       }
       case 'product':
@@ -177,6 +197,8 @@ export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts
     stylesheets: pack.stylesheets === 'inherit' || pack.stylesheets === undefined ? fallback.stylesheets : pack.stylesheets,
     css: [pack.fallbackCss === false ? undefined : fallback.css, pack.css].filter(Boolean).join('\n') || undefined,
     // A getter: the sprite folder can change with ?sprites= between page loads.
+    // The grids the fallback's renderer draws: the hooks paint into it on any of them.
+    ...(fallback.grids ? { grids: fallback.grids } : {}),
     get cssUrls() {
       const base = opts.base !== undefined ? opts.base : resolveBase(pack);
       return [...(pack.fallbackCss === false ? [] : fallback.cssUrls ?? []), ...packCssUrls(pack.cssFiles, base)];
@@ -185,6 +207,10 @@ export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts
     drawIcon,
     drawBackdrop(ctx, kind, width, height, sprite) {
       if (!procedural.has('icons') && getPainter().fitted(ctx, ids.backdrop(kind, sprite), 0, 0, width, height, contextScale(ctx), { cover: true })) return true;
+      if (ph && !procedural.has('icons')) {
+        placeholderBackdrop(ctx, width, height, theme['--panel'], ink);
+        return true;
+      }
       return fallback.drawBackdrop?.(ctx, kind, width, height, sprite) ?? false;
     },
     tileColor: (tile) => fallback.tileColor(tile),

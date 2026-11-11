@@ -139,8 +139,11 @@ export interface DrawRules {
 export type PackLayer = 'water' | 'land' | 'shore' | 'roads' | 'relief' | 'bonus' | 'rumour' | 'settlements' | 'colonies' | 'units' | 'icons';
 
 export interface SpriteSource {
-  /** Folder with manifest.json (made by tools/sprite-pipeline), relative to the page or absolute. */
-  base: string;
+  /**
+   * Folder with manifest.json (made by tools/sprite-pipeline), relative to the page or absolute. Null: a pack
+   * without images (the placeholder pack), which no `?sprites=` setting changes.
+   */
+  base: string | null;
   /** Manifest file name inside `base`. Default manifest.json. */
   manifest?: string;
   /** Query parameter that overrides `base` (remembered in localStorage). Default `sprites`. */
@@ -180,6 +183,13 @@ export interface SpritePack {
    * pennants, routes and badges always come from the fallback.
    */
   procedural?: readonly PackLayer[];
+  /**
+   * What draws a sprite the pack lacks (or has not loaded yet): 'procedural' (default) the fallback style's own
+   * drawing; 'placeholder' a plain placeholder instead (placeholder.ts: a flat colour per terrain, a simple
+   * silhouette per category), so a pack can avoid hand-drawn graphics altogether. Layers listed in `procedural`,
+   * and the layers that are always the fallback's (rivers, coastline ink, fog, captions), stay procedural.
+   */
+  fallback?: 'procedural' | 'placeholder';
 }
 
 /** The id scheme of docs/SPRITE_PROMPTS.md section 5 and tools/sprite-pipeline. */

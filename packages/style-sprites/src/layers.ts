@@ -1,8 +1,14 @@
 /**
  * The map layers a sprite pack paints over its fallback style, as MapLayerHooks. Each hook returns
- * false when its sprite is missing or not loaded yet, and the fallback draws that piece instead.
+ * false when its sprite is missing or not loaded yet, and the fallback draws that piece instead; with
+ * `fallback: 'placeholder'` the hook draws a plain placeholder (placeholder.ts) and returns true.
+ *
+ * On hexes (a fallback renderer that draws them: the schematic style) square sprites are clipped to the
+ * hex the renderer traces, and the square-only pieces (coast bands, terrain transitions, road spokes in
+ * quarter turns) are not used (hex-maps.md H15): roads are drawn through the centres as placeholders, or
+ * left to the renderer.
  */
-import { nationOf, TERRAIN, type GameState, type TerrainId } from '@cc/engine';
+import { gridOf, nationOf, settlementKindOf, TERRAIN, type GameState, type TerrainId } from '@cc/engine';
 import type { LayerTile, MapLayerHooks } from '@cc/render-api';
 import type { SpriteIds } from './ids.js';
 import type { PackLayer, Placement, SpritePack } from './pack.js';
@@ -10,6 +16,18 @@ import type { Painter } from './painter.js';
 import { coastPieces } from './coast.js';
 import { isTakeOf, type VariantContext } from './variants.js';
 import { transitionPieces, type TransitionPieces } from './transitions.js';
+import {
+  placeholderBonus,
+  placeholderBrave,
+  placeholderColony,
+  placeholderGround,
+  placeholderPlowed,
+  placeholderRelief,
+  placeholderRoad,
+  placeholderRumour,
+  placeholderSettlement,
+  placeholderUnit,
+} from './placeholder.js';
 
 export { coastPieces };
 
@@ -56,9 +74,12 @@ export function roadTurns(i: number): { diagonal: boolean; turns: number } {
 export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Painter, ink: string): MapLayerHooks {
   const off = new Set<PackLayer>(pack.procedural ?? []);
   const rules = pack.rules;
+  const ph = pack.fallback === 'placeholder';
   let dpr = 1;
   const plowed = new Set<LayerTile>();
   let seed = 0;
+  let hex = false;
+  let state: Readonly<GameState> | undefined;
   // The variant choice of a tile: its position, the map seed, and what the manifest has (nothing, until it has loaded).
   const vary = (t: LayerTile): VariantContext | undefined =>
     rules.variants === 'off' ? undefined : { mode: rules.variants, seed, x: t.x, y: t.y, has: (id) => painter.store?.has(id) ?? false };
@@ -70,12 +91,32 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
     beginFrame(_ctx, scene) {
       dpr = scene.pixelRatio;
       seed = scene.state?.config?.seed ?? 0;
+      state = scene.state;
+      hex = !!scene.state?.map && gridOf(scene.state).kind === 'hex';
       plowed.clear();
     },
   };
 
+  /** A square sprite clipped to the tile's outline (hexes), or as it always was (squares). */
+  const ground = (ctx: CanvasRenderingContext2D, list: string[], t: LayerTile, z: number, shape: (() => void) | undefined, bleed: number): boolean => {
+    if (!hex || !shape) return painter.square(ctx, list, t.px, t.py, z, dpr, { fill: true, bleed });
+    if (!painter.pick(list, z, dpr, true)) return false;
+    ctx.save();
+    ctx.beginPath();
+    shape();
+    ctx.clip();
+    painter.square(ctx, list, t.px, t.py, z, dpr, { fill: true, bleed: 0.5 });
+    ctx.restore();
+    return true;
+  };
+
   if (!off.has('water')) {
-    hooks.water = (ctx, t, z) => painter.square(ctx, ids.water(t.tile.t, vary(t)), t.px, t.py, z, dpr, { fill: true, bleed: 0.5 });
+    hooks.water = (ctx, t, z, shape) => {
+      if (ground(ctx, ids.water(t.tile.t, vary(t)), t, z, shape, 0.5)) return true;
+      if (!ph) return false;
+      placeholderGround(ctx, TERRAIN[t.tile.t].water ? t.tile.t : 'ocean', t.px, t.py, z, hex ? shape : undefined);
+      return true;
+    };
   }
 
   // Terrain transitions: bands of the higher-ranked neighbour over a tile's ground (rules.transitions).
@@ -109,9 +150,13 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
     hooks.land = (ctx, t, z, shape, s) => {
       const list = ids.terrain(t.tile, vary(t));
       const pick = painter.pick(list, z, dpr, true);
-      if (!pick) return false;
-      // Clip only where the outline is rounded: elsewhere tiles overlap a little, without seams.
-      const clip = roundedCorner(s, t.x, t.y);
+      if (!pick) {
+        if (!ph) return false;
+        placeholderGround(ctx, t.tile.t, t.px, t.py, z, shape);
+        return true;
+      }
+      // Clip only where the outline is rounded (always on hexes): elsewhere tiles overlap a little, without seams.
+      const clip = hex || roundedCorner(s, t.x, t.y);
       if (clip) {
         ctx.save();
         ctx.beginPath();
@@ -119,18 +164,24 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
         ctx.clip();
       }
       painter.square(ctx, list, t.px, t.py, z, dpr, { fill: true, bleed: clip ? 0 : 0.5 });
-      if (blend) blendBorders(ctx, t, z, s);
+      if (blend && !hex) blendBorders(ctx, t, z, s);
       if (clip) ctx.restore();
       if (t.tile.p && ids.plowed(t.tile.t).some((p) => isTakeOf(pick.id, p))) plowed.add(t);
       return true;
     };
-    hooks.plowed = (_ctx, t) => plowed.has(t);
+    hooks.plowed = (ctx, t, z) => {
+      if (plowed.has(t)) return true;
+      if (!ph) return false;
+      placeholderPlowed(ctx, t.px, t.py, z);
+      return true;
+    };
   }
 
   if (!off.has('shore')) {
     const coast = ids.coast();
     hooks.shore = (ctx, tiles, z, s) => {
-      if (!painter.pick(coast.edge, z, dpr, true)) return;
+      // Coast bands are square pieces in quarter turns: none on hexes (H15), where the renderer's coastline stays.
+      if (hex || !painter.pick(coast.edge, z, dpr, true)) return;
       const hasInner = !!painter.pick(coast.inner, z, dpr, true);
       const hasOuter = !!painter.pick(coast.outer, z, dpr, true);
       for (const t of tiles) {
@@ -147,13 +198,20 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
 
   if (!off.has('roads')) {
     const road = ids.road();
+    const roadPlaceholder = (ctx: CanvasRenderingContext2D, t: LayerTile, z: number, s: Readonly<GameState>): boolean => {
+      if (!ph) return false;
+      placeholderRoad(ctx, s, t.x, t.y, t.px, t.py, z);
+      return true;
+    };
     hooks.road = (ctx, t, z, s) => {
+      // Road pieces are square spokes in quarter turns: on hexes roads run through the centres as placeholders.
+      if (hex) return roadPlaceholder(ctx, t, z, s);
       const links = DIRS.map(([dx, dy]) => hasRoadAt(s, t.x + dx, t.y + dy));
       const ready =
         painter.pick(road.hub, z, dpr, true) &&
         (!links.some((l, i) => l && i % 2 === 0) || painter.pick(road.spoke, z, dpr, true)) &&
         (!links.some((l, i) => l && i % 2 === 1) || painter.pick(road.diagonal, z, dpr, true));
-      if (!ready) return false;
+      if (!ready) return roadPlaceholder(ctx, t, z, s);
       // On a river tile the road does not run along the water: spokes towards a neighbour the river
       // links are left out, and the hub (the bridge) stays where the road meets the river.
       const rd = t.tile.rd ?? 0;
@@ -170,23 +228,42 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
   if (!off.has('relief')) {
     hooks.relief = (ctx, t, z) => {
       const r = ids.relief(t.tile, vary(t));
-      return !!r && placed(ctx, r.ids, rules[r.kind], t.px, t.py, z);
+      if (!r) return false;
+      if (placed(ctx, r.ids, rules[r.kind], t.px, t.py, z)) return true;
+      if (!ph) return false;
+      placeholderRelief(ctx, r.kind, t.px, t.py, z);
+      return true;
     };
   }
 
   if (!off.has('bonus')) {
     hooks.bonus = (ctx, t, z) => {
       const b = rules.bonus;
-      return painter.square(ctx, ids.bonus(t.tile), t.px + b.x * z, t.py + b.y * z, b.size * z, dpr);
+      if (painter.square(ctx, ids.bonus(t.tile), t.px + b.x * z, t.py + b.y * z, b.size * z, dpr)) return true;
+      if (!ph) return false;
+      placeholderBonus(ctx, t.px, t.py, z);
+      return true;
     };
   }
 
-  if (!off.has('rumour')) hooks.rumour = (ctx, t, z) => placed(ctx, ids.rumour(), rules.rumour, t.px, t.py, z);
+  if (!off.has('rumour')) {
+    hooks.rumour = (ctx, t, z) => {
+      if (placed(ctx, ids.rumour(), rules.rumour, t.px, t.py, z)) return true;
+      if (!ph) return false;
+      placeholderRumour(ctx, t.px, t.py, z);
+      return true;
+    };
+  }
 
   if (!off.has('settlements')) {
     const mission = ids.overlay('mission');
     hooks.settlement = (ctx, st, px, py, z, state) => {
-      if (!placed(ctx, ids.settlement(st.tribe, st.capital), rules.settlement, px, py, z)) return false;
+      if (!placed(ctx, ids.settlement(st.tribe, st.capital), rules.settlement, px, py, z)) {
+        if (!ph) return false;
+        const look = settlementKindOf(state, st).look;
+        placeholderSettlement(ctx, look, st.tribe, st.capital, st.mission ? nationOf(state, st.mission).color : undefined, px, py, z);
+        return true;
+      }
       const m = rules.mission;
       if (st.mission && m) painter.tinted(ctx, mission, px + m.x * z, py + m.y * z, m.size * z, dpr, nationOf(state, st.mission).color);
       return true;
@@ -198,11 +275,14 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
     hooks.colony = (ctx, c, size, px, py, z, state) => {
       const p = rules.colony;
       const town = ids.colony(size);
-      if (!painter.pick(town, p.scale * z, dpr)) return false;
       const walls = ids.defence(c.buildings.stockade);
       const w = rules.defence;
       // Walls that cannot be drawn yet: the whole colony falls back, so the stockade still shows.
-      if (walls.length && !painter.pick(walls, w.scale * z, dpr)) return false;
+      if (!painter.pick(town, p.scale * z, dpr) || (walls.length && !painter.pick(walls, w.scale * z, dpr))) {
+        if (!ph) return false;
+        placeholderColony(ctx, nationOf(state, c.owner).color, size, c.buildings.stockade, px, py, z);
+        return true;
+      }
       const wall = (part: 'back' | 'front') => painter.anchored(ctx, walls, px + w.x * z, py + w.y * z, w.scale * z, dpr, { part });
       if (walls.length) wall('back');
       const f = rules.colonyFlag;
@@ -216,12 +296,18 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
   if (!off.has('units')) {
     hooks.unit = (ctx, stack, x, y, s) => {
       const box = s * rules.unit.scale;
-      return painter.square(ctx, ids.unit(stack.top.type, stack.top.role), x - box / 2, y - box / 2 + s * rules.unit.dy, box, dpr);
+      if (painter.square(ctx, ids.unit(stack.top.type, stack.top.role), x - box / 2, y - box / 2 + s * rules.unit.dy, box, dpr)) return true;
+      if (!ph || !state) return false;
+      placeholderUnit(ctx, stack.top.type, stack.top.role, nationOf(state, stack.top.owner).color, x, y, s);
+      return true;
     };
-    // Braves: their own sprites when the pack has them, else drawn procedurally by the renderer.
+    // Braves: their own sprites when the pack has them, else drawn procedurally by the renderer (or a placeholder).
     hooks.brave = (ctx, b, x, y, s) => {
       const box = s * rules.unit.scale;
-      return painter.square(ctx, ids.brave(b.armed, b.mounted), x - box / 2, y - box / 2 + s * rules.unit.dy, box, dpr);
+      if (painter.square(ctx, ids.brave(b.armed, b.mounted), x - box / 2, y - box / 2 + s * rules.unit.dy, box, dpr)) return true;
+      if (!ph) return false;
+      placeholderBrave(ctx, b.tribe, b.armed, b.mounted, x, y, s);
+      return true;
     };
   }
 
