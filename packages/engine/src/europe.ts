@@ -23,6 +23,7 @@ import { PIONEER_MAX_TOOLS, PURCHASABLE, ROLES, UNIT_TYPES, type RoleId, type Un
 import type { GameState, MarketEntry, Player, Unit, UnitLocation } from './types.js';
 import { difficultyOf, goodsOf, mechanicsOf, nationOf, portMarketOf, term, Term, unitsOf, type ScenarioLike } from './scenarios/index.js';
 import { setUnitLoc, removeUnit, colonyList, unitList } from './unitindex.js';
+import { systemsOf } from './playerkind.js';
 
 export const SAIL_TURNS = 3;
 
@@ -160,8 +161,8 @@ export function sellToMarket(s: GameState, p: Player, good: GoodId, amount: numb
 
 function maybeRaiseTax(s: GameState, p: Player, gross: number, good: GoodId): void {
   const mechanics = mechanicsOf(s);
-  // A chartered company has no Crown to tax it (companies.ts).
-  if (!mechanics.taxes || p.kind === 'company') return;
+  // A chartered company has no Crown to tax it (companies.ts; playerkind.ts `taxes`).
+  if (!mechanics.taxes || !systemsOf(p).taxes) return;
   const rules = difficultyOf(s, p);
   if (p.tax >= rules.taxCeiling || gross < 100 || p.pendingTax) return;
   const chance = Math.min(0.12, 0.015 + s.turn / 3000) * rules.taxChance;
@@ -340,8 +341,8 @@ export function train(s: GameState, nation: Player['id'], type: UnitTypeId, port
 
 /** Called each turn: crosses bring a new immigrant to the docks. */
 export function processImmigration(s: GameState, p: Player): void {
-  // The Crown (holding colonies it retook) has no docks to send immigrants to.
-  if (p.crosses < p.crossesRequired || p.independence !== 'none' || p.id === 'crown' || !p.recruitPool.length) return;
+  // The Crown (holding colonies it retook) has no docks to send immigrants to (playerkind.ts `immigration`).
+  if (p.crosses < p.crossesRequired || p.independence !== 'none' || !systemsOf(p).immigration || !p.recruitPool.length) return;
   p.crosses -= p.crossesRequired;
   p.crossesRequired += Math.round(setOr(modifiers(s, p.id, 'crossesStep'), 20) * difficultyOf(s, p).crosses);
   // Brewster lets the colony pick the best candidate; otherwise chance decides.

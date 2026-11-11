@@ -68,6 +68,7 @@ import { equippedPrice, trainEquipped } from './outfit.js';
 import { AI_PROFILES, type AiProfile } from './profiles.js';
 import { buildRoads, equipPioneer, pioneerToolsWanted } from './roads.js';
 import { aiGoodsOf, aiTurn, buildingsOf, goodsOf, mechanicsOf, scenarioOf } from '../scenarios/index.js';
+import { systemsOf } from '../playerkind.js';
 
 const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
 
@@ -1581,7 +1582,7 @@ function abandonOutposts(s: GameState, p: Player): void {
  */
 export function readyToDeclare(s: GameState, nation: Player['id'], readiness = 1): boolean {
   const p = s.players.find((o) => o.id === nation);
-  if (!p || p.human || !p.ai || p.ai === 'naive' || p.kind === 'company' || p.independence !== 'none') return false;
+  if (!p || p.human || !p.ai || p.ai === 'naive' || !systemsOf(p).independence || p.independence !== 'none') return false;
   const plan = AI_PROFILES[p.ai].independence;
   if (!plan || !mechanicsOf(s).independence || s.turn < aiTurn(s, plan.minTurn)) return false;
   const colonies = ownColonies(s, p);

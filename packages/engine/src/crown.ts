@@ -20,6 +20,7 @@ import { track } from './telemetry.js';
 import type { Colony, GameState, Player } from './types.js';
 import { difficultyOf, goodsOf, mechanicsOf, nationOf, term, Term } from './scenarios/index.js';
 import { colonyList } from './unitindex.js';
+import { systemsOf } from './playerkind.js';
 
 // ---------------------------------------------------------------------------
 // The Royal Expeditionary Force
@@ -211,7 +212,7 @@ export function royalWarTargets(s: GameState, nation: NationId): { nation: Natio
   if (p.independence !== 'none') return [];
   const out: { nation: NationId; weight: number }[] = [];
   for (const o of s.players) {
-    if (o.id === nation || o.id === 'crown' || o.kind === 'company' || o.independence !== 'none') continue;
+    if (o.id === nation || !systemsOf(o).crown || o.independence !== 'none') continue;
     if (p.stance[o.id] === 'war' || isFavoured(s, nation, o.id) || warOnFriend(s, nation, o.id)) continue;
     if (!colonyList(s).some((c) => c.owner === o.id)) continue;
     out.push({ nation: o.id, weight: hasTradeAgreement(s, nation, o.id) ? ROYAL_WAR.partnerWeight : 1 });
@@ -257,7 +258,7 @@ function maybeRoyalWar(s: GameState, p: Player, colonies: number): void {
 export function processCrown(s: GameState): void {
   const mechanics = mechanicsOf(s);
   for (const p of s.players) {
-    if (p.id === 'crown' || p.kind === 'company' || p.independence !== 'none') continue;
+    if (!systemsOf(p).crown || p.independence !== 'none') continue;
     const colonies = colonyList(s).filter((c) => c.owner === p.id).length;
     if (mechanics.ref) growForce(s, p, colonies);
     if (mechanics.demands) {

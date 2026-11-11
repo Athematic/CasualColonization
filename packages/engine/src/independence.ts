@@ -31,6 +31,7 @@ import type { Colony, GameState, Player, Unit } from './types.js';
 import { concludeConfederation, confederationOf } from './confederation.js';
 import { treatyNations } from './treaties.js';
 import { removeUnit, colonyList, unitList } from './unitindex.js';
+import { systemsOf } from './playerkind.js';
 
 /** Share of all colonists, across every colony, who support independence. */
 export function rebelShare(s: GameState, nation: NationId): number {
@@ -50,7 +51,7 @@ export const DECLARE_AT = 50;
 export function canDeclareIndependence(s: GameState, nation: NationId): string | null {
   if (!mechanicsOf(s).independence) return 'There is no declaring independence in this scenario.';
   const p = player(s, nation);
-  if (p.kind === 'company') return 'A chartered company has no Crown to break with.';
+  if (!systemsOf(p).independence) return p.kind === 'company' ? 'A chartered company has no Crown to break with.' : 'Only a European nation can declare independence.';
   if (p.independence !== 'none') return 'Independence has already been declared.';
   if (!colonyList(s).some((c) => c.owner === nation)) return 'You have no colonies.';
   const share = rebelShare(s, nation);

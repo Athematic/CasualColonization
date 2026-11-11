@@ -9,6 +9,7 @@ import { aiTurn, councilOf, nationOf, scenarioOf, term } from './scenarios/index
 import { memberEffects } from './scenarios/modifiers.js';
 import { shareBells } from './alliances.js';
 import type { GameState, Player } from './types.js';
+import { systemsOf } from './playerkind.js';
 
 export function hasFather(s: GameState, nation: Player['id'], id: FatherId): boolean {
   return s.players.find((p) => p.id === nation)?.fathers.includes(id) ?? false;
@@ -47,8 +48,8 @@ const AI_PREFERENCE: FatherId[] = [
 
 /** Collects liberty bells for the Continental Congress; called once per turn for each player. */
 export function processCongress(s: GameState, p: Player): void {
-  // A chartered company has no Congress (companies.ts).
-  if (p.kind === 'company') return;
+  // A chartered company has no Congress (companies.ts; playerkind.ts `congress`).
+  if (!systemsOf(p).congress) return;
   // Allies' Congresses share a part of each other's bells (alliances.ts, C5).
   if (s.treaties) shareBells(s, p.id);
   if (!p.currentFather) {
