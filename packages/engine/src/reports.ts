@@ -3,6 +3,7 @@
  * changes the game. Each helper looks at one nation and, where it matters, only at what that
  * nation knows: settlements it has explored, and its own colonies, units and ships.
  */
+import { gridOf } from './grid.js';
 import { buildTargetCost } from './colony.js';
 import { defencePower } from './combat.js';
 import { buyPrice, sellPrice } from './europe.js';
@@ -10,7 +11,7 @@ import { nextFatherCost } from './fathers.js';
 import { rebelShare } from './independence.js';
 import { settlementName, tensionLabel, tensionOf } from './natives.js';
 import { colonyReport, foodToGrow, libertyBonus, type ColonyReport } from './production.js';
-import { colonyAt, colonyWorkers, distance, isShip, player, unitName, unitPosition, unitsAboard, unitsAt, warehouseCapacity } from './queries.js';
+import { colonyAt, colonyWorkers, isShip, player, unitName, unitPosition, unitsAboard, unitsAt, warehouseCapacity } from './queries.js';
 import { favouredPartners } from './relations.js';
 import { BUILDINGS } from './rules/buildings.js';
 import { FATHERS, type FatherId } from './rules/fathers.js';
@@ -344,6 +345,7 @@ export interface TribeOverview {
  * What a settlement teaches and wants is only known after the nation's scout has visited it.
  */
 export function nativesOverview(s: GameState, nation: NationId): TribeOverview[] {
+  const grid = gridOf(s);
   const known = knownSettlementList(s, nation);
   const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
   const out: TribeOverview[] = [];
@@ -353,18 +355,12 @@ export function nativesOverview(s: GameState, nation: NationId): TribeOverview[]
     const settlements = mine.map((st): SettlementOverview => {
       const visited = st.visited.includes(nation);
       const land = { own: 0, others: 0, native: 0 };
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (!dx && !dy) continue;
-          const x = st.x + dx;
-          const y = st.y + dy;
-          if (x < 0 || y < 0 || x >= s.map.width || y >= s.map.height) continue;
-          const t = s.map.tiles[y * s.map.width + x];
-          if (t && !TERRAIN[t.t].water) {
-            if (t.claim === nation) land.own++;
-            else if (t.claim) land.others++;
-            else land.native++;
-          }
+      for (const { x, y } of grid.ring(s.map, st.x, st.y, 1)) {
+        const t = s.map.tiles[y * s.map.width + x];
+        if (t && !TERRAIN[t.t].water) {
+          if (t.claim === nation) land.own++;
+          else if (t.claim) land.others++;
+          else land.native++;
         }
       }
       const own = (st as Settlement & { wants?: GoodId[] }).wants;
@@ -379,7 +375,7 @@ export function nativesOverview(s: GameState, nation: NationId): TribeOverview[]
         mission: st.mission,
         visited,
         land,
-        nearestColony: colonies.length ? Math.min(...colonies.map((c) => distance(c.x, c.y, st.x, st.y))) : null,
+        nearestColony: colonies.length ? Math.min(...colonies.map((c) => grid.distance(c.x, c.y, st.x, st.y))) : null,
       };
     });
     out.push({

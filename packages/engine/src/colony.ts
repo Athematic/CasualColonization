@@ -1,3 +1,4 @@
+import { gridOf } from './grid.js';
 import { fail } from './errors.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
@@ -7,12 +8,11 @@ import {
   colonyPopulation,
   colonyWorkers,
   createUnit,
-  distance,
   isCoastal,
   isWater,
   maxMoves,
   message,
-  neighbours,
+  workArea,
   newId,
   player,
   reveal,
@@ -65,14 +65,15 @@ export function charterCost(s: GameState, nation: NationId): number {
 
 /** Why a colony cannot stand on this tile, or null if it can. */
 export function colonySiteProblem(s: GameState, x: number, y: number): string | null {
+  const grid = gridOf(s);
   const tile = tileAt(s, x, y);
   if (!tile || isWater(tile)) return 'Colonies must be founded on land.';
   if (tile.t === 'arctic') return 'Nothing can grow on arctic land.';
   for (const c of Object.values(s.colonies)) {
-    if (distance(c.x, c.y, x, y) < 2) return `Too close to ${c.name}.`;
+    if (grid.distance(c.x, c.y, x, y) < 2) return `Too close to ${c.name}.`;
   }
   for (const st of Object.values(s.settlements)) {
-    if (distance(st.x, st.y, x, y) < 2) return 'Too close to a native settlement.';
+    if (grid.distance(st.x, st.y, x, y) < 2) return 'Too close to a native settlement.';
   }
   return null;
 }
@@ -152,7 +153,7 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
  * players). Valid until a unit changes jobs or moves, or the land around changes.
  */
 export interface ColonyOccupancy {
-  /** The tiles around the colony, in `neighbours` order. */
+  /** The tiles around the colony, in the grid's `workArea` order. */
   tiles: { x: number; y: number }[];
   /** The unit working each tile around the colony (the first found, as tileWorkedBy), by map index. */
   worked: Map<number, Unit>;
@@ -166,7 +167,7 @@ export interface ColonyOccupancy {
 }
 
 export function colonyOccupancy(s: GameState, colony: Colony): ColonyOccupancy {
-  const tiles = neighbours(s, colony.x, colony.y);
+  const tiles = workArea(s, colony.x, colony.y);
   const w = s.map.width;
   const closed = new Set<number>();
   const worked = new Map<number, Unit>();
@@ -269,8 +270,9 @@ export function bestJob(s: GameState, colony: Colony, u: Unit): Job | null {
 }
 
 function validateJob(s: GameState, colony: Colony, u: Unit, job: Job): void {
+  const grid = gridOf(s);
   if (job.kind === 'tile') {
-    if (distance(colony.x, colony.y, job.x, job.y) !== 1) fail('That tile is not next to the colony.');
+    if (grid.distance(colony.x, colony.y, job.x, job.y) !== 1) fail('That tile is not next to the colony.');
     const worker = tileWorkedBy(s, job.x, job.y);
     if (worker && worker.id !== u.id) fail('Someone already works that tile.');
     if (settlementAt(s, job.x, job.y)) fail('Natives live on that tile.');

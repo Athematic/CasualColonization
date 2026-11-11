@@ -1,3 +1,4 @@
+import { gridOf } from './grid.js';
 import { fail } from './errors.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
@@ -11,7 +12,6 @@ import {
   colonyAt,
   colonyWorkers,
   createUnit,
-  distance,
   isCoastal,
   isShip,
   message,
@@ -142,6 +142,7 @@ export function declareWar(s: GameState, a: string, b: string): void {
 
 /** Sends a beaten ship to the nearest drydock, or home to Europe, for repairs. Cargo and passengers are lost. */
 function damageShip(s: GameState, ship: Unit): string {
+  const grid = gridOf(s);
   const name = unitName(ship);
   for (const p of unitsAboard(s, ship)) removeUnit(s, p.id);
   ship.cargo = {};
@@ -149,7 +150,7 @@ function damageShip(s: GameState, ship: Unit): string {
   const pos = unitPosition(s, ship);
   const drydock = Object.values(s.colonies)
     .filter((c) => c.owner === ship.owner && c.buildings.docks >= 2)
-    .sort((a, b) => (pos ? distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y) : 0))[0];
+    .sort((a, b) => (pos ? grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y) : 0))[0];
   if (drydock) {
     setUnitLoc(s, ship, { kind: 'map', x: drydock.x, y: drydock.y });
     ship.repair = 4;
@@ -299,6 +300,7 @@ export interface CombatResult {
 }
 
 export function attack(s: GameState, unitId: string, target: { unitId?: string; colonyId?: string; settlementId?: string; braveId?: string }): CombatResult {
+  const grid = gridOf(s);
   const u = s.units[unitId];
   if (!u || !canAttack(u)) fail('That unit cannot attack.');
   if (u.moves <= 0) fail(`${unitName(u)} has no moves left.`);
@@ -318,12 +320,12 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
   let colony: Colony | undefined;
   if (target.colonyId) {
     colony = s.colonies[target.colonyId];
-    if (!colony || distance(colony.x, colony.y, pos.x, pos.y) !== 1) fail('The colony is not next to the unit.');
+    if (!colony || grid.distance(colony.x, colony.y, pos.x, pos.y) !== 1) fail('The colony is not next to the unit.');
     defender = colonyDefender(s, colony);
   } else if (target.unitId) {
     const t = s.units[target.unitId];
     const tp = t && unitPosition(s, t);
-    if (!tp || distance(tp.x, tp.y, pos.x, pos.y) !== 1) fail('The target is not next to the unit.');
+    if (!tp || grid.distance(tp.x, tp.y, pos.x, pos.y) !== 1) fail('The target is not next to the unit.');
     defender = chooseDefender(s, unitsAt(s, tp.x, tp.y).filter((o) => o.owner === t.owner), pos);
   }
   if (!defender) fail('There is nothing to attack.');
@@ -393,9 +395,10 @@ function hostile(s: GameState, tribeId: TribeId, nation: NationId, at: { x: numb
 
 /** A European unit attacks a brave in the open. The brave defends with its own values and the terrain. */
 function attackBrave(s: GameState, u: Unit, braveId: string): CombatResult {
+  const grid = gridOf(s);
   const b = bravesOf(s)[braveId];
   const pos = unitPosition(s, u)!;
-  if (!b || distance(b.x, b.y, pos.x, pos.y) !== 1) fail('The brave is not next to the unit.');
+  if (!b || grid.distance(b.x, b.y, pos.x, pos.y) !== 1) fail('The brave is not next to the unit.');
   if (isShip(u)) fail('Ships cannot attack braves on land.');
   const atWar = s.tribes.find((t) => t.id === b.tribe)?.stance[u.owner] === 'war';
   hostile(s, b.tribe, u.owner, b, `an attack on one of their braves`);
@@ -437,9 +440,10 @@ export function offenceVsSettlement(s: GameState, u: Unit): number {
 }
 
 function attackSettlement(s: GameState, u: Unit, settlementId: string): CombatResult {
+  const grid = gridOf(s);
   const st = s.settlements[settlementId];
   const pos = unitPosition(s, u)!;
-  if (!st || distance(st.x, st.y, pos.x, pos.y) !== 1) fail('The settlement is not next to the unit.');
+  if (!st || grid.distance(st.x, st.y, pos.x, pos.y) !== 1) fail('The settlement is not next to the unit.');
   hostile(s, st.tribe, u.owner, st, `an attack on the ${settlementName(s, st)}`);
   for (const other of Object.values(s.settlements)) if (other.tribe === st.tribe) addTension(other, u.owner, other.id === st.id ? 300 : 150);
   const off = offenceVsSettlement(s, u);

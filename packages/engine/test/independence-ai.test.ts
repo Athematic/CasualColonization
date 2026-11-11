@@ -5,7 +5,7 @@ import {
   colonySiteProblem,
   createGame,
   createUnit,
-  distance,
+  SQUARE,
   foundColony,
   isCoastal,
   tileAt,
@@ -34,7 +34,7 @@ function colony(s: GameState, opts: { workers?: number; liberty?: number; avoid?
   for (let y = 3; y < s.map.height - 3; y++) {
     for (let x = 2; x < s.map.width - 2; x++) {
       if (colonySiteProblem(s, x, y) || !isCoastal(s, x, y)) continue;
-      if ((opts.avoid ?? []).some((c) => distance(x, y, c.x, c.y) < 6)) continue;
+      if ((opts.avoid ?? []).some((c) => SQUARE.distance(x, y, c.x, c.y) < 6)) continue;
       const t = tileAt(s, x, y)!;
       if (t.t === 'hills' || t.t === 'mountains') continue;
       const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', x, y });
