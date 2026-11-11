@@ -34,6 +34,9 @@ import {
   turnAfterYears,
   WAITING_YEARS,
   attack,
+  player,
+  shareBells,
+  splitFind,
   calendarOf,
   checkVictory,
   concordWinners,
@@ -394,6 +397,59 @@ describe('alliances: computer players', () => {
     foreignAffairs(s, s.players[1], AI_PROFILES.creative, 0, 0);
     expect(isAllied(s, 'england', 'france')).toBe(false);
     expect(s.treaties!.some((t) => t.kind === 'alliance')).toBe(false);
+  });
+});
+
+describe('alliances: shared bells and joint expeditions (step 4)', () => {
+  it('count a tenth of each ally’s bells towards the others’ Congress, from the alliance on', () => {
+    const s = game();
+    const en = player(s, 'england');
+    const fr = player(s, 'france');
+    const es = player(s, 'spain');
+    en.bells = 400; // rung before the alliance: not shared
+    makeAlliance(s, 'england', 'france');
+    shareBells(s, 'england');
+    const before = fr.fatherBells;
+    en.bells += 55;
+    shareBells(s, 'england');
+    expect(fr.fatherBells - before).toBe(5);
+    expect(en.allyBells).toEqual({ seen: 455, carry: 50 });
+    en.bells += 5;
+    shareBells(s, 'england');
+    expect(fr.fatherBells - before).toBe(6);
+    expect(es.fatherBells).toBe(0);
+    expect(fr.bells).toBe(0); // the ally's own liberty is untouched
+    // Nations without allies write nothing.
+    shareBells(s, 'spain');
+    expect(es.allyBells).toBeUndefined();
+  });
+
+  it('fund a seasoned scout together and share the gold it finds', () => {
+    const s = game();
+    const en = player(s, 'england');
+    const fr = player(s, 'france');
+    expect(refused(s, 'england', { type: 'proposeExpedition', nation: 'france' })).toMatch(/between allies/);
+    makeAlliance(s, 'england', 'france');
+    en.gold = fr.gold = 2000;
+    ok(s, 'england', { type: 'proposeExpedition', nation: 'france' });
+    ok(s, 'france', { type: 'answerProposal', nation: 'england', accept: true });
+    const half = ALLIANCE_RULES.expeditionCost / 2;
+    expect([en.gold, fr.gold]).toEqual([2000 - half, 2000 - half]);
+    const scout = Object.values(s.units).find((u) => u.joint === 'france')!;
+    expect(scout).toMatchObject({ owner: 'england', type: 'seasonedScout', role: 'scout', loc: { kind: 'europe' } });
+    expect(splitFind(s, scout, 301)).toBe(151);
+    expect(fr.gold).toBe(2000 - half + 150);
+  });
+
+  it('a computer ally joins an expedition when it can pay its half and keep a reserve', () => {
+    const s = game({ humans: ['england'] });
+    makeAlliance(s, 'england', 'france');
+    const fr = player(s, 'france');
+    fr.gold = 1000;
+    player(s, 'england').gold = 5000;
+    expect(ok(s, 'england', { type: 'proposeExpedition', nation: 'france' }).text).toMatch(/turns down/);
+    fr.gold = 5000;
+    expect(ok(s, 'england', { type: 'proposeExpedition', nation: 'france' }).text).toMatch(/joint expedition/);
   });
 });
 

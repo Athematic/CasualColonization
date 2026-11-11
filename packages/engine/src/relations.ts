@@ -17,7 +17,7 @@ import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, term, turnAfte
 import type { CompanyId, NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, treatyBetween } from './treaties.js';
-import { aiAcceptsAlliance, allianceProblem, isAllied, leaveAlliance, makeAlliance } from './alliances.js';
+import { aiAcceptsAlliance, aiAcceptsExpedition, allianceProblem, expeditionProblem, isAllied, leaveAlliance, makeAlliance, makeExpedition } from './alliances.js';
 import type { GameState, ProposalKind, Relation, RouteCargo, Unit } from './types.js';
 
 /** Years of peace needed for Favoured Nation: 10, plus or minus up to 2. */
@@ -249,14 +249,23 @@ export function proposeAlliance(s: GameState, from: NationId, to: NationId): str
   return propose(s, 'alliance', from, to);
 }
 
-const KIND_NAME: Record<ProposalKind, string> = { trade: 'a trade agreement', favoured: 'Favoured Nation status', alliance: 'an alliance' };
+const KIND_NAME: Record<ProposalKind, string> = { trade: 'a trade agreement', favoured: 'Favoured Nation status', alliance: 'an alliance', expedition: 'a joint expedition' };
 
 /** What a proposal of each kind needs, how a computer player answers it, and what accepting it does. */
 const KINDS: Record<ProposalKind, { problem: typeof tradeProblem; accepts: typeof aiAcceptsTrade; make: typeof makeTradeAgreement }> = {
   trade: { problem: (s, a, b) => tradeProblem(s, a, b), accepts: (s, a, b) => aiAcceptsTrade(s, a, b), make: (s, a, b) => makeTradeAgreement(s, a, b) },
   favoured: { problem: (s, a, b) => favouredProblem(s, a, b), accepts: (s, a, b) => aiAcceptsFavoured(s, a, b), make: (s, a, b) => makeFavoured(s, a, b) },
   alliance: { problem: (s, a, b) => allianceProblem(s, a, b), accepts: (s, a, b) => aiAcceptsAlliance(s, a, b), make: (s, a, b) => makeAlliance(s, a, b) },
+  expedition: { problem: (s, a, b) => expeditionProblem(s, a, b), accepts: (s, a, b) => aiAcceptsExpedition(s, a, b), make: (s, a, b) => makeExpedition(s, a, b) },
 };
+
+/** Proposes a joint expedition to an ally (alliances.ts): each pays half, the gold found is shared. */
+export function proposeExpedition(s: GameState, from: NationId, to: NationId): string {
+  const problem = expeditionProblem(s, from, to);
+  if (problem) fail(problem);
+  track(from, 'cmd:proposeExpedition');
+  return propose(s, 'expedition', from, to);
+}
 
 function propose(s: GameState, kind: ProposalKind, from: NationId, to: NationId): string {
   const target = player(s, to);

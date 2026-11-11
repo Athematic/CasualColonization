@@ -21,7 +21,7 @@ import { answerNativeDemand } from './braves.js';
 import { buyFromSettlement, buyLand, denounceMission, establishMission, giftToTribe, inciteTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
 import { chooseFather } from './fathers.js';
 import { proposePeace, startWar } from './diplomacy.js';
-import { answerProposal, cancelFavoured, cancelTrade, proposeAlliance, proposeFavoured, proposeTrade } from './relations.js';
+import { answerProposal, cancelFavoured, cancelTrade, proposeAlliance, proposeExpedition, proposeFavoured, proposeTrade } from './relations.js';
 import { leaveAlliance, tradeInColony } from './alliances.js';
 import { buyShares, foundCompany } from './chartered.js';
 import { abandonColony, retire } from './leaving.js';
@@ -109,6 +109,8 @@ export type Command =
   /** Proposes an alliance to `nation`, or invites it to join yours (alliances.ts). */
   | { type: 'proposeAlliance'; nation: NationId }
   | { type: 'leaveAlliance' }
+  /** Proposes a joint expedition to an ally: each pays half, the gold it finds is shared (alliances.ts). */
+  | { type: 'proposeExpedition'; nation: NationId }
   /** Founds a chartered company from the scenario's list, or buys new shares in one (companies.ts). */
   | { type: 'foundCompany'; company: NationId }
   | { type: 'buyShares'; company: NationId; count: number }
@@ -412,6 +414,9 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'leaveAlliance':
         text = leaveAlliance(s, nation);
+        break;
+      case 'proposeExpedition':
+        text = proposeExpedition(s, nation, cmd.nation);
         break;
       case 'foundCompany':
         track(nation, 'cmd:foundCompany');

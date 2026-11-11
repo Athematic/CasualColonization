@@ -171,6 +171,10 @@ export interface AllianceRules {
    * a scenario where Favoured Nation is rare. Leaving then ends the trade agreement.
    */
   requires: 'favoured' | 'trade';
+  /** Share of each member's liberty bells that also counts for every other member's Congress (C5). */
+  sharedBells: number;
+  /** Gold a joint expedition costs, paid half by each of the two allies. */
+  expeditionCost: number;
 }
 
 /**
@@ -189,6 +193,8 @@ export interface Cooperation {
   foundCompany: number;
   /** Chance per review that a nation with gold to spare buys shares in a company. */
   buyShares: number;
+  /** Chance per review that a nation with allies and gold to spare proposes a joint expedition. */
+  jointExpedition: number;
 }
 
 /** One way the game can end: a registered victory kind (victory.ts) and its data. */

@@ -172,18 +172,20 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
     const name = nationOf(app.state, from).name;
     const text = p.kind === 'trade'
       ? `${nationTitle(app.state, from)} proposes a trade agreement. Your trade routes may then call at each other's colonies: goods unloaded there are sold to the colony at its owner's home-market prices, and its surplus can be bought.`
+      : p.kind === 'expedition'
+      ? `${nationTitle(app.state, from)} proposes a joint expedition: each of you pays half, and the gold its seasoned scout finds in ruins and lost cities is shared.`
       : p.kind === 'alliance'
       ? `${nationTitle(app.state, from)} proposes ${allianceOf(app.state, from) ? 'that you join its alliance' : 'an alliance'}. An attack on one ally is war with all of them; allied units may enter, garrison and trade in each other's colonies; and allies share what they see. Leaving later costs more than cancelling Favoured Nation.`
       : `${nationTitle(app.state, from)} proposes Favoured Nation status. Your ships may then trade, and buy merchant ships, in each other's home ports, and computer players never declare war on a Favoured Nation. Either side can cancel later, but goods near the other side's colonies are then seized and the trade routes between you end.`;
     list.push({
       id: `proposal-${from}`,
-      title: p.kind === 'trade' ? `A trade agreement with ${name}` : p.kind === 'alliance' ? `An alliance with ${name}` : `Favoured Nation status with ${name}`,
+      title: p.kind === 'trade' ? `A trade agreement with ${name}` : p.kind === 'alliance' ? `An alliance with ${name}` : p.kind === 'expedition' ? `A joint expedition with ${name}` : `Favoured Nation status with ${name}`,
       required: false,
       render: (done) =>
         h('div', { class: 'decision-body' },
           h('p', null, text, ' You can also answer later in Foreign Affairs.'),
           h('div', { class: 'decision-actions' },
-            h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerProposal', nation: from, accept: true }, true) && done(p.kind === 'trade' ? `Agreed: you now trade with ${name}.` : p.kind === 'alliance' ? `Agreed: ${name} is now your ally.` : `Agreed: ${name} is now a Favoured Nation.`) }, 'Accept'),
+            h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerProposal', nation: from, accept: true }, true) && done(p.kind === 'trade' ? `Agreed: you now trade with ${name}.` : p.kind === 'alliance' ? `Agreed: ${name} is now your ally.` : p.kind === 'expedition' ? `Agreed: the expedition sets out.` : `Agreed: ${name} is now a Favoured Nation.`) }, 'Accept'),
             h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerProposal', nation: from, accept: false }, true) && done('Turned down.') }, 'Turn down'))),
     });
   }

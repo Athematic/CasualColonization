@@ -20,7 +20,7 @@
  */
 import { fail } from './errors.js';
 import { noteHistory } from './history.js';
-import { cargoRoomFor, colonyAt, isShip, isWater, message, neighbours, player, tileAt, unitName, unitsAboard, unitsAt } from './queries.js';
+import { cargoRoomFor, colonyAt, createUnit, isShip, isWater, message, neighbours, player, tileAt, unitName, unitsAboard, unitsAt } from './queries.js';
 import { atPeace, cancelFavoured, cancelTrade, FOREIGN_KEEP, hasTradeAgreement, inWaitingPeriod, isFavoured, isHostile, pairRandom, relation, tradeAtForeignColony, yearsOfPeace } from './relations.js';
 import type { NationId } from './rules/nations.js';
 import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, scenarioOf, turnAfterYears } from './scenarios/index.js';
@@ -42,6 +42,9 @@ export const ALLIANCE_RULES: AllianceRules = {
   waitingYears: { base: 15, spread: 3 },
   hostilityYears: { base: 25, spread: 5 },
   requires: 'favoured',
+  // C5: a small share, enough to make an alliance felt in the mid game.
+  sharedBells: 0.1,
+  expeditionCost: 1200,
 };
 
 /**
@@ -50,7 +53,7 @@ export const ALLIANCE_RULES: AllianceRules = {
  * computer-only tournaments to give an alliance in about one game in four and a concord victory
  * about once in 30–40 games (docs/design/cooperation.md, C11).
  */
-export const COOPERATION: Cooperation = { proposeAlliance: 0.5, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1 };
+export const COOPERATION: Cooperation = { proposeAlliance: 0.5, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1, jointExpedition: 0.05 };
 
 /** Each level's share of COOPERATION's chances: Creative seeks alliances out, Naive never proposes. */
 export const LEVEL_COOPERATION: Record<AiLevel, { propose: number; accept: number }> = {
@@ -351,4 +354,86 @@ export function inAlliedColony(s: GameState, u: Unit): boolean {
   if (u.loc.kind !== 'map') return false;
   const c = colonyAt(s, u.loc.x, u.loc.y);
   return !!c && colonyOpenTo(s, c.owner, u.owner);
+}
+
+// ---------------------------------------------------------------------------
+// Shared bells (C5) and joint expeditions (step 4)
+
+/**
+ * At the end of a nation's turn: `sharedBells` of the liberty bells it rang since the last time
+ * count, also, towards each ally's next Congress member (its `fatherBells`; the ally's liberty and
+ * the nation's own bells are untouched). Whole bells only; the remainder carries over. Counting
+ * starts when the nation first has allies, so nothing is paid for bells rung before.
+ */
+export function shareBells(s: GameState, nation: NationId): void {
+  const p = player(s, nation);
+  const allies = alliesOf(s, nation);
+  if (!allies.length) {
+    if (p.allyBells) p.allyBells.seen = p.bells;
+    return;
+  }
+  const book = (p.allyBells = p.allyBells ?? { seen: p.bells, carry: 0 });
+  const rung = Math.max(0, p.bells - book.seen);
+  book.seen = p.bells;
+  const pool = book.carry + rung * Math.round(allianceRules(s).sharedBells * 100);
+  const give = Math.floor(pool / 100);
+  book.carry = pool % 100;
+  if (!give) return;
+  for (const a of allies) {
+    const ally = player(s, a);
+    if (ally.kind === 'company' || ally.finished) continue;
+    ally.fatherBells += give;
+    track(a, 'alliance:bells received', give);
+  }
+}
+
+/** Why `from` cannot propose a joint expedition to its ally `to`, or null. */
+export function expeditionProblem(s: GameState, from: NationId, to: NationId): string | null {
+  if (!alliancesOn(s)) return 'There are no alliances in this scenario.';
+  if (!isAllied(s, from, to)) return 'Joint expeditions are made between allies.';
+  const half = Math.ceil(allianceRules(s).expeditionCost / 2);
+  if (player(s, from).independence !== 'none') return `The expedition sets out from a home port, which ${nationOf(s, from).name} no longer has.`;
+  for (const n of [from, to]) if (player(s, n).gold < half) return `${nationTitle(s, n)} cannot pay its half (${half} gold).`;
+  const pending = relation(s, from, to).proposal;
+  if (pending) return pending.from === from ? `${nationTitle(s, to)} has not answered your last proposal yet.` : `${nationTitle(s, to)} is waiting for your answer to its proposal.`;
+  return null;
+}
+
+/** A computer ally joins an expedition when it can pay its half and keep 1,000 gold. */
+export function aiAcceptsExpedition(s: GameState, ai: NationId, from: NationId): boolean {
+  return isAllied(s, ai, from) && player(s, ai).gold >= Math.ceil(allianceRules(s).expeditionCost / 2) + 1000;
+}
+
+/**
+ * A joint expedition (step 4): each ally pays half of `expeditionCost`, and a mounted seasoned
+ * scout waits on the docks of `from`'s home port. It is `from`'s to command; `to` gets half of the
+ * gold it finds in Lost City Rumours (splitFind).
+ */
+export function makeExpedition(s: GameState, from: NationId, to: NationId): string {
+  const cost = allianceRules(s).expeditionCost;
+  const half = Math.ceil(cost / 2);
+  player(s, from).gold -= cost - half;
+  player(s, to).gold -= half;
+  const u = createUnit(s, from, 'seasonedScout', { kind: 'europe' });
+  u.role = 'scout';
+  u.joint = to;
+  track(from, 'alliance:joint expedition');
+  track(to, 'alliance:joint expedition');
+  const text = `${nationTitle(s, from)} and ${nationOf(s, to).name} fund a joint expedition: a seasoned scout waits on the docks of ${nationOf(s, from).port.name}. The gold it finds is shared.`;
+  message(s, text, from);
+  message(s, text, to);
+  noteHistory(s, 'alliance', [from, to], `${nationTitle(s, from)} and ${nationOf(s, to).name} send out a joint expedition.`);
+  return text;
+}
+
+/** Gold a unit finds: half goes to its joint expedition's partner, if any; returns the finder's part. */
+export function splitFind(s: GameState, u: Unit, gold: number): number {
+  if (!u.joint) return gold;
+  const partner = s.players.find((p) => p.id === u.joint);
+  if (!partner) return gold;
+  const share = Math.floor(gold / 2);
+  partner.gold += share;
+  track(partner.id, 'alliance:expedition gold', share);
+  message(s, `The joint expedition with ${nationOf(s, u.owner).name} finds ${gold} gold; your half is ${share}.`, partner.id);
+  return gold - share;
 }

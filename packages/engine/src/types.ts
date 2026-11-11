@@ -186,6 +186,11 @@ export interface Player {
   goodsSpoiled?: number;
   /** Difficulty whose economics this nation plays at; missing means Conquistador (computer players). */
   difficulty?: DifficultyId;
+  /**
+   * Shared bells (alliances.ts): the nation's bells already counted for its allies' Congress, and
+   * the remainder (in hundredths of a bell) not yet given. Written once the nation has allies.
+   */
+  allyBells?: { seen: number; carry: number };
 }
 
 /** A chartered company's shareholders and bookkeeping (companies.ts). */
@@ -251,6 +256,8 @@ export interface Unit {
   repair?: number;
   /** For Royal troops: the rebel nation they were sent against. */
   against?: NationId;
+  /** A joint expedition's scout (alliances.ts): the ally that paid half, and gets half of what it finds. */
+  joint?: NationId;
   /** A mercenary hired during the War of Independence (rebellion.ts). */
   mercenary?: true;
   /**
@@ -412,7 +419,7 @@ export interface GameMessage {
   at?: { x: number; y: number };
 }
 
-export type ProposalKind = 'trade' | 'favoured' | 'alliance';
+export type ProposalKind = 'trade' | 'favoured' | 'alliance' | 'expedition';
 
 /**
  * Relations between two European nations (see relations.ts and docs/design/favoured-nation.md).

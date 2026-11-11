@@ -5,6 +5,7 @@ import {
   alliesOf,
   allianceRules,
   allTreaties,
+  expeditionProblem,
   companyCharters,
   companyRules,
   foundProblem,
@@ -162,7 +163,7 @@ export class DiplomacyScreen implements Screen {
     const moodClass = war || /hostile/.test(mood) ? 'bad' : /rebuilt|cool/.test(mood) ? 'warn' : 'good';
     const pending = rel.proposal;
     const theirs = pending && pending.from === p.id;
-    const kindName = (k: string) => (k === 'trade' ? 'a trade agreement' : k === 'alliance' ? 'an alliance' : 'Favoured Nation status');
+    const kindName = (k: string) => (k === 'trade' ? 'a trade agreement' : k === 'alliance' ? 'an alliance' : k === 'expedition' ? 'a joint expedition' : 'Favoured Nation status');
     const allied = isAllied(s, me.id, p.id);
     const theirAllies = alliesOf(s, p.id).filter((n) => n !== me.id);
     const buttons: (HTMLElement | null)[] = [];
@@ -183,7 +184,12 @@ export class DiplomacyScreen implements Screen {
         const invite = !!allianceOf(s, me.id);
         buttons.push(h('button', { class: 'btn tiny primary', 'data-action': 'propose-alliance', disabled: !!why, title: why ?? `Offer ${nationOf(s, p.id).name} ${invite ? 'a place in your alliance' : 'an alliance'}`, onclick: () => app.dispatch({ type: 'proposeAlliance', nation: p.id }) }, invite ? 'Invite to alliance' : 'Propose alliance'));
       }
-      if (allied) buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.leaveAlliance(p) }, 'Leave alliance'));
+      if (allied) {
+        const why = expeditionProblem(s, me.id, p.id);
+        const cost = allianceRules(s).expeditionCost;
+        buttons.push(h('button', { class: 'btn tiny', 'data-action': 'joint-expedition', disabled: !!why, title: why ?? `Fund a seasoned scout together, ${Math.ceil(cost / 2)} gold each, and share the gold it finds`, onclick: () => app.dispatch({ type: 'proposeExpedition', nation: p.id }) }, 'Joint expedition'));
+        buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.leaveAlliance(p) }, 'Leave alliance'));
+      }
       else if (favoured) buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.cancelFavoured(p) }, 'Cancel Favoured Nation'));
       buttons.push(h('button', { class: 'btn tiny', onclick: () => void this.war(p.id) }, 'Declare war'));
     }

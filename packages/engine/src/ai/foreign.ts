@@ -43,8 +43,8 @@ import { UNIT_TYPES } from '../rules/units.js';
 import type { NationId } from '../rules/nations.js';
 import { track } from '../telemetry.js';
 import type { Colony, GameState, Player, ProposalKind, Unit } from '../types.js';
-import { allianceRules, alliancesOn, allianceOf, allianceProblem, alliesOf, cooperationOf, isAllied, LEVEL_COOPERATION, leaveAlliance, warOnFriend } from '../alliances.js';
-import { proposeAlliance } from '../relations.js';
+import { allianceRules, alliancesOn, allianceOf, expeditionProblem, allianceProblem, alliesOf, cooperationOf, isAllied, LEVEL_COOPERATION, leaveAlliance, warOnFriend } from '../alliances.js';
+import { proposeAlliance, proposeExpedition } from '../relations.js';
 import { startWar } from '../diplomacy.js';
 import { companies, companiesOn, companyCharters, companyRules } from '../companies.js';
 import { buyShares, foundCompany, foundProblem, sharePrice, sharesProblem } from '../chartered.js';
@@ -101,6 +101,7 @@ export function foreignAffairs(s: GameState, p: Player, prof: AiProfile, strengt
   if (!s.config.noFavoured) safely(() => makeProposals(s, p, prof, strength));
   if (s.treaties && alliancesOn(s)) safely(() => joinAlliesWars(s, p, prof, strength, army));
   if (companiesOn(s)) safely(() => companyAffairs(s, p, prof));
+  if (s.treaties && alliancesOn(s)) safely(() => jointExpedition(s, p, prof));
   pruneTriangles(s, p);
 }
 
@@ -219,6 +220,26 @@ function wantsAlliance(s: GameState, p: Player, prof: AiProfile, other: NationId
   }
   const chance = cooperationOf(s).proposeAlliance * LEVEL_COOPERATION[p.ai ?? 'naive'].propose;
   return chance > 0 && pairRandom(s, p.id, other, `${p.id} alliance wish ${s.turn}`) < chance;
+}
+
+/**
+ * A joint expedition (alliances.ts) with an ally, while there are Lost City Rumours left to find:
+ * a nation with its half of the cost plus its reserve and 1,000 gold proposes one at a seeded
+ * chance per review (the scenario's `jointExpedition` times the level's share of proposing
+ * alliances), when it has none out already.
+ */
+function jointExpedition(s: GameState, p: Player, prof: AiProfile): void {
+  const allies = alliesOf(s, p.id);
+  if (!allies.length || p.independence !== 'none' || !prof.scouting) return;
+  if (Object.values(s.units).some((u) => u.owner === p.id && u.joint)) return;
+  const half = Math.ceil(allianceRules(s).expeditionCost / 2);
+  if (p.gold < half + prof.reserve + 1000 || !s.map.tiles.some((t) => t.lcr)) return;
+  const chance = cooperationOf(s).jointExpedition * LEVEL_COOPERATION[p.ai ?? 'naive'].propose;
+  for (const a of allies) {
+    if (expeditionProblem(s, p.id, a) || pairRandom(s, p.id, a, `${p.id} expedition ${s.turn}`) >= chance) continue;
+    proposeExpedition(s, p.id, a);
+    return;
+  }
 }
 
 /** Each level's share of COOPERATION's company chances: Creative founds and buys most readily. */
