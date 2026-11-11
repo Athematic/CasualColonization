@@ -20,6 +20,7 @@ import { track } from './telemetry.js';
 import { addTreaty, endTreaty, treatyBetween } from './treaties.js';
 import { aiAcceptsAlliance, aiAcceptsExpedition, allianceProblem, expeditionProblem, isAllied, leaveAlliance, makeAlliance, makeExpedition } from './alliances.js';
 import type { GameState, ProposalKind, Relation, RouteCargo, Unit } from './types.js';
+import { colonyList, unitList } from './unitindex.js';
 
 /** Years of peace needed for Favoured Nation: 10, plus or minus up to 2. */
 export const PEACE_YEARS = { base: 10, spread: 2 };
@@ -170,7 +171,7 @@ function stopsAt(s: GameState, stops: { at: string }[], of: NationId): boolean {
  */
 export function routesBetween(s: GameState, a: NationId, b: NationId): number {
   const used = new Set<string>();
-  for (const u of Object.values(s.units)) if (u.route) used.add(u.route.id);
+  for (const u of unitList(s)) if (u.route) used.add(u.route.id);
   let n = 0;
   for (const r of Object.values(s.routes ?? {})) {
     if (!used.has(r.id)) continue;
@@ -467,7 +468,7 @@ function pruneRoutes(s: GameState, a: NationId, b: NationId): void {
     const keep = route.stops.filter((st) => s.colonies[st.at]?.owner !== partner);
     if (keep.length === route.stops.length) continue;
     route.stops = keep;
-    for (const u of Object.values(s.units)) {
+    for (const u of unitList(s)) {
       if (u.route?.id !== route.id) continue;
       if (keep.length < 2) {
         delete u.route;
@@ -497,7 +498,7 @@ export function closedRoutePorts(s: GameState, nation: NationId): void {
       if (open) continue;
       delete stop.port;
       if (port === nation) continue;
-      for (const u of Object.values(s.units)) if (u.route?.id === route.id && u.dest && 'europe' in u.dest) delete u.dest.port;
+      for (const u of unitList(s)) if (u.route?.id === route.id && u.dest && 'europe' in u.dest) delete u.dest.port;
       track(nation, 'route:partner port closed');
       message(s, `The ${route.name} route now calls at ${portName(s, nation)}: ${portName(s, port)} is closed to ${nationOf(s, nation).adjective} ships.`, nation);
     }
@@ -506,7 +507,7 @@ export function closedRoutePorts(s: GameState, nation: NationId): void {
 
 /** Ships of either nation in, or sailing to, the other's home port go to their own. */
 function sendShipsHome(s: GameState, a: NationId, b: NationId): void {
-  for (const u of Object.values(s.units)) {
+  for (const u of unitList(s)) {
     const partner = u.owner === a ? b : u.owner === b ? a : null;
     if (!partner || (u.loc.kind !== 'europe' && u.loc.kind !== 'sailing') || u.loc.port !== partner) continue;
     delete u.loc.port;
@@ -522,10 +523,10 @@ function sendShipsHome(s: GameState, a: NationId, b: NationId): void {
  */
 function seizeGoods(s: GameState, by: NationId, from: NationId): string {
   const grid = gridOf(s);
-  const colonies = Object.values(s.colonies).filter((c) => c.owner === by);
+  const colonies = colonyList(s).filter((c) => c.owner === by);
   if (!colonies.length) return '';
   let total = 0;
-  for (const u of Object.values(s.units)) {
+  for (const u of unitList(s)) {
     if (u.owner !== from || u.loc.kind !== 'map' || !u.cargo) continue;
     const { x, y } = u.loc;
     const colony = colonies.filter((c) => grid.distance(c.x, c.y, x, y) <= 1).sort((p, q) => grid.distance(p.x, p.y, x, y) - grid.distance(q.x, q.y, x, y))[0];

@@ -9,7 +9,7 @@ import { gridOf } from './grid.js';
 import { goodsOf } from './scenarios/index.js';
 import { modifiers } from './scenarios/modifiers.js';
 import { sightSharers } from './alliances.js';
-import { addUnit, indexedColonyAt, indexedColonyPopulation, indexedColonyWorkers, indexedTileWorker, indexedUnitsAboard, indexedUnitsAt } from './unitindex.js';
+import { addUnit, indexedColonyAt, indexedColonyPopulation, indexedColonyWorkers, indexedTileWorker, indexedUnitsAboard, indexedUnitsAt, colonyList } from './unitindex.js';
 
 export function inBounds(s: GameState, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < s.map.width && y < s.map.height;
@@ -209,7 +209,7 @@ export function tileWorkedBy(s: GameState, x: number, y: number): Unit | undefin
 
 export function colonyOwningTile(s: GameState, x: number, y: number): Colony | undefined {
   const grid = gridOf(s);
-  return Object.values(s.colonies).find((c) => grid.distance(c.x, c.y, x, y) <= grid.workRadius);
+  return colonyList(s).find((c) => grid.distance(c.x, c.y, x, y) <= grid.workRadius);
 }
 
 export function buildingWorkers(s: GameState, colony: Colony, kind: keyof typeof BUILDINGS): Unit[] {

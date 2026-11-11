@@ -34,6 +34,7 @@ import type { PeopleTreatyRules, Scenario, TemperamentRules, YearsAround } from 
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, nationParty, peopleParty, peopleTreatyBetween, treatiesWithPeople, treatyNations, treatyPeoples } from './treaties.js';
 import type { GameState, PeopleTreatyKind, Settlement, Treaty, TreatyEnd } from './types.js';
+import { unitList } from './unitindex.js';
 
 /** The engine's rules for treaties with peoples; a scenario's `peopleTreaties` is merged over them. */
 export const PEOPLE_TREATY_RULES: PeopleTreatyRules = {
@@ -446,7 +447,7 @@ export function pruneSettlementStops(s: GameState, nation: NationId, people: Tri
     const keep = route.stops.filter((st) => s.settlements[st.at]?.tribe !== people);
     if (keep.length === route.stops.length) continue;
     route.stops = keep;
-    for (const u of Object.values(s.units)) {
+    for (const u of unitList(s)) {
       if (u.route?.id !== route.id) continue;
       if (keep.length < 2) {
         delete u.route;

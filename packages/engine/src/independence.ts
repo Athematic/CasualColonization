@@ -30,13 +30,13 @@ import { crownSideOf } from './world.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
 import { concludeConfederation, confederationOf } from './confederation.js';
 import { treatyNations } from './treaties.js';
-import { removeUnit } from './unitindex.js';
+import { removeUnit, colonyList, unitList } from './unitindex.js';
 
 /** Share of all colonists, across every colony, who support independence. */
 export function rebelShare(s: GameState, nation: NationId): number {
   let pop = 0;
   let rebels = 0;
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner !== nation) continue;
     const n = colonyWorkers(s, c).length;
     pop += n;
@@ -52,7 +52,7 @@ export function canDeclareIndependence(s: GameState, nation: NationId): string |
   const p = player(s, nation);
   if (p.kind === 'company') return 'A chartered company has no Crown to break with.';
   if (p.independence !== 'none') return 'Independence has already been declared.';
-  if (!Object.values(s.colonies).some((c) => c.owner === nation)) return 'You have no colonies.';
+  if (!colonyList(s).some((c) => c.owner === nation)) return 'You have no colonies.';
   const share = rebelShare(s, nation);
   if (share < DECLARE_AT) return `Only ${share}% of colonists support independence; ${DECLARE_AT}% are needed.`;
   return null;
@@ -75,7 +75,7 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   const reason = canDeclareIndependence(s, nation);
   if (reason) fail(reason);
   const p = player(s, nation);
-  const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
+  const colonies = colonyList(s).filter((c) => c.owner === nation);
   p.independence = 'declared';
   track(nation, 'cmd:declareIndependence');
   p.tax = 0;
@@ -97,7 +97,7 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   lapseFavoured(s, nation);
 
   // Everything left in Europe is confiscated.
-  for (const u of Object.values(s.units)) {
+  for (const u of unitList(s)) {
     if (u.owner !== nation) continue;
     const inEurope = u.loc.kind === 'europe' || (u.loc.kind === 'sailing' && u.loc.to === 'europe');
     const aboardInEurope = u.loc.kind === 'carrier' && s.units[u.loc.carrierId]?.loc.kind === 'europe';
@@ -105,7 +105,7 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   }
   // Veterans, and half the soldiers of committed colonies, form the Continental Army.
   let continentals = 0;
-  for (const u of Object.values(s.units)) {
+  for (const u of unitList(s)) {
     if (u.owner !== nation || (u.role !== 'soldier' && u.role !== 'dragoon')) continue;
     const pos = unitPosition(s, u);
     const colony = pos && colonyAt(s, pos.x, pos.y);
@@ -166,10 +166,10 @@ function landWave(s: GameState, p: Player): void {
   const ref = p.ref;
   if (ref.regulars + ref.dragoons + ref.artillery + ref.menOfWar === 0) return;
   const weight = (c: Colony) => colonyStrength(s, c) * (isToryColony(s, c) ? 0.5 : 1);
-  const targets = Object.values(s.colonies)
+  const targets = colonyList(s)
     .filter((c) => c.owner === p.id && isCoastal(s, c.x, c.y))
     .sort((a, b) => weight(a) - weight(b));
-  const all = targets.length ? targets : Object.values(s.colonies).filter((c) => c.owner === p.id);
+  const all = targets.length ? targets : colonyList(s).filter((c) => c.owner === p.id);
   for (const target of all) {
     const tiles = landingTiles(s, target);
     if (!tiles.length) continue;
@@ -219,13 +219,13 @@ function endRebellion(s: GameState, p: Player): void {
  * fewer (and the Crown has taken one), with the same outcome for all of them.
  */
 function checkConfederationOutcome(s: GameState, members: Player[]): void {
-  const beaten = (p: Player) => p.ref.regulars + p.ref.dragoons + p.ref.artillery === 0 && !Object.values(s.units).some((u) => u.owner === 'crown' && u.against === p.id && !isShip(u));
+  const beaten = (p: Player) => p.ref.regulars + p.ref.dragoons + p.ref.artillery === 0 && !unitList(s).some((u) => u.owner === 'crown' && u.against === p.id && !isShip(u));
   const ids = new Set(members.map((m) => m.id));
   let outcome: 'won' | 'lost' | null = null;
   if (members.every(beaten)) outcome = 'won';
   else {
-    const held = Object.values(s.colonies).filter((c) => ids.has(c.owner)).length;
-    const lost = Object.values(s.colonies).filter((c) => c.owner === 'crown' && c.takenFrom && ids.has(c.takenFrom)).length;
+    const held = colonyList(s).filter((c) => ids.has(c.owner)).length;
+    const lost = colonyList(s).filter((c) => c.owner === 'crown' && c.takenFrom && ids.has(c.takenFrom)).length;
     const had = members.reduce((n, m) => n + (m.coloniesAtDeclaration ?? 1), 0);
     if (lost > 0 && held <= Math.floor(had / 2)) outcome = 'lost';
   }
@@ -236,7 +236,7 @@ function checkConfederationOutcome(s: GameState, members: Player[]): void {
     m.independence = outcome;
     track(m.id, `independence:${outcome}`);
     endRebellion(s, m);
-    if (outcome === 'won') for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === m.id) removeUnit(s, u.id);
+    if (outcome === 'won') for (const u of unitList(s)) if (u.owner === 'crown' && u.against === m.id) removeUnit(s, u.id);
   }
   const t = confederationOf(s, members[0].id);
   if (t) concludeConfederation(s, t);
@@ -254,20 +254,20 @@ function checkOutcome(s: GameState, p: Player): void {
     if (members.every((m) => m.independence === 'declared')) return checkConfederationOutcome(s, members);
   }
   const ref = p.ref;
-  const royalsLeft = Object.values(s.units).some((u) => u.owner === 'crown' && u.against === p.id && !isShip(u));
+  const royalsLeft = unitList(s).some((u) => u.owner === 'crown' && u.against === p.id && !isShip(u));
   if (ref.regulars + ref.dragoons + ref.artillery === 0 && !royalsLeft) {
     p.independence = 'won';
     track(p.id, 'independence:won');
     endRebellion(s, p);
-    for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === p.id) removeUnit(s, u.id);
+    for (const u of unitList(s)) if (u.owner === 'crown' && u.against === p.id) removeUnit(s, u.id);
     const text = term(s, 'gameOver.won', { nation: nationOf(s, p.id).name });
     message(s, text);
     noteHistory(s, 'independence', [p.id], text);
     warEnded(s, p, 'won', text);
     return;
   }
-  const held = Object.values(s.colonies).filter((c) => c.owner === p.id).length;
-  const lost = Object.values(s.colonies).filter((c) => c.owner === 'crown' && c.takenFrom === p.id).length;
+  const held = colonyList(s).filter((c) => c.owner === p.id).length;
+  const lost = colonyList(s).filter((c) => c.owner === 'crown' && c.takenFrom === p.id).length;
   if (lost > 0 && held <= Math.floor((p.coloniesAtDeclaration ?? 1) / 2)) {
     p.independence = 'lost';
     track(p.id, 'independence:lost');
@@ -309,7 +309,7 @@ function safely(fn: () => void): void {
 
 /** The Crown's troops march on the nearest rebel colony and attack it. */
 export function runCrown(s: GameState): void {
-  for (const u of Object.values(s.units)) {
+  for (const u of unitList(s)) {
     if (u.owner !== 'crown' || !s.units[u.id] || u.loc.kind !== 'map') continue;
     safely(() => crownUnit(s, u));
   }
@@ -324,7 +324,7 @@ function crownUnit(s: GameState, u: Unit): void {
     if (prey && u.moves > 0) attack(s, u.id, { unitId: prey.id });
     return;
   }
-  const colonies = Object.values(s.colonies).filter(enemy);
+  const colonies = colonyList(s).filter(enemy);
   if (!colonies.length) return;
   const target = colonies.sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0];
   if (grid.distance(target.x, target.y, pos.x, pos.y) === 1) {

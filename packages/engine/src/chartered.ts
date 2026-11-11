@@ -13,7 +13,7 @@ import type { NationId } from './rules/nations.js';
 import { calendarOf, nationOf, nationTitle, term, yearOf } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import type { GameState, Player } from './types.js';
-import { ownedUnitsView } from './unitindex.js';
+import { ownedUnitsView, colonyList } from './unitindex.js';
 
 /** Why `nation` cannot found the company now, or null. */
 export function foundProblem(s: GameState, nation: NationId, id: NationId): string | null {
@@ -75,7 +75,7 @@ export function foundCompany(s: GameState, nation: NationId, id: NationId): stri
 export function sharePrice(s: GameState, co: Player): number {
   const { total } = sharesIn(co, co.id);
   let colonists = 0;
-  for (const c of Object.values(s.colonies)) if (c.owner === co.id) colonists += colonyWorkers(s, c).length;
+  for (const c of colonyList(s)) if (c.owner === co.id) colonists += colonyWorkers(s, c).length;
   const worth = Math.max(0, co.gold) + 100 * colonists;
   return Math.max(companyRules(s).sharePrice, total ? Math.round(worth / total) : 0);
 }

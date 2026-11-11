@@ -50,7 +50,7 @@ import { type NationId } from './rules/nations.js';
 import { difficultyOf, nationOf, nationSet, scenarioOf, term, Term, type ScenarioLike } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, MercenaryOffer, Player, Unit } from './types.js';
-import { forEachUnitNear, removeUnit, setUnitOwner } from './unitindex.js';
+import { forEachUnitNear, removeUnit, setUnitOwner, colonyList, unitList } from './unitindex.js';
 
 /** A seeded draw for this nation and purpose. */
 const draw = (s: GameState, nation: NationId, purpose: string) => pairRandom(s, nation, 'crown', `rebellion ${purpose}`);
@@ -139,7 +139,7 @@ export function offerMercenaries(s: GameState, nation: NationId): boolean {
 
 /** Where hired mercenaries come ashore: the weakest coastal colony (any colony if none is coastal). */
 function weakestColony(s: GameState, nation: NationId): Colony | undefined {
-  const own = Object.values(s.colonies).filter((c) => c.owner === nation);
+  const own = colonyList(s).filter((c) => c.owner === nation);
   const coastal = own.filter((c) => isCoastal(s, c.x, c.y));
   const strength = (c: Colony) => unitsAt(s, c.x, c.y).filter((u) => u.owner === nation && !isShip(u)).reduce((n, u) => n + defencePower(s, u), 0);
   return (coastal.length ? coastal : own).sort((a, b) => strength(a) - strength(b) || a.id.localeCompare(b.id))[0];
@@ -238,7 +238,7 @@ export function interventionStatus(s: GameState, nation: NationId): { turns: num
     minTurns: INTERVENTION.minTurns,
     bells: Math.max(0, p.bells - r.bells),
     needBells: interventionBells(s, p),
-    held: Object.values(s.colonies).filter((c) => c.owner === nation).length,
+    held: colonyList(s).filter((c) => c.owner === nation).length,
     needHeld: Math.ceil((p.coloniesAtDeclaration ?? 1) * INTERVENTION.hold),
     ...(r.intervention ? { came: r.intervention } : {}),
   };
@@ -260,7 +260,7 @@ export function interventionPower(s: GameState, nation: NationId): NationId | 'f
   const candidates: { id: NationId; weight: number }[] = [];
   for (const o of s.players) {
     if (o.id === nation || o.id === 'crown' || o.independence !== 'none' || p.stance[o.id] === 'war') continue;
-    if (!Object.values(s.colonies).some((c) => c.owner === o.id)) continue;
+    if (!colonyList(s).some((c) => c.owner === o.id)) continue;
     const weight = friends.includes(o.id) ? 4 : hasTradeAgreement(s, nation, o.id) || p.royal?.warOn === o.id ? 2 : 0;
     if (weight) candidates.push({ id: o.id, weight });
   }
@@ -288,7 +288,7 @@ export function intervene(s: GameState, nation: NationId): void {
   const p = player(s, nation);
   const r = rebellionOf(p);
   if (r.intervention) return;
-  const own = Object.values(s.colonies).filter((c) => c.owner === nation);
+  const own = colonyList(s).filter((c) => c.owner === nation);
   const coastal = own.filter((c) => isCoastal(s, c.x, c.y));
   const target = (coastal.length ? coastal : own).sort((a, b) => threat(s, b) - threat(s, a) || a.id.localeCompare(b.id))[0];
   if (!target) return;
@@ -317,7 +317,7 @@ function interventionRound(s: GameState, p: Player): void {
 
 /** When the war ends, the intervention force sails home. */
 export function alliesGoHome(s: GameState, nation: NationId): void {
-  const allies = Object.values(s.units).filter((u) => u.owner === nation && u.ally);
+  const allies = unitList(s).filter((u) => u.owner === nation && u.ally);
   for (const u of allies) removeUnit(s, u.id);
   if (allies.length) message(s, `The ${term(s, 'independenceWar')} is over: the intervention force sails home.`, nation);
 }
@@ -351,7 +351,7 @@ export const ALLY_ATTACK_ODDS = 0.5;
  */
 export function runAllies(s: GameState, p: Player): void {
   if (p.independence !== 'declared') return;
-  for (const u of Object.values(s.units)) {
+  for (const u of unitList(s)) {
     if (u.owner !== p.id || !u.ally || !s.units[u.id] || u.loc.kind !== 'map' || u.moves <= 0) continue;
     safely(() => allyTurn(s, p, u));
   }
@@ -374,7 +374,7 @@ function allyTurn(s: GameState, p: Player, u: Unit): void {
     attack(s, u.id, { unitId: best.target!.id });
     return;
   }
-  const own = Object.values(s.colonies).filter((c) => c.owner === p.id);
+  const own = colonyList(s).filter((c) => c.owner === p.id);
   const here = colonyAt(s, pos.x, pos.y);
   const goal = own
     .map((c) => ({ c, threat: threat(s, c) }))
@@ -424,7 +424,7 @@ function defect(s: GameState, p: Player, c: Colony): void {
 }
 
 function toryRound(s: GameState, p: Player): void {
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner !== p.id || !isToryColony(s, c)) continue;
     const r = draw(s, p.id, `tories ${c.id} ${s.turn}`);
     const atGates = unitsAt(s, c.x, c.y).filter((u) => u.owner === p.id);
@@ -450,7 +450,7 @@ function toryRound(s: GameState, p: Player): void {
 export function processRebellion(s: GameState, p: Player): void {
   if (p.independence !== 'declared') return;
   rebellionOf(p);
-  const lost = Object.values(s.colonies).some((c) => c.owner === 'crown' && c.takenFrom === p.id);
+  const lost = colonyList(s).some((c) => c.owner === 'crown' && c.takenFrom === p.id);
   toryRound(s, p);
   mercenaryRound(s, p, lost);
   interventionRound(s, p);
@@ -458,6 +458,6 @@ export function processRebellion(s: GameState, p: Player): void {
 
 /** Mercenaries and the intervention force fighting for a nation, and how far the intervention is, for the Military report. */
 export function warSupport(s: GameState, nation: NationId): { mercenaries: Unit[]; allies: Unit[]; intervention: ReturnType<typeof interventionStatus> } {
-  const own = Object.values(s.units).filter((u) => u.owner === nation);
+  const own = unitList(s).filter((u) => u.owner === nation);
   return { mercenaries: own.filter((u) => u.mercenary), allies: own.filter((u) => u.ally), intervention: interventionStatus(s, nation) };
 }

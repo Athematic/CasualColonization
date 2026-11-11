@@ -37,7 +37,7 @@ import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
 import type { Colony, GameState, Unit } from './types.js';
-import { setUnitLoc, setUnitOwner, removeUnit } from './unitindex.js';
+import { setUnitLoc, setUnitOwner, removeUnit, colonyList } from './unitindex.js';
 
 function isArmed(u: Unit): boolean {
   return u.role === 'soldier' || u.role === 'dragoon';
@@ -165,7 +165,7 @@ function damageShip(s: GameState, ship: Unit): string {
   ship.cargo = {};
   delete ship.dest;
   const pos = unitPosition(s, ship);
-  const drydock = Object.values(s.colonies)
+  const drydock = colonyList(s)
     .filter((c) => c.owner === ship.owner && c.buildings.docks >= 2)
     .sort((a, b) => (pos ? grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y) : 0))[0];
   if (drydock) {
@@ -288,7 +288,7 @@ export function repairArtillery(s: GameState, nation: NationId, unitId: string):
  */
 export function bombardShips(s: GameState, nation: NationId): void {
   const me = player(s, nation);
-  for (const colony of Object.values(s.colonies)) {
+  for (const colony of colonyList(s)) {
     const level = colony.buildings.stockade;
     if (colony.owner !== nation || level < 2 || !isCoastal(s, colony.x, colony.y)) continue;
     for (const n of neighbours(s, colony.x, colony.y)) {

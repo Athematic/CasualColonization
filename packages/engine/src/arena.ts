@@ -18,6 +18,7 @@ import { isFavoured } from './relations.js';
 import { alliesOf } from './alliances.js';
 import { bound, withPeople } from './treaties.js';
 import type { GameState, MapSize, Player } from './types.js';
+import { colonyList } from './unitindex.js';
 
 export interface ArenaOptions {
   games: number;
@@ -312,7 +313,7 @@ function endRelations(s: GameState, nation: NationId, counted?: RelationsTally):
 
 export function standing(s: GameState, seed: number, nation: NationId, level: AiLevel): Omit<ArenaEntry, 'game' | 'won'> {
   const p = s.players.find((x) => x.id === nation)!;
-  const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
+  const colonies = colonyList(s).filter((c) => c.owner === nation);
   const breakdown = scoreBreakdown(s, p);
   // A nation finished in play-on stands with the score it had when its war ended.
   return {

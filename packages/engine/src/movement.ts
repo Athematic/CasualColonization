@@ -28,7 +28,7 @@ import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
 import type { TribeId } from './rules/nations.js';
 import type { Colony, GameState, ImprovementKind, Player, Unit } from './types.js';
 import { mechanicsOf, term } from './scenarios/index.js';
-import { colonyTiles, setUnitLoc, unitTiles } from './unitindex.js';
+import { colonyTiles, setUnitLoc, unitTiles, colonyList, unitList } from './unitindex.js';
 import { alliesOf, colonyOpenTo, isAllied } from './alliances.js';
 
 export type MoveOption =
@@ -241,16 +241,12 @@ export interface MapIndex {
 export function buildMapIndex(s: GameState): MapIndex {
   const w = s.map.width;
   const index: MapIndex = { colonies: new Map(), settlements: new Set(), units: new Map() };
-  for (const id in s.colonies) {
-    const c = s.colonies[id];
-    index.colonies.set(c.y * w + c.x, c.owner);
-  }
+  for (const c of colonyList(s)) index.colonies.set(c.y * w + c.x, c.owner);
   for (const id in s.settlements) {
     const st = s.settlements[id];
     index.settlements.add(st.y * w + st.x);
   }
-  for (const id in s.units) {
-    const u = s.units[id];
+  for (const u of unitList(s)) {
     if (u.loc.kind !== 'map') continue;
     const i = u.loc.y * w + u.loc.x;
     let owners = index.units.get(i);
@@ -803,7 +799,7 @@ export function advanceWork(s: GameState, u: Unit): void {
   if (kind === 'clear') {
     delete tile.f;
     const grid = gridOf(s);
-    const colony = Object.values(s.colonies).find((c) => c.owner === u.owner && grid.distance(c.x, c.y, at.x, at.y) <= grid.workRadius);
+    const colony = colonyList(s).find((c) => c.owner === u.owner && grid.distance(c.x, c.y, at.x, at.y) <= grid.workRadius);
     if (colony) {
       colony.goods.lumber += 20;
       message(s, `Clearing the forest brought 20 lumber to ${colony.name}.`, u.owner, colony);

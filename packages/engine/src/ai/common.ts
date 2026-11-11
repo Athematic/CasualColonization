@@ -20,7 +20,7 @@ import {
 } from '../queries.js';
 import type { Brave, Colony, GameState, Player, Tile, Unit } from '../types.js';
 import { goodsOf } from '../scenarios/index.js';
-import { ownedUnitsView } from '../unitindex.js';
+import { ownedUnitsView, colonyList } from '../unitindex.js';
 
 /** Runs an AI action, ignoring moves the rules turn down. */
 export function safely(fn: () => void): void {
@@ -63,8 +63,9 @@ function siteScoresFor(s: GameState): SiteScores {
   const w = s.map.width;
   let colonies = 0;
   let settlements = 0;
-  for (const id in s.colonies) {
-    const c = s.colonies[id];
+  const all = colonyList(s);
+  for (let i = 0; i < all.length; i++) {
+    const c = all[i];
     colonies = (colonies * 31 + c.y * w + c.x + 1) % 2147483647;
   }
   for (const id in s.settlements) {
@@ -84,7 +85,7 @@ function siteScoresFor(s: GameState): SiteScores {
 function neighbourColonies(s: GameState, x: number, y: number): Colony[] {
   const grid = gridOf(s);
   // Within the search's square, only the colonies within two tiles of it can be (in the same order).
-  const pool = search && grid.distance(search.x, search.y, x, y) <= search.radius ? search.colonies : Object.values(s.colonies);
+  const pool = search && grid.distance(search.x, search.y, x, y) <= search.radius ? search.colonies : colonyList(s);
   return pool.filter((c) => grid.distance(c.x, c.y, x, y) <= 2 * grid.workRadius);
 }
 
@@ -197,7 +198,7 @@ export function bestColonySite(
 ): { x: number; y: number; score: number } {
   const grid = gridOf(s);
   const outer = search;
-  search = { x, y, radius: opts.radius, colonies: Object.values(s.colonies).filter((c) => grid.distance(c.x, c.y, x, y) <= opts.radius + 2), land: new Map(), scores: siteScoresFor(s) };
+  search = { x, y, radius: opts.radius, colonies: colonyList(s).filter((c) => grid.distance(c.x, c.y, x, y) <= opts.radius + 2), land: new Map(), scores: siteScoresFor(s) };
   try {
     let best = { x, y, score: opts.stay ? opts.score(x, y) : -Infinity };
     const reach = opts.overLand ? landReach(s, x, y, opts.radius) : undefined;
@@ -237,7 +238,7 @@ export function landReach(s: GameState, x: number, y: number, radius: number): S
 export function nearestColony(s: GameState, p: Player, x: number, y: number, coastalOnly = false): Colony | undefined {
   const grid = gridOf(s);
   let best: Colony | undefined;
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner !== p.id) continue;
     if (coastalOnly && !isCoastal(s, c.x, c.y)) continue;
     if (!best || grid.distance(c.x, c.y, x, y) < grid.distance(best.x, best.y, x, y)) best = c;
@@ -247,10 +248,8 @@ export function nearestColony(s: GameState, p: Player, x: number, y: number, coa
 
 export function ownColonies(s: GameState, p: Player): Colony[] {
   const out: Colony[] = [];
-  for (const id in s.colonies) {
-    const c = s.colonies[id];
-    if (c.owner === p.id) out.push(c);
-  }
+  const all = colonyList(s);
+  for (let i = 0; i < all.length; i++) if (all[i].owner === p.id) out.push(all[i]);
   return out;
 }
 
@@ -377,7 +376,7 @@ export function landingSpot(s: GameState, p: Player, ship: Unit): { x: number; y
  * whole game unless a ship takes them off again (`fetchStranded`, `boardRescue`).
  */
 export function strandedSettlers(s: GameState, p: Player): Unit[] {
-  if (Object.values(s.colonies).some((c) => c.owner === p.id)) return [];
+  if (colonyList(s).some((c) => c.owner === p.id)) return [];
   return ownedUnitsView(s, p.id).filter((u) => u.loc.kind === 'map' && u.role !== 'scout' && UNIT_TYPES[u.type].kind === 'colonist' && stranded(s, u));
 }
 
@@ -412,7 +411,7 @@ export function fetchStranded(s: GameState, p: Player, ship: Unit): boolean {
 
 /** A stranded settler boards an own ship with room next to it. Returns whether it did. */
 export function boardRescue(s: GameState, p: Player, u: Unit): boolean {
-  if (u.loc.kind !== 'map' || u.moves <= 0 || Object.values(s.colonies).some((c) => c.owner === p.id) || !stranded(s, u)) return false;
+  if (u.loc.kind !== 'map' || u.moves <= 0 || colonyList(s).some((c) => c.owner === p.id) || !stranded(s, u)) return false;
   const { x, y } = u.loc;
   for (const n of neighbours(s, x, y)) {
     const ship = unitsAt(s, n.x, n.y).find((o) => o.owner === p.id && isShip(o) && cargoFree(s, o) > 0);

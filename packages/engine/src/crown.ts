@@ -19,6 +19,7 @@ import { type NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, Player } from './types.js';
 import { difficultyOf, goodsOf, mechanicsOf, nationOf, term, Term } from './scenarios/index.js';
+import { colonyList } from './unitindex.js';
 
 // ---------------------------------------------------------------------------
 // The Royal Expeditionary Force
@@ -54,7 +55,7 @@ export function describeForce(f: Force): string {
 
 /** The force the Crown holds at the start of a game: the fixed part of the old formula, scaled by `refBase`. */
 export function initCrown(s: GameState, p: Player): void {
-  const colonies = Object.values(s.colonies).filter((c) => c.owner === p.id).length;
+  const colonies = colonyList(s).filter((c) => c.owner === p.id).length;
   // A save from before the REF grew catches up with the old formula for its colonies.
   p.ref = royalForce(s, p, colonies);
   p.royal = { bells: p.bells, points: 0, added: 0 };
@@ -122,7 +123,7 @@ export const DEMAND = { from: 40, chance: 0.015, minGold: 400, share: { min: 0.1
 export function seizureColony(s: GameState, nation: NationId): { colony: Colony; value: number } | null {
   const p = player(s, nation);
   let best: { colony: Colony; value: number } | null = null;
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner !== nation) continue;
     const value = goodsOf(s).reduce((n, g) => (g === 'food' ? n : n + c.goods[g] * p.market[g].price), 0);
     if (!best || value > best.value) best = { colony: c, value };
@@ -212,7 +213,7 @@ export function royalWarTargets(s: GameState, nation: NationId): { nation: Natio
   for (const o of s.players) {
     if (o.id === nation || o.id === 'crown' || o.kind === 'company' || o.independence !== 'none') continue;
     if (p.stance[o.id] === 'war' || isFavoured(s, nation, o.id) || warOnFriend(s, nation, o.id)) continue;
-    if (!Object.values(s.colonies).some((c) => c.owner === o.id)) continue;
+    if (!colonyList(s).some((c) => c.owner === o.id)) continue;
     out.push({ nation: o.id, weight: hasTradeAgreement(s, nation, o.id) ? ROYAL_WAR.partnerWeight : 1 });
   }
   return out;
@@ -257,7 +258,7 @@ export function processCrown(s: GameState): void {
   const mechanics = mechanicsOf(s);
   for (const p of s.players) {
     if (p.id === 'crown' || p.kind === 'company' || p.independence !== 'none') continue;
-    const colonies = Object.values(s.colonies).filter((c) => c.owner === p.id).length;
+    const colonies = colonyList(s).filter((c) => c.owner === p.id).length;
     if (mechanics.ref) growForce(s, p, colonies);
     if (mechanics.demands) {
       // A demand not answered within a round counts as refused.

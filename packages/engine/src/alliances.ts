@@ -29,7 +29,7 @@ import type { AiLevel } from './ai/profiles.js';
 import { track } from './telemetry.js';
 import { addTreaty, bound, endTreaty, nationParty, sameParty, treatyNations } from './treaties.js';
 import type { AllianceTerms, GameState, Treaty, Unit } from './types.js';
-import { removeUnit, setUnitLoc } from './unitindex.js';
+import { removeUnit, setUnitLoc, colonyList } from './unitindex.js';
 import type { GoodId } from './rules/goods.js';
 
 /** The engine's alliance rules; a scenario's `alliances` is merged over them. */
@@ -323,7 +323,7 @@ export function leaveAlliance(s: GameState, by: NationId, war?: NationId): strin
  * next to the colony (water for ships, land for the rest), or are lost when there is none.
  */
 export function expelUnits(s: GameState, nation: NationId, from: NationId): void {
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner !== from) continue;
     for (const u of unitsAt(s, c.x, c.y)) {
       if (u.owner !== nation || u.loc.kind !== 'map') continue;

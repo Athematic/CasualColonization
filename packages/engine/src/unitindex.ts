@@ -36,6 +36,8 @@ interface UnitIndex {
   worked: Map<number, Unit[]>;
   /** Every unit, by owner, each list in key order. */
   byOwner: Map<string, Unit[]>;
+  /** Every unit in key order (Object.values of the record), built on demand; null after a unit was added or removed. */
+  all: Unit[] | null;
 }
 
 const unitIndexes = new WeakMap<Units, UnitIndex>();
@@ -106,7 +108,7 @@ function place(ix: UnitIndex, u: Unit, loc: UnitLocation, add: boolean): void {
 function unitIndex(s: GameState): UnitIndex | undefined {
   let ix = unitIndexes.get(s.units);
   if (ix && ix.width === s.map.width && ix.height === s.map.height) return ix;
-  ix = { width: s.map.width, height: s.map.height, rank: new Map(), next: 0, onMap: new Map(), inColony: new Map(), aboard: new Map(), worked: new Map(), byOwner: new Map() };
+  ix = { width: s.map.width, height: s.map.height, rank: new Map(), next: 0, onMap: new Map(), inColony: new Map(), aboard: new Map(), worked: new Map(), byOwner: new Map(), all: null };
   for (const id in s.units) {
     if (INDEX_LIKE.test(id)) return undefined;
     ix.rank.set(id, ix.next++);
@@ -147,6 +149,7 @@ export function addUnit(s: GameState, u: Unit): void {
   } else ix.rank.set(u.id, ix.next++);
   place(ix, u, u.loc, true);
   insert(ix, ix.byOwner, u.owner, u);
+  ix.all = null;
 }
 
 /** Removes a unit from the state. */
@@ -159,6 +162,25 @@ export function removeUnit(s: GameState, id: string): void {
   place(ix, u, u.loc, false);
   remove(ix.byOwner, u.owner, u);
   ix.rank.delete(id);
+  ix.all = null;
+}
+
+/**
+ * Every unit, in key order: what Object.values(s.units) returns, without walking the record each
+ * time (a record that units have left is a slow dictionary: about 100 us a walk at 900 units).
+ * Built from the record after a unit is added or removed, and never changed after: a list in hand
+ * stays as it was, as Object.values' copy would. Read it, never change it. A unit's location,
+ * owner and the rest are read from the unit.
+ */
+export function unitList(s: GameState): readonly Unit[] {
+  const ix = unitIndex(s);
+  if (!ix) return Object.values(s.units);
+  const kept = (ix.all ??= Object.values(s.units));
+  if (checks) {
+    const out = Object.values(s.units);
+    if (kept.length !== out.length || out.some((u, i) => kept[i] !== u)) throw new Error('Stale unit index for unitList');
+  }
+  return kept;
 }
 
 /** Gives a unit to another owner: the only way to change `u.owner` (see the top of this file). */
@@ -315,6 +337,8 @@ interface ColonyIndex {
   byTile: Map<number, Colony>;
   /** The last colony in key order on each tile (two share a tile only in tests), as path searches kept it. */
   lastByTile: Map<number, Colony>;
+  /** Every colony in key order, as Object.values gives them (much faster to walk than the record). */
+  list: Colony[];
 }
 
 const colonyIndexes = new WeakMap<Colonies, ColonyIndex>();
@@ -322,10 +346,11 @@ const colonyIndexes = new WeakMap<Colonies, ColonyIndex>();
 function colonyIndex(s: GameState): ColonyIndex | undefined {
   let ix = colonyIndexes.get(s.colonies);
   if (ix && ix.width === s.map.width && ix.height === s.map.height) return ix;
-  ix = { width: s.map.width, height: s.map.height, byTile: new Map(), lastByTile: new Map() };
+  ix = { width: s.map.width, height: s.map.height, byTile: new Map(), lastByTile: new Map(), list: [] };
   for (const id in s.colonies) {
     if (INDEX_LIKE.test(id)) return undefined;
     const c = s.colonies[id];
+    ix.list.push(c);
     const k = colonyTileKey(ix, c.x, c.y);
     // The first colony in key order wins, as in the scan.
     if (k >= 0 && !ix.byTile.has(k)) ix.byTile.set(k, c);
@@ -370,6 +395,20 @@ export function colonyTiles(s: GameState): ReadonlyMap<number, Colony> {
     if (c.x >= 0 && c.y >= 0 && c.x < w && c.y < s.map.height) out.set(c.y * w + c.x, c);
   }
   if (ix && (ix.lastByTile.size !== out.size || [...out].some(([k, c]) => ix.lastByTile.get(k) !== c))) throw new Error('Stale colony index for colonyTiles');
+  return out;
+}
+
+/**
+ * Every colony, in key order: what Object.values(s.colonies) returns, without walking the record
+ * (a record that colonies have left is slow to walk). Shared with the index: read it, never change
+ * it. Founding or losing a colony gives the index a new list, so a list in hand stays as it was,
+ * as Object.values' copy would; a colony's owner and the rest are read from the colony.
+ */
+export function colonyList(s: GameState): readonly Colony[] {
+  const ix = colonyIndex(s);
+  if (ix && !checks) return ix.list;
+  const out = Object.values(s.colonies);
+  if (ix && (ix.list.length !== out.length || out.some((c, i) => ix.list[i] !== c))) throw new Error('Stale colony index for colonyList');
   return out;
 }
 

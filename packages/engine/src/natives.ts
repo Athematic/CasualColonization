@@ -6,7 +6,7 @@ import { perfEnd, perfStart } from './perf.js';
 import { hasSubmitted, nativeUnitPrice, processBraves, settlementKind } from './braves.js';
 import { addOf, modifiers, mulOf } from './scenarios/modifiers.js';
 import { noteGoods, noteHistory } from './history.js';
-import { cargoRoomFor, colonyWorkers, createUnit, message, player, reveal, tileAt, unitName, unitPosition } from './queries.js';
+import { cargoRoomFor, colonyPopulation, createUnit, message, player, reveal, tileAt, unitName, unitPosition } from './queries.js';
 import { random, randInt } from './rng.js';
 import { noteTrade } from './stats.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
@@ -17,7 +17,7 @@ import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import type { Colony, GameState, PeopleRelation, Settlement, Unit } from './types.js';
 import { calendarOf, difficultyOf, goodsOf, landReachOf, mechanicsOf, nationOf, nativeProduceOf, nativeRulesOf, peopleOf, yearValue } from './scenarios/index.js';
 import { peoplePairRandom } from './relations.js';
-import { removeUnit } from './unitindex.js';
+import { removeUnit, colonyList } from './unitindex.js';
 import { breakFaith, noteLandTaken, notePeopleContact, peopleSellFactor, peopleTensionFall, processPeopleTreaties } from './peopletreaties.js';
 
 /**
@@ -329,7 +329,7 @@ export function establishMission(s: GameState, unitId: string, settlementId: str
 function nearestColony(s: GameState, nation: NationId, x: number, y: number, within: number) {
   const grid = gridOf(s);
   let best: Colony | undefined;
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner !== nation) continue;
     const d = grid.distance(c.x, c.y, x, y);
     if (d <= within && (!best || d < grid.distance(best.x, best.y, x, y))) best = c;
@@ -357,14 +357,23 @@ export function processNatives(s: GameState): void {
   const nations = s.players.filter((p) => p.id !== 'crown' && p.kind !== 'company').map((p) => p.id);
   const difficulty = new Map(s.players.map((p) => [p.id, difficultyOf(s, p)]));
   const rules = nativeRulesOf(s);
+  // Nearby colonies press on native land, more so as they grow: 3 and one per two colonists for
+  // each colony within 3 tiles. Nothing below founds, moves, gives away or repeoples a colony (a
+  // convert joins on the map), so each colony's pressure is worked out once; the sums are of whole
+  // numbers, so their order does not matter.
+  const colonies = colonyList(s);
+  const weight = colonies.map((c) => 3 + Math.floor(colonyPopulation(s, c) / 2));
+  const pressureOn = new Map<string, number>();
   for (const st of Object.values(s.settlements)) {
     st.gold += st.capital ? 6 : 3;
     const tribe = tribeOf(s, st);
+    pressureOn.clear();
+    for (let i = 0; i < colonies.length; i++) {
+      const c = colonies[i];
+      if (grid.distance(c.x, c.y, st.x, st.y) <= 3) pressureOn.set(c.owner, (pressureOn.get(c.owner) ?? 0) + weight[i]);
+    }
     for (const nation of nations) {
-      // Nearby colonies press on native land, more so as they grow.
-      const pressure = Object.values(s.colonies)
-        .filter((c) => c.owner === nation && grid.distance(c.x, c.y, st.x, st.y) <= 3)
-        .reduce((sum, c) => sum + 3 + Math.floor(colonyWorkers(s, c).length / 2), 0);
+      const pressure = pressureOn.get(nation) ?? 0;
       const mission = st.mission === nation;
       const r = difficulty.get(nation)!;
       // A trade treaty calms the people faster (N4).

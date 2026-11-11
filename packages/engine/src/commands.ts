@@ -40,7 +40,7 @@ import type { RoleId, UnitTypeId } from './rules/units.js';
 import { endTurn } from './turn.js';
 import { assignRoute, createRoute, deleteRoute, editRoute, unassignRoute } from './routes.js';
 import type { BuildTarget, GameState, ImprovementKind, Job, PeopleTreatyKind, RouteStop } from './types.js';
-import { removeUnit } from './unitindex.js';
+import { removeUnit, unitList } from './unitindex.js';
 
 export type Command =
   | { type: 'move'; unitId: string; dir: Direction }
@@ -350,7 +350,7 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
       case 'disband': {
         const u = ownUnit(s, nation, cmd.unitId);
         if (u.loc.kind === 'colony') fail('Remove the colonist from the colony first.');
-        for (const o of Object.values(s.units)) if (o.loc.kind === 'carrier' && o.loc.carrierId === u.id) removeUnit(s, o.id);
+        for (const o of unitList(s)) if (o.loc.kind === 'carrier' && o.loc.carrierId === u.id) removeUnit(s, o.id);
         removeUnit(s, u.id);
         break;
       }

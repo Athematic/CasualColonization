@@ -18,7 +18,7 @@ import { calendarOf, formatDate } from './scenarios/index.js';
 import { checkVictory } from './victory.js';
 import { recordStats } from './stats.js';
 import type { GameState, Player, Unit } from './types.js';
-import { indexedUnitsOf } from './unitindex.js';
+import { indexedUnitsOf, colonyList, unitList } from './unitindex.js';
 
 /** Resets a player's units and carries out standing orders at the start of their turn. */
 export function beginPlayerTurn(s: GameState, p: Player): void {
@@ -84,7 +84,7 @@ function finishPlayerTurn(s: GameState, p: Player): void {
   if (p.finished) return;
   track(p.id, 'cmd:endTurn');
   let t = perfStart();
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner === p.id) processColony(s, c);
   }
   perfEnd('end of turn: colony production', t);
@@ -126,7 +126,7 @@ function advance(s: GameState): void {
 
 /** Units of a player that still want orders this turn. */
 export function unitsAwaitingOrders(s: GameState, nation: Player['id']): string[] {
-  return Object.values(s.units)
+  return unitList(s)
     .filter((u) => u.owner === nation && !u.ally && u.moves > 0 && u.state === 'active' && !u.work && !u.dest && !u.roadTo && !u.route)
     .filter((u) => u.loc.kind === 'map')
     .map((u) => u.id);

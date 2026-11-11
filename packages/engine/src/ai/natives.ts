@@ -17,6 +17,7 @@ import type { NationId } from '../rules/nations.js';
 import type { GameState, Player, Settlement, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
+import { colonyList } from '../unitindex.js';
 
 /** A purchase must fetch at least this much more in Europe (after tax) than it costs. */
 export const NATIVE_BUY_MARGIN = 1.4;
@@ -66,7 +67,7 @@ export function maybeIncite(s: GameState, p: Player, u: Unit, st: Settlement, pr
   if (hasPeopleTrade(s, p.id, st.tribe)) return false;
   const tribe = s.tribes.find((t) => t.id === st.tribe)!;
   const enemy = (Object.keys(p.stance) as NationId[]).find(
-    (n) => n !== 'crown' && p.stance[n] === 'war' && tribe.stance[n] !== 'war' && Object.values(s.colonies).some((c) => c.owner === n && grid.distance(c.x, c.y, st.x, st.y) <= 6),
+    (n) => n !== 'crown' && p.stance[n] === 'war' && tribe.stance[n] !== 'war' && colonyList(s).some((c) => c.owner === n && grid.distance(c.x, c.y, st.x, st.y) <= 6),
   );
   if (!enemy) return false;
   let ok = false;

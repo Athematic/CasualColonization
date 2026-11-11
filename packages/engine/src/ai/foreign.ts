@@ -54,7 +54,7 @@ import type { AiLevel } from './profiles.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
 import { aiGoodsOf, aiTurn } from '../scenarios/index.js';
-import { ownedUnitsView } from '../unitindex.js';
+import { ownedUnitsView, colonyList } from '../unitindex.js';
 import { peopleTreatiesOn } from '../peopletreaties.js';
 import { peopleAffairs } from './natives.js';
 
@@ -156,7 +156,7 @@ export function wagonSteps(s: GameState, p: Player, from: Colony, to: Colony): n
  */
 export function tradeNeighbours(s: GameState, p: Player, other: NationId): boolean {
   const grid = gridOf(s);
-  const theirs = Object.values(s.colonies).filter((c) => c.owner === other);
+  const theirs = colonyList(s).filter((c) => c.owner === other);
   if (!theirs.length) return false;
   let checks = 0;
   for (const c of ownColonies(s, p)) {
@@ -179,7 +179,7 @@ export function favouredPays(s: GameState, p: Player, prof: AiProfile, other: Na
   const grid = gridOf(s);
   if (prof.aggression < 0.5) return true;
   const own = ownColonies(s, p);
-  return !Object.values(s.colonies).some(
+  return !colonyList(s).some(
     (c) => c.owner === other && own.some((o) => grid.distance(o.x, o.y, c.x, c.y) <= 10) && strength / (colonyDefence(s, c) + 1) >= (2.5 / prof.aggression) * 0.6,
   );
 }
@@ -353,7 +353,7 @@ function joinAlliesWars(s: GameState, p: Player, prof: AiProfile, strength: numb
     if (!e || e.independence !== 'none' || e.finished || isFavoured(s, p.id, enemy) || warOnFriend(s, p.id, enemy)) continue;
     let best: Colony | null = null;
     let bestScore = 0;
-    for (const c of Object.values(s.colonies)) {
+    for (const c of colonyList(s)) {
       if (c.owner !== enemy || !ownColonies(s, p).some((o) => grid.distance(o.x, o.y, c.x, c.y) <= 10)) continue;
       const score = strength / (colonyDefence(s, c) + 1);
       if (score > bestScore) [best, bestScore] = [c, score];
@@ -395,7 +395,7 @@ export function bestWarTarget(s: GameState, p: Player, prof: AiProfile, strength
   const colonies = ownColonies(s, p);
   const memory = p.aiMemory ?? {};
   let best: WarTarget | null = null;
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner === p.id || c.owner === 'crown' || p.stance[c.owner] === 'war') continue;
     if (!favoured && isFavoured(s, p.id, c.owner)) continue;
     // Allies, like Favoured Nations, are weighed only to decide on leaving; a friend's allies never.

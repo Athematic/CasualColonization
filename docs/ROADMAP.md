@@ -88,6 +88,8 @@ Test free image generation running on the Mac to generate sprites.
 
 ## More Hill Climbing
 
+Speed rounds continue after 0.10 with the same gate on the Mac (`docs/perf/MAC_WORKER.md`; branches `claude/perf-best` and `claude/perf-candidate`). Round 4 (after Beta 1, November 2026): accepted, bit-identical; colony and unit lists kept by the index, `colonyReport` allocating less, nearest-first neighbour search, native pressure once per turn, running sums for statistics. Mac: to 1700 1.2 → 1.1 s, to 1750 1.7 → 1.5 s, full game 3.5 → 3.0 s (−8%, −12%, −14%). Ideas left from it: cache `pathIndex`'s settlement and brave maps, a land/water mask, explored-land counts per player, a settlement list.
+
 Consider other candidates for Hill Climbing, such as:
 - **Using the concept of Deep Modules** to refactor code to be more easy to maintain, while repeated games ensures that nothing breaks.
 
