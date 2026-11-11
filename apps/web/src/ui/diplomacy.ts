@@ -74,6 +74,13 @@ import {
   type PlayerId,
   type Player,
   type TribeId,
+  leaguesOn,
+  leagueOf,
+  leagueMembers,
+  leagueProblem,
+  leagueProposalFor,
+  formatDate,
+  calendarOf,
 } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -385,9 +392,57 @@ export class DiplomacyScreen implements Screen {
     return h('div', { class: 'card pairs' },
       h('h3', null, amPeople ? 'Nations and peoples' : 'Native nations'),
       h('ul', { class: 'nation-relations' }, ids.map(row)),
+      amPeople ? this.leagueBlock() : null,
       h('p', { class: 'muted small' }, amPeople
         ? 'After years of good relations and trade, you may make a trade treaty with a European nation, then land use, a cultural exchange and a mutual defence pact; with another people a trade treaty and a mutual defence pact. Ending a treaty, or going to war, breaks faith: trust is slow to come back.'
         : 'A people that plays as a nation makes treaties itself: you propose and it answers, or it proposes to you. Ending a treaty, or going to war, breaks faith.'));
+  }
+
+  /**
+   * A playing people's league (native-nations.md T14's confederacy, peopleleague.ts): its league and
+   * a way to leave it or invite a pact partner, or a proposal of a new league to its pact partners
+   * and theirs, and a proposal waiting for its answer.
+   */
+  private leagueBlock(): HTMLElement | null {
+    const app = this.app;
+    const s = app.state;
+    const me = app.me;
+    if (!leaguesOn(s)) return null;
+    const pacts = (id: PlayerId): PlayerId[] => {
+      const out: PlayerId[] = [];
+      for (const t of s.treaties ?? []) {
+        if (t.end || t.kind !== 'defence' || !t.parties.some((p) => p.id === id)) continue;
+        for (const p of t.parties) if (p.id !== id && p.kind === 'people' && !out.includes(p.id)) out.push(p.id);
+      }
+      return out;
+    };
+    const names = (ids: readonly PlayerId[]) => ids.map((id) => sideName(s, id)).join(', ');
+    const own = leagueOf(s, me.id);
+    const partners = pacts(me.id).filter((id) => !leagueOf(s, id));
+    const parts: (HTMLElement | null)[] = [h('h4', null, 'League of peoples')];
+    const waiting = leagueProposalFor(s, me.id);
+    if (waiting) {
+      parts.push(h('div', { class: 'proposal row wrap' },
+        h('span', { class: 'small' }, `${sideName(s, waiting.by).replace(/^the /, 'The ')} propose ${waiting.league ? 'that you join their league' : `a league with ${names([waiting.by, ...waiting.peoples].filter((id) => id !== me.id))}`}.`),
+        h('button', { class: 'btn tiny primary', disabled: !app.isMyTurn(), onclick: () => app.dispatch({ type: 'answerLeague', by: waiting.by, accept: true }) }, 'Accept'),
+        h('button', { class: 'btn tiny', disabled: !app.isMyTurn(), onclick: () => app.dispatch({ type: 'answerLeague', by: waiting.by, accept: false }) }, 'Turn down')));
+    }
+    if (own) {
+      parts.push(h('p', { class: 'small' }, `In a league with ${names(leagueMembers(own).filter((id) => id !== me.id))} since ${formatDate(own.start, calendarOf(s))}.`));
+      const buttons = partners.map((id) => {
+        const why = leagueProblem(s, me.id, [id]);
+        return h('button', { class: 'btn tiny', disabled: !!why || !app.isMyTurn(), title: why ?? `Invite ${sideName(s, id)} into the league.`, onclick: () => app.dispatch({ type: 'proposeLeague', peoples: [id] }) }, `Invite ${sideName(s, id)}`);
+      });
+      buttons.push(h('button', { class: 'btn tiny', disabled: !app.isMyTurn(), onclick: () => app.dispatch({ type: 'leaveLeague' }) }, 'Leave the league'));
+      parts.push(h('div', { class: 'row wrap nation-actions' }, buttons));
+    } else {
+      const ask = [...partners];
+      for (const id of partners) for (const o of pacts(id)) if (o !== me.id && !ask.includes(o) && !leagueOf(s, o)) ask.push(o);
+      const why = ask.length ? leagueProblem(s, me.id, ask) : 'A league is made with the peoples you hold mutual defence pacts with, and theirs: you hold none.';
+      parts.push(h('button', { class: 'btn tiny', disabled: !!why || !app.isMyTurn(), title: why ?? `Propose a league with ${names(ask)}.`, onclick: () => app.dispatch({ type: 'proposeLeague', peoples: ask }) }, ask.length ? `Propose a league with ${names(ask)}` : 'Propose a league'));
+    }
+    parts.push(h('p', { class: 'muted small' }, 'Three or more peoples at peace with each other, each with a mutual defence pact with one of them and in good standing with all, may join in a league. A league that holds for long, its peoples keeping their homelands, wins together at the end.'));
+    return h('div', { class: 'league' }, parts);
   }
 
   private async endPair(other: PlayerId, kind: PeopleTreatyKind): Promise<void> {

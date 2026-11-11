@@ -1,4 +1,4 @@
-import { independenceQuestion, councilText, CouncilText, aBrave, peopleTradeBenefits, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, TRIBES, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { independenceQuestion, leagueProposalFor, sideName, councilText, CouncilText, aBrave, peopleTradeBenefits, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, TRIBES, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import { icon } from '../styles.js';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -223,6 +223,23 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
           h('div', { class: 'decision-actions' },
             h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerProposal', nation: from, accept: true }, true) && done(p.kind === 'trade' ? `Agreed: you now trade with ${name}.` : p.kind === 'alliance' ? `Agreed: ${name} is now your ally.` : p.kind === 'expedition' ? `Agreed: the expedition sets out.` : p.kind === 'confederation' ? `Agreed: independence is declared.` : `Agreed: ${name} is now a Favoured Nation.`) }, 'Accept'),
             h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerProposal', nation: from, accept: false }, true) && done('Turned down.') }, 'Turn down'))),
+    });
+  }
+  // A league of peoples proposed to a playing people (peopleleague.ts, native-nations.md T14).
+  const league = leagueProposalFor(app.state, me.id);
+  if (league) {
+    const by = sideName(app.state, league.by).replace(/^the /, 'The ');
+    const others = [league.by, ...league.peoples].filter((id) => id !== me.id).map((id) => sideName(app.state, id)).join(', ');
+    list.push({
+      id: 'league',
+      title: 'A league of peoples',
+      required: false,
+      render: (done) =>
+        h('div', { class: 'decision-body' },
+          h('p', null, `${by} propose ${league.league ? 'that you join their league' : `a league with ${others}`}: its peoples keep the peace among themselves and settle their common affairs together. You can also answer later in Foreign Affairs.`),
+          h('div', { class: 'decision-actions' },
+            h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerLeague', by: league.by, accept: true }, true) && done('Agreed.') }, 'Accept'),
+            h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerLeague', by: league.by, accept: false }, true) && done('Turned down.') }, 'Turn down'))),
     });
   }
   const offer = Object.values(me.fatherOffer) as FatherId[];
