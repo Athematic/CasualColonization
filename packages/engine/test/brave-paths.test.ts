@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  braveDefending,
   braveRoute,
+  braveStepCost,
   bravesOf,
   buildIndex,
   createGame,
@@ -8,7 +10,11 @@ import {
   foundColony,
   processBraves,
   removeUnit,
+  setFeatureSink,
   tileAt,
+  FOREST_MOVE_COST,
+  RIVER_MOVE_COST,
+  ROAD_MOVE_COST,
   SQUARE,
   type Brave,
   type GameState,
@@ -98,5 +104,76 @@ describe('brave paths', () => {
     expect(braveRoute(s, b, st.x + 4, st.y, false, buildIndex(s))).toBeNull();
     processBraves(s);
     expect(b.task).toBeUndefined();
+  });
+});
+
+describe('braves moving to defend', () => {
+  it('are those set against an enemy unit (their own land or a partner), not raids, visits, trade or demands', () => {
+    const b = (task: Brave['task']): Brave => ({ id: 'b', tribe: 'arawak', home: 'x', x: 0, y: 0, task });
+    expect(braveDefending(b({ kind: 'attack', unitId: 'u1' }))).toBe(true);
+    expect(braveDefending(b({ kind: 'attack', unitId: 'u1', defend: 'england' }))).toBe(true);
+    expect(braveDefending(b({ kind: 'attack', colonyId: 'c1' }))).toBe(false);
+    expect(braveDefending(b({ kind: 'visit', colonyId: 'c1', purpose: 'trade' }))).toBe(false);
+    expect(braveDefending(b({ kind: 'visit', colonyId: 'c1', purpose: 'demand' }))).toBe(false);
+    expect(braveDefending(b({ kind: 'wander', turns: 2 }))).toBe(false);
+    expect(braveDefending(b(undefined))).toBe(false);
+  });
+
+  it('step at the river cost on open land and the road cost on a road', () => {
+    const { s, st } = openGround();
+    const x = st.x + 2;
+    const y = st.y;
+    const t = tileAt(s, x, y)!;
+    expect(braveStepCost(s, x, y, false)).toBe(3);
+    expect(braveStepCost(s, x, y, true)).toBe(RIVER_MOVE_COST);
+    t.f = true;
+    expect(braveStepCost(s, x, y, false)).toBe(FOREST_MOVE_COST);
+    expect(braveStepCost(s, x, y, true)).toBe(RIVER_MOVE_COST);
+    delete t.f;
+    t.t = 'mountains';
+    expect(braveStepCost(s, x, y, true)).toBe(RIVER_MOVE_COST);
+    t.t = 'plains';
+    t.r = true;
+    expect(braveStepCost(s, x, y, false)).toBe(ROAD_MOVE_COST);
+    expect(braveStepCost(s, x, y, true)).toBe(ROAD_MOVE_COST);
+  });
+
+  it('cover three plains tiles a round on foot, for their own land or a partner, where a raiding or visiting brave covers one', () => {
+    const { s, st } = openGround();
+    const enemy = createUnit(s, 'france', 'freeColonist', { kind: 'map', x: st.x + 6, y: st.y });
+    // Against an enemy near their own land (nearbyEnemy sets no partner) and for a partner (N7).
+    const own = brave(s, st, st.x, st.y - 1, { task: { kind: 'attack', unitId: enemy.id } });
+    const partner = brave(s, st, st.x - 1, st.y, { task: { kind: 'attack', unitId: enemy.id, defend: 'england' } });
+    const founder = createUnit(s, 'france', 'freeColonist', { kind: 'map', x: st.x - 6, y: st.y });
+    founder.moves = 3;
+    const c = foundColony(s, founder.id, 'Raidville');
+    const raider = brave(s, st, st.x, st.y + 1, { task: { kind: 'attack', colonyId: c.id } });
+    const trader = brave(s, st, st.x + 1, st.y + 1, { task: { kind: 'visit', colonyId: c.id, purpose: 'trade' } });
+    processBraves(s);
+    expect(SQUARE.distance(own.x, own.y, st.x, st.y - 1)).toBe(3);
+    expect(SQUARE.distance(partner.x, partner.y, st.x - 1, st.y)).toBe(3);
+    expect(SQUARE.distance(raider.x, raider.y, st.x, st.y + 1)).toBe(1);
+    expect(SQUARE.distance(trader.x, trader.y, st.x + 1, st.y + 1)).toBe(1);
+  });
+
+  it('include braves of a people at war that set out against an enemy near their settlement', () => {
+    const { s, st } = openGround();
+    s.tribes.find((t) => t.id === st.tribe)!.stance.france = 'war';
+    const enemy = createUnit(s, 'france', 'freeColonist', { kind: 'map', x: st.x + 3, y: st.y });
+    enemy.role = 'soldier';
+    st.braveTimer = 0;
+    // The brave sets out and attacks in the same round (three steps at defence speed); catch it attacking.
+    let set: Brave | undefined;
+    const prev = setFeatureSink((_nation, feature) => {
+      if (feature === 'natives:unit attacked') set = Object.values(bravesOf(s)).find((b) => b.task?.kind === 'attack' && b.task.unitId === enemy.id);
+    });
+    try {
+      for (let i = 0; i < 40 && !set; i++) processBraves(s);
+    } finally {
+      setFeatureSink(prev);
+    }
+    expect(set).toBeDefined();
+    expect(set!.task).toEqual({ kind: 'attack', unitId: enemy.id });
+    expect(braveDefending(set!)).toBe(true);
   });
 });
