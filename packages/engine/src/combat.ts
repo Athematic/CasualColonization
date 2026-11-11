@@ -89,7 +89,7 @@ export function riverCrossing(s: GameState, from: { x: number; y: number }, to: 
   const target = tileAt(s, to.x, to.y);
   const source = tileAt(s, from.x, from.y);
   if (!target?.rv || !source || TERRAIN[source.t].water || colonyAt(s, to.x, to.y)) return false;
-  return !riverLinked(s.map, from.x, from.y, to.x, to.y);
+  return !riverLinked(s.map, from.x, from.y, to.x, to.y, gridOf(s));
 }
 
 /** `attackFrom`: where the attack comes from, for the river defence bonus (a unit in the open defending against a crossing attacker). */

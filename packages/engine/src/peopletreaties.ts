@@ -45,7 +45,8 @@ import { gridOf } from './grid.js';
 import { noteHistory } from './history.js';
 import { bestJob } from './colony.js';
 import { addTension, goodRelations, landPrice, nativeLandClosedTo, nativeLandOwner, peopleRelation, peopleRelationOf, peopleThreshold, settlementName, tensionOf } from './natives.js';
-import { isShip, message, player, tileAt, tileWorkedBy, unitName, unitPosition, workArea } from './queries.js';
+import { isShip, message, player, tileAt, tileWorkedBy, unitName, unitPosition } from './queries.js';
+import { colonyWorkArea, reachArea } from './workarea.js';
 import { isFavoured, peoplePairRandom, settlementRandom } from './relations.js';
 import { isCompanyIdent, TRIBES, type NationId, type TribeId } from './rules/nations.js';
 import type { UnitTypeId } from './rules/units.js';
@@ -452,7 +453,7 @@ export function leasableTiles(s: GameState, nation: NationId, people: TribeId): 
   const w = s.map.width;
   for (const c of colonyList(s)) {
     if (c.owner !== nation) continue;
-    for (const p of workArea(s, c.x, c.y)) {
+    for (const p of colonyWorkArea(s, c)) {
       const i = p.y * w + p.x;
       if (seen.has(i)) continue;
       seen.add(i);
@@ -615,7 +616,7 @@ export function leasedFromBeside(s: GameState, colonies: readonly Colony[]): Map
   if (!anyLandUse(s)) return out;
   for (let i = 0; i < colonies.length; i++) {
     const c = colonies[i];
-    for (const p of workArea(s, c.x, c.y)) {
+    for (const p of reachArea(s, c.x, c.y)) {
       if (tileAt(s, p.x, p.y)!.use !== c.owner) continue;
       const st = nativeLandOwner(s, p.x, p.y);
       if (!st || !hasLandUse(s, c.owner, st.tribe)) continue;

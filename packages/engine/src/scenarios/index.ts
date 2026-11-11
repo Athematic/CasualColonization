@@ -17,6 +17,7 @@ import { COLONY_BUILDS, IMMIGRANT_WEIGHTS, PURCHASABLE, TRAINABLE, type UnitType
 import type { GameConfig, GameState } from '../types.js';
 import { AMERICAS } from './americas.js';
 import { CARIBBEAN } from './caribbean.js';
+import { HEX_TEST, HEX_TEST_FLAT } from './hex-test.js';
 import type { Calendar } from './calendar.js';
 import { AMERICAS_TEXT, capitalise, fillTemplate, type TermKey } from './terms.js';
 import type { Mechanics, NationEntry, Rivals, RumourEntry, Scenario, ScenarioAi } from './types.js';
@@ -26,6 +27,7 @@ export * from './calendar.js';
 export * from './terms.js';
 export { AMERICAS, AMERICAS_GENERATOR } from './americas.js';
 export { CARIBBEAN, CARIBBEAN_CALENDAR, CARIBBEAN_GENERATOR } from './caribbean.js';
+export { HEX_TEST, HEX_TEST_FLAT } from './hex-test.js';
 
 /** The scenario of games that do not name one. */
 export const DEFAULT_SCENARIO = 'americas';
@@ -401,3 +403,6 @@ export function checkSavedScenario(s: GameState): Scenario {
 
 registerScenario(AMERICAS);
 registerScenario(CARIBBEAN);
+// Hidden: the Americas' rules on generated hex maps, for tests and tournaments (docs/design/hex-maps.md).
+registerScenario(HEX_TEST);
+registerScenario(HEX_TEST_FLAT);

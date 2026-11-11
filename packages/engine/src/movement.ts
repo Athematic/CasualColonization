@@ -68,7 +68,7 @@ export function moveCost(s: GameState, u: Unit, fx: number, fy: number, tx: numb
 export function landStepCost(s: GameState, from: Tile, to: Tile, fx: number, fy: number, tx: number, ty: number, roadFrom: boolean, roadTo: boolean): number {
   if (roadFrom && roadTo) return ROAD_MOVE_COST;
   // Along a river: as cheap as a road, and the two do not add up.
-  if (to.rv && from.rv && riverLinked(s.map, fx, fy, tx, ty)) return RIVER_MOVE_COST;
+  if (to.rv && from.rv && riverLinked(s.map, fx, fy, tx, ty, gridOf(s))) return RIVER_MOVE_COST;
   if (to.f) return FOREST_MOVE_COST;
   return TERRAIN[to.t].moveCost;
 }

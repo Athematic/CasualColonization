@@ -8,10 +8,11 @@
  *   production.ts), and a colony built on a river gets the bonus on its centre tile.
  *
  * A tile stores its river's size and a bit mask of the neighbours the river runs to (`rd`, bits in
- * the square grid's direction order, grid.ts). The mask makes the course unambiguous where two
- * rivers run side by side, lets renderers draw smooth curves, and marks the mouth with a bit
- * towards the water. The mask, the courses and the stored maps' river lines are square-only: rivers
- * on other grids run along tile edges (docs/ROADMAP.md, hex maps step 3).
+ * the game grid's direction order, grid.ts: eight on squares, six on hexes). The mask makes the
+ * course unambiguous where two rivers run side by side, lets renderers draw smooth curves, and
+ * marks the mouth with a bit towards the water. On every grid rivers run through tile centres
+ * (docs/design/hex-maps.md H3). `riverLinked`, `linkRiver` and the generated rivers take the grid;
+ * `RIVER_DIRS` and the stored maps' river lines (`parseRivers`) are square-only until hex step 2.
  */
 import { SQUARE, type Grid } from './grid.js';
 import { random } from './rng.js';
@@ -30,13 +31,14 @@ export function riverDirIndex(dx: number, dy: number): number {
 
 const water = (tile: Tile | undefined) => !!tile && TERRAIN[tile.t].water;
 
-/** Does the river link these two neighbouring land tiles? */
-export function riverLinked(map: GameMap, fx: number, fy: number, tx: number, ty: number): boolean {
+/** Does the river link these two neighbouring land tiles? `grid` is the game's (squares when left out). */
+export function riverLinked(map: GameMap, fx: number, fy: number, tx: number, ty: number, grid: Grid = SQUARE): boolean {
   const from = map.tiles[fy * map.width + fx];
   const to = map.tiles[ty * map.width + tx];
   if (!from?.rv || !to?.rv || !from.rd || !to.rd) return false;
-  const d = riverDirIndex(tx - fx, ty - fy);
-  return d >= 0 && (from.rd & (1 << d)) !== 0 && (to.rd & (1 << ((d + 4) % 8))) !== 0;
+  const d = grid.directionIndex(fx, fy, tx - fx, ty - fy);
+  const n = grid.directions.length;
+  return d >= 0 && (from.rd & (1 << d)) !== 0 && (to.rd & (1 << ((d + n / 2) % n))) !== 0;
 }
 
 export function riverName(tile: Tile): string | undefined {
@@ -47,9 +49,10 @@ export function riverName(tile: Tile): string | undefined {
  * Joins two neighbouring tiles by river. Land tiles get the river (the larger size wins where
  * rivers meet); a water tile only receives the mouth bit on the land side.
  */
-export function linkRiver(map: GameMap, ax: number, ay: number, bx: number, by: number, size: 1 | 2): void {
-  const d = riverDirIndex(bx - ax, by - ay);
+export function linkRiver(map: GameMap, ax: number, ay: number, bx: number, by: number, size: 1 | 2, grid: Grid = SQUARE): void {
+  const d = grid.directionIndex(ax, ay, bx - ax, by - ay);
   if (d < 0) throw new Error(`River tiles ${ax},${ay} and ${bx},${by} are not neighbours.`);
+  const n = grid.directions.length;
   const a = map.tiles[ay * map.width + ax];
   const b = map.tiles[by * map.width + bx];
   if (!water(a)) {
@@ -58,7 +61,7 @@ export function linkRiver(map: GameMap, ax: number, ay: number, bx: number, by: 
   }
   if (!water(b)) {
     b.rv = Math.max(b.rv ?? 0, size) as 1 | 2;
-    b.rd = (b.rd ?? 0) | (1 << ((d + 4) % 8));
+    b.rd = (b.rd ?? 0) | (1 << ((d + n / 2) % n));
   }
 }
 
@@ -171,18 +174,24 @@ export function generateRivers(rng: { rng: number }, map: GameMap, height: (x: n
     }
     return top[1];
   };
+  // On squares a step to a corner neighbour gets special treatment below; every hex neighbour
+  // shares an edge.
+  const square = grid.kind === 'square';
   const coastDist = new Int32Array(n).fill(0);
   for (let i = 0; i < n; i++) {
     if (!land(i)) continue;
     const x = i % width;
     const y = (i - x) / width;
-    for (const [dx, dy] of RIVER_DIRS) {
+    const near = grid.neighbourOffsets(x, y);
+    for (let k = 0; k < near.length; k += 2) {
+      const dx = near[k];
+      const dy = near[k + 1];
       const nx = x + dx;
       const ny = y + dy;
       if (nx < 0 || ny < 0 || nx >= width || ny >= rows) continue;
       const j = ny * width + nx;
       // Mouths open onto the water through an edge, not a corner, so they meet the coast cleanly.
-      if (!land(j) && (dx === 0 || dy === 0) && tiles[j].t !== 'highSeas') {
+      if (!land(j) && (!square || dx === 0 || dy === 0) && tiles[j].t !== 'highSeas') {
         down[i] = j;
         level[i] = h[i];
         coastDist[i] = 1;
@@ -198,14 +207,17 @@ export function generateRivers(rng: { rng: number }, map: GameMap, height: (x: n
     done[i] = 1;
     const x = i % width;
     const y = (i - x) / width;
-    for (const [dx, dy] of RIVER_DIRS) {
+    const near = grid.neighbourOffsets(x, y);
+    for (let k = 0; k < near.length; k += 2) {
+      const dx = near[k];
+      const dy = near[k + 1];
       const nx = x + dx;
       const ny = y + dy;
       if (nx < 0 || ny < 0 || nx >= width || ny >= rows) continue;
       const j = ny * width + nx;
       if (!land(j) || done[j]) continue;
-      // Diagonal steps cost a little more, so courses favour straight runs that draw well.
-      const lv = Math.max(h[j], level[i]) + (dx && dy ? 0.004 : 0);
+      // Diagonal steps on squares cost a little more, so courses favour straight runs that draw well.
+      const lv = Math.max(h[j], level[i]) + (square && dx && dy ? 0.004 : 0);
       if (lv < level[j]) {
         level[j] = lv;
         down[j] = i;
@@ -272,9 +284,9 @@ export function generateRivers(rng: { rng: number }, map: GameMap, height: (x: n
   const xy = (i: number) => [i % width, Math.floor(i / width)] as const;
   const sizeAt = (i: number): 1 | 2 => (flow[i] >= MAJOR_RIVER_LENGTH ? 2 : 1);
   for (const course of courses) {
-    for (let k = 0; k + 1 < course.length; k++) linkRiver(map, ...xy(course[k]), ...xy(course[k + 1]), sizeAt(course[k]));
+    for (let k = 0; k + 1 < course.length; k++) linkRiver(map, ...xy(course[k]), ...xy(course[k + 1]), sizeAt(course[k]), grid);
     // A river that did not join another runs into the water.
     const last = course[course.length - 1];
-    if (!land(down[last])) linkRiver(map, ...xy(last), ...xy(down[last]), sizeAt(last));
+    if (!land(down[last])) linkRiver(map, ...xy(last), ...xy(down[last]), sizeAt(last), grid);
   }
 }

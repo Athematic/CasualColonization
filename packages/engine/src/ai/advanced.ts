@@ -40,7 +40,6 @@ import {
   isShip,
   isWater,
   neighbours,
-  workArea,
   settlementAt,
   tileAt,
   tileWorkedBy,
@@ -67,6 +66,7 @@ import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './p
 import { equippedPrice, trainEquipped } from './outfit.js';
 import { AI_PROFILES, type AiProfile } from './profiles.js';
 import { buildRoads, equipPioneer, pioneerToolsWanted } from './roads.js';
+import { colonyWorkArea } from '../workarea.js';
 import { aiGoodsOf, aiTurn, buildingsOf, goodsOf, mechanicsOf, scenarioOf } from '../scenarios/index.js';
 
 const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
@@ -830,8 +830,8 @@ function mountTroops(s: GameState, p: Player, c: Colony): void {
 function acquireLand(s: GameState, p: Player, c: Colony, prof: AiProfile): void {
   if (prof.land === 'avoid') return;
   // Native land next to the colony before its people: most colonies have none left to acquire.
-  if (!workArea(s, c.x, c.y).some((n) => nativeLandOwner(s, n.x, n.y)) || colonyWorkers(s, c).length < 3) return;
-  for (const n of workArea(s, c.x, c.y)) {
+  if (!colonyWorkArea(s, c).some((n) => nativeLandOwner(s, n.x, n.y)) || colonyWorkers(s, c).length < 3) return;
+  for (const n of colonyWorkArea(s, c)) {
     const st = nativeLandOwner(s, n.x, n.y);
     if (!st) continue;
     const tile = tileAt(s, n.x, n.y)!;

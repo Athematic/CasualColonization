@@ -10,6 +10,7 @@ export * from './rules/colonyNames.js';
 export * from './rules/difficulty.js';
 export * from './rules/ports.js';
 export * from './grid.js';
+export * from './workarea.js';
 export * from './queries.js';
 export { addColony, addUnit, forEachUnitNear, indexChecks, indexedUnitsOf, removeColony, removeUnit, setIndexChecks, setUnitLoc, setUnitOwner } from './unitindex.js';
 export { setJobSearchChecks } from './ai/advanced.js';

@@ -12,7 +12,6 @@ import {
   isWater,
   maxMoves,
   message,
-  workArea,
   newId,
   player,
   reveal,
@@ -34,6 +33,7 @@ import { nativeLandClosedTo, onColonyFounded } from './natives.js';
 import type { BuildTarget, Colony, GameState, Job, Unit } from './types.js';
 import { buildingsOf, difficultyOf, goodsOf, mechanicsOf, nationOf, unitsOf } from './scenarios/index.js';
 import { addColony, setUnitLoc, removeUnit, colonyList } from './unitindex.js';
+import { beyondOpenRings, colonyWorkArea, inColonyWorkArea, workReach } from './workarea.js';
 
 export function canFoundColony(s: GameState, u: Unit): string | null {
   if (UNIT_TYPES[u.type].kind !== 'colonist') return 'Only colonists can found colonies.';
@@ -162,7 +162,7 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
  * players). Valid until a unit changes jobs or moves, or the land around changes.
  */
 export interface ColonyOccupancy {
-  /** The tiles around the colony, in the grid's `workArea` order. */
+  /** The tiles the colony can work now, in the grid's `workArea` order (workarea.ts `colonyWorkArea`). */
   tiles: { x: number; y: number }[];
   /** The unit working each tile around the colony (the first found, as tileWorkedBy), by map index. */
   worked: Map<number, Unit>;
@@ -176,7 +176,7 @@ export interface ColonyOccupancy {
 }
 
 export function colonyOccupancy(s: GameState, colony: Colony): ColonyOccupancy {
-  const tiles = workArea(s, colony.x, colony.y);
+  const tiles = colonyWorkArea(s, colony);
   const w = s.map.width;
   const closed = new Set<number>();
   const worked = new Map<number, Unit>();
@@ -279,9 +279,8 @@ export function bestJob(s: GameState, colony: Colony, u: Unit): Job | null {
 }
 
 function validateJob(s: GameState, colony: Colony, u: Unit, job: Job): void {
-  const grid = gridOf(s);
   if (job.kind === 'tile') {
-    if (grid.distance(colony.x, colony.y, job.x, job.y) !== 1) fail('That tile is not next to the colony.');
+    if (!inColonyWorkArea(s, colony, job.x, job.y)) fail(workReach(s) > 1 ? "That tile is outside the colony's work area." : 'That tile is not next to the colony.');
     const worker = tileWorkedBy(s, job.x, job.y);
     if (worker && worker.id !== u.id) fail('Someone already works that tile.');
     if (settlementAt(s, job.x, job.y)) fail('Natives live on that tile.');
@@ -458,6 +457,7 @@ export function hurryBuild(s: GameState, colonyId: string): void {
 
 /** End-of-turn production, growth, building and storage limits for one colony. */
 export function processColony(s: GameState, colony: Colony): void {
+  releaseClosedRings(s, colony);
   const report = colonyReport(s, colony);
   const p = player(s, colony.owner);
   for (const g of goodsOf(s)) colony.goods[g] += report.net[g];
@@ -534,6 +534,26 @@ export function processColony(s: GameState, colony: Colony): void {
       colony.goods[g] = cap;
     }
     if (colony.goods[g] < 0) colony.goods[g] = 0;
+  }
+}
+
+/**
+ * Moves the colonists off tiles in a ring of the work area that has closed since they took it (the
+ * colony shrank below its gate or lost its building; workarea.ts), before the colony produces:
+ * each takes the best job left, or waits at the colony's gate if there is none. Nothing to do in a
+ * scenario with one ring.
+ */
+function releaseClosedRings(s: GameState, colony: Colony): void {
+  if (workReach(s) === 1) return;
+  for (const u of colonyWorkers(s, colony)) {
+    if (u.loc.kind !== 'colony' || u.loc.job.kind !== 'tile' || !beyondOpenRings(s, colony, u.loc.job.x, u.loc.job.y)) continue;
+    const job = bestJob(s, colony, u);
+    if (job) setUnitLoc(s, u, { kind: 'colony', colonyId: colony.id, job });
+    else {
+      setUnitLoc(s, u, { kind: 'map', x: colony.x, y: colony.y });
+      u.moves = 0;
+    }
+    message(s, `${unitName(u)} in ${colony.name} can no longer work so far out and finds other work.`, colony.owner, colony);
   }
 }
 

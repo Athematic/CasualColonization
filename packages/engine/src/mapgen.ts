@@ -75,11 +75,20 @@ export function generateMap(rng: { rng: number }, size: MapSize, scenario: Scena
   if (!gen) throw new Error(`${scenario.name} has no generated maps.`);
   const { width, height } = gen.sizes[size];
   const grid = gridIn(scenario);
-  const land = octaves(rng, width, height, gen.noise.land);
-  const heat = octaves(rng, width, height, gen.noise.heat);
-  const wet = octaves(rng, width, height, gen.noise.wet);
-  const elev = octaves(rng, width, height, gen.noise.elevation);
-  const wood = octaves(rng, width, height, gen.noise.wood);
+  // On hexes the noise is sampled at the tiles' centres, so the land is not squashed or sheared
+  // by the offset rows or columns (docs/design/hex-maps.md H10). Squares sample at (x, y).
+  const atCentres = (f: (x: number, y: number) => number) =>
+    grid.kind === 'square'
+      ? f
+      : (x: number, y: number) => {
+          const c = grid.centre(x, y);
+          return f(c.x, c.y);
+        };
+  const land = atCentres(octaves(rng, width, height, gen.noise.land));
+  const heat = atCentres(octaves(rng, width, height, gen.noise.heat));
+  const wet = atCentres(octaves(rng, width, height, gen.noise.wet));
+  const elev = atCentres(octaves(rng, width, height, gen.noise.elevation));
+  const wood = atCentres(octaves(rng, width, height, gen.noise.wood));
 
   const { centre, spread, falloff: fall, threshold, margin: edge } = gen.land;
   const isLand: boolean[] = new Array(width * height).fill(false);

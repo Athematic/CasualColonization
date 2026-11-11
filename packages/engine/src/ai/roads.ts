@@ -66,7 +66,7 @@ export function roadTargets(s: GameState, p: Player): Spot[] {
       // A tile reached and left along the river moves as fast as a road already.
       const full = [c, ...(roadRoute(s, p, c, o) ?? []), o];
       for (let k = 1; k < full.length - 1; k++) {
-        const along = (a: Spot, b: Spot) => riverLinked(s.map, a.x, a.y, b.x, b.y);
+        const along = (a: Spot, b: Spot) => riverLinked(s.map, a.x, a.y, b.x, b.y, grid);
         if (!along(full[k - 1], full[k]) || !along(full[k], full[k + 1])) add(full[k]);
       }
     }
@@ -102,7 +102,7 @@ export function roadRoute(s: GameState, p: Player, from: Spot, to: Spot): Spot[]
       if (isWater(tile) || settlementAt(s, n.x, n.y)) continue;
       const colony = colonyAt(s, n.x, n.y);
       if (colony && j !== goal && colony.owner !== p.id) continue;
-      const step = tile.r || colony || riverLinked(s.map, x, y, n.x, n.y) ? 0.25 : tile.t === 'mountains' ? 3 : 1;
+      const step = tile.r || colony || riverLinked(s.map, x, y, n.x, n.y, grid) ? 0.25 : tile.t === 'mountains' ? 3 : 1;
       const c = cost.get(i)! + step;
       if (c < (cost.get(j) ?? Infinity)) {
         cost.set(j, c);

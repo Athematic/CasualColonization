@@ -22,6 +22,7 @@ import {
 import type { Brave, Colony, GameState, Player, Tile, Unit } from '../types.js';
 import { goodsOf } from '../scenarios/index.js';
 import { ownedUnitsView, colonyList } from '../unitindex.js';
+import { reachOffsets, workReach } from '../workarea.js';
 
 /** Runs an AI action, ignoring moves the rules turn down. */
 export function safely(fn: () => void): void {
@@ -87,11 +88,18 @@ function neighbourColonies(s: GameState, x: number, y: number): Colony[] {
   const grid = gridOf(s);
   // Within the search's square, only the colonies within two tiles of it can be (in the same order).
   const pool = search && grid.distance(search.x, search.y, x, y) <= search.radius ? search.colonies : colonyList(s);
-  return pool.filter((c) => grid.distance(c.x, c.y, x, y) <= 2 * grid.workRadius);
+  const reach = workReach(s);
+  return pool.filter((c) => grid.distance(c.x, c.y, x, y) <= 2 * reach);
 }
 
-/** Whether a tile is in the work area of one of these colonies (or under one). */
-const shared = (grid: Grid, near: Colony[], x: number, y: number) => near.some((c) => grid.distance(c.x, c.y, x, y) <= grid.workRadius);
+/** Whether a tile is in the work area of one of these colonies, as far as it can reach (or under one). */
+const shared = (grid: Grid, reach: number, near: Colony[], x: number, y: number) => near.some((c) => grid.distance(c.x, c.y, x, y) <= reach);
+
+/**
+ * Share of a tile's value a site counts for a tile in the second ring of its work area (hex-maps.md
+ * H7): the ring opens later, when the colony grows (or builds), if ever.
+ */
+export const OUTER_RING_VALUE = 0.5;
 
 export function siteScore(s: GameState, x: number, y: number): number {
   const memo = search?.scores.plain;
@@ -108,7 +116,10 @@ export function siteScore(s: GameState, x: number, y: number): number {
  */
 function plainSiteScore(s: GameState, x: number, y: number, near: Colony[]): number {
   const grid = gridOf(s);
-  const work = grid.workOffsets(x, y);
+  const reach = workReach(s);
+  const work = reachOffsets(grid, x, y, reach);
+  // Tiles past the first ring (only in a scenario whose colonies reach further) count less.
+  const inner = grid.workOffsets(x, y).length;
   let score = 0;
   let water = 0;
   // The site itself (k = -2), then its work area.
@@ -117,9 +128,10 @@ function plainSiteScore(s: GameState, x: number, y: number, near: Colony[]): num
     const py = k < 0 ? y : y + work[k + 1];
     const tile = tileAt(s, px, py);
     if (!tile) continue;
-    const weight = shared(grid, near, px, py) ? SHARED_TILE_VALUE : 1;
+    let weight = shared(grid, reach, near, px, py) ? SHARED_TILE_VALUE : 1;
+    if (k >= inner) weight *= OUTER_RING_VALUE;
     if (isWater(tile)) {
-      water++;
+      if (k < inner) water++;
       score += 1.5 * weight;
       continue;
     }
@@ -163,7 +175,9 @@ function workKeenSiteScore(s: GameState, x: number, y: number): number {
   const near = neighbourColonies(s, x, y);
   const base = plainSiteScore(s, x, y, near);
   const grid = gridOf(s);
-  const work = grid.workOffsets(x, y);
+  const reach = workReach(s);
+  const work = reachOffsets(grid, x, y, reach);
+  const inner = grid.workOffsets(x, y).length;
   let extra = 0;
   let water = 0;
   // The site itself (k = -2), then its work area.
@@ -172,10 +186,11 @@ function workKeenSiteScore(s: GameState, x: number, y: number): number {
     const py = k < 0 ? y : y + work[k + 1];
     const tile = tileAt(s, px, py);
     if (!tile) continue;
-    const weight = shared(grid, near, px, py) ? SHARED_TILE_VALUE : 1;
+    let weight = shared(grid, reach, near, px, py) ? SHARED_TILE_VALUE : 1;
+    if (k >= inner) weight *= OUTER_RING_VALUE;
     if (tile.b) extra += 5 * weight;
     if (isWater(tile)) {
-      water++;
+      if (k < inner) water++;
       continue;
     }
     if (tile.rv) extra += 1.5 * weight;
@@ -199,7 +214,7 @@ export function bestColonySite(
 ): { x: number; y: number; score: number } {
   const grid = gridOf(s);
   const outer = search;
-  search = { x, y, radius: opts.radius, colonies: colonyList(s).filter((c) => grid.distance(c.x, c.y, x, y) <= opts.radius + 2), land: new Map(), scores: siteScoresFor(s) };
+  search = { x, y, radius: opts.radius, colonies: colonyList(s).filter((c) => grid.distance(c.x, c.y, x, y) <= opts.radius + 2 * workReach(s)), land: new Map(), scores: siteScoresFor(s) };
   try {
     let best = { x, y, score: opts.stay ? opts.score(x, y) : -Infinity };
     const reach = opts.overLand ? landReach(s, x, y, opts.radius) : undefined;
@@ -281,18 +296,22 @@ interface TileAround {
 }
 
 /**
- * The units on the map, the colony and the braves on each tile next to x, y (not x, y itself), at
- * (dy + 1) × 3 + (dx + 1); undefined where nothing stands. Each list is in the order unitsAt,
- * colonyAt and bravesAt would give.
+ * The units on the map, the colony and the braves on each tile next to x, y (not x, y itself), by
+ * the grid's direction index (`grid.neighbourOffsets` order); undefined where nothing stands or
+ * off the map. Each list is in the order unitsAt, colonyAt and bravesAt would give.
  */
-function tilesAround(s: GameState, x: number, y: number): (TileAround | undefined)[] {
-  const out: (TileAround | undefined)[] = new Array(9);
+function tilesAround(s: GameState, grid: Grid, x: number, y: number): (TileAround | undefined)[] {
+  const near = grid.neighbourOffsets(x, y);
+  const out: (TileAround | undefined)[] = new Array(near.length >> 1);
   // Units and colonies from the tile indexes (each list in record order, as unitsAt and colonyAt
   // give them), braves in one pass.
-  for (const n of neighbours(s, x, y)) {
-    const units = unitsAt(s, n.x, n.y);
-    const colony = colonyAt(s, n.x, n.y);
-    if (units.length || colony) out[(n.y - y + 1) * 3 + (n.x - x + 1)] = { units, colony, braves: [] };
+  for (let d = 0; d < out.length; d++) {
+    const nx = x + near[2 * d];
+    const ny = y + near[2 * d + 1];
+    if (!grid.inBounds(s.map, nx, ny)) continue;
+    const units = unitsAt(s, nx, ny);
+    const colony = colonyAt(s, nx, ny);
+    if (units.length || colony) out[d] = { units, colony, braves: [] };
   }
   const braves = s.braves;
   if (braves) {
@@ -300,9 +319,11 @@ function tilesAround(s: GameState, x: number, y: number): (TileAround | undefine
       const b = braves[id];
       const dx = b.x - x;
       const dy = b.y - y;
+      // Every grid's neighbours are within one tile on both axes.
       if (dx < -1 || dx > 1 || dy < -1 || dy > 1 || (dx === 0 && dy === 0)) continue;
-      const i = (dy + 1) * 3 + (dx + 1);
-      (out[i] ??= { units: [], braves: [] }).braves.push(b);
+      const d = grid.directionIndex(x, y, dx, dy);
+      if (d < 0) continue;
+      (out[d] ??= { units: [], braves: [] }).braves.push(b);
     }
   }
   return out;
@@ -317,9 +338,8 @@ export function aiFight(s: GameState, p: Player, u: Unit): boolean {
   const margin = u.type === 'damagedArtillery' ? 1.5 : UNIT_TYPES[u.type].kind === 'artillery' ? 1.25 : 1;
   // What stands on the tiles around, gathered in one pass over the units, colonies and braves
   // (in their usual order, as unitsAt, colonyAt and hostileBraveAt see them) instead of one per tile.
-  const around = tilesAround(s, pos.x, pos.y);
-  for (const n of neighbours(s, pos.x, pos.y)) {
-    const near = around[(n.y - pos.y + 1) * 3 + (n.x - pos.x + 1)];
+  const around = tilesAround(s, gridOf(s), pos.x, pos.y);
+  for (const near of around) {
     if (!near) continue;
     const colony = near.colony;
     if (colony && atWar(colony.owner)) {

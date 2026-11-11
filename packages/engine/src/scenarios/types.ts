@@ -20,7 +20,7 @@ import type { PortEntry } from '../rules/ports.js';
 import type { ScoreWeights } from '../rules/score.js';
 import type { UnitTypeId } from '../rules/units.js';
 import type { EntrySide } from '../mapgen.js';
-import type { GridKind } from '../grid.js';
+import type { GridKind, HexOrientation } from '../grid.js';
 import type { TerrainId } from '../rules/terrain.js';
 import type { GameState, MapSize, PeopleTreatyKind } from '../types.js';
 import type { Calendar } from './calendar.js';
@@ -420,9 +420,17 @@ export interface RumourEntry {
 export interface ScenarioMap {
   /**
    * The tiles' shape (grid.ts): which tiles are next to which, distances and the colony's work
-   * area. Squares when absent, and the only grid so far.
+   * area. Squares when absent; 'hex' for hexagons, laid out as `hex` says.
    */
   grid?: GridKind;
+  /** On hexes (`grid: 'hex'`), their orientation; read only on hexes. Pointy-top when absent. */
+  hex?: { orientation: HexOrientation };
+  /**
+   * The rings of tiles a colony works around it and what opens each (workarea.ts,
+   * docs/design/hex-maps.md H7). Absent: the first ring only, always open (every scenario before
+   * Beta 4). At most two rings; the first is always open, whatever its gate.
+   */
+  workArea?: { rings: WorkRing[] };
   /** The stored maps this scenario offers (maps/index.ts), each with the scenario's peoples on it. */
   stored: StoredMapEntry[];
   /** How a generated map is made; absent when the scenario has stored maps only. */
@@ -443,6 +451,17 @@ export interface ScenarioMap {
    * arrival edge ('entry', where the nations' expeditions arrive), or a fixed edge.
    */
   crown: 'entry' | EntrySide;
+}
+
+/**
+ * A ring of a colony's work area and its gate (`ScenarioMap.workArea`). When both are given, both
+ * must hold; a ring with neither is always open.
+ */
+export interface WorkRing {
+  /** The colony's colonists, inside and out, at least this many. */
+  size?: number;
+  /** A building the colony must have (at any level). */
+  building?: BuildingKind;
 }
 
 /** A stored map in a scenario, and where the scenario's peoples live on it. */
