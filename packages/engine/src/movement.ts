@@ -28,7 +28,7 @@ import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
 import type { TribeId } from './rules/nations.js';
 import type { Colony, GameState, ImprovementKind, Player, Tile, Unit } from './types.js';
 import { mechanicsOf, term } from './scenarios/index.js';
-import { colonyTiles, setUnitLoc, unitTiles, colonyList, unitList } from './unitindex.js';
+import { colonyTiles, indexChecks, setUnitLoc, unitTiles, colonyList, unitList } from './unitindex.js';
 import { alliesOf, colonyOpenTo, isAllied } from './alliances.js';
 
 export type MoveOption =
@@ -423,6 +423,149 @@ function approachable(s: GameState, ctx: SearchContext, startIdx: number, tx: nu
   return false;
 }
 
+/**
+ * Land regions: the map's land tiles labelled by the region they belong to, two tiles sharing a
+ * label when land steps (the grid's neighbours) join them. A land unit's path search only ever
+ * enters land tiles, so it cannot reach a goal outside the regions of its own tile and the tiles
+ * around it (a unit aboard a ship lands on one of those).
+ *
+ * Kept beside the state for the last map seen. Terrain can change in place (tests do it), so the
+ * labels are trusted to say "unreachable" only after a check against the map as it is now: the
+ * start and the tiles around it have the water flags they were labelled with, and every water
+ * tile on the shore of the start's regions is still water. Then no land step leads out of those
+ * regions (a tile in them that has become water only makes them smaller), so a goal outside them
+ * cannot be reached. When the check fails the map is labelled again.
+ */
+interface LandRegions {
+  tiles: readonly Tile[];
+  grid: ReturnType<typeof gridOf>;
+  width: number;
+  height: number;
+  /** 1 for a water tile (or a missing one), as labelled. */
+  water: Uint8Array;
+  /** The region of each land tile, -1 for water. */
+  label: Int32Array;
+  /** The water tiles beside each region: `shore[shoreStart[r]]` up to `shore[shoreStart[r + 1]]`. */
+  shore: Int32Array;
+  shoreStart: Int32Array;
+}
+
+let landRegionsKept: LandRegions | null = null;
+
+const isWaterTile = (tile: Tile | undefined): boolean => !tile || TERRAIN[tile.t].water;
+
+function labelLandRegions(s: GameState, grid: ReturnType<typeof gridOf>): LandRegions {
+  const w = s.map.width;
+  const h = s.map.height;
+  const tiles = s.map.tiles;
+  const size = w * h;
+  const water = new Uint8Array(size);
+  const label = new Int32Array(size).fill(-1);
+  for (let i = 0; i < size; i++) water[i] = isWaterTile(tiles[i]) ? 1 : 0;
+  const stack = new Int32Array(size);
+  // A water tile is on region r's shore list once: shoreMark[n] === r + 1.
+  const shoreMark = new Int32Array(size);
+  const shore: number[] = [];
+  const shoreStart: number[] = [];
+  let next = 0;
+  for (let i = 0; i < size; i++) {
+    if (water[i] || label[i] >= 0) continue;
+    const region = next++;
+    shoreStart.push(shore.length);
+    label[i] = region;
+    let top = 0;
+    stack[top++] = i;
+    while (top > 0) {
+      const idx = stack[--top];
+      const cx = idx % w;
+      const cy = (idx - cx) / w;
+      const near = grid.neighbourOffsets(cx, cy);
+      for (let d = 0; d < near.length; d += 2) {
+        const nx = cx + near[d];
+        const ny = cy + near[d + 1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const n = ny * w + nx;
+        if (water[n]) {
+          if (shoreMark[n] !== region + 1) {
+            shoreMark[n] = region + 1;
+            shore.push(n);
+          }
+          continue;
+        }
+        if (label[n] >= 0) continue;
+        label[n] = region;
+        stack[top++] = n;
+      }
+    }
+  }
+  shoreStart.push(shore.length);
+  return { tiles, grid, width: w, height: h, water, label, shore: Int32Array.from(shore), shoreStart: Int32Array.from(shoreStart) };
+}
+
+/** Calls `visit` with the start and each tile around it on the map. */
+function startAndAround(r: LandRegions, startIdx: number, visit: (i: number) => boolean): boolean {
+  if (visit(startIdx)) return true;
+  const w = r.width;
+  const sx = startIdx % w;
+  const sy = (startIdx - sx) / w;
+  const near = r.grid.neighbourOffsets(sx, sy);
+  for (let d = 0; d < near.length; d += 2) {
+    const nx = sx + near[d];
+    const ny = sy + near[d + 1];
+    if (nx < 0 || ny < 0 || nx >= w || ny >= r.height) continue;
+    if (visit(ny * w + nx)) return true;
+  }
+  return false;
+}
+
+/** Whether a land region of the start tile or of a tile around it holds the goal, as labelled. */
+function sharesLandRegion(r: LandRegions, startIdx: number, goalIdx: number): boolean {
+  const label = r.label;
+  const goal = label[goalIdx];
+  if (goal < 0) return false;
+  // Most searches are from land to land in the same region: one comparison.
+  if (label[startIdx] === goal) return true;
+  const w = r.width;
+  const sx = startIdx % w;
+  const sy = (startIdx - sx) / w;
+  const near = r.grid.neighbourOffsets(sx, sy);
+  for (let d = 0; d < near.length; d += 2) {
+    const nx = sx + near[d];
+    const ny = sy + near[d + 1];
+    if (nx >= 0 && ny >= 0 && nx < w && ny < r.height && label[ny * w + nx] === goal) return true;
+  }
+  return false;
+}
+
+/** Whether the start's regions are as labelled, closed by water (see LandRegions). */
+function startRegionsCurrent(s: GameState, r: LandRegions, startIdx: number): boolean {
+  const tiles = s.map.tiles;
+  if (startAndAround(r, startIdx, (i) => (isWaterTile(tiles[i]) ? 1 : 0) !== r.water[i])) return false;
+  return !startAndAround(r, startIdx, (i) => {
+    const region = r.label[i];
+    if (region < 0) return false;
+    for (let k = r.shoreStart[region]; k < r.shoreStart[region + 1]; k++) if (!isWaterTile(tiles[r.shore[k]])) return true;
+    return false;
+  });
+}
+
+/**
+ * Whether a land unit's search from `startIdx` certainly cannot reach the land tile `goalIdx`: no
+ * land step joins them (LandRegions). False when unsure, and the search then finds out itself.
+ */
+function landUnreachable(s: GameState, grid: ReturnType<typeof gridOf>, startIdx: number, goalIdx: number): boolean {
+  let r = landRegionsKept;
+  if (!r || r.tiles !== s.map.tiles || r.grid !== grid || r.width !== s.map.width || r.height !== s.map.height) {
+    r = landRegionsKept = labelLandRegions(s, grid);
+  }
+  if (sharesLandRegion(r, startIdx, goalIdx)) return false;
+  if (!startRegionsCurrent(s, r, startIdx)) {
+    r = landRegionsKept = labelLandRegions(s, grid);
+    if (sharesLandRegion(r, startIdx, goalIdx)) return false;
+  }
+  return true;
+}
+
 // Search buffers, reused between path searches: a tile's cost and previous tile count only when
 // its stamp is the current search's, so nothing is cleared between searches.
 let searchSize = 0;
@@ -465,6 +608,11 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
   const h = s.map.height;
   const grid = gridOf(s);
   if (!approachable(s, ctx, start.y * w + start.x, tx, ty, index)) return null;
+  // A land unit cannot reach land that no land step joins to it (an island across the water): the
+  // search would only find that out after visiting every tile it can reach.
+  // With CC_INDEX_CHECKS=1 (indexChecks) the search runs all the same and must find no route.
+  const unreachable = !ctx.ship && landUnreachable(s, grid, start.y * w + start.x, ty * w + tx);
+  if (unreachable && !indexChecks()) return null;
   const gen = searchBuffers(w * h);
   const cost = searchCost;
   const prev = searchPrev;
@@ -549,6 +697,7 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
       }
     }
   }
+  if (unreachable && reached) throw new Error(`findPath: land regions ruled out (${tx}, ${ty}) for ${u.id}, but the search found a route.`);
   if (!reached) return null;
   const path: { x: number; y: number }[] = [];
   let cur = goalIdx;
