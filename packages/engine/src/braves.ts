@@ -514,10 +514,18 @@ export function braveRoute(s: GameState, b: Brave, tx: number, ty: number, onto:
       if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
       const nIdx = ny * w + nx;
       if (done[nIdx] === gen) continue;
-      if (grid.distance(nx, ny, cx0, cy0) > reach) continue;
+      // Nothing changes during a search, so a tile out of reach or that the brave may not enter is
+      // closed at once: the next tiles beside it skip it without testing it again.
+      if (grid.distance(nx, ny, cx0, cy0) > reach) {
+        done[nIdx] = gen;
+        continue;
+      }
       const c = cost[idx] + braveStepCost(s, cx, cy, nx, ny, defending);
       if (seen[nIdx] === gen && c >= cost[nIdx]) continue;
-      if (!open(s, b, nx, ny, index)) continue;
+      if (!open(s, b, nx, ny, index)) {
+        done[nIdx] = gen;
+        continue;
+      }
       seen[nIdx] = gen;
       cost[nIdx] = c;
       prev[nIdx] = idx;

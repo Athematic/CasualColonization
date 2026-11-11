@@ -678,7 +678,12 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
       // Both tests only read the state, so the cheaper cost test goes first.
       const c = cost[idx] + stepCost(s, ctx, idx, nIdx, cx, cy, nx, ny, index);
       if (seen[nIdx] === gen && c >= cost[nIdx]) continue;
-      if (!passableAt(s, ctx, nIdx, nIdx === goalIdx, index)) continue;
+      // Nothing changes during a search, so a tile the unit cannot enter now never can: it is
+      // closed, and the next tiles beside it skip it at once (no step cost or test again).
+      if (!passableAt(s, ctx, nIdx, nIdx === goalIdx, index)) {
+        done[nIdx] = gen;
+        continue;
+      }
       {
         seen[nIdx] = gen;
         cost[nIdx] = c;
