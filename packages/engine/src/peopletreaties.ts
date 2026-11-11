@@ -80,6 +80,8 @@ export const PEOPLE_TREATY_RULES: PeopleTreatyRules = {
     // As land use: some years more than the trade treaty's, drawn on their own.
     years: { base: 12, spread: 4 },
     teachYears: { base: 25, spread: 5 },
+    // Each settlement teaches a partner again at most this often (step 6, section 15).
+    renewals: 2,
     speakYears: 10,
     gather: 1.25,
   },
@@ -671,9 +673,14 @@ function exchangeProblem(s: GameState, nation: NationId, people: TribeId): strin
  * skill, or when its last teaching was not noted (the scenario has no exchange).
  */
 export function teachAgainTurn(s: GameState, st: Settlement): number | undefined {
-  if (st.skill || st.taughtAt === undefined) return undefined;
+  if (st.skill || st.taughtAt === undefined || renewalsSpent(s, st)) return undefined;
   const years = around(settlementRandom(s, st.id, `teach years ${st.taughtAt}`), peopleTreatyRules(s).exchange.teachYears);
   return turnAfterYears(st.taughtAt, years, calendarOf(s));
+}
+
+/** Whether a settlement has taught again as often as exchanges allow (`exchange.renewals`). */
+export function renewalsSpent(s: GameState, st: Settlement): boolean {
+  return (st.renewed ?? 0) >= peopleTreatyRules(s).exchange.renewals;
 }
 
 /** The skill a settlement teaches again under an exchange: one of its people's skills, drawn per settlement and teaching. */
@@ -692,13 +699,19 @@ export function renewedSkill(s: GameState, st: Settlement): UnitTypeId | null {
 export function settlementTeaches(s: GameState, st: Settlement, nation: NationId): UnitTypeId | null {
   if (st.skill) return st.skill;
   if (st.taughtAt === undefined || !hasExchange(s, nation, st.tribe)) return null;
+  // teachAgainTurn is undefined once the settlement has taught again as often as exchanges allow.
   const at = teachAgainTurn(s, st);
   return at !== undefined && s.turn >= at ? renewedSkill(s, st) : null;
 }
 
-/** Notes that a settlement has taught (learnSkill), so a cultural exchange can renew it; only while the scenario has exchanges. */
-export function noteTaught(s: GameState, st: Settlement): void {
-  if (peopleTreatyOn(s, 'exchange')) st.taughtAt = s.turn;
+/**
+ * Notes that a settlement has taught (learnSkill), so a cultural exchange can renew it, and counts
+ * a renewed teaching (`renewed`: the first skill was taught before); only while the scenario has exchanges.
+ */
+export function noteTaught(s: GameState, st: Settlement, renewed: boolean): void {
+  if (!peopleTreatyOn(s, 'exchange')) return;
+  st.taughtAt = s.turn;
+  if (renewed) st.renewed = (st.renewed ?? 0) + 1;
 }
 
 /**
@@ -729,8 +742,9 @@ export function noteSpoken(s: GameState, st: Settlement, nation: NationId): void
 export function exchangeBenefits(s: GameState): string {
   const r = peopleTreatyRules(s).exchange;
   const years = r.teachYears.spread ? `${r.teachYears.base} years or so` : `${r.teachYears.base} years`;
+  const times = !Number.isFinite(r.renewals) ? '' : r.renewals === 1 ? ' (once)' : r.renewals === 2 ? ' (up to twice)' : ` (up to ${r.renewals} times)`;
   const speak = r.speakYears === 10 ? 'once a decade' : `every ${r.speakYears} years`;
-  return `each of their settlements teaches your colonists again ${years} after it last taught, their chiefs welcome your scouts again ${speak}, and they gather ${Math.round((r.gather - 1) * 100)}% more for sale`;
+  return `each of their settlements teaches your colonists again ${years} after it last taught${times}, their chiefs welcome your scouts again ${speak}, and they gather ${Math.round((r.gather - 1) * 100)}% more for sale`;
 }
 
 // ---------------------------------------------------------------------------

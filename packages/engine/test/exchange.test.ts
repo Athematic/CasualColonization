@@ -33,7 +33,9 @@ import {
   processNatives,
   proposePeopleTreaty,
   registerScenario,
+  renewalsSpent,
   renewedSkill,
+  peopleTreatyRules,
   serialize,
   settlementProduce,
   settlementTeaches,
@@ -175,7 +177,7 @@ describe('unlocking a cultural exchange (N2, N3)', () => {
   });
 
   it('describes its benefits from the numbers', () => {
-    expect(exchangeBenefits(game())).toBe('each of their settlements teaches your colonists again 25 years or so after it last taught, their chiefs welcome your scouts again once a decade, and they gather 25% more for sale');
+    expect(exchangeBenefits(game())).toBe('each of their settlements teaches your colonists again 25 years or so after it last taught (up to twice), their chiefs welcome your scouts again once a decade, and they gather 25% more for sale');
   });
 });
 
@@ -223,6 +225,27 @@ describe('renewed teaching (N7)', () => {
     // And again a generation later, not at once.
     expect(settlementTeaches(s, st, 'england')).toBeNull();
     expect(teachAgainTurn(s, st)!).toBeGreaterThan(again);
+    expect(st.renewed).toBe(1);
+  });
+
+  it('teaches again at most `renewals` times (twice in the engine), then has nothing more to teach', () => {
+    const { s, st } = exchanging();
+    expect(peopleTreatyRules(s).exchange.renewals).toBe(2);
+    learnSkill(s, beside(s, 'england', st).id, st.id);
+    expect(st.renewed).toBeUndefined();
+    for (let i = 1; i <= 2; i++) {
+      s.turn = teachAgainTurn(s, st)!;
+      learnSkill(s, beside(s, 'england', st).id, st.id);
+      expect(st.renewed).toBe(i);
+    }
+    expect(renewalsSpent(s, st)).toBe(true);
+    expect(teachAgainTurn(s, st)).toBeUndefined();
+    yearsOn(s, 60);
+    expect(settlementTeaches(s, st, 'england')).toBeNull();
+    const v = beside(s, 'england', st);
+    expect(() => learnSkill(s, v.id, st.id)).toThrow(/nothing more to teach/);
+    // The count survives a save.
+    expect(deserialize(serialize(s)).settlements[st.id].renewed).toBe(2);
   });
 
   it('teaches a skill drawn per settlement and teaching, the same each time it is asked', () => {

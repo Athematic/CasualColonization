@@ -434,6 +434,11 @@ export interface Settlement {
    */
   taughtAt?: number;
   /**
+   * Times the settlement has taught again under a cultural exchange (Beta 2 step 6: at most the
+   * scenario's `exchange.renewals`). Written only when it does; absent before.
+   */
+  renewed?: number;
+  /**
    * Turn each nation's scout last spoke with the chief (N7: a cultural exchange welcomes the
    * partner's scouts again once a decade). Written only while the scenario has cultural exchange.
    */

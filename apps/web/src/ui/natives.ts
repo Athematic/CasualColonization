@@ -14,6 +14,7 @@ import {
   defenceTreaty,
   exchangeTreaty,
   settlementTeaches,
+  renewalsSpent,
   teachAgainTurn,
   UNIT_TYPES,
   yearValue,
@@ -78,7 +79,8 @@ export function teachingLine(s: GameState, nation: NationId, st: Settlement): st
   const skill = settlementTeaches(s, st, nation);
   if (!skill) {
     const at = teachAgainTurn(s, st);
-    return at === undefined ? 'It has nothing to teach now.' : `It teaches again in ${yearsText(yearsUntil(s, at))} (${formatDate(at, calendarOf(s))}).`;
+    if (at === undefined) return renewalsSpent(s, st) ? 'It has taught again as often as an exchange allows.' : 'It has nothing to teach now.';
+    return `It teaches again in ${yearsText(yearsUntil(s, at))} (${formatDate(at, calendarOf(s))}).`;
   }
   const name = UNIT_TYPES[skill].name;
   return st.skill ? `It still teaches its first skill (${name.toLowerCase()}).` : `It teaches again: a colonist may live among them and become ${/^[AEIOU]/.test(name) ? 'an' : 'a'} ${name}.`;
