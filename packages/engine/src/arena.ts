@@ -101,6 +101,8 @@ export interface RelationsTally {
   /** Joint expeditions the nation took part in, and bells its allies' shared bells gave its Congress. */
   expeditions: number;
   sharedBells: number;
+  /** Declarations of independence made together with an ally (confederation.ts). */
+  confederations: number;
 }
 
 const TALLY: Record<string, keyof RelationsTally> = {
@@ -130,13 +132,14 @@ const TALLY: Record<string, keyof RelationsTally> = {
   'company:dividend': 'dividends',
   'alliance:joint expedition': 'expeditions',
   'alliance:bells received': 'sharedBells',
+  'independence:confederation': 'confederations',
 };
 
 /** Tally keys that add up the amount reported, not the number of reports. */
 const AMOUNTS = new Set<keyof RelationsTally>(['foreignStopSales', 'partnerPortSales', 'refAdded', 'shares', 'dividends', 'sharedBells']);
 
 function emptyTally(): RelationsTally {
-  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0, alliances: 0, alliancesLeft: 0, alliesAtEnd: 0, allyWars: 0, companies: 0, shares: 0, dividends: 0, expeditions: 0, sharedBells: 0 };
+  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0, alliances: 0, alliancesLeft: 0, alliesAtEnd: 0, allyWars: 0, companies: 0, shares: 0, dividends: 0, expeditions: 0, sharedBells: 0, confederations: 0 };
 }
 
 /** What one event did to one nation over a game: times it fired, the choices taken (by index) and the computer players' gold value of the outcomes. */
@@ -463,6 +466,7 @@ export function allianceLine(entries: ArenaEntry[]): string {
   const expeditions = entries.reduce((n, e) => n + (e.relations?.expeditions ?? 0), 0) / 2;
   const bells = entries.reduce((n, e) => n + (e.relations?.sharedBells ?? 0), 0);
   return `Alliances: ${withAlliance} of ${games} games with an alliance, ${Math.round((made / games) * 10) / 10} made per game, ${Math.round((expeditions / games) * 10) / 10} joint expeditions and ${Math.round(bells / games)} shared bells per game; ${concord} of ${games} games won together (concord). ` +
+    `Confederations: ${rows.filter((g) => g.some((e) => (e.relations?.confederations ?? 0) > 0)).length} of ${games} games. ` +
     `Companies: ${withCompany} of ${games} games with a chartered company, ${Math.round((founded / games) * 10) / 10} founded per game, ${Math.round(dividends / games)} gold of dividends per game.`;
 }
 
