@@ -13,7 +13,7 @@ import { initCrown } from './crown.js';
 import { entryPoints } from './mapgen.js';
 import { checkSavedScenario, checkScenarioConfig, difficultyOf, goodsOf, nationOf, peoplesOf, portMarketOf, term } from './scenarios/index.js';
 import { modifiers } from './scenarios/modifiers.js';
-import { systemsOfId } from './playerkind.js';
+import { systemsOf, systemsOfId } from './playerkind.js';
 import { addPeoplePlayer } from './peopleplayer.js';
 
 /** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
@@ -73,7 +73,7 @@ export function createGame(config: GameConfig): GameState {
     p.recruitPool = [randomImmigrant(s), randomImmigrant(s), randomImmigrant(s)];
     offerFathers(s, p);
     reveal(s, nation, entry.x, entry.y, 1);
-    startingUnits(s, nation, entry);
+    if (systemsOf(p).startingCaravel) startingUnits(s, nation, entry);
     const heading = world.entrySide === 'west' ? 'east' : 'west';
     message(s, term(s, 'arrival', { nation: nationOf(s, nation).name, heading }), nation, entry);
   });

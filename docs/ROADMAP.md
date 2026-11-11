@@ -63,6 +63,8 @@ Folded in from elsewhere on this roadmap:
 
 Not in it: hex maps and Vinland with the Norse (Beta 4), and Australia, which follows Beta 4 on hexes.
 
+Step 1 is built (L, P1, done; branch `beta3/step1`): the nation type. `PlayerId` (a nation's or a people's id) for owners, claims, stances, messages and winners; `kind: 'people'`; `playerKind` and one systems table (`playerkind.ts`) that every company check now reads, bit-identical for the Americas and the Caribbean (bench, golden and a 24-game tournament); the Europe-only systems (market, immigration, taxes, the Crown, the Royal Expeditionary Force, independence, the Congress, the caravel, events and rumours) off for a people; per-type selections of units and buildings (`Scenario.nationTypes.people`, with placeholders until step 2); a people the scenario names as playable turned into a player at setup, its settlements its towns (`GameConfig.peoples`); a hidden test scenario with the Iroquois playable (section 7 of the note).
+
 ## Beta 4: Hex maps
 
 Status: `idea, agreed in outline` (Simon, 11 November 2026). A scenario can be played on hexagons. Builds the hex steps listed under Later (step 1, the grid abstraction, was done in 0.10) and proves them on Vinland, with the Norse, built here on Beta 3's North-east map (Beta 3 plays that map on squares, without the Norse). The Americas and the Caribbean stay square. Gets its own design note first. About XL.

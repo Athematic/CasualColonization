@@ -215,7 +215,7 @@ Each step keeps the Americas and the Caribbean identical (golden and bench hashe
 | Step | What | Size | Prio |
 | --- | --- | --- | --- |
 | 0 | This note; Simon's decisions | S | P1 |
-| 1 | **The nation type.** `PlayerId`, `kind: 'people'`, `playerKind` and the systems table (the company checks moved onto it first, bit-identical); Europe-only systems off by kind; per-type selections of units and buildings; a people player at setup with towns as colonies (T1–T4); a hidden test scenario | L | P1 |
+| 1 | **The nation type.** `PlayerId`, `kind: 'people'`, `playerKind` and the systems table (the company checks moved onto it first, bit-identical); Europe-only systems off by kind; per-type selections of units and buildings; a people player at setup with towns as colonies (T1–T4); a hidden test scenario. **Built** (section 7) | L | P1 |
 | 2 | **Economy and growth without Europe** (T10). The people's units and buildings (T6, T7), hunting, fishing, gardens and crafts; births from food above a town's reserve; stores and hard years (`mechanics.hardYears`); land health per region (`mechanics.landHealth`); Beta 2's standing record widened to `PlayerId` and read from the people's side; gold only from trade with Europeans, at towns and by treaty; people-to-people trade | L | P1 |
 | 3 | **The council system.** `Scenario.councils`, open categories, the Congress as one council, the people's council with its first members and their sources (T8, T9) | M | P1 |
 | 4 | **Diplomacy from the people's side.** Beta 2's treaties proposed and broken by a playing people, treaties between peoples, war and peace between any players (T11); epidemics behind a switch if agreed (T12) | L | P1 |
@@ -231,3 +231,53 @@ Total: well over **XL**, larger than Beta 2 (three L steps more), a little small
 ## 6. Questions for Simon
 
 None open: Simon decided T14 (option (a) with the military victory as described) and confirmed T19 (the North-east map on squares, turned into hexes for Vinland in Beta 4) on 11 November 2026.
+
+## 7. Implementation (step 1, November 2026)
+
+Built on branch `beta3/step1`. Code: `playerkind.ts` (new: `PlayerKind`, `playerKind`, `kindOfId`, `PLAYER_SYSTEMS`, `systemsOf`, `systemsOfId`, `isPeoplePlayer`), `peopleplayer.ts` (new: `addPeoplePlayer`), `rules/nations.ts` (`PlayerId`), `types.ts` (`Player.kind`, `GameConfig.peoples`, the widened ids), `scenarios/types.ts` (`PlayerEntry`, `PlayablePeople`, `NationTypeSelection`, `Scenario.nationTypes`, `peoples.playable`), `scenarios/index.ts` (`nationOf` for any player, `playablePeoples`, `nationTypeOf`, `PEOPLE_SELECTION`, `bornType`, `newColonyBuildings`, `buildingsOf` and `unitsOf` by owner, the config check), `game.ts` (`newPlayer`, `createGame`), and the files whose company checks moved (below). Test: `test/people-player.test.ts` (8 tests) with the hidden scenario `test-people-player`.
+
+### What was built
+
+- **One table of systems per kind (T1).** `playerKind(p)` is `nation`, `company`, `crown` or `people`; `kindOfId(id)` reads the same from an id alone, since the four kinds' ids never overlap (`crown`, the company ids, the people ids, the nations). `systemsOf(p)` and `systemsOfId(id)` return the kind's row of `PLAYER_SYSTEMS`:
+
+| System | nation | company | crown | people | Read by |
+| --- | :-: | :-: | :-: | :-: | --- |
+| `homePort` (market, Europe) | yes | yes | yes¹ | no | `newPlayer` (market), `recoverMarkets`, damaged ships, score's goods |
+| `immigration` | yes | yes | no | no | `processImmigration` |
+| `taxes` | yes | no | yes² | no | `maybeRaiseTax` |
+| `crown` (REF growth, demands, royal wars) | yes | no | no | no | `processCrown`, `royalWarTargets` |
+| `independence` | yes | no | no | no | `canDeclareIndependence`, `readyToDeclare` |
+| `congress` | yes | no | no | no | `processCongress`, allies' shared bells |
+| `startingCaravel` | yes | yes | no | no | `createGame` (`startingUnits`); a company's comes with `foundCompany` |
+| `war` | yes | no | yes | yes | `startWar`, `attack`, computer war targets, privateers' prey, a defence pact's attacker |
+| `relations` (trade, Favoured Nation) | yes | no | no | no | `europeanPair`, computer proposals, Foreign Affairs' nations |
+| `alliances` | yes | no | no | no | `allianceProblem`, the alliance size cap |
+| `peoples` (peoples nobody plays treat it as a European) | yes | no | no | no | `addTension`, `processNatives`, inciting, standing, people treaties, burial grounds, braves' enemies and raids, the web incite dialog |
+| `visitedByBraves` | yes | yes | no | no | braves' `nearestColony` |
+| `rumours` | yes | yes | yes | no | entering a Lost City Rumour's tile |
+| `events` | yes | no | no | no | `fireEvent`, world and random events |
+| `ranked` (final scores, shares, play-on) | yes | no | no | no | `finalScores`, `score`'s company shares, play-on's end |
+| `ai` | level | company | crown | people | `runAi` |
+
+¹ The Crown keeps the market every player was given (its colonies retaken from rebels sell through their custom houses). ² The Crown's colonies retaken from rebels sell through their custom houses and are taxed, as before. Both footnotes reproduce the engine as it was. The first version of the table had the Crown untaxed; bench and golden hashes did not notice, the 24-game tournament did (three games changed), and it was fixed in its own commit.
+
+- **The checks moved.** About 30 company and "European nation" checks in 20 files now read the table, in four commits, each bit-identical; `isCompany`, `isNation` and `companies` in `companies.ts` read `playerKind`. Checks for the Crown's own units and colonies (`u.owner === 'crown'`: the Royal Expeditionary Force, retaken colonies) are identity checks, not system checks, and stay. `isCompanyId` is still exported; the engine no longer uses it.
+- **`PlayerId` (T1).** `PlayerId = NationId | TribeId`. `Player.id`, `Unit.owner`, `Colony.owner`, `Tile.claim`, `Tile.use`, `Tribe.stance`, `Settlement.tension`, `GameMessage.to`, `gameOver.winner`, `winners` and `scores`, and the engine's, renderers' and web game's functions that take a player, are `PlayerId`. `GameConfig.nations`, the scenarios' nation sets, `NationEntry.id` and the New game screen stay `NationId`. `nationOf(s, id)` takes any player and returns a `PlayerEntry`; a playing people's entry is built from the people (its colour, the scenario's name and adjective for it, its town names, no bonus, a home port with no name or market).
+- **`kind: 'people'` with the Europe-only systems off** (the table): no market (`Player.market` is `{}`), no gold to start (T10), no immigration, Crown, taxes, Royal Expeditionary Force, independence, Congress, caravel, events or rumours. `sellPrice` reads 0 for a player with no market, as a guard.
+- **Per-type selections (T6, T7).** `Scenario.nationTypes.people` (`NationTypeSelection`: `units`, `buildings`) is the people's selection from the global catalogues beside the European one (`Scenario.units`, `buildings`); missing means the engine's placeholder `PEOPLE_SELECTION`: the native convert (today's only native unit type) and the town hall, carpenter's and blacksmith's house. `nationTypeOf(s, 'european' | 'people')` reads it. `buildingsOf(s, owner)` and `unitsOf(s, owner)` give a people's towns its own buildings and builds (nothing from Europe), and `newColonyBuildings` makes a town's buildings: its own at their first level, the European ones at 0, so rules that ask for docks or a stockade read "none". A town grows by `bornType`, the first unit of the people's selection.
+- **A people player at setup (T2, T3, T4).** `Scenario.peoples.playable` names the peoples setup may play (`PlayablePeople`: id, name, adjective, town names); `GameConfig.peoples` picks which play (checked against that list); `config.humans` and `config.ai` may name them. `createGame` adds each after the nations (`addPeoplePlayer`): a `kind: 'people'` player with its own id, its settlements turned into towns (colonies it owns, at the settlements' places and with their names, a road on the tile), each with one unit at work and one standing in the town for the braves the settlement would have sent; the settlements' records go, the `Tribe` record stays. Peoples not picked stay settlements under Beta 2's rules. A computer people ends its turn (`ai: 'people'`) until step 9.
+- **The hidden test scenario.** `test-people-player` (registered in `test/people-player.test.ts`, like the other hidden test scenarios): the Americas with the Iroquois playable. Tests: the table and the kinds; setup (players in order, towns, buildings, units, settlements gone, the nations' caravels); refused configurations; 120 rounds of three computer nations around a computer people; save and load (the loaded game is the same and plays on the same for 30 rounds); a person playing the people for 20 turns; its towns working. Each checks that no Europe-only system touched the people: no market, taxes, boycotts, demands, Crown bookkeeping, REF, independence, crosses, recruits, Congress members, gold, no unit in Europe or sailing, no caravel, no tax, immigrant or Royal Expeditionary Force message, and no tension or stance towards it from the peoples nobody plays.
+
+### Choices made while building (for Simon)
+
+1. **The selections sit beside `units` and `buildings`** (`Scenario.nationTypes.people`) instead of reshaping them into `units: { european, people }` (T6's sketch), so the Americas' and the Caribbean's data are untouched. The European selection is still `Scenario.units` and `buildings`.
+2. **Rumours are a system of their own** (not in the plan's list): a people's units walk past Lost City Rumours, whose finds are partly European (immigrants on the docks in Europe).
+3. **War is on for a people from step 1** (T11), so computer Europeans may already treat a people's towns as any war target, and its units fight. Nothing tunes that until steps 4 and 9; the tests play it without a crash.
+4. **The placeholder units and buildings are today's**: native converts people the towns and are born in them, and a town hall rings bells that become liberty in the town (the council's product comes in step 3). No new catalogue entries were needed for step 1; step 2 adds the people's own.
+5. **A generated map may not place a playable people.** Setup then fails with "The Iroquois have no settlements on this map." On medium generated Americas maps this happened on 4 of 8 seeds tried; the test uses a seed where the Iroquois are there. The North-east game's stored map (step 8) places every people; the New game screen does not offer peoples before step 10.
+6. **The widening is wide.** Besides the state fields T1 names, every function that takes a player now takes `PlayerId` (a mechanical change, types only). Narrowing back to `NationId` where only nations make sense is cheap if wanted.
+7. **Not yet:** land claims by a people's towns (T5), its score lines (step 7: it is not ranked, and its score counts no goods), its standing record (step 2), the interface (step 10: a person playing a people in the web game would still see the European screens).
+
+### Measurements
+
+Every commit of the refactor was checked with `npm run bench -- --verify` and `--verify --scenario caribbean` ("same" for all eight games) and the golden tests, unchanged. After the fix of the Crown's taxes, the 24-game Americas tournament (`npm run tournament -- --games 24 --turns 609 --play-on --events --seed 1000`) is identical to the base, also with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1`. The test scenario passes with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1`; two 609-turn games with two playing peoples (the Iroquois and the Sioux) and four computer nations, saved and loaded every 150 turns, end in the same state with and without the checks.

@@ -29,8 +29,8 @@ export type PlayerKind = 'nation' | 'company' | 'crown' | 'people';
 export interface PlayerSystems {
   /**
    * A home port in Europe: a market of its own (`Player.market`), buying, selling, training and
-   * recruiting there, ships sailing to and from Europe. The Crown keeps the market record every
-   * player was given before this table (it never trades).
+   * recruiting there, ships sailing to and from Europe. The Crown keeps the market every player
+   * was given before this table: its colonies retaken from rebels sell through their custom houses.
    */
   homePort: boolean;
   /** Crosses bring immigrants to the docks (europe.ts `processImmigration`); the recruit pool. */
