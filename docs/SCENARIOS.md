@@ -41,7 +41,7 @@ If a change is meant to change games, re-record with `npm run test:golden:write`
 | `companyRules` | Optional overrides of the chartered companies' rules (`COMPANY_RULES` in `companies.ts`): `capital` (2,000), `foundingShares` (20), `sharePrice` (the least, 100), `dividendEvery` (10 turns), `reserve` (800) and `payout` (0.5 of the gold above the reserve). See [Chartered companies](#chartered-companies). |
 | `victory` | The ways the game can end, in the order they are checked. See [Victory](#victory). |
 | `rumours` | The outcomes of a Lost City Rumour and their odds, in the order they are drawn. The Caribbean reuses the Americas' table. |
-| `difficulty`, `score` | Optional overrides, merged over the engine's `DIFFICULTY` table and `SCORE_WEIGHTS`. Fields and levels you leave out keep the engine's values. |
+| `difficulty`, `score` | Optional overrides, merged over the engine's `DIFFICULTY` table and `SCORE_WEIGHTS`. Fields and levels you leave out keep the engine's values. `score.peopleTreaty` (engine 3; the Caribbean 5) counts each treaty with a people in force, any kind, as the "Treaties with native peoples" line; 0 leaves the line out. |
 | `text` | Terms that differ from the Americas'. See [Terms](#terms-and-term). |
 | `art` | `covers` and `councilHall`. See [Art](#art). |
 | `migrate` | Converts a save from an older `version`. |
@@ -150,10 +150,11 @@ The numbers of the Crown and the war (REF growth, demands, royal wars, mercenari
 - `independence-war`: winning the war ends the game with that winner; losing it ends the game once no person is left to play. With `GameConfig.playOn` the nation is finished instead and the others play on.
 
 - `concord`: at the end of the calendar, an alliance whose members together hold more than `params.share` of the total score (default 0.7, `CONCORD_SHARE`) wins together; its members are the winners, ranked by their own score. List it before `time`.
+- `prosperity` (`prosperity.ts`, [design/native-partners.md](design/native-partners.md) N10): at the end of the calendar, every nation that is at peace with each people it has met and has been for the last `params.peaceYears` (30) years, never burned a native settlement, holds treaties with a people (any kind) with at least `params.treatyShare` (0.5, rounded up, at least one) of the peoples it has met that are still on the map, and has at least `params.scoreShare` (0.8) of the best score wins; the winners are ranked by score, and `gameOver.partners` names the peoples they hold treaties with (shown on the game-over screen, "England wins, with the Kalinago and the Arawak"; peoples are never winners). A nation has **met** a people once its standing with it is written (`GameState.peopleRelations`: a trade, a scout's visit, a mission, a brave come to trade) or once it has fought it (at war, a war ended, a settlement burned). The rule keeps two records, written only in a scenario that lists it: `Tribe.warEnded` (the turn each nation's last war with the people ended) and `Tribe.burned` (the nations that burned one of its settlements). List it after `concord` (an alliance that also qualifies wins as an alliance) and before `time`; the defaults are `PROSPERITY`.
 
-`gameOver.winners` lists every winner, best first (several after `concord`, none when nobody won); `gameOver.winner` is the first of them. A kind may return `winners`; otherwise they are its `winner`.
+`gameOver.winners` lists every winner, best first (several after `concord` or `prosperity`, none when nobody won); `gameOver.winner` is the first of them. A kind may return `winners`; otherwise they are its `winner`.
 
-A kind is a pure function of the state. The Americas use `[independence-war, concord, time]`, the Caribbean `[concord, time]`. `newGameOptions` shows the names on the New game screen. A new kind (Federation, survival) is registered in `victory.ts`; its texts come from `gameOver.*` terms.
+A kind is a pure function of the state. The Americas use `[independence-war, concord, prosperity, time]`, the Caribbean `[concord, prosperity, time]`. `newGameOptions` shows the names on the New game screen. A new kind (Federation, survival) is registered in `victory.ts`; its texts come from `gameOver.*` terms.
 
 ## Computer players
 
@@ -166,7 +167,7 @@ A kind is a pure function of the state. The Americas use `[independence-war, con
 
 ## The arena and the tournament
 
-The arena (`packages/engine/src/arena.ts`) and `npm run tournament` play a scenario with `--scenario <id>`; nations rotate over the scenario's chosen set (`--rivals real|alternative`). Give `--turns` the length of the calendar (202 for the Caribbean), or the game ends early. `--play-on` lets the other nations finish the calendar after a War of Independence. Record a tournament reference in the design note when you add a scenario, as the Caribbean's is in [design/scenario-framework.md](design/scenario-framework.md), section 7.1.
+The arena (`packages/engine/src/arena.ts`) and `npm run tournament` play a scenario with `--scenario <id>`; nations rotate over the scenario's chosen set (`--rivals real|alternative`). Give `--turns` the length of the calendar (202 for the Caribbean), or the game ends early. `--play-on` lets the other nations finish the calendar after a War of Independence. Where the scenario plays for `prosperity`, each game line names the prosperity winners and the nations that missed it on one condition only, and the summary's "Prosperity:" sentence counts the games won that way and, over all nations at the end, how many failed each condition (`ArenaEntry.prosperityFails`). Record a tournament reference in the design note when you add a scenario, as the Caribbean's is in [design/scenario-framework.md](design/scenario-framework.md), section 7.1.
 
 ## Alliances
 
@@ -244,7 +245,7 @@ With `'defence'`, a people and a nation can make a **mutual defence pact** (N7, 
 | `breachTension`, `waitingYears`, `hostilityYears` | What breaking faith costs: 200 tension at each settlement, waiting 15 ± 3 years, hostility 25 ± 5. |
 | `temperaments` | `open` (accept × 1.2, offer × 1.5, thresholds × 0.75), `guarded` (0.7, 0.5, 1.25) and `proud` (0.5, 0.25, 1); a people without one (`peoples.overrides[id].temperament`) uses neither. |
 
-The Americas and the Caribbean switch on all four kinds. The Caribbean needs no gold traded (`trade.volume` 0–0: its colonies hardly trade at settlements), its peoples offer at 0.5, and, after the French treaty with the Kalinago (1660), a defence pact comes sooner (`defence.years` 10 ± 3) and is sought more readily (`ai.cooperation.proposeDefence` 0.6). Measured in [design/native-partners.md](design/native-partners.md), sections 9–12.
+The Americas and the Caribbean switch on all four kinds. The Caribbean needs no gold traded (`trade.volume` 0–0: its colonies hardly trade at settlements), its peoples offer at 0.5, and, after the French treaty with the Kalinago (1660), a defence pact comes sooner (`defence.years` 10 ± 3) and is sought more readily (`ai.cooperation.proposeDefence` 0.6). Measured in [design/native-partners.md](design/native-partners.md), sections 9–12. The treaties also count towards the `prosperity` victory and, at `score.peopleTreaty` each, the score (see [Victory](#victory)).
 
 ## The map grid
 

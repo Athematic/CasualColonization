@@ -1,6 +1,6 @@
 # Design note: Native peoples as partners (Beta 2)
 
-Status: **decided** (11 November 2026); **step 0 built** (section 8); **step 1 built** (section 9); **step 2 built** (section 10); **step 3 built** (section 11); **step 4 built** (section 12). Simon agreed to every recommendation N1–N14 and to the five fixes of today's native rules in step 0 (section 5). He added one direction for N1: native peoples are to become a **nation type of their own** later (section 4, after the table), so the people party must be built to grow into that. Builds on Beta 1, [cooperation.md](cooperation.md) (built), and reuses its shapes: the `Treaty` record, scenario data and mechanics switches for every new rule, computer behaviour per level at seeded chances with targets a scenario can change, and `gameOver.winners`. The 0.9 scenario framework ([scenario-framework.md](scenario-framework.md), [SCENARIOS.md](../SCENARIOS.md)) applies throughout. Australia ([australia.md](australia.md)) is the scenario that will lean on this most, so the shapes chosen here must serve it later.
+Status: **decided** (11 November 2026); **step 0 built** (section 8); **step 1 built** (section 9); **step 2 built** (section 10); **step 3 built** (section 11); **step 4 built** (section 12); **step 5 built** (section 13). Simon agreed to every recommendation N1–N14 and to the five fixes of today's native rules in step 0 (section 5). He added one direction for N1: native peoples are to become a **nation type of their own** later (section 4, after the table), so the people party must be built to grow into that. Builds on Beta 1, [cooperation.md](cooperation.md) (built), and reuses its shapes: the `Treaty` record, scenario data and mechanics switches for every new rule, computer behaviour per level at seeded chances with targets a scenario can change, and `gameOver.winners`. The 0.9 scenario framework ([scenario-framework.md](scenario-framework.md), [SCENARIOS.md](../SCENARIOS.md)) applies throughout. Australia ([australia.md](australia.md)) is the scenario that will lean on this most, so the shapes chosen here must serve it later.
 
 ## 1. Goal
 
@@ -433,3 +433,60 @@ Mutual defence, with the switch on:
 - Renewed teaching's strength: about ten free experts per exchange per Americas game (Simon, section 11).
 - Combative and the ladder (choice 1).
 - Braves' walking round colonies (choice 6), if defence fights should come more often.
+- The `prosperity` rates (section 13): the Caribbean's (15 of 16 games, mostly naming the top scorer), and whether the Americas' (3 of 96) wants raising towards one in 20–30, by computer nations seeking treaties with more of the peoples they meet (the treaties condition fails most), not by loosening the rule.
+
+## 13. Implementation (step 5, November 2026)
+
+Built on branch `beta2/step5`. Code: `prosperity.ts` (new: the rule's defaults, the records, "met", each nation's standing against the rule, the winners and their partners), `victory.ts` (the `prosperity` kind), hooks in `natives.ts` (a people making peace), `combat.ts` (a burned settlement, a surrender), `events/effects.ts` (Pocahontas's peace), `score.ts` and `rules/score.ts` (`peopleTreaty`, the "Treaties with native peoples" line), `arena.ts` and `scripts/tournament.ts` (prosperity wins and the conditions missed), `scenarios/terms.ts` and `caribbean.ts` (`gameOver.prosperity`), `stats.ts` (the score's description); state in `types.ts` (`Tribe.warEnded`, `Tribe.burned`, `gameOver.partners`); in the web game `ui/progress.ts` (the game-over screen, the score breakdown) and `ui/newgame.ts`. Tests: `test/prosperity.test.ts` (18 tests: the scenarios' lists and weights, the arena's line, a winner and its partners, each of the four conditions, a vanished people, the params, the end year only, "met", winning together, concord first, nobody qualifying, a saved game-over, the two records and that they are written only where the scenario plays for prosperity, the score line).
+
+### What was built
+
+- **The kind `prosperity` (N10),** checked after a round once the calendar's last turn has come, after `concord` in the scenario's order: every European nation (not the Crown, not a company; a nation finished in play-on counts with its frozen score) that meets all four conditions wins. `params`, over `PROSPERITY` in the engine:
+  - **peace** (`peaceYears`, 30): at peace now with every people it has met, and no war with any of them ended within the last 30 years (years by the calendar, `yearValue`);
+  - **never burned** a native settlement, of any people;
+  - **treaties** (`treatyShare`, 0.5): a treaty of any people kind in force with at least half (rounded up, and at least one) of the peoples it has met that are still on the map; several kinds with one people count once;
+  - **score** (`scoreShare`, 0.8): at least 0.8 of the best final score.
+- **"Met"** is read from what the game already records: the nation's standing with the people is written (`peopleRelations`: a trade, a scout's visit, a mission, a brave come to trade), or it has fought the people (at war now, a war that ended, a settlement burned). A people a nation never dealt with in either way does not count.
+- **Two records**, plain JSON, absent until first written and written only in a scenario that lists `prosperity`: `Tribe.warEnded` (per nation, the turn its last war with the people ended: the people making peace in `processNatives`, a surrender, Pocahontas's peace) and `Tribe.burned` (nations that burned one of its settlements). Neither existed: `goodSince` is stricter than peace (the settlements must be content on average), and burning was only telemetry and a capped History entry.
+- **`gameOver.partners`**: the peoples the winners hold treaties with, in the order the first treaty with each was made; `winners` stays `NationId[]`, best score first. The reason reads "The year 1850 has come and the age of colonization is over. In peace and partnership with the Iroquois and the Cherokee, England wins by prosperity." (several winners "win together"; the Caribbean opens with its own sentence about the chartered companies).
+- **Score:** `SCORE_WEIGHTS.peopleTreaty`, points per treaty with a people in force (each kind counts); the line "Treaties with native peoples" appears while the weight is not 0. The engine's weight is 3, as a trade agreement's; the Caribbean's 5, as its trade agreements'.
+- **Game-over screen:** "England (you) wins, with the Iroquois and the Cherokee." The score breakdown now matches lines by their key, so a line only some nations have (shares in companies) no longer shifts the others. The New game screen lists "winning by prosperity in partnership with the native peoples".
+- **Arena and tournament:** `ArenaEntry.prosperity` marks a prosperity winner (a game-over with partners; `concord` is no longer set for a shared prosperity win), and, where the scenario plays for prosperity, `ArenaEntry.prosperityFails` lists the conditions each nation failed at the end, whether or not the game ended that way. Each game line names the prosperity winners and the nations that missed it on one condition only; the summary adds "Prosperity: n of N games won by prosperity (levels); at the end q of M nations qualified; failing each condition: …; failing only that one: …". The score-by-component table has a `peoples` column.
+
+### Choices made while building (for Simon)
+
+1. **"Met" includes fighting** (above), so a nation cannot escape the peace condition by never trading with the people it fights.
+2. **A people gone from the map** (every settlement burned or taken by others) no longer counts among those a nation needs treaties with, but a war with it within 30 years still breaks the peace.
+3. **At least one treaty is needed,** even by a nation that met nobody; "half of none" would otherwise let a nation that never met a people win by prosperity.
+4. **Half is rounded up** (3 peoples met: 2 treaties).
+5. **Peace is measured from the end of the last war,** whoever started it; a war that ended before the record existed (a game saved before this step) is not known.
+6. **The records are written only where the scenario plays for prosperity,** so other scenarios' saves keep their text; a game of the Americas saved before step 5 starts its records when loaded.
+7. **The score weight counts treaties, not peoples:** a nation with all four kinds with one people gets 12 points in the Americas. Per treaty is what N10 says; per partner people would weigh broad partnership over deep.
+8. **Weights:** 3 in the Americas (a trade agreement's), 5 in the Caribbean (its trade agreements'). They raised Creative and Competent by about 6 points in the Americas and 9–13 in the Caribbean.
+
+### Measurements
+
+The code commit kept every bench game "same" (`npm run bench -- --verify`, with and without `--scenario caribbean`). The switching commit (`[outcomes]`) re-recorded all eight bench hashes, both golden hashes and the Caribbean game's snapshot: the score is in each round's statistics. No game plays differently (computer players never read the score): the per-game lines before and after are the same but for the scores and the victory, so the changes below are the weight and the new ending.
+
+Tournaments, `npm run tournament -- --turns 609 --play-on --events --seed 1000` (the Caribbean `--turns 202 --events`), before → after, average score (wins):
+
+| Run | Combative | Competent | Creative | Naive |
+| --- | ---: | ---: | ---: | ---: |
+| Americas, 24 games | 580.3 → 581.6 (12 → 12) | 549.3 → 557.3 (7 → 7) | 523.8 → 529.5 (6 → 6) | 250.0 → 250.4 (0 → 0) |
+| Americas, 48 games | 583.8 → 584.8 (27 → 24) | 506.1 → 512.6 (12 → 14) | 468.2 → 473.6 (9 → 10) | 261.9 → 262.4 (1 → 1) |
+| Americas, 96 games | 608.9 → 610.1 (55 → 52) | 497.8 → 503.7 (24 → 25) | 454.5 → 460.5 (20 → 21) | 259.3 → 259.7 (2 → 2) |
+| Caribbean, 16 games | 96.2 → 96.8 (1 → 0) | 109.3 → 118.3 (5 → 7) | 121.2 → 134.0 (10 → 12) | 63.1 → 64.7 (0 → 1) |
+
+The prosperity victory, and how close the nations came at the end (every nation is judged, whatever ended the game):
+
+| Run | Games won by prosperity | Nations qualifying | Failing peace | burned | treaties | score | Failing only treaties | only score |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Americas, 24 games | 1 (Competent) | 1 of 96 | 84 | 5 | 92 | 58 | 3 | 0 |
+| Americas, 48 games | 3 (Competent each time) | 3 of 192 | 162 | 11 | 183 | 117 | 7 | 1 |
+| Americas, 96 games | 3 (Competent each time) | 3 of 384 | 329 | 20 | 371 | 244 | 18 | 4 |
+| Caribbean, 16 games | 15 (Creative 11, Competent 7, Naive 1; 4 shared) | 18 of 64 | 16 | 0 | 34 | 40 | 3 | 11 |
+
+- **Against N12 (Americas):** 3 of 96 four-level games (1 in 32; 1 of 24 and 3 of 48 on the smaller runs, all three wins in the first 48 games), at the edge of "about once in 20–30", untuned. Every win was Competent's; in two of the three it had the best score anyway, in one (seed 1032) it took the win from Combative (661 against 747). Nobody missed only on peace or burning: the 86% that fail peace (a war with some people met within 30 years) almost all fail treaties too, which is the binding condition (97% fail it; 18 nations missed on treaties alone, 12 of them Competent and 6 Creative, and 4 on score alone). Computer nations hold 3.3 treaties with peoples per game at the end, all nations together.
+- **The Caribbean:** prosperity ends 15 of 16 games, and in 14 of them the best score is among the winners: with three peoples, few wars and treaties with most peoples met, the rule there mostly names the top scorer, adds a co-winner in 4 games, and took the 1 Combative time win. Stricter `params` hardly move it (16 games each: `scoreShare` 0.95, 14 of 16; `treatyShare` 1, 14; both, 13). N12 sets no Caribbean target; step 6 should decide whether the Caribbean keeps `prosperity` and on what terms (for example treaties beyond trade, or a share of all the scenario's peoples rather than of those met).
+- **Concord:** 1 of 48 Americas games as before; 5 → 4 of 96 (seed 1078: the weight moved the alliance's share of the score below 0.7). The Caribbean: none either way.
+- The 24-game Americas run with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1` ran clean, every game line and the summary the same as without the checks. A Playwright smoke of the built web game with Google Fonts blocked (a new game in the Americas and in the Caribbean, the person's nation given contact and a trade treaty with two peoples and the best score, the turn set one round before the end, the last turn ended so the engine decides) had no page errors; the game-over screen read "… In peace and partnership with the Iroquois and the Cherokee, England wins by prosperity." and "England (you) wins, with the Iroquois and the Cherokee." (the Caribbean: Courland with the Arawak and the Kalinago), the breakdown showed "Treaties with native peoples", and the New game screen listed the victory.
