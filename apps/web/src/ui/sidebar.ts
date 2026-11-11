@@ -35,7 +35,7 @@ import {
   unitsAboard,
   unitsAwaitingOrders,
   type GameState,
-  type NationId,
+  type PlayerId,
   type Unit,
   colonyOpenTo,
   FOREIGN_KEEP,
@@ -149,7 +149,7 @@ export class Sidebar {
         };
       })
       .sort((a, b) => b.score - a.score);
-    const watch = h('select', { 'aria-label': 'Whose view to show', onchange: (e: Event) => app.setWatch((e.target as HTMLSelectElement).value as NationId | 'all') },
+    const watch = h('select', { 'aria-label': 'Whose view to show', onchange: (e: Event) => app.setWatch((e.target as HTMLSelectElement).value as PlayerId | 'all') },
       h('option', { value: 'all', selected: app.watch === 'all' || undefined }, 'Everything'),
       rows.map((r) => h('option', { value: r.p.id, selected: app.watch === r.p.id || undefined }, `${nationTitle(app.state, r.p.id)}'s view`)));
     const head = s.config.headStart;

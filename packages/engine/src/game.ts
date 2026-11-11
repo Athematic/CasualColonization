@@ -2,7 +2,7 @@ import { applyCommand, type Command, type CommandResult } from './commands.js';
 import { initialMarket, randomImmigrant } from './europe.js';
 import { placeOnMap } from './movement.js';
 import { createUnit, message, reveal } from './queries.js';
-import type { NationId } from './rules/nations.js';
+import type { PlayerId } from './rules/nations.js';
 import { DEFAULT_DIFFICULTY, resolveDifficulty } from './rules/difficulty.js';
 import { beginPlayerTurn, runAiUntilHuman } from './turn.js';
 import type { GameConfig, GameState, Player } from './types.js';
@@ -30,7 +30,7 @@ export function createGame(config: GameConfig): GameState {
   // (version 1, the default) write nothing, so their saves and hashes stay as they were.
   if (config.scenario && config.scenarioVersion === undefined && scenario.version !== 1) config = { ...config, scenarioVersion: scenario.version };
   if (new Set(config.nations).size !== config.nations.length) throw new Error('Each nation can only take part once.');
-  for (const h of config.humans) if (!config.nations.includes(h)) throw new Error(`${h} is not taking part.`);
+  for (const h of config.humans) if (!(config.nations as readonly PlayerId[]).includes(h) && !(config.peoples as readonly PlayerId[] | undefined)?.includes(h)) throw new Error(`${h} is not taking part.`);
 
   const rngHolder = { rng: config.seed | 0 };
   const world = createWorld(rngHolder, config);
@@ -81,7 +81,7 @@ export function createGame(config: GameConfig): GameState {
   return s;
 }
 
-export function newPlayer(s: GameState, nation: NationId, human: boolean, entry: { x: number; y: number }): Player {
+export function newPlayer(s: GameState, nation: PlayerId, human: boolean, entry: { x: number; y: number }): Player {
   return {
     id: nation,
     human,
@@ -109,7 +109,7 @@ export function newPlayer(s: GameState, nation: NationId, human: boolean, entry:
   };
 }
 
-function startingUnits(s: GameState, nation: NationId, at: { x: number; y: number }): void {
+function startingUnits(s: GameState, nation: PlayerId, at: { x: number; y: number }): void {
   const ship = createUnit(s, nation, 'caravel', { kind: 'map', x: at.x, y: at.y });
   placeOnMap(s, ship, at.x, at.y);
   const aboard = () => ({ kind: 'carrier' as const, carrierId: ship.id });

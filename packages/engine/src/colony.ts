@@ -24,7 +24,7 @@ import {
 } from './queries.js';
 import { BUILDINGS, SCHOOL_TEACHERS, TEACH_TURNS, type BuildingKind } from './rules/buildings.js';
 import { GOOD_DEFS, emptyGoods, type GoodId } from './rules/goods.js';
-import { TRIBES, type NationId } from './rules/nations.js';
+import { TRIBES, type PlayerId } from './rules/nations.js';
 import { COLONY_BUILDS, PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId } from './rules/units.js';
 import { runCustomHouse } from './europe.js';
 import { modifiers } from './scenarios/modifiers.js';
@@ -52,7 +52,7 @@ export function canFoundColony(s: GameState, u: Unit): string | null {
  * in rules/difficulty.ts): 0 with the rule off or not in the scenario, for the first colony, and
  * once the nation has declared independence (there is no Crown to pay).
  */
-export function charterCost(s: GameState, nation: NationId): number {
+export function charterCost(s: GameState, nation: PlayerId): number {
   if (!s.config.colonyCharter) return 0;
   const charter = mechanicsOf(s).charter;
   if (!charter) return 0;

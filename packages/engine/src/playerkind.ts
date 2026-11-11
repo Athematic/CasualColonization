@@ -20,7 +20,7 @@
  * 'crown'`: the Royal Expeditionary Force, colonies retaken by royal troops) are not system checks
  * and stay as they are.
  */
-import { COMPANY_IDS, TRIBES, type NationId, type PlayerId } from './rules/nations.js';
+import { COMPANY_IDS, TRIBES, type PlayerId } from './rules/nations.js';
 import type { Player } from './types.js';
 
 export type PlayerKind = 'nation' | 'company' | 'crown' | 'people';
@@ -114,7 +114,7 @@ export function playerKind(p: Pick<Player, 'id' | 'kind'>): PlayerKind {
 /** The kind of the player an id names, from the id alone (the kinds' ids never overlap). */
 export function kindOfId(id: PlayerId): PlayerKind {
   if (id === 'crown') return 'crown';
-  if (COMPANY_IDS.has(id as PlayerId)) return 'company';
+  if (COMPANY_IDS.has(id)) return 'company';
   if (Object.hasOwn(TRIBES, id)) return 'people';
   return 'nation';
 }

@@ -57,7 +57,7 @@ import {
   systemsOf,
   TRIBES,
   withPeople,
-  type NationId,
+  type PlayerId,
   type Player,
   type TribeId,
 } from '@cc/engine';
@@ -357,7 +357,7 @@ export class DiplomacyScreen implements Screen {
       h('p', { class: 'muted small' }, `A company founds and runs colonies of its own, with no ${term(s, 'crown')} and no taxes. Its founder pays ${rules.capital} gold for the first ${rules.foundingShares} shares; anyone may buy more. Every ${rules.dividendEvery} turns it pays out part of its gold to its shareholders, and its score counts for them by their shares. Nobody makes war on a company.`));
   }
 
-  private async cancelTrade(nation: NationId): Promise<void> {
+  private async cancelTrade(nation: PlayerId): Promise<void> {
     if (await confirmDialog('End the trade agreement?', `Your trade routes will no longer call at ${nationOf(this.app.state, nation).adjective} colonies, and theirs not at yours.`, 'End it', 'Keep trading')) {
       this.app.dispatch({ type: 'cancelTrade', nation });
     }
@@ -369,7 +369,7 @@ export class DiplomacyScreen implements Screen {
     if (await confirmDialog('Cancel Favoured Nation status?', text, 'Cancel it', 'Keep it')) this.app.dispatch({ type: 'cancelFavoured', nation: p.id });
   }
 
-  private async confederate(nation: NationId): Promise<void> {
+  private async confederate(nation: PlayerId): Promise<void> {
     const s = this.app.state;
     const ok = await confirmDialog(
       `Declare independence together with ${nationOf(s, nation).name}?`,
@@ -387,7 +387,7 @@ export class DiplomacyScreen implements Screen {
     if (await confirmDialog(`Leave the alliance with ${nationOf(s, p.id).name}?`, text, 'Leave it', 'Stay allied')) this.app.dispatch({ type: 'leaveAlliance' });
   }
 
-  private async war(nation: NationId): Promise<void> {
+  private async war(nation: PlayerId): Promise<void> {
     const s = this.app.state;
     const favoured = isFavoured(this.app.state, this.app.me.id, nation);
     const allies = alliesOf(s, nation).filter((n) => n !== this.app.me.id);

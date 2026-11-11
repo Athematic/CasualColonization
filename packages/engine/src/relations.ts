@@ -15,7 +15,7 @@ import { noteTrade } from './stats.js';
 import { cargoRoomFor, colonyAt, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
 import { random } from './rng.js';
 import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, term, turnAfterYears, yearValue } from './scenarios/index.js';
-import { type NationId, type TribeId } from './rules/nations.js';
+import { type PlayerId, type TribeId } from './rules/nations.js';
 import { systemsOfId } from './playerkind.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, treatyBetween } from './treaties.js';
@@ -58,7 +58,7 @@ function stream(s: GameState, a: string, b: string, purpose: string): { rng: num
  * (never `GameState.rng`). The computer players use it for decisions such as how long to wait
  * after a refused proposal, so adding such decisions shifts no other random outcome.
  */
-export function pairRandom(s: GameState, a: NationId, b: NationId, purpose: string): number {
+export function pairRandom(s: GameState, a: PlayerId, b: PlayerId, purpose: string): number {
   return random(stream(s, a, b, purpose));
 }
 
@@ -67,7 +67,7 @@ export function pairRandom(s: GameState, a: NationId, b: NationId, purpose: stri
  * their own (never `GameState.rng`): the hidden thresholds of treaties with peoples are drawn from
  * it each time they are needed and never stored (native-partners.md N3).
  */
-export function peoplePairRandom(s: GameState, nation: NationId, people: TribeId, purpose: string): number {
+export function peoplePairRandom(s: GameState, nation: PlayerId, people: TribeId, purpose: string): number {
   return random(stream(s, nation, people, `people|${purpose}`));
 }
 
@@ -84,23 +84,23 @@ function around(r: { rng: number }, v: { base: number; spread: number }): number
   return v.base - v.spread + Math.floor(random(r) * (2 * v.spread + 1));
 }
 
-export function relationKey(a: NationId, b: NationId): string {
+export function relationKey(a: PlayerId, b: PlayerId): string {
   return [a, b].sort().join('|');
 }
 
 /** Whether two nations can have relations at all: two different European nations (no Crown, no company: companies make no agreements; playerkind.ts `relations`). */
-function europeanPair(a: NationId, b: NationId): boolean {
+function europeanPair(a: PlayerId, b: PlayerId): boolean {
   return a !== b && systemsOfId(a).relations && systemsOfId(b).relations;
 }
 
 /** The relation between two nations, created (with its seeded thresholds) when first needed. */
-export function relation(s: GameState, a: NationId, b: NationId): Relation {
+export function relation(s: GameState, a: PlayerId, b: PlayerId): Relation {
   s.relations = s.relations ?? {};
   const key = relationKey(a, b);
   let rel = s.relations[key];
   if (!rel) {
     const r = stream(s, a, b, 'thresholds');
-    const order = s.config.nations;
+    const order: readonly PlayerId[] = s.config.nations;
     const [first, second] = order.indexOf(a) <= order.indexOf(b) ? [a, b] : [b, a];
     rel = {
       a: first,
@@ -121,56 +121,56 @@ export function initRelations(s: GameState): void {
   for (let i = 0; i < nations.length; i++) for (let j = i + 1; j < nations.length; j++) relation(s, nations[i], nations[j]);
 }
 
-function other(rel: Relation, nation: NationId): NationId {
+function other(rel: Relation, nation: PlayerId): PlayerId {
   return rel.a === nation ? rel.b : rel.a;
 }
 
-function takePart(s: GameState, a: NationId, b: NationId): boolean {
+function takePart(s: GameState, a: PlayerId, b: PlayerId): boolean {
   return s.players.some((p) => p.id === a) && s.players.some((p) => p.id === b);
 }
 
-export function atPeace(s: GameState, a: NationId, b: NationId): boolean {
+export function atPeace(s: GameState, a: PlayerId, b: PlayerId): boolean {
   return player(s, a).stance[b] !== 'war';
 }
 
 /** Years of continuous peace between two nations; 0 while at war. */
-export function yearsOfPeace(s: GameState, a: NationId, b: NationId): number {
+export function yearsOfPeace(s: GameState, a: PlayerId, b: PlayerId): number {
   if (!europeanPair(a, b) || !atPeace(s, a, b)) return 0;
   const cal = calendarOf(s);
   return yearValue(s.turn, cal) - yearValue(relation(s, a, b).peaceSince, cal);
 }
 
-export function hasTradeAgreement(s: GameState, a: NationId, b: NationId): boolean {
+export function hasTradeAgreement(s: GameState, a: PlayerId, b: PlayerId): boolean {
   return europeanPair(a, b) && !!treatyBetween(s, 'trade', a, b);
 }
 
-export function isFavoured(s: GameState, a: NationId, b: NationId): boolean {
+export function isFavoured(s: GameState, a: PlayerId, b: PlayerId): boolean {
   return europeanPair(a, b) && !!treatyBetween(s, 'favoured', a, b);
 }
 
 /** Whether the hostility after a cancellation still lasts. Hidden from players; computer players act on it. */
-export function isHostile(s: GameState, a: NationId, b: NationId): boolean {
+export function isHostile(s: GameState, a: PlayerId, b: PlayerId): boolean {
   const rel = europeanPair(a, b) ? s.relations?.[relationKey(a, b)] : undefined;
   return !!rel?.hostileUntil && s.turn < rel.hostileUntil;
 }
 
 /** Whether the waiting period after a cancellation still lasts. */
-export function inWaitingPeriod(s: GameState, a: NationId, b: NationId): boolean {
+export function inWaitingPeriod(s: GameState, a: PlayerId, b: PlayerId): boolean {
   const rel = europeanPair(a, b) ? s.relations?.[relationKey(a, b)] : undefined;
   return !!rel?.waitUntil && s.turn < rel.waitUntil;
 }
 
 /** Nations whose home ports a nation's ships may use: its Favoured Nation partners that still have one. */
-export function favouredPartners(s: GameState, nation: NationId): NationId[] {
+export function favouredPartners(s: GameState, nation: PlayerId): PlayerId[] {
   return s.players.filter((p) => p.id !== nation && p.independence === 'none' && isFavoured(s, nation, p.id)).map((p) => p.id);
 }
 
-function bothHuman(s: GameState, a: NationId, b: NationId): boolean {
+function bothHuman(s: GameState, a: PlayerId, b: PlayerId): boolean {
   return player(s, a).human && player(s, b).human;
 }
 
 /** Whether a route stops at a colony of `of`. */
-function stopsAt(s: GameState, stops: { at: string }[], of: NationId): boolean {
+function stopsAt(s: GameState, stops: { at: string }[], of: PlayerId): boolean {
   return stops.some((st) => s.colonies[st.at]?.owner === of);
 }
 
@@ -178,7 +178,7 @@ function stopsAt(s: GameState, stops: { at: string }[], of: NationId): boolean {
  * Active trade routes between two nations: routes of either one that stop at a colony of the
  * other and have at least one ship or wagon train following them.
  */
-export function routesBetween(s: GameState, a: NationId, b: NationId): number {
+export function routesBetween(s: GameState, a: PlayerId, b: PlayerId): number {
   const used = new Set<string>();
   for (const u of unitList(s)) if (u.route) used.add(u.route.id);
   let n = 0;
@@ -190,13 +190,13 @@ export function routesBetween(s: GameState, a: NationId, b: NationId): number {
 }
 
 /** Whether the years of peace and the trade routes between two nations both reach the hidden thresholds. */
-export function favouredUnlocked(s: GameState, a: NationId, b: NationId): boolean {
+export function favouredUnlocked(s: GameState, a: PlayerId, b: PlayerId): boolean {
   const rel = relation(s, a, b);
   return yearsOfPeace(s, a, b) >= rel.peaceNeeded && routesBetween(s, a, b) >= rel.routesNeeded;
 }
 
 /** Why `from` cannot propose a trade agreement to `to` now, or null. */
-export function tradeProblem(s: GameState, from: NationId, to: NationId): string | null {
+export function tradeProblem(s: GameState, from: PlayerId, to: PlayerId): string | null {
   if (!europeanPair(from, to)) return 'Trade agreements are made between two European nations.';
   if (!takePart(s, from, to)) return `${nationOf(s, to).name} is not taking part.`;
   const name = nationOf(s, to).name;
@@ -209,7 +209,7 @@ export function tradeProblem(s: GameState, from: NationId, to: NationId): string
 }
 
 /** Why `from` cannot propose Favoured Nation status to `to` now, or null. */
-export function favouredProblem(s: GameState, from: NationId, to: NationId): string | null {
+export function favouredProblem(s: GameState, from: PlayerId, to: PlayerId): string | null {
   if (!mechanicsOf(s).favoured) return 'There is no Favoured Nation status in this scenario.';
   if (!europeanPair(from, to)) return 'Favoured Nation status is agreed between two European nations.';
   if (!takePart(s, from, to)) return `${nationOf(s, to).name} is not taking part.`;
@@ -228,7 +228,7 @@ export function favouredProblem(s: GameState, from: NationId, to: NationId): str
 }
 
 /** Computer players accept a trade agreement when at peace and not hostile. */
-export function aiAcceptsTrade(s: GameState, ai: NationId, from: NationId): boolean {
+export function aiAcceptsTrade(s: GameState, ai: PlayerId, from: PlayerId): boolean {
   return atPeace(s, ai, from) && !isHostile(s, ai, from) && !inWaitingPeriod(s, ai, from);
 }
 
@@ -237,7 +237,7 @@ export function aiAcceptsTrade(s: GameState, ai: NationId, from: NationId): bool
  * pays: enough gold has changed hands between them, or the peace has lasted twice as long as
  * needed. A computer player that has picked one of the proposer's colonies as a war target refuses.
  */
-export function aiAcceptsFavoured(s: GameState, ai: NationId, from: NationId): boolean {
+export function aiAcceptsFavoured(s: GameState, ai: PlayerId, from: PlayerId): boolean {
   if (!atPeace(s, ai, from) || isHostile(s, ai, from)) return false;
   const target = player(s, ai).aiMemory?.warTarget;
   if (target && s.colonies[target]?.owner === from) return false;
@@ -245,21 +245,21 @@ export function aiAcceptsFavoured(s: GameState, ai: NationId, from: NationId): b
   return rel.volume >= FAVOURED_MIN_VOLUME || yearsOfPeace(s, ai, from) >= rel.peaceNeeded * 2;
 }
 
-export function proposeTrade(s: GameState, from: NationId, to: NationId): string {
+export function proposeTrade(s: GameState, from: PlayerId, to: PlayerId): string {
   const problem = tradeProblem(s, from, to);
   if (problem) fail(problem);
   track(from, 'cmd:proposeTrade');
   return propose(s, 'trade', from, to);
 }
 
-export function proposeFavoured(s: GameState, from: NationId, to: NationId): string {
+export function proposeFavoured(s: GameState, from: PlayerId, to: PlayerId): string {
   const problem = favouredProblem(s, from, to);
   if (problem) fail(problem);
   track(from, 'cmd:proposeFavoured');
   return propose(s, 'favoured', from, to);
 }
 
-export function proposeAlliance(s: GameState, from: NationId, to: NationId): string {
+export function proposeAlliance(s: GameState, from: PlayerId, to: PlayerId): string {
   const problem = allianceProblem(s, from, to);
   if (problem) fail(problem);
   track(from, 'cmd:proposeAlliance');
@@ -270,9 +270,9 @@ const KIND_NAME: Record<ProposalKind, string> = { trade: 'a trade agreement', fa
 
 /** What a proposal of each kind needs, how a computer player answers it, and what accepting it does. */
 interface KindRules {
-  problem: (s: GameState, from: NationId, to: NationId) => string | null;
-  accepts: (s: GameState, ai: NationId, from: NationId) => boolean;
-  make: (s: GameState, a: NationId, b: NationId) => string;
+  problem: (s: GameState, from: PlayerId, to: PlayerId) => string | null;
+  accepts: (s: GameState, ai: PlayerId, from: PlayerId) => boolean;
+  make: (s: GameState, a: PlayerId, b: PlayerId) => string;
 }
 
 /** Registers a proposal kind whose rules live in a module relations.ts must not import (confederation.ts). */
@@ -281,7 +281,7 @@ export function registerProposalKind(kind: ProposalKind, rules: KindRules): void
 }
 
 /** Proposes `kind` to `to` after checking its rules; for kinds registered from elsewhere. */
-export function proposeKind(s: GameState, kind: ProposalKind, from: NationId, to: NationId): string {
+export function proposeKind(s: GameState, kind: ProposalKind, from: PlayerId, to: PlayerId): string {
   const rules = KINDS[kind];
   if (!rules) fail('There is no such proposal.');
   const problem = rules.problem(s, from, to);
@@ -300,14 +300,14 @@ const BUILT_IN: Record<'trade' | 'favoured' | 'alliance' | 'expedition', KindRul
 Object.assign(KINDS, BUILT_IN);
 
 /** Proposes a joint expedition to an ally (alliances.ts): each pays half, the gold found is shared. */
-export function proposeExpedition(s: GameState, from: NationId, to: NationId): string {
+export function proposeExpedition(s: GameState, from: PlayerId, to: PlayerId): string {
   const problem = expeditionProblem(s, from, to);
   if (problem) fail(problem);
   track(from, 'cmd:proposeExpedition');
   return propose(s, 'expedition', from, to);
 }
 
-function propose(s: GameState, kind: ProposalKind, from: NationId, to: NationId): string {
+function propose(s: GameState, kind: ProposalKind, from: PlayerId, to: PlayerId): string {
   const target = player(s, to);
   if (target.human) {
     relation(s, from, to).proposal = { kind, from, turn: s.turn };
@@ -325,7 +325,7 @@ function propose(s: GameState, kind: ProposalKind, from: NationId, to: NationId)
 }
 
 /** A person answers a proposal from `from`. */
-export function answerProposal(s: GameState, nation: NationId, from: NationId, accept: boolean): string {
+export function answerProposal(s: GameState, nation: PlayerId, from: PlayerId, accept: boolean): string {
   if (!europeanPair(nation, from)) fail('There is no such proposal.');
   const rel = relation(s, nation, from);
   const p = rel.proposal;
@@ -343,7 +343,7 @@ export function answerProposal(s: GameState, nation: NationId, from: NationId, a
   return KINDS[p.kind]!.make(s, from, nation);
 }
 
-export function makeTradeAgreement(s: GameState, a: NationId, b: NationId): string {
+export function makeTradeAgreement(s: GameState, a: PlayerId, b: PlayerId): string {
   const rel = relation(s, a, b);
   if (!treatyBetween(s, 'trade', a, b)) addTreaty(s, 'trade', [rel.a, rel.b]);
   track(a, 'diplomacy:trade agreement made');
@@ -354,7 +354,7 @@ export function makeTradeAgreement(s: GameState, a: NationId, b: NationId): stri
   return text;
 }
 
-export function makeFavoured(s: GameState, a: NationId, b: NationId): string {
+export function makeFavoured(s: GameState, a: PlayerId, b: PlayerId): string {
   const rel = relation(s, a, b);
   if (!treatyBetween(s, 'trade', a, b)) addTreaty(s, 'trade', [rel.a, rel.b]);
   addTreaty(s, 'favoured', [rel.a, rel.b]);
@@ -370,7 +370,7 @@ export function makeFavoured(s: GameState, a: NationId, b: NationId): string {
  * Ends a plain trade agreement (one without Favoured Nation status): the stops at each other's
  * colonies are dropped from both nations' routes. No goods are seized and no penalty follows.
  */
-export function cancelTrade(s: GameState, by: NationId, to: NationId): string {
+export function cancelTrade(s: GameState, by: PlayerId, to: PlayerId): string {
   if (!hasTradeAgreement(s, by, to)) fail(`You have no trade agreement with ${nationOf(s, to).name}.`);
   if (isFavoured(s, by, to)) fail('Cancel the Favoured Nation status instead; that ends the trade agreement too.');
   track(by, 'cmd:cancelTrade');
@@ -390,7 +390,7 @@ export function cancelTrade(s: GameState, by: NationId, to: NationId): string {
  * colonies are seized, and (unless both are people) a hidden waiting period and a hidden
  * period of hostility begin. Both sides suffer, whoever cancels.
  */
-export function cancelFavoured(s: GameState, by: NationId, to: NationId, why: 'cancel' | 'war' = 'cancel'): string {
+export function cancelFavoured(s: GameState, by: PlayerId, to: PlayerId, why: 'cancel' | 'war' = 'cancel'): string {
   if (!isFavoured(s, by, to)) fail(`${nationTitle(s, to)} is not a Favoured Nation.`);
   if (s.treaties && isAllied(s, by, to)) fail(`${nationTitle(s, to)} is your ally: leave the alliance instead.`);
   if (why === 'cancel') track(by, 'cmd:cancelFavoured');
@@ -426,7 +426,7 @@ export function cancelFavoured(s: GameState, by: NationId, to: NationId, why: 'c
  * status. This lapse is not a cancellation: no goods are seized and no penalty follows. The trade
  * agreements stay.
  */
-export function lapseFavoured(s: GameState, nation: NationId): void {
+export function lapseFavoured(s: GameState, nation: PlayerId): void {
   for (const rel of Object.values(s.relations ?? {})) {
     if (rel.a !== nation && rel.b !== nation) continue;
     const favoured = treatyBetween(s, 'favoured', rel.a, rel.b);
@@ -441,7 +441,7 @@ export function lapseFavoured(s: GameState, nation: NationId): void {
 }
 
 /** Called when a war starts: a trade agreement ends, and Favoured Nation status is cancelled by the nation that declared war. */
-export function onWar(s: GameState, by: NationId, to: NationId): void {
+export function onWar(s: GameState, by: PlayerId, to: PlayerId): void {
   if (!europeanPair(by, to) || !s.relations?.[relationKey(by, to)]) return;
   const rel = relation(s, by, to);
   delete rel.proposal;
@@ -462,7 +462,7 @@ export function onWar(s: GameState, by: NationId, to: NationId): void {
 }
 
 /** Called when peace is made: a new run of peace begins. */
-export function onPeace(s: GameState, a: NationId, b: NationId): void {
+export function onPeace(s: GameState, a: PlayerId, b: PlayerId): void {
   if (europeanPair(a, b)) relation(s, a, b).peaceSince = s.turn;
 }
 
@@ -470,7 +470,7 @@ export function onPeace(s: GameState, a: NationId, b: NationId): void {
  * Drops every stop at the other nation's colonies from both nations' trade routes. A route left
  * with fewer than two stops lets its units go, and they wait for orders.
  */
-function pruneRoutes(s: GameState, a: NationId, b: NationId): void {
+function pruneRoutes(s: GameState, a: PlayerId, b: PlayerId): void {
   for (const route of Object.values(s.routes ?? {})) {
     const partner = route.owner === a ? b : route.owner === b ? a : null;
     if (!partner) continue;
@@ -497,7 +497,7 @@ function pruneRoutes(s: GameState, a: NationId, b: NationId): void {
  * Nation status any more, or the partner has no home port) fall back to its own home port, with a
  * report. Called when Favoured Nation ends, and at the start of the nation's route moves.
  */
-export function closedRoutePorts(s: GameState, nation: NationId): void {
+export function closedRoutePorts(s: GameState, nation: PlayerId): void {
   for (const route of Object.values(s.routes ?? {})) {
     if (route.owner !== nation) continue;
     for (const stop of route.stops) {
@@ -515,7 +515,7 @@ export function closedRoutePorts(s: GameState, nation: NationId): void {
 }
 
 /** Ships of either nation in, or sailing to, the other's home port go to their own. */
-function sendShipsHome(s: GameState, a: NationId, b: NationId): void {
+function sendShipsHome(s: GameState, a: PlayerId, b: PlayerId): void {
   for (const u of unitList(s)) {
     const partner = u.owner === a ? b : u.owner === b ? a : null;
     if (!partner || (u.loc.kind !== 'europe' && u.loc.kind !== 'sailing') || u.loc.port !== partner) continue;
@@ -530,7 +530,7 @@ function sendShipsHome(s: GameState, a: NationId, b: NationId): void {
  * `by`, and put into the nearest such colony as far as its warehouse has room; the rest is lost.
  * Returns a report, or '' when nothing was seized.
  */
-function seizeGoods(s: GameState, by: NationId, from: NationId): string {
+function seizeGoods(s: GameState, by: PlayerId, from: PlayerId): string {
   const grid = gridOf(s);
   const colonies = colonyList(s).filter((c) => c.owner === by);
   if (!colonies.length) return '';
@@ -559,7 +559,7 @@ function seizeGoods(s: GameState, by: NationId, from: NationId): string {
 }
 
 /** A vague description of how close two nations are, for the diplomacy screen. Never shows the hidden numbers. */
-export function relationsMood(s: GameState, a: NationId, b: NationId): string {
+export function relationsMood(s: GameState, a: PlayerId, b: PlayerId): string {
   if (!atPeace(s, a, b)) return 'At war';
   if (s.treaties && isAllied(s, a, b)) return 'Allies';
   if (isFavoured(s, a, b)) return 'Favoured Nations';
@@ -575,7 +575,7 @@ export function relationsMood(s: GameState, a: NationId, b: NationId): string {
 }
 
 /** A vague description of the trade ties between two nations. */
-export function tradeTies(s: GameState, a: NationId, b: NationId): string {
+export function tradeTies(s: GameState, a: PlayerId, b: PlayerId): string {
   const n = routesBetween(s, a, b);
   if (!hasTradeAgreement(s, a, b)) return n ? 'Some trade' : 'No trade';
   if (n === 0) return 'No routes yet';

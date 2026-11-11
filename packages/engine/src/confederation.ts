@@ -18,7 +18,7 @@ import { noteHistory } from './history.js';
 import { canDeclareIndependence, declareIndependence } from './independence.js';
 import { message } from './queries.js';
 import { proposeKind, registerProposalKind } from './relations.js';
-import type { NationId } from './rules/nations.js';
+import type { PlayerId } from './rules/nations.js';
 import { mechanicsOf, nationOf, nationTitle } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import { addTreaty, bound, endTreaty, treatyNations } from './treaties.js';
@@ -28,7 +28,7 @@ import type { GameState, Treaty } from './types.js';
  * Whether a computer nation is ready to declare independence now (set by the computer players);
  * `together`: as an ally's partner in a confederation, which asks a smaller margin than declaring alone.
  */
-type Judge = (s: GameState, nation: NationId, together: boolean) => boolean;
+type Judge = (s: GameState, nation: PlayerId, together: boolean) => boolean;
 let judge: Judge = () => false;
 
 /** The computer players register their readiness for independence here (ai/index.ts). Returns the previous judge. */
@@ -39,7 +39,7 @@ export function setConfederationJudge(fn: Judge): Judge {
 }
 
 /** Whether a computer nation would declare independence now: alone, or `together` with an ally. */
-export function readyForIndependence(s: GameState, nation: NationId, together = false): boolean {
+export function readyForIndependence(s: GameState, nation: PlayerId, together = false): boolean {
   return judge(s, nation, together);
 }
 
@@ -50,13 +50,13 @@ export function confederationOn(s: GameState): boolean {
 }
 
 /** The confederation a nation belongs to, if any (in force while its war lasts). */
-export function confederationOf(s: GameState, nation: NationId): Treaty | undefined {
+export function confederationOf(s: GameState, nation: PlayerId): Treaty | undefined {
   for (const t of s.treaties ?? []) if (!t.end && t.kind === 'confederation' && bound(t, nation)) return t;
   return undefined;
 }
 
 /** Why `from` cannot propose to its ally `to` that they declare independence together, or null. */
-export function confederationProblem(s: GameState, from: NationId, to: NationId): string | null {
+export function confederationProblem(s: GameState, from: PlayerId, to: PlayerId): string | null {
   if (!confederationOn(s)) return 'Allies cannot declare independence together in this scenario.';
   if (!isAllied(s, from, to)) return 'Only allies can declare independence together.';
   for (const n of [from, to]) {
@@ -69,12 +69,12 @@ export function confederationProblem(s: GameState, from: NationId, to: NationId)
 }
 
 /** A computer nation joins when it would declare independence now anyway. */
-export function aiAcceptsConfederation(s: GameState, ai: NationId, from: NationId): boolean {
+export function aiAcceptsConfederation(s: GameState, ai: PlayerId, from: PlayerId): boolean {
   return isAllied(s, ai, from) && readyForIndependence(s, ai, true);
 }
 
 /** `a` and `b` declare independence together, as one confederation. */
-export function makeConfederation(s: GameState, a: NationId, b: NationId): string {
+export function makeConfederation(s: GameState, a: PlayerId, b: PlayerId): string {
   const t = addTreaty(s, 'confederation', [a, b]);
   track(a, 'independence:confederation');
   track(b, 'independence:confederation');
@@ -91,7 +91,7 @@ export function concludeConfederation(s: GameState, t: Treaty): void {
 }
 
 /** Proposes to an ally that both declare independence now, together (answered with answerProposal). */
-export function proposeConfederation(s: GameState, from: NationId, to: NationId): string {
+export function proposeConfederation(s: GameState, from: PlayerId, to: PlayerId): string {
   return proposeKind(s, 'confederation', from, to);
 }
 

@@ -14,7 +14,7 @@ import { peoplePairRandom } from '../relations.js';
 import type { TribeId } from '../rules/nations.js';
 import { cargoRoomFor, colonyWorkers, isCoastal } from '../queries.js';
 import { nativeRulesOf } from '../scenarios/index.js';
-import type { NationId } from '../rules/nations.js';
+import type { PlayerId } from '../rules/nations.js';
 import type { GameState, Player, Settlement, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
@@ -71,7 +71,7 @@ export function maybeIncite(s: GameState, p: Player, u: Unit, st: Settlement, pr
   const tribe = s.tribes.find((t) => t.id === st.tribe)!;
   // Nobody can incite a people against its partner in a mutual defence pact (N7).
   const partner = s.treaties ? defencePartner(s, st.tribe) : undefined;
-  const enemy = (Object.keys(p.stance) as NationId[]).find(
+  const enemy = (Object.keys(p.stance) as PlayerId[]).find(
     (n) => n !== 'crown' && n !== partner && p.stance[n] === 'war' && tribe.stance[n] !== 'war' && colonyList(s).some((c) => c.owner === n && grid.distance(c.x, c.y, st.x, st.y) <= 6),
   );
   if (!enemy) return false;

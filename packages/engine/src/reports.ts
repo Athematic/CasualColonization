@@ -17,7 +17,7 @@ import { settlementTeaches } from './peopletreaties.js';
 import { BUILDINGS } from './rules/buildings.js';
 import { FATHERS, type FatherId } from './rules/fathers.js';
 import type { GoodId } from './rules/goods.js';
-import type { NationId, TribeId } from './rules/nations.js';
+import type { PlayerId, TribeId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { ledgerFor } from './history.js';
@@ -116,7 +116,7 @@ export function colonyOverview(s: GameState, colony: Colony): ColonyOverview {
 }
 
 /** Every colony of a nation, with its overview, in founding order. */
-export function coloniesOverview(s: GameState, nation: NationId): ColonyOverview[] {
+export function coloniesOverview(s: GameState, nation: PlayerId): ColonyOverview[] {
   return colonyList(s)
     .filter((c) => c.owner === nation)
     .sort((a, b) => a.founded - b.founded || a.id.localeCompare(b.id))
@@ -128,7 +128,7 @@ export function coloniesOverview(s: GameState, nation: NationId): ColonyOverview
 export interface TradeRow {
   good: GoodId;
   /** Sell and buy price in each port the nation may trade in: its own first, then Favoured Nation partners'. */
-  prices: { port: NationId; sell: number; buy: number; tax: number }[];
+  prices: { port: PlayerId; sell: number; buy: number; tax: number }[];
   boycotted: boolean;
   /** Units sold in Europe (custom house sales included), over the game, this turn and last turn. */
   sold: { total: number; now: number; last: number };
@@ -143,7 +143,7 @@ export interface TradeRow {
   stored: number;
 }
 
-export function tradeOverview(s: GameState, nation: NationId): TradeRow[] {
+export function tradeOverview(s: GameState, nation: PlayerId): TradeRow[] {
   const p = player(s, nation);
   const ports = [p, ...favouredPartners(s, nation).map((n) => player(s, n))];
   const ledger = ledgerFor(s, nation);
@@ -206,7 +206,7 @@ function whereIs(s: GameState, u: Unit): { where: string; colonyId?: string; at?
 }
 
 /** A nation's land units outside colony work (soldiers, pioneers, scouts, wagon trains and the rest). */
-export function landForces(s: GameState, nation: NationId): ForceUnit[] {
+export function landForces(s: GameState, nation: PlayerId): ForceUnit[] {
   return unitList(s)
     .filter((u) => u.owner === nation && !isShip(u) && u.loc.kind !== 'colony')
     .map((u) => ({ unit: u, name: unitName(u), kind: forceKind(u), ...whereIs(s, u) }));
@@ -221,7 +221,7 @@ export function militaryStrength(units: Unit[]): number {
  * The Royal Expeditionary Force a nation faces: the troops still waiting in Europe and those
  * already landed against it. Null when the state holds no such figures.
  */
-export function royalForces(s: GameState, nation: NationId): { regulars: number; dragoons: number; artillery: number; menOfWar: number; landed: number } | null {
+export function royalForces(s: GameState, nation: PlayerId): { regulars: number; dragoons: number; artillery: number; menOfWar: number; landed: number } | null {
   const ref = player(s, nation).ref as Partial<Record<'regulars' | 'dragoons' | 'artillery' | 'menOfWar', number>> | undefined;
   if (!ref) return null;
   const landed = unitList(s).filter((u) => u.owner === 'crown' && u.against === nation).length;
@@ -242,7 +242,7 @@ export interface ShipOverview {
   repair: number | null;
 }
 
-export function navalOverview(s: GameState, nation: NationId): ShipOverview[] {
+export function navalOverview(s: GameState, nation: PlayerId): ShipOverview[] {
   return unitList(s)
     .filter((u) => u.owner === nation && isShip(u))
     .map((u) => {
@@ -273,13 +273,13 @@ export interface ReligionOverview {
   /** Crosses per colony, for colonies that make any. */
   colonies: { colony: Colony; crosses: number }[];
   /** Known settlements with a mission, by tribe: own missions and rivals'. */
-  missions: { tribe: TribeId; own: number; rival: Partial<Record<NationId, number>> }[];
+  missions: { tribe: TribeId; own: number; rival: Partial<Record<PlayerId, number>> }[];
   converts: number;
   /** Immigration stops after independence is declared. */
   closed: boolean;
 }
 
-export function religionOverview(s: GameState, nation: NationId): ReligionOverview {
+export function religionOverview(s: GameState, nation: PlayerId): ReligionOverview {
   const p = player(s, nation);
   const colonies = colonyList(s)
     .filter((c) => c.owner === nation)
@@ -288,7 +288,7 @@ export function religionOverview(s: GameState, nation: NationId): ReligionOvervi
     .sort((a, b) => b.crosses - a.crosses);
   const perTurn = colonies.reduce((n, r) => n + r.crosses, 0);
   const left = Math.max(0, p.crossesRequired - p.crosses);
-  const byTribe = new Map<TribeId, { tribe: TribeId; own: number; rival: Partial<Record<NationId, number>> }>();
+  const byTribe = new Map<TribeId, { tribe: TribeId; own: number; rival: Partial<Record<PlayerId, number>> }>();
   for (const st of knownSettlementList(s, nation)) {
     if (!st.mission) continue;
     const row = byTribe.get(st.tribe) ?? { tribe: st.tribe, own: 0, rival: {} };
@@ -310,7 +310,7 @@ export function religionOverview(s: GameState, nation: NationId): ReligionOvervi
 
 // ---- Natives ----
 
-function knownSettlementList(s: GameState, nation: NationId): Settlement[] {
+function knownSettlementList(s: GameState, nation: PlayerId): Settlement[] {
   const explored = player(s, nation).explored;
   return Object.values(s.settlements).filter((st) => explored[st.y * s.map.width + st.x] === 1);
 }
@@ -324,7 +324,7 @@ export interface SettlementOverview {
   skill: UnitTypeId | null | undefined;
   /** Goods the settlement wants most, once visited (the settlement's own list if it has one, else its tribe's). */
   wants: GoodId[] | undefined;
-  mission?: NationId;
+  mission?: PlayerId;
   visited: boolean;
   /** Land around the settlement claimed by the nation, by others, and still native. */
   land: { own: number; others: number; native: number };
@@ -346,7 +346,7 @@ export interface TribeOverview {
  * The tribes a nation has met and their settlements it knows: those on tiles it has explored.
  * What a settlement teaches and wants is only known after the nation's scout has visited it.
  */
-export function nativesOverview(s: GameState, nation: NationId): TribeOverview[] {
+export function nativesOverview(s: GameState, nation: PlayerId): TribeOverview[] {
   const grid = gridOf(s);
   const known = knownSettlementList(s, nation);
   const colonies = colonyList(s).filter((c) => c.owner === nation);
@@ -408,7 +408,7 @@ export interface CongressOverview {
   turnsToFather: number | null;
 }
 
-export function congressOverview(s: GameState, nation: NationId): CongressOverview {
+export function congressOverview(s: GameState, nation: PlayerId): CongressOverview {
   const p = player(s, nation);
   const colonies = colonyList(s)
     .filter((c) => c.owner === nation)
@@ -439,7 +439,7 @@ export function congressOverview(s: GameState, nation: NationId): CongressOvervi
  * The turn each of a nation's Founding Fathers joined, read from the history's 'father' entries
  * (the state keeps no separate field; fathers whose entry has been trimmed or never recorded are missing).
  */
-export function fatherJoinTurns(s: GameState, nation: NationId): Partial<Record<FatherId, number>> {
+export function fatherJoinTurns(s: GameState, nation: PlayerId): Partial<Record<FatherId, number>> {
   const out: Partial<Record<FatherId, number>> = {};
   const mine = new Set(player(s, nation).fathers);
   for (const e of s.history ?? []) {

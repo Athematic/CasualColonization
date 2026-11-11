@@ -1,5 +1,5 @@
 import type { GoodId } from '../rules/goods.js';
-import type { NationId } from '../rules/nations.js';
+import type { PlayerId } from '../rules/nations.js';
 export type AiLevel = 'naive' | 'competent' | 'combative' | 'creative';
 
 export const AI_LEVELS: AiLevel[] = ['naive', 'competent', 'combative', 'creative'];
@@ -152,9 +152,9 @@ export interface AiMemory {
   /** No new proposal of this kind to this nation before the turn given, keyed `trade:france` or `favoured:france`. */
   proposalCooldown?: Record<string, number>;
   /** Goods bought in one European port to sell in another (Creative's triangle trading), by ship id. */
-  triangle?: Record<string, { good: GoodId; port: NationId; turn: number; net: number }>;
+  triangle?: Record<string, { good: GoodId; port: PlayerId; turn: number; net: number }>;
   /** After cancelling Favoured Nation to go to war: the nation, and the first turn war may be declared. */
-  warPlan?: { nation: NationId; turn: number };
+  warPlan?: { nation: PlayerId; turn: number };
   /** Wagon trains carrying goods bought from natives, and the port each is taking them to. */
   nativeHaul?: Record<string, string>;
   /** Turn a missionary last incited a tribe (Combative). */

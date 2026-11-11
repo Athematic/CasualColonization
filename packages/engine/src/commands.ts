@@ -35,7 +35,7 @@ import type { FatherId } from './rules/fathers.js';
 import type { Direction } from './grid.js';
 import { cargoRoomFor, colonyAt, currentPlayer } from './queries.js';
 import type { GoodId } from './rules/goods.js';
-import type { NationId, TribeId } from './rules/nations.js';
+import type { PlayerId, TribeId } from './rules/nations.js';
 import type { RoleId, UnitTypeId } from './rules/units.js';
 import { endTurn } from './turn.js';
 import { assignRoute, createRoute, deleteRoute, editRoute, unassignRoute } from './routes.js';
@@ -47,7 +47,7 @@ export type Command =
   | { type: 'goto'; unitId: string; x: number; y: number }
   | { type: 'roadTo'; unitId: string; x: number; y: number }
   /** `port`: a Favoured Nation partner's home port to sail to; missing means the ship's own. */
-  | { type: 'gotoEurope'; unitId: string; port?: NationId }
+  | { type: 'gotoEurope'; unitId: string; port?: PlayerId }
   | { type: 'clearOrders'; unitId: string }
   | { type: 'foundColony'; unitId: string; name?: string }
   | { type: 'attack'; unitId: string; target: { unitId?: string; colonyId?: string; settlementId?: string; braveId?: string } }
@@ -59,7 +59,7 @@ export type Command =
   /** A missionary next to a settlement denounces a rival nation's mission there. */
   | { type: 'denounce'; unitId: string; settlementId: string }
   /** A missionary pays a settlement's tribe to turn against a rival nation. */
-  | { type: 'incite'; unitId: string; settlementId: string; nation: NationId }
+  | { type: 'incite'; unitId: string; settlementId: string; nation: PlayerId }
   /** Pays (or refuses) a brave's demand for tribute, or buys (or declines) goods a brave offers. */
   | { type: 'answerNativeDemand'; demandId: string; accept: boolean }
   | { type: 'fortify'; unitId: string }
@@ -81,8 +81,8 @@ export type Command =
   | { type: 'buyGoods'; carrierId: string; good: GoodId; amount: number }
   | { type: 'recruit'; slot: number }
   /** `port`: buy a merchant ship in a Favoured Nation partner's port, where one of your ships is. */
-  | { type: 'train'; unitType: UnitTypeId; port?: NationId }
-  | { type: 'sailToEurope'; unitId: string; port?: NationId }
+  | { type: 'train'; unitType: UnitTypeId; port?: PlayerId }
+  | { type: 'sailToEurope'; unitId: string; port?: PlayerId }
   | { type: 'sailToAmerica'; unitId: string }
   | { type: 'disband'; unitId: string }
   | { type: 'chooseFather'; father: FatherId }
@@ -101,24 +101,24 @@ export type Command =
   | { type: 'setEvents'; historical?: boolean; random?: boolean }
   | { type: 'payArrears'; good: GoodId }
   | { type: 'setExport'; colonyId: string; good: GoodId; on: boolean }
-  | { type: 'declareWar'; nation: NationId }
-  | { type: 'proposePeace'; nation: NationId }
-  | { type: 'proposeTrade'; nation: NationId }
-  | { type: 'proposeFavoured'; nation: NationId }
+  | { type: 'declareWar'; nation: PlayerId }
+  | { type: 'proposePeace'; nation: PlayerId }
+  | { type: 'proposeTrade'; nation: PlayerId }
+  | { type: 'proposeFavoured'; nation: PlayerId }
   /** Answers the proposal (trade agreement or Favoured Nation) that `nation` made. */
-  | { type: 'answerProposal'; nation: NationId; accept: boolean }
-  | { type: 'cancelTrade'; nation: NationId }
-  | { type: 'cancelFavoured'; nation: NationId }
+  | { type: 'answerProposal'; nation: PlayerId; accept: boolean }
+  | { type: 'cancelTrade'; nation: PlayerId }
+  | { type: 'cancelFavoured'; nation: PlayerId }
   /** Proposes an alliance to `nation`, or invites it to join yours (alliances.ts). */
-  | { type: 'proposeAlliance'; nation: NationId }
+  | { type: 'proposeAlliance'; nation: PlayerId }
   | { type: 'leaveAlliance' }
   /** Proposes a joint expedition to an ally: each pays half, the gold it finds is shared (alliances.ts). */
-  | { type: 'proposeExpedition'; nation: NationId }
+  | { type: 'proposeExpedition'; nation: PlayerId }
   /** Proposes to an ally that both declare independence now, together (confederation.ts). */
-  | { type: 'proposeConfederation'; nation: NationId }
+  | { type: 'proposeConfederation'; nation: PlayerId }
   /** Founds a chartered company from the scenario's list, or buys new shares in one (companies.ts). */
-  | { type: 'foundCompany'; company: NationId }
-  | { type: 'buyShares'; company: NationId; count: number }
+  | { type: 'foundCompany'; company: PlayerId }
+  | { type: 'buyShares'; company: PlayerId; count: number }
   /** A ship or wagon train in an ally's colony sells goods to it, or buys goods from it (alliances.ts). */
   | { type: 'sellInColony'; carrierId: string; good: GoodId; amount: number }
   | { type: 'buyInColony'; carrierId: string; good: GoodId; amount: number }
@@ -136,13 +136,13 @@ export type Command =
   | { type: 'assignRoute'; unitId: string; routeId: string }
   | { type: 'unassignRoute'; unitId: string }
   /** A cheat (see cheats.ts). `nation` defaults to the nation whose turn it is; `on` sets a toggle, omitted flips it. */
-  | { type: 'cheat'; cheat: CheatId; nation?: NationId; on?: boolean }
+  | { type: 'cheat'; cheat: CheatId; nation?: PlayerId; on?: boolean }
   | { type: 'endTurn' };
 
 /** `id` names what the command created (a new trade route). */
 export type CommandResult = { ok: true; text?: string; id?: string } | { ok: false; error: string };
 
-function ownUnit(s: GameState, nation: NationId, unitId: string) {
+function ownUnit(s: GameState, nation: PlayerId, unitId: string) {
   const u = s.units[unitId];
   if (!u) fail('No such unit.');
   if (u.owner !== nation) fail('That is not your unit.');
@@ -150,7 +150,7 @@ function ownUnit(s: GameState, nation: NationId, unitId: string) {
   return u;
 }
 
-function ownColony(s: GameState, nation: NationId, colonyId: string) {
+function ownColony(s: GameState, nation: PlayerId, colonyId: string) {
   const c = s.colonies[colonyId];
   if (!c) fail('No such colony.');
   if (c.owner !== nation) fail('That is not your colony.');
@@ -158,7 +158,7 @@ function ownColony(s: GameState, nation: NationId, colonyId: string) {
 }
 
 /** Loads or unloads goods between a carrier and the colony it is in. */
-function transferGoods(s: GameState, nation: NationId, carrierId: string, good: GoodId, amount: number, load: boolean): void {
+function transferGoods(s: GameState, nation: PlayerId, carrierId: string, good: GoodId, amount: number, load: boolean): void {
   const carrier = ownUnit(s, nation, carrierId);
   if (carrier.loc.kind !== 'map') fail('The carrier must be in a colony.');
   const colony = colonyAt(s, carrier.loc.x, carrier.loc.y);

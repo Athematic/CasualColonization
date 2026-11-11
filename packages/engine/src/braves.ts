@@ -34,7 +34,7 @@ import { track } from './telemetry.js';
 import { BUILDINGS, type BuildingKind } from './rules/buildings.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { UNIT_TYPES } from './rules/units.js';
-import { TRIBES, type NationId } from './rules/nations.js';
+import { TRIBES, type PlayerId } from './rules/nations.js';
 import { systemsOfId } from './playerkind.js';
 import { braveCombat } from './rules/natives.js';
 import { landStepCost } from './movement.js';
@@ -87,7 +87,7 @@ function tribeOf(s: GameState, st: { tribe: Settlement['tribe'] }) {
 }
 
 /** Whether a tribe has submitted to a nation (no attacks or demands on it). */
-export function hasSubmitted(s: GameState, tribe: Settlement['tribe'], nation: NationId): boolean {
+export function hasSubmitted(s: GameState, tribe: Settlement['tribe'], nation: PlayerId): boolean {
   return !!s.tribes.find((t) => t.id === tribe)?.submitted?.includes(nation);
 }
 
@@ -95,7 +95,7 @@ export function hasSubmitted(s: GameState, tribe: Settlement['tribe'], nation: N
  * Removes a brave. With a killer, the tribe mourns: tension rises towards that nation, by a third
  * as much (and at home only) when the tribe was already at war with it, so wars can still end.
  */
-export function killBrave(s: GameState, b: Brave, killer?: NationId, atWar = false): void {
+export function killBrave(s: GameState, b: Brave, killer?: PlayerId, atWar = false): void {
   delete bravesOf(s)[b.id];
   s.nativeDemands = (s.nativeDemands ?? []).filter((d) => d.braveId !== b.id);
   const home = s.settlements[b.home];
@@ -160,7 +160,7 @@ export function settlementForSale(s: GameState, st: Settlement): { good: GoodId;
 }
 
 /** Price per unit a settlement asks a nation for one of its goods: dearer when tense, cheaper when it has plenty, and with a trade treaty (N4). */
-export function nativeUnitPrice(s: GameState, st: Settlement, good: GoodId, nation: NationId): number {
+export function nativeUnitPrice(s: GameState, st: Settlement, good: GoodId, nation: PlayerId): number {
   const stock = st.goods?.[good] ?? 0;
   const plenty = stock >= settlementKind(s, st).produceCap * 0.75 ? nativeRulesOf(s).buyPricePlenty : 1;
   const mood = 1 + tensionOf(st, nation) / 1000;
@@ -802,7 +802,7 @@ export function resolveDemand(s: GameState, d: NativeDemand, accept: boolean): s
 }
 
 /** Answers a waiting demand or offer for a nation (the `answerNativeDemand` command). */
-export function answerNativeDemand(s: GameState, nation: NationId, demandId: string, accept: boolean): string {
+export function answerNativeDemand(s: GameState, nation: PlayerId, demandId: string, accept: boolean): string {
   const d = (s.nativeDemands ?? []).find((o) => o.id === demandId);
   if (!d || d.nation !== nation) fail('There is no such native demand.');
   track(nation, 'cmd:answerNativeDemand');
@@ -819,7 +819,7 @@ function expireDemands(s: GameState): void {
 }
 
 /** Demands and offers waiting for a nation's answer. */
-export function pendingDemands(s: GameState, nation: NationId): NativeDemand[] {
+export function pendingDemands(s: GameState, nation: PlayerId): NativeDemand[] {
   return (s.nativeDemands ?? []).filter((d) => d.nation === nation);
 }
 
@@ -946,7 +946,7 @@ function pillage(s: GameState, b: Brave, c: Colony): void {
  * to the brave (a King's regular, disarmed, is destroyed, as in combat). `defend`: the partner whose
  * colony the brave defends (N7), told of the fight.
  */
-function attackUnit(s: GameState, b: Brave, target: Unit, defend?: NationId): void {
+function attackUnit(s: GameState, b: Brave, target: Unit, defend?: PlayerId): void {
   if (target.loc.kind !== 'map') return;
   const units = unitsAt(s, target.loc.x, target.loc.y).filter((u) => u.owner === target.owner && !isShip(u));
   const defender = chooseDefender(s, units, b);
@@ -988,6 +988,6 @@ export function braveDefence(s: GameState, b: Brave): number {
 }
 
 /** Whether a tile holds a brave of a tribe at war with the nation. */
-export function hostileBraveAt(s: GameState, nation: NationId, x: number, y: number): Brave | undefined {
+export function hostileBraveAt(s: GameState, nation: PlayerId, x: number, y: number): Brave | undefined {
   return bravesAt(s, x, y).find((b) => s.tribes.find((t) => t.id === b.tribe)?.stance[nation] === 'war');
 }

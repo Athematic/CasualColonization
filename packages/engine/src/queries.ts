@@ -1,6 +1,6 @@
 import { BUILDINGS, WAREHOUSE_CAPACITY } from './rules/buildings.js';
 import type { GoodId } from './rules/goods.js';
-import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
 import { FOREST_DEFENCE, TERRAIN, type TerrainDef } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeDef } from './rules/units.js';
 import type { Colony, GameState, Player, Settlement, Tile, Unit, UnitLocation } from './types.js';
@@ -58,7 +58,7 @@ export function isCoastal(s: GameState, x: number, y: number): boolean {
   return false;
 }
 
-export function player(s: GameState, id: NationId): Player {
+export function player(s: GameState, id: PlayerId): Player {
   const p = s.players.find((p) => p.id === id);
   if (!p) throw new Error(`No player ${id}`);
   return p;
@@ -173,7 +173,7 @@ export function warehouseCapacity(colony: Colony): number {
   return WAREHOUSE_CAPACITY[colony.buildings.warehouse] ?? 100;
 }
 
-export function isExplored(s: GameState, nation: NationId, x: number, y: number): boolean {
+export function isExplored(s: GameState, nation: PlayerId, x: number, y: number): boolean {
   if (!inBounds(s, x, y)) return false;
   return player(s, nation).explored[y * s.map.width + x] === 1;
 }
@@ -187,7 +187,7 @@ export function sightRadius(u: Unit, s: GameState): number {
   return r;
 }
 
-export function reveal(s: GameState, nation: NationId, x: number, y: number, radius: number): void {
+export function reveal(s: GameState, nation: PlayerId, x: number, y: number, radius: number): void {
   revealTo(s, player(s, nation), x, y, radius);
   // Allies share their sight (alliances.ts).
   if (s.treaties) for (const ally of sightSharers(s, nation)) revealTo(s, player(s, ally), x, y, radius);
@@ -222,7 +222,7 @@ export function firstMeetingText(people: TribeId): string {
  * nation is told about the people once (`Tribe.met`); computer players need no telling, so nothing
  * is written for them.
  */
-export function meetPeople(s: GameState, nation: NationId, people: TribeId, at?: { x: number; y: number }): void {
+export function meetPeople(s: GameState, nation: PlayerId, people: TribeId, at?: { x: number; y: number }): void {
   if (!s.players.find((o) => o.id === nation)?.human) return;
   const tribe = s.tribes.find((t) => t.id === people);
   if (!tribe || tribe.met?.includes(nation)) return;
@@ -244,7 +244,7 @@ export function buildingWorkers(s: GameState, colony: Colony, kind: keyof typeof
   return colonyWorkers(s, colony).filter((u) => u.loc.kind === 'colony' && u.loc.job.kind === 'building' && u.loc.job.building === kind);
 }
 
-export function message(s: GameState, text: string, to?: NationId, at?: { x: number; y: number }): void {
+export function message(s: GameState, text: string, to?: PlayerId, at?: { x: number; y: number }): void {
   // Only the tile, copied: callers pass colonies, settlements and players' entries, and keeping
   // the object itself would share it with the state (see GameState).
   s.messages.push({ turn: s.turn, to, text, at: at && { x: at.x, y: at.y } });
@@ -255,7 +255,7 @@ export function newId(s: GameState, prefix: string): string {
   return `${prefix}${s.nextId++}`;
 }
 
-export function createUnit(s: GameState, owner: NationId, type: UnitTypeId, loc: UnitLocation): Unit {
+export function createUnit(s: GameState, owner: PlayerId, type: UnitTypeId, loc: UnitLocation): Unit {
   const u: Unit = { id: newId(s, 'u'), owner, type, role: 'none', tools: 0, loc, moves: 0, state: 'active' };
   addUnit(s, u);
   return u;

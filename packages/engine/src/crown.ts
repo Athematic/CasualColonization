@@ -15,7 +15,7 @@ import { message, player } from './queries.js';
 import { hasTradeAgreement, isFavoured, pairRandom } from './relations.js';
 import { warOnFriend } from './alliances.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
-import { type NationId } from './rules/nations.js';
+import { type PlayerId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, Player } from './types.js';
 import { difficultyOf, goodsOf, mechanicsOf, nationOf, term, Term } from './scenarios/index.js';
@@ -121,7 +121,7 @@ function listForce(f: Force): string {
 export const DEMAND = { from: 40, chance: 0.015, minGold: 400, share: { min: 0.1, max: 0.3 } };
 
 /** The colony whose goods the Crown would seize: the one with the most valuable stock (at home sell prices, food left out). */
-export function seizureColony(s: GameState, nation: NationId): { colony: Colony; value: number } | null {
+export function seizureColony(s: GameState, nation: PlayerId): { colony: Colony; value: number } | null {
   const p = player(s, nation);
   let best: { colony: Colony; value: number } | null = null;
   for (const c of colonyList(s)) {
@@ -146,7 +146,7 @@ function maybeDemand(s: GameState, p: Player, colonies: number): void {
 }
 
 /** What refusing the pending demand would cost: the goods seized, and the regulars added. */
-export function demandPenalty(s: GameState, nation: NationId): { colony: Colony | null; value: number } {
+export function demandPenalty(s: GameState, nation: PlayerId): { colony: Colony | null; value: number } {
   const p = player(s, nation);
   const named = p.pendingDemand?.colony ? s.colonies[p.pendingDemand.colony] : undefined;
   if (named && named.owner === nation) {
@@ -158,7 +158,7 @@ export function demandPenalty(s: GameState, nation: NationId): { colony: Colony 
 }
 
 /** Pays or refuses the King's pending demand for gold. */
-export function answerDemand(s: GameState, nation: NationId, pay: boolean): string {
+export function answerDemand(s: GameState, nation: PlayerId, pay: boolean): string {
   const p = player(s, nation);
   const demand = p.pendingDemand;
   if (!demand) fail(`${Term(s, 'king')} has demanded nothing.`);
@@ -207,10 +207,10 @@ export function answerDemand(s: GameState, nation: NationId, pay: boolean): stri
 export const ROYAL_WAR = { from: 60, chance: 0.002, cooldown: 60, partnerWeight: 0.25 };
 
 /** The nations a nation's King may declare war on, with their weights. */
-export function royalWarTargets(s: GameState, nation: NationId): { nation: NationId; weight: number }[] {
+export function royalWarTargets(s: GameState, nation: PlayerId): { nation: PlayerId; weight: number }[] {
   const p = player(s, nation);
   if (p.independence !== 'none') return [];
-  const out: { nation: NationId; weight: number }[] = [];
+  const out: { nation: PlayerId; weight: number }[] = [];
   for (const o of s.players) {
     if (o.id === nation || !systemsOf(o).crown || o.independence !== 'none') continue;
     if (p.stance[o.id] === 'war' || isFavoured(s, nation, o.id) || warOnFriend(s, nation, o.id)) continue;
@@ -221,7 +221,7 @@ export function royalWarTargets(s: GameState, nation: NationId): { nation: Natio
 }
 
 /** The King declares war on another European nation for this nation. */
-export function royalWar(s: GameState, nation: NationId, target: NationId): void {
+export function royalWar(s: GameState, nation: PlayerId, target: PlayerId): void {
   const p = player(s, nation);
   if (p.independence !== 'none' || player(s, target).independence !== 'none') fail(`${Term(s, 'king')} declares no wars for or on independent nations.`);
   if (isFavoured(s, nation, target)) fail(`${Term(s, 'king')} declares no war on a Favoured Nation.`);

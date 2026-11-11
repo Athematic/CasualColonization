@@ -18,7 +18,7 @@
  * `companyRules` over COMPANY_RULES. Company players exist only once founded, so a game without
  * companies is not touched.
  */
-import type { NationId } from './rules/nations.js';
+import type { PlayerId } from './rules/nations.js';
 import { playerKind } from './playerkind.js';
 import { mechanicsOf, scenarioOf } from './scenarios/index.js';
 import type { CompanyEntry, CompanyRules } from './scenarios/types.js';
@@ -56,7 +56,7 @@ export function isCompany(p: Player | undefined): boolean {
 }
 
 /** Whether the nation id names a company taking part in the game. */
-export function isCompanyId(s: GameState, id: NationId): boolean {
+export function isCompanyId(s: GameState, id: PlayerId): boolean {
   return isCompany(s.players.find((p) => p.id === id));
 }
 
@@ -71,7 +71,7 @@ export function companies(s: GameState): Player[] {
 }
 
 /** Shares a nation holds in a company, and all the company's shares. */
-export function sharesIn(co: Player, nation: NationId): { held: number; total: number } {
+export function sharesIn(co: Player, nation: PlayerId): { held: number; total: number } {
   const shares = co.company?.shares ?? {};
   let total = 0;
   for (const n of Object.values(shares)) total += n ?? 0;
@@ -79,7 +79,7 @@ export function sharesIn(co: Player, nation: NationId): { held: number; total: n
 }
 
 /** A nation's part of a company's score: its share of the shares, times the company's score. */
-export function companyScoreShare(co: Player, nation: NationId, companyScore: number): number {
+export function companyScoreShare(co: Player, nation: PlayerId, companyScore: number): number {
   const { held, total } = sharesIn(co, nation);
   return total ? (companyScore * held) / total : 0;
 }

@@ -16,7 +16,7 @@ import {
 import { random, randInt, weightedPick } from './rng.js';
 import { noteTrade } from './stats.js';
 import { favouredPartners, isFavoured } from './relations.js';
-import type { NationId } from './rules/nations.js';
+import type { PlayerId } from './rules/nations.js';
 import { portBasePrice, portCharacter, portDepth, portPriceBand, type PortRef } from './rules/ports.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import { PIONEER_MAX_TOOLS, PURCHASABLE, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
@@ -114,7 +114,7 @@ function requireInEurope(s: GameState, u: Unit | undefined): asserts u is Unit {
  * The home port a unit is in, or sailing to: its owner's own, or a Favoured Nation partner's.
  * Units on the docks are always in their own home port.
  */
-export function portOf(u: Unit): NationId {
+export function portOf(u: Unit): PlayerId {
   return (u.loc.kind === 'europe' || u.loc.kind === 'sailing') && u.loc.port ? u.loc.port : u.owner;
 }
 
@@ -124,17 +124,17 @@ export function inHomePort(u: Unit): boolean {
 }
 
 /** Name of a nation's home port in its game's scenario, e.g. "Amsterdam". */
-export function portName(s: ScenarioLike, nation: NationId): string {
+export function portName(s: ScenarioLike, nation: PlayerId): string {
   return nationOf(s, nation).port.name;
 }
 
 /** The ports a nation's ships may sail to: its own, then its Favoured Nation partners'. */
-export function portsFor(s: GameState, nation: NationId): NationId[] {
+export function portsFor(s: GameState, nation: PlayerId): PlayerId[] {
   return [nation, ...favouredPartners(s, nation)];
 }
 
 /** Why a nation's ships may not use a port, or null. */
-export function portProblem(s: GameState, nation: NationId, port: NationId): string | null {
+export function portProblem(s: GameState, nation: PlayerId, port: PlayerId): string | null {
   if (port === nation) return null;
   const host = s.players.find((p) => p.id === port);
   if (!host || port === 'crown') return 'There is no such port.';
@@ -312,7 +312,7 @@ export function buyableInPartnerPort(type: UnitTypeId): boolean {
  * Trains an expert or buys a unit in Europe. With `port` set to a Favoured Nation partner, buys a
  * merchant ship in that partner's port at its prices; one of the nation's ships must be there.
  */
-export function train(s: GameState, nation: Player['id'], type: UnitTypeId, port?: NationId): Unit {
+export function train(s: GameState, nation: Player['id'], type: UnitTypeId, port?: PlayerId): Unit {
   const p = player(s, nation);
   const def = UNIT_TYPES[type];
   if (p.independence !== 'none') fail(`${Term(s, 'homeland')} does not trade with rebels.`);
@@ -404,7 +404,7 @@ export function sailToAmerica(s: GameState, carrierId: string): void {
 }
 
 /** Sails a ship from the high seas to Europe: to its own home port, or to `port`, a Favoured Nation partner's. */
-export function sailToEurope(s: GameState, carrierId: string, port?: NationId): void {
+export function sailToEurope(s: GameState, carrierId: string, port?: PlayerId): void {
   const ship = s.units[carrierId];
   if (!ship || !isShip(ship)) fail(`Only ships can sail to ${term(s, 'homeland')}.`);
   if (ship.loc.kind !== 'map') fail('The ship must be at sea.');

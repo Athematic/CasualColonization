@@ -19,7 +19,7 @@ export type NationId = AmericasNationId | 'courland' | 'brandenburg' | 'scotland
 export type CompanyId = 'hudsonsBay' | 'westIndia' | 'mississippi' | 'darien' | 'courlandCompany';
 
 /** Every company id, for the rules that need no game at hand (relations, native tension). */
-export const COMPANY_IDS: ReadonlySet<NationId> = new Set<CompanyId>(['hudsonsBay', 'westIndia', 'mississippi', 'darien', 'courlandCompany']);
+export const COMPANY_IDS: ReadonlySet<PlayerId> = new Set<CompanyId>(['hudsonsBay', 'westIndia', 'mississippi', 'darien', 'courlandCompany']);
 
 /** Whether a nation id names a chartered company (companies.ts `isCompanyId` asks the game instead). */
 export function isCompanyIdent(id: NationId): id is CompanyId {

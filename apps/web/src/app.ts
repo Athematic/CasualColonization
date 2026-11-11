@@ -46,7 +46,7 @@ import {
   type Direction,
   type GameMessage,
   type GameState,
-  type NationId,
+  type PlayerId,
   type SettlementAction,
   type Unit,
 } from '@cc/engine';
@@ -156,7 +156,7 @@ export class App {
   private frame = 0;
   private panelsDirty = true;
   camera: Camera = { x: 0, y: 0, zoom: 56 };
-  viewer: NationId;
+  viewer: PlayerId;
   selected?: string;
   hover?: Point;
   gotoMode = false;
@@ -165,7 +165,7 @@ export class App {
   /** No people play: the computers play each other and the user watches. */
   observer: boolean;
   /** In observer mode, whose view of the world is shown ('all' reveals everything). */
-  watch: NationId | 'all' = 'all';
+  watch: PlayerId | 'all' = 'all';
   autoplay = false;
   /** Milliseconds between turns while autoplaying. */
   speed = 400;
@@ -257,7 +257,7 @@ export class App {
     return player(this.state, this.viewer);
   }
 
-  private humanViewer(): NationId {
+  private humanViewer(): PlayerId {
     const cur = this.game.current;
     if (cur.human) return cur.id;
     return this.state.players.find((p) => p.human)?.id ?? cur.id;
@@ -279,7 +279,7 @@ export class App {
 
   // ---- Observer mode ----
 
-  setWatch(watch: NationId | 'all'): void {
+  setWatch(watch: PlayerId | 'all'): void {
     this.watch = watch;
     this.viewer = watch === 'all' ? this.state.players[0].id : watch;
     this.requestRender();
@@ -304,7 +304,7 @@ export class App {
   }
 
   /** Keeps the watched nation's latest activity in view: its newest colony, or its ships before it has one. */
-  private follow(nation: NationId): void {
+  private follow(nation: PlayerId): void {
     const newest = Object.values(this.state.colonies)
       .filter((c) => c.owner === nation)
       .sort((a, b) => b.founded - a.founded)[0];
@@ -474,7 +474,7 @@ export class App {
   private asking = false;
 
   /** The last message each nation had seen when it ended its turn, to tell what is new since. */
-  private lastSeen = new Map<NationId, GameMessage>();
+  private lastSeen = new Map<PlayerId, GameMessage>();
 
   /** Messages for the viewer since it last ended its turn. */
   private newsSinceLastTurn(): GameMessage[] {
@@ -683,9 +683,9 @@ export class App {
   /** Sends a ship to Europe; with Favoured Nation partners, first asks which home port. */
   private async sailForEurope(u: Unit, type: 'gotoEurope' | 'sailToEurope'): Promise<void> {
     const ports = portsFor(this.state, u.owner);
-    let port: NationId | undefined;
+    let port: PlayerId | undefined;
     if (ports.length > 1) {
-      const choice = await choose<NationId>('Sail to which port?', `${unitName(u)} can sail to your own home port or to a Favoured Nation's. In a partner's port you trade at its prices and tax and can buy merchant ships; colonists are recruited and go ashore only at home.`,
+      const choice = await choose<PlayerId>('Sail to which port?', `${unitName(u)} can sail to your own home port or to a Favoured Nation's. In a partner's port you trade at its prices and tax and can buy merchant ships; colonists are recruited and go ashore only at home.`,
         ports.map((p, i) => ({ label: `${portName(this.state, p)}${i === 0 ? ' (home)' : ` (${nationOf(this.state, p).adjective})`}`, value: p, primary: i === 0 })));
       if (!choice) return;
       port = choice === u.owner ? undefined : choice;
@@ -820,7 +820,7 @@ export class App {
     this.game.emit();
   }
 
-  private handoff(nation: NationId): Promise<void> {
+  private handoff(nation: PlayerId): Promise<void> {
     return new Promise((resolve) => {
       const veil = h(
         'div',
@@ -840,7 +840,7 @@ export class App {
   }
 
   /** Europe; `port` opens a Favoured Nation partner's port where the viewer has ships. */
-  openEurope(port?: NationId): void {
+  openEurope(port?: PlayerId): void {
     this.showScreen(new EuropeScreen(this, port));
   }
 

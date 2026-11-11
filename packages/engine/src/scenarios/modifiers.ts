@@ -10,7 +10,7 @@
  */
 import { FATHERS, type FatherId } from '../rules/fathers.js';
 import type { Hook, Modifier, ModifierOf } from '../rules/modifiers.js';
-import type { NationId } from '../rules/nations.js';
+import type { PlayerId } from '../rules/nations.js';
 import type { GameState, Player } from '../types.js';
 import { nationEntry, scenarioOf } from './index.js';
 import type { MemberEffects, Scenario } from './types.js';
@@ -31,7 +31,7 @@ export function memberEffects(scenario: Scenario, id: FatherId): MemberEffects {
   return scenario.council.effects?.[id] ?? FATHERS[id] ?? {};
 }
 
-function collect(s: GameState, nation: NationId, fathers: readonly FatherId[]): ByHook {
+function collect(s: GameState, nation: PlayerId, fathers: readonly FatherId[]): ByHook {
   const scenario = scenarioOf(s);
   const all: Modifier[] = [];
   const entry = nation === 'crown' ? undefined : nationEntry(scenario, s.config.rivals, nation);
@@ -46,7 +46,7 @@ function collect(s: GameState, nation: NationId, fathers: readonly FatherId[]): 
   return byHook;
 }
 
-function byHookOf(s: GameState, nation: NationId): ByHook {
+function byHookOf(s: GameState, nation: PlayerId): ByHook {
   const p = s.players.find((q) => q.id === nation);
   if (!p) return collect(s, nation, NONE);
   let c = CACHE.get(p);
@@ -58,12 +58,12 @@ function byHookOf(s: GameState, nation: NationId): ByHook {
 }
 
 /** The nation's modifiers at a hook, in order: its bonus, then its council members. */
-export function modifiers<H extends Hook>(s: GameState, nation: NationId, hook: H): readonly ModifierOf<H>[] {
+export function modifiers<H extends Hook>(s: GameState, nation: PlayerId, hook: H): readonly ModifierOf<H>[] {
   return (byHookOf(s, nation)[hook] as ModifierOf<H>[] | undefined) ?? NONE;
 }
 
 /** Whether the nation has any modifier at a hook (for hooks that are on or off). */
-export function hasModifier(s: GameState, nation: NationId, hook: Hook): boolean {
+export function hasModifier(s: GameState, nation: PlayerId, hook: Hook): boolean {
   return modifiers(s, nation, hook).length > 0;
 }
 

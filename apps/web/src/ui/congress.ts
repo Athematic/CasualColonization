@@ -1,4 +1,4 @@
-import { calendarOf, congressOverview, FATHERS, formatDate, nationOf, scenarioOf, term, Term, type FatherId, type NationId } from '@cc/engine';
+import { calendarOf, congressOverview, FATHERS, formatDate, nationOf, scenarioOf, term, Term, type FatherId, type PlayerId } from '@cc/engine';
 import { CONGRESS_HALL_ASPECT, hallPaintOrder, hallSpotBox, layoutCongressHall } from '@cc/render-api';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -45,7 +45,7 @@ export class CongressScreen implements Screen {
     this.ro.disconnect();
   }
 
-  private nation(): NationId {
+  private nation(): PlayerId {
     const app = this.app;
     if (!app.observer) return app.viewer;
     if (app.watch !== 'all') return app.watch;

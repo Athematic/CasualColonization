@@ -14,7 +14,7 @@ import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
 import type { Modifier, RumourOutcome } from '../rules/modifiers.js';
 import type { Effect } from '../events/types.js';
-import type { CompanyId, Lifeway, NationId, PeopleDef, Temperament, TribeId } from '../rules/nations.js';
+import type { CompanyId, Lifeway, NationId, PeopleDef, PlayerId, Temperament, TribeId } from '../rules/nations.js';
 import type { NativeRulesOverride, SettlementKindDef } from '../rules/natives.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { ScoreWeights } from '../rules/score.js';
@@ -66,6 +66,12 @@ export interface Scenario {
    * the armory uses them). Colonies only have these.
    */
   buildings: readonly BuildingKind[];
+  /**
+   * Selections per nation type (native-nations.md T6, T7): the unit types and buildings a playing
+   * people uses, from the same global catalogues. `units` and `buildings` above are the European
+   * nations' selection. Missing means the engine's placeholder selection (`nationTypeOf`).
+   */
+  nationTypes?: { people?: NationTypeSelection };
   council: Council;
   /** What the computer players need to know about the scenario's content. */
   ai: ScenarioAi;
@@ -610,8 +616,17 @@ export interface NationIdentity {
  * The engine and the web game read it through `nationOf(s, id)`; the catalogue's NATIONS only
  * supplies the Americas' values.
  */
-export interface NationEntry extends NationIdentity {
+export interface NationEntry extends PlayerEntry {
   id: NationId;
+}
+
+/**
+ * Any player as `nationOf(s, id)` shows it: a nation's entry, or a playing people's (native-nations.md
+ * T1: a people keeps its own id). A people has no home port: its `port` has no name or market and is
+ * never used (playerkind.ts `homePort`).
+ */
+export interface PlayerEntry extends NationIdentity {
+  id: PlayerId;
   /** The bonus: its shown text and the modifiers that make it work (rules/modifiers.ts). */
   bonus: { text: string; modifiers?: Modifier[] };
   colonyNames: string[];
@@ -619,9 +634,38 @@ export interface NationEntry extends NationIdentity {
   port: PortEntry;
 }
 
+/** What one nation type uses from the global catalogues (native-nations.md T6, T7). */
+export interface NationTypeSelection {
+  /** Unit types, in catalogue order: what its towns build and what its braves become. */
+  units: readonly UnitTypeId[];
+  /** Buildings, in catalogue order: what its towns have and build. */
+  buildings: readonly BuildingKind[];
+}
+
+/**
+ * A people the scenario lets setup play as a nation (native-nations.md T3, T4): `GameConfig.peoples`
+ * picks which of them play; the others stay settlements under Beta 2's rules. Its settlements
+ * become its towns (colonies) and its braves its first units.
+ */
+export interface PlayablePeople {
+  id: TribeId;
+  /** Its name as a player, in sentences ("the Haudenosaunee"); missing means the people's name. */
+  name?: string;
+  /** Missing means the people's name. */
+  adjective?: string;
+  /** Names for the towns it founds after its first (which keep their settlements' names). */
+  townNames: string[];
+}
+
 export interface ScenarioPeoples {
   /** Peoples in play, north to south (the generator's band order). */
   ids: TribeId[];
+  /**
+   * Peoples setup may play as nations (native-nations.md T4), each also in `ids`. Missing means
+   * none: the Americas and the Caribbean list none in Beta 3.
+   */
+  playable?: PlayablePeople[];
+
   /** Goods native settlements produce for trade. */
   produce: GoodId[];
   /**

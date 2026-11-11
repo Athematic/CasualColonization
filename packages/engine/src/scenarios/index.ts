@@ -9,7 +9,7 @@ import type { BuildingKind } from '../rules/buildings.js';
 import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
 import { DEFAULT_DIFFICULTY, DIFFICULTY, DIFFICULTY_LEVELS, type DifficultyId, type DifficultyRules } from '../rules/difficulty.js';
-import { TRIBES, type NationId, type PeopleDef, type TribeId } from '../rules/nations.js';
+import { TRIBES, type PeopleDef, type PlayerId, type TribeId } from '../rules/nations.js';
 import { mergeNativeRules, type NativeRules, type SettlementKindDef } from '../rules/natives.js';
 import type { PortCharacter } from '../rules/ports.js';
 import { SCORE_WEIGHTS, type ScoreWeights } from '../rules/score.js';
@@ -19,7 +19,7 @@ import { AMERICAS } from './americas.js';
 import { CARIBBEAN } from './caribbean.js';
 import type { Calendar } from './calendar.js';
 import { AMERICAS_TEXT, capitalise, fillTemplate, type TermKey } from './terms.js';
-import type { Mechanics, NationEntry, Rivals, RumourEntry, Scenario, ScenarioAi } from './types.js';
+import type { Mechanics, NationEntry, NationTypeSelection, PlayerEntry, PlayablePeople, Rivals, RumourEntry, Scenario, ScenarioAi } from './types.js';
 
 export * from './types.js';
 export * from './calendar.js';
@@ -103,13 +103,14 @@ export function Term(x: ScenarioLike, key: TermKey, vars?: Readonly<Record<strin
   return capitalise(term(x, key, vars));
 }
 
-const NATION_TABLES = new WeakMap<Scenario, Map<string, ReadonlyMap<NationId, NationEntry>>>();
+const NATION_TABLES = new WeakMap<Scenario, Map<string, ReadonlyMap<PlayerId, PlayerEntry>>>();
 
 /**
  * The nations a game knows, by id: its chosen set first (real rivals or alternative history), then
- * the scenario's other set, then the Crown. Worked out once per scenario and choice.
+ * the scenario's other set, then the Crown, the companies and the peoples it lets play as nations.
+ * Worked out once per scenario and choice.
  */
-function nationTable(scenario: Scenario, rivals: Rivals | undefined): ReadonlyMap<NationId, NationEntry> {
+function nationTable(scenario: Scenario, rivals: Rivals | undefined): ReadonlyMap<PlayerId, PlayerEntry> {
   let byRivals = NATION_TABLES.get(scenario);
   if (!byRivals) NATION_TABLES.set(scenario, (byRivals = new Map()));
   const key = rivals ?? '';
@@ -117,18 +118,52 @@ function nationTable(scenario: Scenario, rivals: Rivals | undefined): ReadonlyMa
   if (!table) {
     const { sets } = scenario.nations;
     const first = (rivals ?? scenario.nations.default) === 'real' && sets.real ? sets.real : sets.alternative;
-    const map = new Map<NationId, NationEntry>();
+    const map = new Map<PlayerId, PlayerEntry>();
     for (const e of [...first, ...sets.alternative, ...(sets.real ?? []), scenario.nations.crown, ...(scenario.nations.companies ?? [])]) if (!map.has(e.id)) map.set(e.id, e);
+    for (const pp of scenario.peoples.playable ?? []) if (!map.has(pp.id)) map.set(pp.id, peopleEntry(scenario, pp));
     byRivals.set(key, (table = map));
   }
   return table;
 }
 
+/** A playing people as a player (native-nations.md T1): its own name and colour, no bonus, no home port. */
+function peopleEntry(scenario: Scenario, pp: PlayablePeople): PlayerEntry {
+  const def = peopleIn(scenario, pp.id);
+  return { id: pp.id, name: pp.name ?? def.name, adjective: pp.adjective ?? def.name, color: def.color, bonus: { text: '' }, colonyNames: pp.townNames, port: { name: '' } };
+}
+
+/** The peoples a scenario lets setup play as nations (T4); none in the Americas and the Caribbean. */
+export function playablePeoples(scenario: Scenario): readonly PlayablePeople[] {
+  return scenario.peoples.playable ?? [];
+}
+
 /**
- * A nation as its game's scenario has it (Q2): name, adjective, colour, bonus, colony names and
- * home port. The Crown is `scenario.nations.crown`. Throws for a nation the scenario does not have.
+ * The catalogue selections of a nation type (native-nations.md T6, T7): the scenario's `units` and
+ * `buildings` for European nations (companies and the Crown use them too), its
+ * `nationTypes.people` for a playing people, or the engine's placeholder selection.
  */
-export function nationOf(x: ScenarioLike, nation: NationId): NationEntry {
+export function nationTypeOf(s: HasScenario, type: 'european' | 'people'): NationTypeSelection {
+  const scenario = scenarioOf(s);
+  if (type === 'european') return scenario;
+  return scenario.nationTypes?.people ?? PEOPLE_SELECTION;
+}
+
+/**
+ * The engine's placeholder selection for a playing people until step 2 adds the people's own units
+ * and buildings (T6, T7): free colonists and a native convert (a brave's first form), a scout, and
+ * the buildings every colony has.
+ */
+export const PEOPLE_SELECTION: NationTypeSelection = {
+  units: ['freeColonist', 'nativeConvert', 'seasonedScout'],
+  buildings: ['townHall', 'carpenter', 'blacksmith'],
+};
+
+/**
+ * A player as its game's scenario has it (Q2): name, adjective, colour, bonus, colony names and
+ * home port. The Crown is `scenario.nations.crown`; a playing people has its own entry (T1).
+ * Throws for a player the scenario does not have.
+ */
+export function nationOf(x: ScenarioLike, nation: PlayerId): PlayerEntry {
   const scenario = asScenario(x);
   const e = nationTable(scenario, 'config' in x ? x.config.rivals : undefined).get(nation);
   if (!e) throw new Error(`${nation} is not one of the nations of ${scenario.name}.`);
@@ -138,12 +173,12 @@ export function nationOf(x: ScenarioLike, nation: NationId): NationEntry {
 const NO_CHARACTER: PortCharacter = {};
 
 /** The character of a nation's home port in its game's scenario (rules/ports.ts); none for the Crown. */
-export function portMarketOf(x: ScenarioLike, nation: NationId): PortCharacter {
+export function portMarketOf(x: ScenarioLike, nation: PlayerId): PortCharacter {
   return nationOf(x, nation).port.market ?? NO_CHARACTER;
 }
 
 /** A nation's name for the start of a sentence or a table cell ("The Netherlands"). */
-export function nationTitle(x: ScenarioLike, nation: NationId): string {
+export function nationTitle(x: ScenarioLike, nation: PlayerId): string {
   return capitalise(nationOf(x, nation).name);
 }
 
@@ -354,7 +389,7 @@ export function nationSet(scenario: Scenario, rivals: Rivals | undefined): Natio
 }
 
 /** The scenario's entry for a nation in the game's chosen set, if it is there. */
-export function nationEntry(scenario: Scenario, rivals: Rivals | undefined, nation: NationId): NationEntry | undefined {
+export function nationEntry(scenario: Scenario, rivals: Rivals | undefined, nation: PlayerId): NationEntry | undefined {
   return nationSet(scenario, rivals).find((e) => e.id === nation);
 }
 

@@ -38,7 +38,7 @@ import {
   type GoodId,
   type HistoryEntry,
   type HistoryKind,
-  type NationId,
+  type PlayerId,
   type ProductId,
 } from '@cc/engine';
 import type { App, Screen } from '../app.js';
@@ -60,7 +60,7 @@ import { activeStyle, icon } from '../styles.js';
 export interface ReportContext {
   app: App;
   /** The nation the reports are about. */
-  nation: NationId;
+  nation: PlayerId;
   /** True when an observer watches everything: history then shows every nation's events. */
   all: boolean;
   /** Rebuilds the screen, after a sort or filter change. */
@@ -93,7 +93,7 @@ function turns(n: number | null, never = '—'): string {
   return n === null ? never : `${n} turn${n === 1 ? '' : 's'}`;
 }
 
-function flag(s: GameState, n: NationId): HTMLElement {
+function flag(s: GameState, n: PlayerId): HTMLElement {
   return h('span', { class: 'flag', style: `background:${nationOf(s, n).color}` });
 }
 
@@ -436,7 +436,7 @@ function religionTab(ctx: ReportContext): Child[] {
             h('tbody', null, r.missions.map((m) => h('tr', null,
               h('td', null, h('span', { class: 'flag', style: `background:${TRIBES[m.tribe].color}` }), ' ', TRIBES[m.tribe].name),
               h('td', { class: 'num' }, String(m.own)),
-              h('td', null, (Object.entries(m.rival) as [NationId, number][]).map(([n, k]) => h('span', { class: 'report-chip' }, flag(app.state, n), `${nationOf(app.state, n).adjective} ${k}`))))))))
+              h('td', null, (Object.entries(m.rival) as [PlayerId, number][]).map(([n, k]) => h('span', { class: 'report-chip' }, flag(app.state, n), `${nationOf(app.state, n).adjective} ${k}`))))))))
         : empty('No missions among the settlements you know.'),
         h('p', { class: 'muted small' }, 'Missions calm their settlement and now and then send a convert to your nearest colony. Only settlements you have found are counted.'))),
   ];
@@ -593,7 +593,7 @@ export const REPORT_TABS: ReportTab[] = [
 
 // Remembered for the session.
 let lastTab = REPORT_TABS[0].id;
-let lastNation: NationId | undefined;
+let lastNation: PlayerId | undefined;
 
 export class ReportsScreen implements Screen {
   el: HTMLElement;
@@ -609,7 +609,7 @@ export class ReportsScreen implements Screen {
   }
 
   /** The nation the reports are about: the player's own, or the one an observer picked. */
-  private nation(): NationId {
+  private nation(): PlayerId {
     const app = this.app;
     if (!app.observer) return app.viewer;
     if (app.watch !== 'all') return app.watch;
@@ -656,7 +656,7 @@ export class ReportsScreen implements Screen {
     const ctx: ReportContext = { app, nation, all: app.observer && app.watch === 'all' && tab.id === 'history', rerender: () => this.build() };
     const pick = app.observer && app.watch === 'all'
       ? h('label', { class: 'field report-nation' }, h('span', null, 'Nation'),
-          h('select', { onchange: (e: Event) => { lastNation = (e.target as HTMLSelectElement).value as NationId; this.build(); } },
+          h('select', { onchange: (e: Event) => { lastNation = (e.target as HTMLSelectElement).value as PlayerId; this.build(); } },
             s.players.filter((p) => p.id !== 'crown').map((p) => h('option', { value: p.id, selected: p.id === nation || undefined }, nationTitle(app.state, p.id)))))
       : null;
     this.body.append(

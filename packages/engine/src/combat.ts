@@ -34,7 +34,7 @@ import { pactAllies, sendOut, warOnFriend } from './alliances.js';
 import { systemsOfId } from './playerkind.js';
 import { STOCKADE_DEFENCE } from './rules/buildings.js';
 import { AMBUSH_BONUS, BOMBARD_CHANCE, CAPTURE_CHANCE, REPAIR_COST, RIVER_DEFENCE } from './rules/combat.js';
-import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
 import type { Colony, GameState, Unit } from './types.js';
@@ -127,7 +127,7 @@ export function chooseDefender(s: GameState, units: Unit[], attackFrom?: { x: nu
  * The unit that defends a colony against `attacker`: the strongest land unit on its tile, the
  * owner's or, under a defensive pact, an ally's garrison (alliances.ts); otherwise a colonist.
  */
-function colonyDefender(s: GameState, colony: Colony, attacker: NationId): Unit | undefined {
+function colonyDefender(s: GameState, colony: Colony, attacker: PlayerId): Unit | undefined {
   const allies = s.treaties ? pactAllies(s, colony.owner, attacker) : [];
   const outside = unitsAt(s, colony.x, colony.y).filter((u) => !isShip(u) && (u.owner === colony.owner || allies.includes(u.owner)));
   return chooseDefender(s, outside) ?? colonyWorkers(s, colony)[0];
@@ -262,7 +262,7 @@ function takeEquipment(s: GameState, winner: Unit, loser: Unit, before: Unit['ro
 }
 
 /** A damaged artillery piece in a colony with an armory (or in Europe) is mended for hammers and tools (or gold). */
-export function repairArtillery(s: GameState, nation: NationId, unitId: string): string {
+export function repairArtillery(s: GameState, nation: PlayerId, unitId: string): string {
   const u = s.units[unitId];
   if (!u || u.owner !== nation) fail('That is not your unit.');
   if (u.type !== 'damagedArtillery') fail('Only damaged artillery needs repairs.');
@@ -287,7 +287,7 @@ export function repairArtillery(s: GameState, nation: NationId, unitId: string):
  * At the start of a nation's turn, its coastal forts and fortresses fire on adjacent enemy ships
  * (nations at war with the owner; one seeded roll per ship). A hit damages the ship as in combat.
  */
-export function bombardShips(s: GameState, nation: NationId): void {
+export function bombardShips(s: GameState, nation: PlayerId): void {
   const me = player(s, nation);
   for (const colony of colonyList(s)) {
     const level = colony.buildings.stockade;
@@ -415,7 +415,7 @@ function captureColony(s: GameState, attacker: Unit, colony: Colony): string {
  * it (its treaties end). An attack on a people with a mutual defence pact is war with its partner
  * (native-partners.md N7); a partner allied with the attacker sees it leave the alliance (N9).
  */
-function hostile(s: GameState, tribeId: TribeId, nation: NationId, at: { x: number; y: number }, cause: string): void {
+function hostile(s: GameState, tribeId: TribeId, nation: PlayerId, at: { x: number; y: number }, cause: string): void {
   const tribe = s.tribes.find((t) => t.id === tribeId)!;
   // Attacking a partner breaks faith with it (native-partners.md N8).
   breakFaith(s, nation, tribeId, 'attack');
@@ -435,7 +435,7 @@ function hostile(s: GameState, tribeId: TribeId, nation: NationId, at: { x: numb
 }
 
 /** Computer players never attack a people whose defence partner is their Favoured Nation or ally (N9, as for nations). */
-function noFriendsPeople(s: GameState, nation: NationId, people: TribeId): void {
+function noFriendsPeople(s: GameState, nation: PlayerId, people: TribeId): void {
   if (s.treaties && !player(s, nation).human && defendedByFriend(s, nation, people)) fail('Computer players never attack a people defended by a Favoured Nation or an ally.');
 }
 
@@ -547,7 +547,7 @@ function destroySettlement(s: GameState, u: Unit, settlementId: string): string 
  * tribute, no longer attack or make demands, and give their land freely. Attacking the tribe
  * again ends it. Otherwise they fight on.
  */
-function surrender(s: GameState, tribeId: TribeId, nation: NationId, at: { x: number; y: number }): string {
+function surrender(s: GameState, tribeId: TribeId, nation: PlayerId, at: { x: number; y: number }): string {
   if (nation === 'crown' || !mechanicsOf(s).surrender) return '';
   const rules = nativeRulesOf(s);
   const tribe = s.tribes.find((t) => t.id === tribeId)!;

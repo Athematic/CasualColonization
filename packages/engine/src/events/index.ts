@@ -13,7 +13,7 @@ import { message, player, unitName } from '../queries.js';
 import { calendarOf, formatDate, nationOf, nationTitle, scenarioOf, yearOf } from '../scenarios/index.js';
 import { buildingName } from '../rules/buildings.js';
 import { GOOD_DEFS } from '../rules/goods.js';
-import { TRIBES, type NationId } from '../rules/nations.js';
+import { TRIBES, type PlayerId } from '../rules/nations.js';
 import { systemsOf } from '../playerkind.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import { track, tracking } from '../telemetry.js';
@@ -168,7 +168,7 @@ export function choiceAvailable(s: GameState, c: EventChoice, v: EventVars): boo
 }
 
 /** The pending event choices for a nation, oldest first. */
-export function pendingEvents(s: GameState, nation: NationId): PendingEvent[] {
+export function pendingEvents(s: GameState, nation: PlayerId): PendingEvent[] {
   return (s.events?.pending ?? []).filter((p) => p.vars.nation === nation);
 }
 
@@ -233,7 +233,7 @@ function resolveChoice(s: GameState, def: EventDef, v: EventVars, index: number,
 }
 
 /** A person answers a pending event (the `answerEvent` command). */
-export function answerEvent(s: GameState, nation: NationId, pendingId: string, choice: number): string {
+export function answerEvent(s: GameState, nation: PlayerId, pendingId: string, choice: number): string {
   const ev = s.events;
   const i = ev?.pending.findIndex((p) => p.id === pendingId && p.vars.nation === nation) ?? -1;
   if (!ev || i < 0) fail('There is no such event waiting for an answer.');
@@ -252,7 +252,7 @@ export function answerEvent(s: GameState, nation: NationId, pendingId: string, c
  * Fires an event for one nation: picks its target (unless given), applies its effects and either
  * resolves its choice (computer players) or leaves it pending (people). Returns whether it fired.
  */
-export function fireEvent(s: GameState, def: EventDef, nation: NationId, given?: EventVars): boolean {
+export function fireEvent(s: GameState, def: EventDef, nation: PlayerId, given?: EventVars): boolean {
   const p = s.players.find((x) => x.id === nation);
   if (!p || !systemsOf(p).events) return false;
   const r = eventStream(s, `fire ${def.id} ${nation} ${s.turn}`);

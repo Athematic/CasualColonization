@@ -1,4 +1,4 @@
-import { calendarOf, DIFFICULTY, formatDate, nationOf, nationTitle, resolveDifficulty, withTerms, scoreBreakdown, STAT_INFO, STAT_KEYS, statsHistory, turnOfYear, yearOf, type GameState, type NationId, type StatKey, type StatsSeries, type TribeId, peopleList } from '@cc/engine';
+import { calendarOf, DIFFICULTY, formatDate, nationOf, nationTitle, resolveDifficulty, withTerms, scoreBreakdown, STAT_INFO, STAT_KEYS, statsHistory, turnOfYear, yearOf, type GameState, type PlayerId, type StatKey, type StatsSeries, type TribeId, peopleList } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
 import { activeStyle } from '../styles.js';
@@ -23,7 +23,7 @@ const METRICS: { id: Metric; name: string; description: string }[] = [
 
 // Remembered for the session, so reopening the screen shows the same graph.
 let lastMetric: Metric = 'score';
-const hiddenNations = new Set<NationId>();
+const hiddenNations = new Set<PlayerId>();
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -34,7 +34,7 @@ function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
   return el;
 }
 
-function values(hist: StatsSeries, nation: NationId, metric: Metric): number[] {
+function values(hist: StatsSeries, nation: PlayerId, metric: Metric): number[] {
   const rows = hist.series[nation]!;
   const total = (key: StatKey) => {
     let sum = 0;
@@ -79,21 +79,21 @@ function darkPanel(): boolean {
   return lum < 0.4;
 }
 
-function nationColor(s: GameState, nation: NationId, dark: boolean): string {
+function nationColor(s: GameState, nation: PlayerId, dark: boolean): string {
   const c = nationOf(s, nation).color;
   return dark ? `color-mix(in srgb, ${c} 72%, white)` : c;
 }
 
 export interface GameOverInfo {
   reason: string;
-  winner?: NationId;
+  winner?: PlayerId;
   /** Every winner, best first (several when an alliance wins together). */
-  winners?: NationId[];
+  winners?: PlayerId[];
   /** The winners' partner peoples, after a prosperity victory. */
   partners?: TribeId[];
-  scores: Partial<Record<NationId, number>>;
+  scores: Partial<Record<PlayerId, number>>;
   /** The nation of the person looking, if any. */
-  viewer?: NationId;
+  viewer?: PlayerId;
   onMenu: () => void;
 }
 
@@ -209,7 +209,7 @@ export class ProgressScreen implements Screen {
   }
 
   private gameOverCard(over: GameOverInfo): HTMLElement {
-    const rows = (Object.entries(over.scores) as [NationId, number][]).sort((a, b) => b[1] - a[1]);
+    const rows = (Object.entries(over.scores) as [PlayerId, number][]).sort((a, b) => b[1] - a[1]);
     const level = DIFFICULTY[resolveDifficulty(this.app.state.difficulty)];
     return h('div', { class: 'card progress-over' },
       h('p', null, over.reason),
@@ -240,7 +240,7 @@ export class ProgressScreen implements Screen {
     this.build();
   }
 
-  private toggle(nation: NationId, only: boolean): void {
+  private toggle(nation: PlayerId, only: boolean): void {
     if (only) {
       const alone = this.hist.nations.every((n) => n === nation || hiddenNations.has(n));
       hiddenNations.clear();
@@ -362,7 +362,7 @@ export class ProgressScreen implements Screen {
     showAt(this.hover !== null && this.hover < n ? this.hover : null);
   }
 
-  private fillLegend(data: Map<NationId, number[]>, i: number, dark: boolean): void {
+  private fillLegend(data: Map<PlayerId, number[]>, i: number, dark: boolean): void {
     clear(this.legend);
     for (const nn of this.hist.nations) {
       const off = hiddenNations.has(nn);

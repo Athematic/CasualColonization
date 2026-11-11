@@ -46,14 +46,14 @@ import {
   unitsAt,
 } from './queries.js';
 import { hasTradeAgreement, isFavoured, pairRandom } from './relations.js';
-import { type NationId } from './rules/nations.js';
+import { type PlayerId } from './rules/nations.js';
 import { difficultyOf, nationOf, nationSet, scenarioOf, term, Term, type ScenarioLike } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, MercenaryOffer, Player, Unit } from './types.js';
 import { forEachUnitNear, removeUnit, setUnitOwner, colonyList, unitList } from './unitindex.js';
 
 /** A seeded draw for this nation and purpose. */
-const draw = (s: GameState, nation: NationId, purpose: string) => pairRandom(s, nation, 'crown', `rebellion ${purpose}`);
+const draw = (s: GameState, nation: PlayerId, purpose: string) => pairRandom(s, nation, 'crown', `rebellion ${purpose}`);
 
 /** The turn of the declaration, or the current turn for a position without one. */
 const declaredOn = (s: GameState, p: Player) => p.refAtDeclaration?.turn ?? s.turn;
@@ -100,7 +100,7 @@ function companyPrice(s: GameState, p: Player, c: Company): number {
  * The company that would offer its services to a nation on `turn` (default now), sized to what it
  * can pay, or null. Seeded, so the computer players can weigh it before declaring.
  */
-export function mercenaryCompany(s: GameState, nation: NationId, turn = s.turn): MercenaryOffer | null {
+export function mercenaryCompany(s: GameState, nation: PlayerId, turn = s.turn): MercenaryOffer | null {
   const p = player(s, nation);
   const r = (what: string) => draw(s, nation, `mercenaries ${what} ${turn}`);
   const c: Company = { soldiers: 2 + Math.floor(r('soldiers') * 3), dragoons: 1 + Math.floor(r('dragoons') * 2), artillery: Math.floor(r('artillery') * 3) };
@@ -124,7 +124,7 @@ export function describeCompany(c: Company): string {
 }
 
 /** A mercenary company offers its services, if the nation can pay for one. Returns whether it did. */
-export function offerMercenaries(s: GameState, nation: NationId): boolean {
+export function offerMercenaries(s: GameState, nation: PlayerId): boolean {
   const p = player(s, nation);
   const offer = mercenaryCompany(s, nation);
   if (!offer) return false;
@@ -138,7 +138,7 @@ export function offerMercenaries(s: GameState, nation: NationId): boolean {
 }
 
 /** Where hired mercenaries come ashore: the weakest coastal colony (any colony if none is coastal). */
-function weakestColony(s: GameState, nation: NationId): Colony | undefined {
+function weakestColony(s: GameState, nation: PlayerId): Colony | undefined {
   const own = colonyList(s).filter((c) => c.owner === nation);
   const coastal = own.filter((c) => isCoastal(s, c.x, c.y));
   const strength = (c: Colony) => unitsAt(s, c.x, c.y).filter((u) => u.owner === nation && !isShip(u)).reduce((n, u) => n + defencePower(s, u), 0);
@@ -146,7 +146,7 @@ function weakestColony(s: GameState, nation: NationId): Colony | undefined {
 }
 
 /** Creates soldiers, dragoons and artillery for a nation on a tile. */
-function raise(s: GameState, nation: NationId, at: { x: number; y: number }, c: Company, mark: (u: Unit) => void): Unit[] {
+function raise(s: GameState, nation: PlayerId, at: { x: number; y: number }, c: Company, mark: (u: Unit) => void): Unit[] {
   const out: Unit[] = [];
   const add = (type: 'veteranSoldier' | 'artillery', role: 'soldier' | 'dragoon' | 'none') => {
     const u = createUnit(s, nation, type, { kind: 'map', x: at.x, y: at.y });
@@ -161,7 +161,7 @@ function raise(s: GameState, nation: NationId, at: { x: number; y: number }, c: 
 }
 
 /** Hires (or turns away) the mercenary company that offers its services. */
-export function answerMercenaries(s: GameState, nation: NationId, hire: boolean): string {
+export function answerMercenaries(s: GameState, nation: PlayerId, hire: boolean): string {
   const p = player(s, nation);
   const offer = p.mercenaryOffer;
   if (!offer) fail('No mercenaries are offering their services.');
@@ -229,7 +229,7 @@ export function interventionForce(p: Player): Company & { menOfWar: number } {
 }
 
 /** How far a rebellion is from foreign intervention, for the reports. */
-export function interventionStatus(s: GameState, nation: NationId): { turns: number; minTurns: number; bells: number; needBells: number; held: number; needHeld: number; came?: { by: NationId | 'foreign'; turn: number; land: number } } | null {
+export function interventionStatus(s: GameState, nation: PlayerId): { turns: number; minTurns: number; bells: number; needBells: number; held: number; needHeld: number; came?: { by: PlayerId | 'foreign'; turn: number; land: number } } | null {
   const p = player(s, nation);
   if (p.independence !== 'declared' && !p.rebellion?.intervention) return null;
   const r = p.rebellion ?? { bells: p.bells, offers: 0 };
@@ -245,7 +245,7 @@ export function interventionStatus(s: GameState, nation: NationId): { turns: num
 }
 
 /** "France", or "A European power" for a force from no particular nation. */
-export function powerName(s: ScenarioLike, by: NationId | 'foreign'): string {
+export function powerName(s: ScenarioLike, by: PlayerId | 'foreign'): string {
   return by === 'foreign' ? term(s, 'foreignPower') : nationOf(s, by).name;
 }
 
@@ -254,10 +254,10 @@ export function powerName(s: ScenarioLike, by: NationId | 'foreign'): string {
  * a trade partner or the nation the rebels' King last made war on (2), at peace with the rebels
  * and loyal to its own Crown; otherwise a European nation not in the game; otherwise "foreign".
  */
-export function interventionPower(s: GameState, nation: NationId): NationId | 'foreign' {
+export function interventionPower(s: GameState, nation: PlayerId): PlayerId | 'foreign' {
   const p = player(s, nation);
   const friends = p.rebellion?.friends ?? [];
-  const candidates: { id: NationId; weight: number }[] = [];
+  const candidates: { id: PlayerId; weight: number }[] = [];
   for (const o of s.players) {
     if (o.id === nation || o.id === 'crown' || o.independence !== 'none' || p.stance[o.id] === 'war') continue;
     if (!colonyList(s).some((c) => c.owner === o.id)) continue;
@@ -284,7 +284,7 @@ function threat(s: GameState, c: Colony): number {
 }
 
 /** Sends the intervention force now, whatever the conditions (used by `processRebellion` once they are met). */
-export function intervene(s: GameState, nation: NationId): void {
+export function intervene(s: GameState, nation: PlayerId): void {
   const p = player(s, nation);
   const r = rebellionOf(p);
   if (r.intervention) return;
@@ -316,7 +316,7 @@ function interventionRound(s: GameState, p: Player): void {
 }
 
 /** When the war ends, the intervention force sails home. */
-export function alliesGoHome(s: GameState, nation: NationId): void {
+export function alliesGoHome(s: GameState, nation: PlayerId): void {
   const allies = unitList(s).filter((u) => u.owner === nation && u.ally);
   for (const u of allies) removeUnit(s, u.id);
   if (allies.length) message(s, `The ${term(s, 'independenceWar')} is over: the intervention force sails home.`, nation);
@@ -334,7 +334,7 @@ function safely(fn: () => void): void {
 }
 
 /** Odds of an attack by `u` on the tile at `q` (its best defender there). */
-function odds(s: GameState, u: Unit, q: { x: number; y: number }, enemy: NationId): { odds: number; target?: Unit } {
+function odds(s: GameState, u: Unit, q: { x: number; y: number }, enemy: PlayerId): { odds: number; target?: Unit } {
   const target = chooseDefender(s, unitsAt(s, q.x, q.y).filter((o) => o.owner === enemy && !isShip(o)));
   if (!target) return { odds: 0 };
   const off = offencePower(s, u);
@@ -457,7 +457,7 @@ export function processRebellion(s: GameState, p: Player): void {
 }
 
 /** Mercenaries and the intervention force fighting for a nation, and how far the intervention is, for the Military report. */
-export function warSupport(s: GameState, nation: NationId): { mercenaries: Unit[]; allies: Unit[]; intervention: ReturnType<typeof interventionStatus> } {
+export function warSupport(s: GameState, nation: PlayerId): { mercenaries: Unit[]; allies: Unit[]; intervention: ReturnType<typeof interventionStatus> } {
   const own = unitList(s).filter((u) => u.owner === nation);
   return { mercenaries: own.filter((u) => u.mercenary), allies: own.filter((u) => u.ally), intervention: interventionStatus(s, nation) };
 }

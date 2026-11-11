@@ -9,7 +9,7 @@ import { endStateFeatures, type FeatureCounts } from './features.js';
 import { createGame } from './game.js';
 import { colonyWorkers } from './queries.js';
 import type { DifficultyId } from './rules/difficulty.js';
-import type { NationId } from './rules/nations.js';
+import type { NationId, PlayerId } from './rules/nations.js';
 import { nationSet, scenarioOf, type Rivals } from './scenarios/index.js';
 import { finalScores, scoreBreakdown, type ScoreComponent } from './score.js';
 import { prosperityParams, prosperityStanding, type ProsperityCondition } from './prosperity.js';
@@ -193,7 +193,7 @@ export interface EventTally {
 export interface ArenaEntry {
   game: number;
   seed: number;
-  nation: NationId;
+  nation: PlayerId;
   level: AiLevel;
   score: number;
   /** Points per score component (see scoreBreakdown). */
@@ -347,7 +347,7 @@ export function playArenaGame(
 }
 
 /** A nation's relations tally, completed with the end state: Favoured Nation partners and trade volume. */
-function endRelations(s: GameState, nation: NationId, counted?: RelationsTally): RelationsTally {
+function endRelations(s: GameState, nation: PlayerId, counted?: RelationsTally): RelationsTally {
   const r = { ...(counted ?? emptyTally()) };
   for (const rel of Object.values(s.relations ?? {})) {
     if (rel.a !== nation && rel.b !== nation) continue;
@@ -359,7 +359,7 @@ function endRelations(s: GameState, nation: NationId, counted?: RelationsTally):
   return r;
 }
 
-export function standing(s: GameState, seed: number, nation: NationId, level: AiLevel): Omit<ArenaEntry, 'game' | 'won'> {
+export function standing(s: GameState, seed: number, nation: PlayerId, level: AiLevel): Omit<ArenaEntry, 'game' | 'won'> {
   const p = s.players.find((x) => x.id === nation)!;
   const colonies = colonyList(s).filter((c) => c.owner === nation);
   const breakdown = scoreBreakdown(s, p);

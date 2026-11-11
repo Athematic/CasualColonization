@@ -27,7 +27,7 @@ import { finalScores, scoreBreakdown } from './score.js';
 import { calendarOf, lastTurn, nationOf, scenarioOf, term } from './scenarios/index.js';
 import { treatyNations } from './treaties.js';
 import { peopleList, prosperityParams, prosperityWinners } from './prosperity.js';
-import type { NationId } from './rules/nations.js';
+import type { PlayerId } from './rules/nations.js';
 import { systemsOf } from './playerkind.js';
 import type { GameState, Player } from './types.js';
 import { removeUnit, unitList } from './unitindex.js';
@@ -35,7 +35,7 @@ import { removeUnit, unitList } from './unitindex.js';
 export type GameOver = NonNullable<GameState['gameOver']>;
 
 /** What a victory kind returns: a game over whose `winners` default to its `winner`. */
-export type VictoryResult = Omit<GameOver, 'winners'> & { winners?: NationId[] };
+export type VictoryResult = Omit<GameOver, 'winners'> & { winners?: PlayerId[] };
 
 /** Concord's default: the share of the total score an alliance must hold at the end to win together. */
 export const CONCORD_SHARE = 0.7;
@@ -45,7 +45,7 @@ export type VictoryMoment =
   /** After a round, once the turn counter has moved on. */
   | { kind: 'round' }
   /** A nation's War of Independence has just ended; `text` is the news. */
-  | { kind: 'warEnded'; nation: NationId; outcome: 'won' | 'lost'; text: string; together?: NationId[] };
+  | { kind: 'warEnded'; nation: PlayerId; outcome: 'won' | 'lost'; text: string; together?: PlayerId[] };
 
 export interface VictoryKind {
   id: string;
@@ -82,8 +82,8 @@ export function checkVictory(s: GameState, moment: VictoryMoment): void {
 }
 
 /** The nation with the highest score, if any. */
-function leader(scores: Partial<Record<NationId, number>>): NationId | undefined {
-  return (Object.entries(scores) as [NationId, number][]).sort((a, b) => b[1] - a[1])[0]?.[0];
+function leader(scores: Partial<Record<PlayerId, number>>): PlayerId | undefined {
+  return (Object.entries(scores) as [PlayerId, number][]).sort((a, b) => b[1] - a[1])[0]?.[0];
 }
 
 registerVictory({
@@ -136,10 +136,10 @@ registerVictory({
  * their own score (ties in turn order), or null. With a share below one half two alliances could
  * both qualify; the larger share wins.
  */
-export function concordWinners(s: GameState, scores: Partial<Record<NationId, number>>, share: number): NationId[] | null {
+export function concordWinners(s: GameState, scores: Partial<Record<PlayerId, number>>, share: number): PlayerId[] | null {
   const total = Object.values(scores).reduce((n: number, v) => n + (v ?? 0), 0);
   if (total <= 0) return null;
-  let best: { members: NationId[]; part: number } | null = null;
+  let best: { members: PlayerId[]; part: number } | null = null;
   for (const t of s.treaties ?? []) {
     if (t.end || t.kind !== 'alliance') continue;
     const members = treatyNations(t).filter((n) => scores[n] !== undefined);
@@ -149,7 +149,7 @@ export function concordWinners(s: GameState, scores: Partial<Record<NationId, nu
     if (part > share && (!best || part > best.part)) best = { members, part };
   }
   if (!best) return null;
-  const order = s.config.nations;
+  const order: readonly PlayerId[] = s.config.nations;
   return [...best.members].sort((a, b) => (scores[b] ?? 0) - (scores[a] ?? 0) || order.indexOf(a) - order.indexOf(b));
 }
 
@@ -168,7 +168,7 @@ registerVictory({
       const scores = finalScores(s);
       // A confederation (confederation.ts) wins together, best score first.
       if (moment.together && moment.together.length > 1) {
-        const order = s.config.nations;
+        const order: readonly PlayerId[] = s.config.nations;
         const winners = [...moment.together].sort((a, b) => (scores[b] ?? 0) - (scores[a] ?? 0) || order.indexOf(a) - order.indexOf(b));
         return { turn: s.turn, reason: moment.text, winner: winners[0], winners, scores };
       }

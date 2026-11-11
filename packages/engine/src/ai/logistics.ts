@@ -15,7 +15,7 @@ import { aiColonyReport } from './reports.js';
 import { cargoRoomFor, colonyAt, isCoastal, isShip, player, unitPosition, unitsAboard, warehouseCapacity } from '../queries.js';
 import { favouredPartners, favouredUnlocked, FOREIGN_KEEP, hasTradeAgreement, inWaitingPeriod, isFavoured, routesBetween, ROUTES_NEEDED } from '../relations.js';
 import { assignRoute, createRoute, deleteRoute, editRoute, EUROPE_STOP, foreignStopColonies, isForeignStop, isSettlementStop, routesOf, routeUnits, stopPort } from '../routes.js';
-import type { NationId } from '../rules/nations.js';
+import type { PlayerId } from '../rules/nations.js';
 import { track } from '../telemetry.js';
 import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
 import type { GoodId } from '../rules/goods.js';
@@ -263,7 +263,7 @@ function refreshRoute(s: GameState, p: Player, r: TradeRoute, users: Unit[]): vo
  * still pays at least as well, so it does not flap between ports. Colonists board only at home:
  * the nation's free ship ferries them (routeShips always leaves one ship free).
  */
-export function routePort(s: GameState, p: Player, stops: RouteStop[], current?: NationId): NationId {
+export function routePort(s: GameState, p: Player, stops: RouteStop[], current?: PlayerId): PlayerId {
   const ports = portsFor(s, p.id);
   if (ports.length < 2) return p.id;
   const cargo = new Map<GoodId, number>();
@@ -273,9 +273,9 @@ export function routePort(s: GameState, p: Player, stops: RouteStop[], current?:
     const report = aiColonyReport(s, c);
     for (const r of st.load) cargo.set(r.good, (cargo.get(r.good) ?? 0) + Math.max(0, c.goods[r.good] - (r.amount ?? 0)) + Math.max(0, report.net[r.good]) * 8);
   }
-  const value = (port: NationId) => [...cargo].reduce((v, [g, n]) => v + n * portNet(s, p, port, g), 0);
+  const value = (port: PlayerId) => [...cargo].reduce((v, [g, n]) => v + n * portNet(s, p, port, g), 0);
   const home = value(p.id);
-  let best: { port: NationId; v: number } = { port: p.id, v: home };
+  let best: { port: PlayerId; v: number } = { port: p.id, v: home };
   for (const port of ports.slice(1)) {
     const v = value(port);
     const enough = port === current ? v >= home : v >= home * (1 + ROUTE_PORT_MARGIN) && v - home >= ROUTE_PORT_GAIN;
@@ -336,7 +336,7 @@ export function buyGain(s: GameState, p: Player, f: Colony, g: GoodId): number {
  * routes between them than the most that can be needed. While it is, a stop that sells at no loss
  * is worth adding; otherwise a stop must gain at least 1 gold per unit.
  */
-export function buildingTies(s: GameState, p: Player, other: NationId): boolean {
+export function buildingTies(s: GameState, p: Player, other: PlayerId): boolean {
   return (
     !s.config.noFavoured &&
     mechanicsOf(s).favoured &&

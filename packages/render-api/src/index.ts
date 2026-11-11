@@ -21,7 +21,7 @@ import {
   type GameState,
   type ScenarioLike,
   type GoodId,
-  type NationId,
+  type PlayerId,
   type ProductId,
   type RoleId,
   type Settlement,
@@ -47,7 +47,7 @@ export interface Point {
 export interface Scene {
   state: Readonly<GameState>;
   /** The nation whose knowledge of the world is shown. */
-  viewer: NationId;
+  viewer: PlayerId;
   camera: Camera;
   /** Viewport size in CSS pixels. */
   width: number;
@@ -249,7 +249,7 @@ export function visibleRange(scene: Pick<Scene, 'camera' | 'width' | 'height' | 
 
 // ---- Knowledge helpers ----
 
-export function computeVisibility(s: Readonly<GameState>, viewer: NationId): Uint8Array {
+export function computeVisibility(s: Readonly<GameState>, viewer: PlayerId): Uint8Array {
   const w = s.map.width;
   const out = new Uint8Array(w * s.map.height);
   const mark = (x: number, y: number, r: number) => {
@@ -278,7 +278,7 @@ export function isTileVisible(scene: Scene, x: number, y: number): boolean {
 }
 
 /** A nation's colour in its game's scenario (Q2: nations are per scenario). */
-export function nationColor(s: ScenarioLike, nation: NationId): string {
+export function nationColor(s: ScenarioLike, nation: PlayerId): string {
   return nationOf(s, nation).color;
 }
 
@@ -286,7 +286,7 @@ export interface MapUnitStack {
   x: number;
   y: number;
   /** Unit to draw on top: the selected one, else the strongest-looking. */
-  top: { id: string; type: UnitTypeId; role: RoleId; owner: NationId; state: string; working: boolean; cargo: number };
+  top: { id: string; type: UnitTypeId; role: RoleId; owner: PlayerId; state: string; working: boolean; cargo: number };
   count: number;
 }
 

@@ -47,7 +47,7 @@ import { bestJob } from './colony.js';
 import { addTension, goodRelations, landPrice, nativeLandClosedTo, nativeLandOwner, peopleRelation, peopleRelationOf, peopleThreshold, settlementName, tensionOf } from './natives.js';
 import { isShip, message, player, tileAt, tileWorkedBy, unitName, unitPosition, workArea } from './queries.js';
 import { isFavoured, peoplePairRandom, settlementRandom } from './relations.js';
-import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
 import { systemsOfId } from './playerkind.js';
 import type { UnitTypeId } from './rules/units.js';
 import { cooperationOf, LEVEL_COOPERATION, warOnFriend } from './alliances.js';
@@ -139,17 +139,17 @@ export function peopleTreatiesOn(s: GameState): boolean {
 }
 
 /** Whether a nation can make treaties with peoples: a European nation, neither the Crown nor a company (playerkind.ts `peoples`). */
-function treatyNation(nation: NationId): boolean {
+function treatyNation(nation: PlayerId): boolean {
   return systemsOfId(nation).peoples;
 }
 
 /** The trade treaty in force between a nation and a people, if any. */
-export function peopleTradeTreaty(s: GameState, nation: NationId, people: TribeId): Treaty | undefined {
+export function peopleTradeTreaty(s: GameState, nation: PlayerId, people: TribeId): Treaty | undefined {
   return s.treaties ? peopleTreatyBetween(s, 'people-trade', nation, people) : undefined;
 }
 
 /** Whether a nation and a people have a trade treaty in force. */
-export function hasPeopleTrade(s: GameState, nation: NationId, people: TribeId): boolean {
+export function hasPeopleTrade(s: GameState, nation: PlayerId, people: TribeId): boolean {
   return !!peopleTradeTreaty(s, nation, people);
 }
 
@@ -162,7 +162,7 @@ export function peopleTrades(s: GameState, people: TribeId): boolean {
 }
 
 /** The peoples a nation has a trade treaty with, in the order the treaties were made. */
-export function tradePartnerPeoples(s: GameState, nation: NationId): TribeId[] {
+export function tradePartnerPeoples(s: GameState, nation: PlayerId): TribeId[] {
   const out: TribeId[] = [];
   for (const t of s.treaties ?? []) if (!t.end && t.kind === 'people-trade' && treatyNations(t).includes(nation)) out.push(...treatyPeoples(t));
   return out;
@@ -172,12 +172,12 @@ export function tradePartnerPeoples(s: GameState, nation: NationId): TribeId[] {
 // Effects of a trade treaty (N4). Each is 1 (or 0) without a treaty, so nothing changes then.
 
 /** What a people's settlement pays a nation for goods, against the usual. */
-export function peopleSellFactor(s: GameState, nation: NationId | undefined, people: TribeId): number {
+export function peopleSellFactor(s: GameState, nation: PlayerId | undefined, people: TribeId): number {
   return nation && hasPeopleTrade(s, nation, people) ? peopleTreatyRules(s).trade.sell : 1;
 }
 
 /** What a people's goods cost a nation, against the usual. */
-export function peopleBuyFactor(s: GameState, nation: NationId, people: TribeId): number {
+export function peopleBuyFactor(s: GameState, nation: PlayerId, people: TribeId): number {
   return hasPeopleTrade(s, nation, people) ? peopleTreatyRules(s).trade.buy : 1;
 }
 
@@ -192,12 +192,12 @@ export function peopleGatherFactor(s: GameState, people: TribeId): number {
 }
 
 /** How much more often a people's braves come to trade at a nation's colonies. */
-export function peopleBraveTradeFactor(s: GameState, nation: NationId, people: TribeId): number {
+export function peopleBraveTradeFactor(s: GameState, nation: PlayerId, people: TribeId): number {
   return hasPeopleTrade(s, nation, people) ? peopleTreatyRules(s).trade.braveTrade : 1;
 }
 
 /** Tension that falls each round towards a nation beyond the usual drift. */
-export function peopleTensionFall(s: GameState, nation: NationId, people: TribeId): number {
+export function peopleTensionFall(s: GameState, nation: PlayerId, people: TribeId): number {
   return hasPeopleTrade(s, nation, people) ? peopleTreatyRules(s).trade.tensionFall : 0;
 }
 
@@ -215,18 +215,18 @@ export function temperamentOf(s: GameState, people: TribeId): TemperamentRules {
  * standing with the people, so treaties can follow. Only while the scenario has treaties with
  * peoples, so other games keep their save text.
  */
-export function notePeopleContact(s: GameState, nation: NationId, people: TribeId): void {
+export function notePeopleContact(s: GameState, nation: PlayerId, people: TribeId): void {
   if (!peopleTreatiesOn(s) || !treatyNation(nation)) return;
   peopleRelation(s, nation, people);
 }
 
 /** Whether a nation has had contact with a people (its standing is written). */
-export function inContact(s: GameState, nation: NationId, people: TribeId): boolean {
+export function inContact(s: GameState, nation: PlayerId, people: TribeId): boolean {
   return !!peopleRelationOf(s, nation, people);
 }
 
 /** The hidden thresholds that unlock a trade treaty between a nation and a people (drawn, never stored). */
-export function peopleTradeThresholds(s: GameState, nation: NationId, people: TribeId): { years: number; volume: number } {
+export function peopleTradeThresholds(s: GameState, nation: PlayerId, people: TribeId): { years: number; volume: number } {
   const rules = peopleTreatyRules(s).trade;
   const scale = temperamentOf(s, people).thresholds;
   const years = peopleThreshold(s, nation, people, 'trade years', rules.years);
@@ -234,7 +234,7 @@ export function peopleTradeThresholds(s: GameState, nation: NationId, people: Tr
   return { years: Math.round(years * scale), volume: Math.round(volume * scale) };
 }
 
-function yearsOfGood(s: GameState, nation: NationId, people: TribeId): number {
+function yearsOfGood(s: GameState, nation: PlayerId, people: TribeId): number {
   const since = peopleRelationOf(s, nation, people)?.goodSince;
   if (since === undefined) return 0;
   const cal = calendarOf(s);
@@ -242,7 +242,7 @@ function yearsOfGood(s: GameState, nation: NationId, people: TribeId): number {
 }
 
 /** Whether the years of good relations and the trade with a people both reach the hidden thresholds for a trade treaty. */
-export function peopleTradeUnlocked(s: GameState, nation: NationId, people: TribeId): boolean {
+export function peopleTradeUnlocked(s: GameState, nation: PlayerId, people: TribeId): boolean {
   const rel = peopleRelationOf(s, nation, people);
   if (!rel) return false;
   const need = peopleTradeThresholds(s, nation, people);
@@ -250,13 +250,13 @@ export function peopleTradeUnlocked(s: GameState, nation: NationId, people: Trib
 }
 
 /** Whether the waiting after a broken treaty still lasts: no new treaty before it ends. */
-export function peopleWaiting(s: GameState, nation: NationId, people: TribeId): boolean {
+export function peopleWaiting(s: GameState, nation: PlayerId, people: TribeId): boolean {
   const until = peopleRelationOf(s, nation, people)?.waitUntil;
   return until !== undefined && s.turn < until;
 }
 
 /** Whether the people still treats the nation as hostile after a broken treaty: no gifts, trade visits or offers. */
-export function peopleHostile(s: GameState, nation: NationId, people: TribeId): boolean {
+export function peopleHostile(s: GameState, nation: PlayerId, people: TribeId): boolean {
   const until = peopleRelationOf(s, nation, people)?.hostileUntil;
   return until !== undefined && s.turn < until;
 }
@@ -279,7 +279,7 @@ export function peopleTreatyText(kind: PeopleTreatyKind): string {
 }
 
 /** A treaty offer from the people waiting for the nation's answer, if any (a turn-start notice). */
-function pendingOffer(s: GameState, nation: NationId, people: TribeId): boolean {
+function pendingOffer(s: GameState, nation: PlayerId, people: TribeId): boolean {
   for (const d of s.nativeDemands ?? []) if (d.kind === 'treaty' && d.nation === nation && s.settlements[d.settlementId]?.tribe === people) return true;
   return false;
 }
@@ -289,7 +289,7 @@ function pendingOffer(s: GameState, nation: NationId, people: TribeId): boolean 
  * know before asking. The people's own reasons to say no come with its answer (`peopleRefusal`).
  * Like Favoured Nation's, the hidden thresholds are in here, shown only in words.
  */
-export function peopleTreatyProblem(s: GameState, nation: NationId, people: TribeId, kind: PeopleTreatyKind = 'people-trade'): string | null {
+export function peopleTreatyProblem(s: GameState, nation: PlayerId, people: TribeId, kind: PeopleTreatyKind = 'people-trade'): string | null {
   if (!peopleTreatiesOn(s)) return 'There are no treaties with native peoples in this scenario.';
   if (!peopleTreatyOn(s, kind)) return `There is no ${KIND_TEXT[kind].replace(/^an? /, '')} with native peoples in this scenario.`;
   if (!treatyNation(nation) || !s.players.some((p) => p.id === nation)) return 'Treaties with native peoples are made by European nations.';
@@ -310,7 +310,7 @@ export function peopleTreatyProblem(s: GameState, nation: NationId, people: Trib
 }
 
 /** The people's own reasons to refuse a treaty with a nation now, or null (N8): an angry settlement, land taken lately. */
-export function peopleRefusal(s: GameState, nation: NationId, people: TribeId): string | null {
+export function peopleRefusal(s: GameState, nation: PlayerId, people: TribeId): string | null {
   const name = peopleName(people);
   const angry = nativeRulesOf(s).tension.angry;
   const st = settlementsOf(s, people).find((o) => tensionOf(o, nation) >= angry);
@@ -321,7 +321,7 @@ export function peopleRefusal(s: GameState, nation: NationId, people: TribeId): 
 }
 
 /** A nation proposes a treaty to a people, which answers at once (N8, N13). */
-export function proposePeopleTreaty(s: GameState, nation: NationId, people: TribeId, kind: PeopleTreatyKind = 'people-trade'): string {
+export function proposePeopleTreaty(s: GameState, nation: PlayerId, people: TribeId, kind: PeopleTreatyKind = 'people-trade'): string {
   const problem = peopleTreatyProblem(s, nation, people, kind);
   if (problem) fail(problem);
   track(nation, 'cmd:proposePeopleTreaty');
@@ -337,7 +337,7 @@ export function proposePeopleTreaty(s: GameState, nation: NationId, people: Trib
 }
 
 /** Makes a treaty between a nation and a people, in force from now. */
-export function makePeopleTreaty(s: GameState, nation: NationId, people: TribeId, kind: PeopleTreatyKind = 'people-trade'): string {
+export function makePeopleTreaty(s: GameState, nation: PlayerId, people: TribeId, kind: PeopleTreatyKind = 'people-trade'): string {
   if (kind === 'land-use') return makeLease(s, nation, people);
   if (!peopleTreatyBetween(s, kind, nation, people)) addTreaty(s, kind, [nationParty(nation), peopleParty(people)]);
   track(nation, 'natives:people treaty made');
@@ -360,7 +360,7 @@ export function makePeopleTreaty(s: GameState, nation: NationId, people: TribeId
  * A computer player's answer to a people's offer: the scenario's `acceptPeopleOffer` times its
  * level's share (N11), drawn from the pair's own stream.
  */
-export function aiAcceptsPeopleOffer(s: GameState, nation: NationId, people: TribeId): boolean {
+export function aiAcceptsPeopleOffer(s: GameState, nation: PlayerId, people: TribeId): boolean {
   const p = player(s, nation);
   const chance = cooperationOf(s).acceptPeopleOffer * LEVEL_COOPERATION[p.ai ?? 'naive'].peopleAccept;
   return chance > 0 && peoplePairRandom(s, nation, people, `accept offer ${s.turn}`) < chance;
@@ -371,7 +371,7 @@ export function aiAcceptsPeopleOffer(s: GameState, nation: NationId, people: Tri
  * (braves.ts): free to make one (as `peopleTreatyProblem`), nothing against it (`peopleRefusal`),
  * and a seeded chance, `offer` times its temperament.
  */
-export function peopleWouldOffer(s: GameState, st: Settlement, nation: NationId): boolean {
+export function peopleWouldOffer(s: GameState, st: Settlement, nation: PlayerId): boolean {
   if (!peopleTreatyOn(s, 'people-trade') || !treatyNation(nation)) return false;
   if (peopleTreatyProblem(s, nation, st.tribe, 'people-trade') || peopleRefusal(s, nation, st.tribe)) return false;
   const chance = peopleTreatyRules(s).offer * temperamentOf(s, st.tribe).offer;
@@ -379,7 +379,7 @@ export function peopleWouldOffer(s: GameState, st: Settlement, nation: NationId)
 }
 
 /** The answer to a people's offer (a person's from the briefing, or a computer player's at once). */
-export function answerPeopleOffer(s: GameState, nation: NationId, people: TribeId, kind: PeopleTreatyKind, accept: boolean): string {
+export function answerPeopleOffer(s: GameState, nation: PlayerId, people: TribeId, kind: PeopleTreatyKind, accept: boolean): string {
   const name = peopleName(people);
   if (!accept) {
     track(nation, 'natives:people offer declined');
@@ -402,12 +402,12 @@ export function answerPeopleOffer(s: GameState, nation: NationId, people: TribeI
 // Land use: a lease (N5)
 
 /** The land use treaty in force between a nation and a people, if any. */
-export function landUseTreaty(s: GameState, nation: NationId, people: TribeId): Treaty | undefined {
+export function landUseTreaty(s: GameState, nation: PlayerId, people: TribeId): Treaty | undefined {
   return s.treaties ? peopleTreatyBetween(s, 'land-use', nation, people) : undefined;
 }
 
 /** Whether a nation leases land from a people. */
-export function hasLandUse(s: GameState, nation: NationId, people: TribeId): boolean {
+export function hasLandUse(s: GameState, nation: PlayerId, people: TribeId): boolean {
   return !!landUseTreaty(s, nation, people);
 }
 
@@ -425,13 +425,13 @@ export function leaseTerms(t: Treaty): LandUseTerms | undefined {
 }
 
 /** The hidden years of good relations a nation needs with a people before it may lease its land (drawn, never stored). */
-export function landUseThreshold(s: GameState, nation: NationId, people: TribeId): number {
+export function landUseThreshold(s: GameState, nation: PlayerId, people: TribeId): number {
   const years = peopleThreshold(s, nation, people, 'land years', peopleTreatyRules(s).landUse.years);
   return Math.round(years * temperamentOf(s, people).thresholds);
 }
 
 /** Whether a nation's years of good relations with a people reach the hidden threshold for land use. */
-export function landUseUnlocked(s: GameState, nation: NationId, people: TribeId): boolean {
+export function landUseUnlocked(s: GameState, nation: PlayerId, people: TribeId): boolean {
   return !!peopleRelationOf(s, nation, people) && yearsOfGood(s, nation, people) >= landUseThreshold(s, nation, people);
 }
 
@@ -447,7 +447,7 @@ export interface LandTile {
  * work area), the people's (`nativeLandOwner`: not bought or taken), and not leased to another
  * nation. In the order of the colonies and their work areas, each tile once.
  */
-export function leasableTiles(s: GameState, nation: NationId, people: TribeId): LandTile[] {
+export function leasableTiles(s: GameState, nation: PlayerId, people: TribeId): LandTile[] {
   const out: LandTile[] = [];
   const seen = new Set<number>();
   const w = s.map.width;
@@ -468,7 +468,7 @@ export function leasableTiles(s: GameState, nation: NationId, people: TribeId): 
 }
 
 /** The tiles a nation leases from a people now (`Tile.use`, beside its colonies), with the settlement whose land each is. */
-export function leasedTiles(s: GameState, nation: NationId, people: TribeId): LandTile[] {
+export function leasedTiles(s: GameState, nation: PlayerId, people: TribeId): LandTile[] {
   if (!hasLandUse(s, nation, people)) return [];
   return leasableTiles(s, nation, people).filter((p) => tileAt(s, p.x, p.y)!.use === nation);
 }
@@ -478,7 +478,7 @@ export function leasedTiles(s: GameState, nation: NationId, people: TribeId): La
  * `landUse.rent` share of their average price (`landPrice`: the settlement's kind, a capital,
  * tension, Peter Minuit), at least 1 gold.
  */
-export function leaseRent(s: GameState, nation: NationId, tiles: readonly { x: number; y: number }[]): number {
+export function leaseRent(s: GameState, nation: PlayerId, tiles: readonly { x: number; y: number }[]): number {
   if (!tiles.length) return 0;
   let sum = 0;
   for (const p of tiles) sum += landPrice(s, nation, p.x, p.y);
@@ -486,7 +486,7 @@ export function leaseRent(s: GameState, nation: NationId, tiles: readonly { x: n
 }
 
 /** What stands in the way of a lease, beyond the checks every treaty with a people shares (`peopleTreatyProblem`). */
-function landUseProblem(s: GameState, nation: NationId, people: TribeId): string | null {
+function landUseProblem(s: GameState, nation: PlayerId, people: TribeId): string | null {
   const name = peopleName(people);
   if (!hasPeopleTrade(s, nation, people)) return `Land use needs a trade treaty with the ${name} first.`;
   if (!landUseUnlocked(s, nation, people)) return `The ${name} do not know you well enough to lend you land yet: it takes more years of good relations.`;
@@ -498,7 +498,7 @@ function landUseProblem(s: GameState, nation: NationId, people: TribeId): string
 }
 
 /** Pays a year's rent to the settlements whose land the tiles are, each tile's to its own. Returns the gold paid. */
-function payRent(s: GameState, nation: NationId, tiles: readonly LandTile[], rent: number): number {
+function payRent(s: GameState, nation: PlayerId, tiles: readonly LandTile[], rent: number): number {
   const total = rent * tiles.length;
   player(s, nation).gold -= total;
   for (const p of tiles) p.st.gold += rent;
@@ -507,7 +507,7 @@ function payRent(s: GameState, nation: NationId, tiles: readonly LandTile[], ren
 }
 
 /** Makes a lease: the rent per tile is set now and the first year's paid, and the people's land beside the nation's colonies is leased. */
-function makeLease(s: GameState, nation: NationId, people: TribeId): string {
+function makeLease(s: GameState, nation: PlayerId, people: TribeId): string {
   const tiles = leasableTiles(s, nation, people);
   const rent = leaseRent(s, nation, tiles);
   const paid = payRent(s, nation, tiles, rent);
@@ -549,7 +549,7 @@ function evictWorkers(s: GameState, tiles: readonly { x: number; y: number }[]):
  * The tiles a nation's lease with a people marks: leased to it, and the people's land or nobody's
  * (bought since, or its settlement gone). Scans the map: only when a lease ends or on rent day.
  */
-function tilesUsedBy(s: GameState, nation: NationId, people: TribeId): { x: number; y: number }[] {
+function tilesUsedBy(s: GameState, nation: PlayerId, people: TribeId): { x: number; y: number }[] {
   const out: { x: number; y: number }[] = [];
   const { width, tiles } = s.map;
   for (let i = 0; i < tiles.length; i++) {
@@ -563,7 +563,7 @@ function tilesUsedBy(s: GameState, nation: NationId, people: TribeId): { x: numb
 }
 
 /** A lease ended: its tiles are the people's alone again, and whoever worked them finds other work. */
-function releaseLease(s: GameState, nation: NationId, people: TribeId): void {
+function releaseLease(s: GameState, nation: PlayerId, people: TribeId): void {
   const tiles = tilesUsedBy(s, nation, people);
   for (const p of tiles) delete tileAt(s, p.x, p.y)!.use;
   evictWorkers(s, tiles);
@@ -575,7 +575,7 @@ function releaseLease(s: GameState, nation: NationId, people: TribeId): void {
  * paid for each tile at the rate set when the lease was made. A nation that cannot pay loses the
  * lease: the people ends it (it lapses), with no breach of faith.
  */
-function rentDay(s: GameState, t: Treaty, terms: LandUseTerms, nation: NationId, people: TribeId): void {
+function rentDay(s: GameState, t: Treaty, terms: LandUseTerms, nation: PlayerId, people: TribeId): void {
   const name = peopleName(people);
   const tiles = leasableTiles(s, nation, people);
   const due = terms.rent * tiles.length;
@@ -632,12 +632,12 @@ export function leasedFromBeside(s: GameState, colonies: readonly Colony[]): Map
 // Cultural exchange (N7)
 
 /** The cultural exchange in force between a nation and a people, if any. */
-export function exchangeTreaty(s: GameState, nation: NationId, people: TribeId): Treaty | undefined {
+export function exchangeTreaty(s: GameState, nation: PlayerId, people: TribeId): Treaty | undefined {
   return s.treaties ? peopleTreatyBetween(s, 'exchange', nation, people) : undefined;
 }
 
 /** Whether a nation and a people have a cultural exchange in force. */
-export function hasExchange(s: GameState, nation: NationId, people: TribeId): boolean {
+export function hasExchange(s: GameState, nation: PlayerId, people: TribeId): boolean {
   return !!exchangeTreaty(s, nation, people);
 }
 
@@ -650,18 +650,18 @@ export function peopleExchanges(s: GameState, people: TribeId): boolean {
 }
 
 /** The hidden years of good relations a nation needs with a people before it may agree on an exchange (drawn, never stored). */
-export function exchangeThreshold(s: GameState, nation: NationId, people: TribeId): number {
+export function exchangeThreshold(s: GameState, nation: PlayerId, people: TribeId): number {
   const years = peopleThreshold(s, nation, people, 'exchange years', peopleTreatyRules(s).exchange.years);
   return Math.round(years * temperamentOf(s, people).thresholds);
 }
 
 /** Whether a nation's years of good relations with a people reach the hidden threshold for an exchange. */
-export function exchangeUnlocked(s: GameState, nation: NationId, people: TribeId): boolean {
+export function exchangeUnlocked(s: GameState, nation: PlayerId, people: TribeId): boolean {
   return !!peopleRelationOf(s, nation, people) && yearsOfGood(s, nation, people) >= exchangeThreshold(s, nation, people);
 }
 
 /** What stands in the way of an exchange, beyond the checks every treaty with a people shares. */
-function exchangeProblem(s: GameState, nation: NationId, people: TribeId): string | null {
+function exchangeProblem(s: GameState, nation: PlayerId, people: TribeId): string | null {
   const name = peopleName(people);
   if (!hasPeopleTrade(s, nation, people)) return `A cultural exchange needs a trade treaty with the ${name} first.`;
   if (!exchangeUnlocked(s, nation, people)) return `The ${name} do not know you well enough for a cultural exchange yet: it takes more years of good relations.`;
@@ -697,7 +697,7 @@ export function renewedSkill(s: GameState, st: Settlement): UnitTypeId | null {
  * come (N7). Null when it has nothing to teach the nation. Without an exchange in the scenario the
  * settlement's `taughtAt` is never written, so this is `st.skill`, as before.
  */
-export function settlementTeaches(s: GameState, st: Settlement, nation: NationId): UnitTypeId | null {
+export function settlementTeaches(s: GameState, st: Settlement, nation: PlayerId): UnitTypeId | null {
   if (st.skill) return st.skill;
   if (st.taughtAt === undefined || !hasExchange(s, nation, st.tribe)) return null;
   // teachAgainTurn is undefined once the settlement has taught again as often as exchanges allow.
@@ -719,14 +719,14 @@ export function noteTaught(s: GameState, st: Settlement, renewed: boolean): void
  * The turn a nation's scouts are welcome again at a chief they have spoken with, under a cultural
  * exchange (N7): `speakYears` after the last visit. Undefined without an exchange, or before any visit.
  */
-export function chiefAgainTurn(s: GameState, st: Settlement, nation: NationId): number | undefined {
+export function chiefAgainTurn(s: GameState, st: Settlement, nation: PlayerId): number | undefined {
   if (!st.visited.includes(nation) || !hasExchange(s, nation, st.tribe)) return undefined;
   const last = st.spokeAt?.[nation];
   return last === undefined ? s.turn : turnAfterYears(last, peopleTreatyRules(s).exchange.speakYears, calendarOf(s));
 }
 
 /** Whether a chief would speak with a nation's scout now: never spoken with, or welcome again under a cultural exchange. */
-export function chiefWelcomes(s: GameState, st: Settlement, nation: NationId): boolean {
+export function chiefWelcomes(s: GameState, st: Settlement, nation: PlayerId): boolean {
   if (!st.visited.includes(nation)) return true;
   // Written only while the scenario has exchanges: without it, once is all.
   if (!st.spokeAt) return false;
@@ -735,7 +735,7 @@ export function chiefWelcomes(s: GameState, st: Settlement, nation: NationId): b
 }
 
 /** Notes that a nation's scout spoke with a chief (speakToChief); only while the scenario has exchanges. */
-export function noteSpoken(s: GameState, st: Settlement, nation: NationId): void {
+export function noteSpoken(s: GameState, st: Settlement, nation: PlayerId): void {
   if (peopleTreatyOn(s, 'exchange')) (st.spokeAt ??= {})[nation] = s.turn;
 }
 
@@ -752,17 +752,17 @@ export function exchangeBenefits(s: GameState): string {
 // Mutual defence (N7, N9)
 
 /** The mutual defence pact in force between a nation and a people, if any. */
-export function defenceTreaty(s: GameState, nation: NationId, people: TribeId): Treaty | undefined {
+export function defenceTreaty(s: GameState, nation: PlayerId, people: TribeId): Treaty | undefined {
   return s.treaties ? peopleTreatyBetween(s, 'defence', nation, people) : undefined;
 }
 
 /** Whether a nation and a people have a mutual defence pact in force. */
-export function hasDefence(s: GameState, nation: NationId, people: TribeId): boolean {
+export function hasDefence(s: GameState, nation: PlayerId, people: TribeId): boolean {
   return !!defenceTreaty(s, nation, people);
 }
 
 /** The nation a people has its mutual defence pact with (a people keeps one with a single nation at a time, N2), if any. */
-export function defencePartner(s: GameState, people: TribeId): NationId | undefined {
+export function defencePartner(s: GameState, people: TribeId): PlayerId | undefined {
   const list = s.treaties;
   if (!list) return undefined;
   for (const t of list) if (!t.end && t.kind === 'defence' && treatyPeoples(t).includes(people)) return treatyNations(t)[0];
@@ -770,25 +770,25 @@ export function defencePartner(s: GameState, people: TribeId): NationId | undefi
 }
 
 /** The peoples a nation has a mutual defence pact with, in the order the pacts were made. */
-export function defencePeoples(s: GameState, nation: NationId): TribeId[] {
+export function defencePeoples(s: GameState, nation: PlayerId): TribeId[] {
   const out: TribeId[] = [];
   for (const t of s.treaties ?? []) if (!t.end && t.kind === 'defence' && treatyNations(t).includes(nation)) out.push(...treatyPeoples(t));
   return out;
 }
 
 /** The hidden years of good relations a nation needs with a people before a mutual defence pact (drawn, never stored). */
-export function defenceThreshold(s: GameState, nation: NationId, people: TribeId): number {
+export function defenceThreshold(s: GameState, nation: PlayerId, people: TribeId): number {
   const years = peopleThreshold(s, nation, people, 'defence years', peopleTreatyRules(s).defence.years);
   return Math.round(years * temperamentOf(s, people).thresholds);
 }
 
 /** Whether a nation's years of good relations with a people reach the hidden threshold for a defence pact. */
-export function defenceUnlocked(s: GameState, nation: NationId, people: TribeId): boolean {
+export function defenceUnlocked(s: GameState, nation: PlayerId, people: TribeId): boolean {
   return !!peopleRelationOf(s, nation, people) && yearsOfGood(s, nation, people) >= defenceThreshold(s, nation, people);
 }
 
 /** What stands in the way of a defence pact, beyond the checks every treaty with a people shares. */
-function defenceProblem(s: GameState, nation: NationId, people: TribeId): string | null {
+function defenceProblem(s: GameState, nation: PlayerId, people: TribeId): string | null {
   const name = peopleName(people);
   if (!hasPeopleTrade(s, nation, people)) return `A mutual defence pact needs a trade treaty with the ${name} first.`;
   if (!hasLandUse(s, nation, people) && !hasExchange(s, nation, people)) return `A mutual defence pact needs land use or a cultural exchange with the ${name} first.`;
@@ -809,7 +809,7 @@ export function defenceBenefits(s: GameState): string {
  * rule for computer players): its partner is the nation's Favoured Nation or ally, or war on the
  * partner would bring in one of the nation's friends. Only computer players are held to it.
  */
-export function defendedByFriend(s: GameState, nation: NationId, people: TribeId): boolean {
+export function defendedByFriend(s: GameState, nation: PlayerId, people: TribeId): boolean {
   const partner = s.treaties ? defencePartner(s, people) : undefined;
   if (!partner || partner === nation) return false;
   return isFavoured(s, nation, partner) || warOnFriend(s, nation, partner);
@@ -923,7 +923,7 @@ const BREACH_TEXT = { land: 'taking their land', attack: 'attacking them', incit
  * the people makes no new treaty for the waiting years and treats the nation as hostile for longer
  * (drawn from the pair's own stream). Nothing happens without a treaty in force.
  */
-export function breakFaith(s: GameState, nation: NationId, people: TribeId, why: keyof typeof BREACH_TEXT): void {
+export function breakFaith(s: GameState, nation: PlayerId, people: TribeId, why: keyof typeof BREACH_TEXT): void {
   const treaties = treatiesWithPeople(s, nation, people);
   if (!treaties.length) return;
   const rules = peopleTreatyRules(s);
@@ -950,7 +950,7 @@ export function breakFaith(s: GameState, nation: NationId, people: TribeId, why:
 }
 
 /** The people ends a treaty (it turned angry, went to war, or has no settlements left). */
-function peopleEnds(s: GameState, t: Treaty, nation: NationId, people: TribeId, why: TreatyEnd['why']): void {
+function peopleEnds(s: GameState, t: Treaty, nation: PlayerId, people: TribeId, why: TreatyEnd['why']): void {
   endTreaty(s, t, why, why === 'lapsed' ? undefined : peopleParty(people));
   track(nation, 'natives:people treaty ended');
   if (t.kind === 'exchange') track(nation, 'natives:exchange ended');
@@ -995,7 +995,7 @@ export function processPeopleTreaties(s: GameState): void {
 }
 
 /** Notes land a nation took from a people (N8: no new treaty for `landYears`); only while treaties with peoples are in play. */
-export function noteLandTaken(s: GameState, nation: NationId, people: TribeId): void {
+export function noteLandTaken(s: GameState, nation: PlayerId, people: TribeId): void {
   if (!peopleTreatiesOn(s) || !treatyNation(nation)) return;
   peopleRelation(s, nation, people).tookLand = s.turn;
 }
@@ -1004,14 +1004,14 @@ export function noteLandTaken(s: GameState, nation: NationId, people: TribeId): 
 // Trade route stops at a partner's settlement (N4)
 
 /** Whether a nation's trade routes may stop at a settlement: it belongs to a people at peace with it, with a trade treaty. */
-export function settlementStopOpen(s: GameState, nation: NationId, settlementId: string): boolean {
+export function settlementStopOpen(s: GameState, nation: PlayerId, settlementId: string): boolean {
   const st = s.settlements[settlementId];
   if (!st || !hasPeopleTrade(s, nation, st.tribe)) return false;
   return s.tribes.find((t) => t.id === st.tribe)?.stance[nation] !== 'war';
 }
 
 /** Settlements a nation's routes may stop at: those of its trade partners among the peoples. */
-export function partnerSettlements(s: GameState, nation: NationId): Settlement[] {
+export function partnerSettlements(s: GameState, nation: PlayerId): Settlement[] {
   if (!s.treaties) return [];
   return Object.values(s.settlements).filter((st) => settlementStopOpen(s, nation, st.id));
 }
@@ -1020,7 +1020,7 @@ export function partnerSettlements(s: GameState, nation: NationId): Settlement[]
  * Drops every stop at a people's settlements from a nation's trade routes (its treaty ended). A
  * route left with fewer than two stops lets its units go, and they wait for orders.
  */
-export function pruneSettlementStops(s: GameState, nation: NationId, people: TribeId): void {
+export function pruneSettlementStops(s: GameState, nation: PlayerId, people: TribeId): void {
   for (const route of Object.values(s.routes ?? {})) {
     if (route.owner !== nation) continue;
     const keep = route.stops.filter((st) => s.settlements[st.at]?.tribe !== people);
@@ -1050,7 +1050,7 @@ export function pruneSettlementStops(s: GameState, nation: NationId, people: Tri
  * (waiting), "Partners in trade", or by how near the thresholds are: "Barely knows you",
  * "Getting to know you", "Thinks well of you", "Trusts you". Not "wary", a mood word.
  */
-export function peopleStanding(s: GameState, nation: NationId, people: TribeId): string {
+export function peopleStanding(s: GameState, nation: PlayerId, people: TribeId): string {
   const rel = peopleRelationOf(s, nation, people);
   if (!rel) return 'No contact yet';
   if (s.tribes.find((t) => t.id === people)?.stance[nation] === 'war') return 'At war';
