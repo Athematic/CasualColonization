@@ -239,7 +239,7 @@ export function colonyReport(s: GameState, colony: Colony): ColonyReport {
   consumed.food += units.length * FOOD_PER_COLONIST;
 
   // Buildings run in dependency order: tools are made before the armory uses them.
-  for (const kind of buildingsOf(s)) {
+  for (const kind of buildingsOf(s, colony.owner)) {
     const def = BUILDINGS[kind];
     const level = colony.buildings[kind];
     if (!def.output || level === 0) continue;

@@ -22,7 +22,7 @@ import {
   unitName,
   warehouseCapacity,
 } from './queries.js';
-import { BUILDINGS, SCHOOL_TEACHERS, TEACH_TURNS, type BuildingKind } from './rules/buildings.js';
+import { BUILDINGS, SCHOOL_TEACHERS, TEACH_TURNS } from './rules/buildings.js';
 import { GOOD_DEFS, emptyGoods, type GoodId } from './rules/goods.js';
 import { TRIBES, type PlayerId } from './rules/nations.js';
 import { COLONY_BUILDS, PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId } from './rules/units.js';
@@ -32,7 +32,7 @@ import { noteMining } from './mines.js';
 import { noteProduction } from './stats.js';
 import { nativeLandClosedTo, onColonyFounded } from './natives.js';
 import type { BuildTarget, Colony, GameState, Job, Unit } from './types.js';
-import { buildingsOf, difficultyOf, goodsOf, mechanicsOf, nationOf, unitsOf } from './scenarios/index.js';
+import { buildingsOf, difficultyOf, goodsOf, mechanicsOf, nationOf, newColonyBuildings, unitsOf } from './scenarios/index.js';
 import { addColony, setUnitLoc, removeUnit, colonyList } from './unitindex.js';
 
 export function canFoundColony(s: GameState, u: Unit): string | null {
@@ -118,7 +118,7 @@ export function foundColony(s: GameState, unitId: string, name?: string): Colony
   const { x, y } = u.loc;
   const charter = charterCost(s, u.owner);
   if (charter > 0) player(s, u.owner).gold -= charter;
-  const buildings = Object.fromEntries(buildingsOf(s).map((k) => [k, BUILDINGS[k].initialLevel])) as Record<BuildingKind, number>;
+  const buildings = newColonyBuildings(s, u.owner);
   const colony: Colony = {
     id: newId(s, 'c'),
     owner: u.owner,
@@ -216,7 +216,7 @@ export function jobOptions(s: GameState, colony: Colony, u: Unit, occupancy = co
   // The unit's own place does not count against a building's room.
   const own = u.loc.kind === 'colony' && u.loc.colonyId === colony.id && u.loc.job.kind === 'building' ? u.loc.job.building : null;
   const others = (kind: string) => (inBuilding.get(kind) ?? 0) - (own === kind ? 1 : 0);
-  for (const kind of buildingsOf(s)) {
+  for (const kind of buildingsOf(s, colony.owner)) {
     const def = BUILDINGS[kind];
     if (def.workplaces === 0 || colony.buildings[kind] === 0 || !def.output) continue;
     if (others(kind) >= def.workplaces) continue;
@@ -398,7 +398,7 @@ export function buildTargetCost(target: BuildTarget, colony: Colony): { hammers:
 export function canBuild(s: GameState, colony: Colony, target: BuildTarget): boolean {
   if (target.kind === 'unit') {
     const build = COLONY_BUILDS[target.id];
-    if (!build || !unitsOf(s).units.has(target.id)) return false;
+    if (!build || !unitsOf(s, colony.owner).units.has(target.id)) return false;
     if (build.armory && colony.buildings.armory === 0) return false;
     return colony.buildings.docks >= (build.docks ?? 0);
   }
@@ -415,11 +415,11 @@ export function canBuild(s: GameState, colony: Colony, target: BuildTarget): boo
 
 export function buildOptions(s: GameState, colony: Colony): BuildTarget[] {
   const out: BuildTarget[] = [];
-  for (const kind of buildingsOf(s)) {
+  for (const kind of buildingsOf(s, colony.owner)) {
     const t: BuildTarget = { kind: 'building', id: kind };
     if (canBuild(s, colony, t)) out.push(t);
   }
-  for (const id of unitsOf(s).colonyBuilds) {
+  for (const id of unitsOf(s, colony.owner).colonyBuilds) {
     const t: BuildTarget = { kind: 'unit', id };
     if (canBuild(s, colony, t)) out.push(t);
   }

@@ -580,7 +580,7 @@ function bestJobFor(s: GameState, p: Player, c: Colony, u: Unit, prof: AiProfile
   // Building jobs and the school, as jobOptions lists them.
   const own = u.loc.kind === 'colony' && u.loc.colonyId === c.id && u.loc.job.kind === 'building' ? u.loc.job.building : null;
   const others = (kind: string) => (occupancy.inBuilding.get(kind) ?? 0) - (own === kind ? 1 : 0);
-  for (const kind of buildingsOf(s)) {
+  for (const kind of buildingsOf(s, c.owner)) {
     const def = BUILDINGS[kind];
     if (def.workplaces === 0 || c.buildings[kind] === 0 || !def.output) continue;
     if (others(kind) >= def.workplaces) continue;

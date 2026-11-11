@@ -5,7 +5,8 @@
  * are unchanged. There is no "current scenario": code that needs one reads `scenarioOf(s)` (Q8).
  */
 import { SaveVersionError } from '../errors.js';
-import type { BuildingKind } from '../rules/buildings.js';
+import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
+import { kindOfId } from '../playerkind.js';
 import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
 import { DEFAULT_DIFFICULTY, DIFFICULTY, DIFFICULTY_LEVELS, type DifficultyId, type DifficultyRules } from '../rules/difficulty.js';
@@ -275,8 +276,23 @@ export function nativeRulesOf(s: HasScenario): NativeRules {
 }
 
 /** Buildings in play, in production order. */
-export function buildingsOf(s: HasScenario): readonly BuildingKind[] {
+export function buildingsOf(s: HasScenario, owner?: PlayerId): readonly BuildingKind[] {
+  // A playing people's towns have its own selection (T7); everyone else the scenario's.
+  if (owner !== undefined && kindOfId(owner) === 'people') return nationTypeOf(s, 'people').buildings;
   return scenarioOf(s).buildings;
+}
+
+/**
+ * A new colony's buildings: each of the owner's buildings at its first level. A playing people's
+ * town also lists the European buildings at level 0, so rules that ask for a building it does not
+ * have (docks, a stockade, a schoolhouse) read "none".
+ */
+export function newColonyBuildings(s: HasScenario, owner: PlayerId): Record<BuildingKind, number> {
+  const own = buildingsOf(s, owner);
+  const out: Partial<Record<BuildingKind, number>> = {};
+  if (own !== scenarioOf(s).buildings) for (const k of scenarioOf(s).buildings) out[k] = 0;
+  for (const k of own) out[k] = BUILDINGS[k].initialLevel;
+  return out as Record<BuildingKind, number>;
 }
 
 /** The scenario's council categories and members (catalogue order). */
@@ -314,10 +330,23 @@ interface UnitSelection {
 }
 
 const UNIT_SELECTIONS = new WeakMap<Scenario, UnitSelection>();
+const PEOPLE_UNIT_SELECTIONS = new WeakMap<Scenario, UnitSelection>();
 
-/** Unit types in play and the offers made from them (Europe, colony builds, immigrants). */
-export function unitsOf(s: HasScenario): UnitSelection {
+/**
+ * Unit types in play and the offers made from them (Europe, colony builds, immigrants). With an
+ * owner that is a playing people: its own selection (T6), what its towns build; nothing from Europe.
+ */
+export function unitsOf(s: HasScenario, owner?: PlayerId): UnitSelection {
   const scenario = scenarioOf(s);
+  if (owner !== undefined && kindOfId(owner) === 'people') {
+    let own = PEOPLE_UNIT_SELECTIONS.get(scenario);
+    if (!own) {
+      const units = new Set(nationTypeOf(s, 'people').units);
+      own = { units, trainable: [], purchasable: [], colonyBuilds: (Object.keys(COLONY_BUILDS) as UnitTypeId[]).filter((t) => units.has(t)), immigrants: [] };
+      PEOPLE_UNIT_SELECTIONS.set(scenario, own);
+    }
+    return own;
+  }
   let sel = UNIT_SELECTIONS.get(scenario);
   if (!sel) {
     const units = new Set(scenario.units);

@@ -73,7 +73,7 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreW
   let goods = 0;
   for (const c of colonyList(s)) {
     if (c.owner !== p.id) continue;
-    for (const kind of buildingsOf(s)) levels += Math.max(0, (c.buildings[kind] ?? 0) - BUILDINGS[kind].initialLevel);
+    for (const kind of buildingsOf(s, c.owner)) levels += Math.max(0, (c.buildings[kind] ?? 0) - BUILDINGS[kind].initialLevel);
     const pop = workers.get(c.id) ?? 0;
     const sol = sonsOfLiberty(s, c, pop);
     rebels += Math.round((pop * sol) / 100);
