@@ -42,7 +42,7 @@ Each beta gets design notes first.
 
 Beta 1, cooperation between Europeans, is built (design in [design/cooperation.md](design/cooperation.md)); its steps are in [SHIPPED.md](SHIPPED.md#beta-1-cooperation-between-europeans).
 
-Beta 2, native peoples as partners: design in [design/native-partners.md](design/native-partners.md) (status: `in progress`; N1–N14 decided by Simon, 11 November 2026, as recommended, with the five fixes of today's native rules in step 0). Step 0 is built (M, P1, done; branch `beta2/step0`): a people as a treaty party read through party helpers, `peopleRelations`, `peoples.rules`, the `burialGrounds` and `surrender` switches, `landRadius`, and the five fixes (section 8 of the note). Next: step 1, the trade treaty with a people (L, P1).
+Beta 2, native peoples as partners: design in [design/native-partners.md](design/native-partners.md) (status: `in progress`; N1–N14 decided by Simon, 11 November 2026, as recommended, with the five fixes of today's native rules in step 0). Step 0 is built (M, P1, done; branch `beta2/step0`): a people as a treaty party read through party helpers, `peopleRelations`, `peoples.rules`, the `burialGrounds` and `surrender` switches, `landRadius`, and the five fixes (section 8 of the note). Step 1 is built (L, P1, done; branch `beta2/step1`): the trade treaty with a people (`people-trade`): unlocking from the standing record, proposals and the people's seeded answers and own offers, better prices and goods, more trade visits, route stops at partner settlements, breaking faith, computer nations per level, the Native peoples card, switched on in the Americas and the Caribbean (section 9 of the note). Next: step 2, land use (M–L, P1).
 
 ## Scenarios (content)
 

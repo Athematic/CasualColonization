@@ -28,15 +28,16 @@ If a change is meant to change games, re-record with `npm run test:golden:write`
 | `map` | See [Map settings](#map-settings-and-settlement-kinds). |
 | `terrain` | The terrains in play. The generator and the stored maps may use only these (the conformance test checks it). `ocean` and `highSeas` must be on the list. |
 | `nations` | See [Nations](#nations). |
-| `peoples` | The indigenous peoples in play (`ids`, north to south, the order of the generator's bands), the goods their settlements `produce`, the `settlements` table (one settlement kind for each lifeway), `overrides` for a people's skills or wants in this scenario only, and `rules`, changes to the engine's native rules. See [Native rules](#native-rules). |
+| `peoples` | The indigenous peoples in play (`ids`, north to south, the order of the generator's bands), the goods their settlements `produce`, the `settlements` table (one settlement kind for each lifeway), `overrides` for a people's skills, wants or treaty `temperament` (`open`, `guarded`, `proud`) in this scenario only, and `rules`, changes to the engine's native rules. See [Native rules](#native-rules). |
 | `goods` | Goods in play. The order is the order of keys in markets and warehouses. |
 | `units` | Unit types in play. Europe offers, colonies build and immigrants arrive only from this list. The engine's named slots (treasure, the King's regulars, the starting ship) must be on it. |
 | `buildings` | Buildings in play, in production order (tools are made before the armory uses them). |
 | `council` | The scenario's council (the Americas: the Continental Congress). `categories`, `members` (ids from the catalogue's `FATHERS`) and optional `effects` that replace a member's effects in this scenario. |
 | `ai` | What the computer players need to know: `pace`, `islands` and four goods lists. See [Computer players](#computer-players). |
 | `events` | The id of a registered event set. See [Events](#events). |
-| `mechanics` | Fifteen switches. See [Mechanics switches](#mechanics-switches). |
+| `mechanics` | Sixteen switches. See [Mechanics switches](#mechanics-switches). |
 | `alliances` | Optional overrides of the alliance rules (`ALLIANCE_RULES` in `alliances.ts`): `requires` (the rung an alliance builds on, `'favoured'` or only `'trade'`), `peaceYears` and `volume` (the hidden thresholds that unlock it), `longPeace` (the years of peace with a trade agreement after which "old friends" may ally without the rung or the trade, 150 ± 30), `waitingYears` and `hostilityYears` after leaving one, `sharedBells` (the share of each ally's bells that helps the others' Congress, 0.1) and `expeditionCost` (a joint expedition, 1,200 gold, half each). See [Alliances](#alliances). |
+| `peopleTreaties` | Optional overrides of the rules for treaties with native peoples (`PEOPLE_TREATY_RULES` in `peopletreaties.ts`), the tables field by field. See [Treaties with peoples](#treaties-with-peoples). |
 | `companyRules` | Optional overrides of the chartered companies' rules (`COMPANY_RULES` in `companies.ts`): `capital` (2,000), `foundingShares` (20), `sharePrice` (the least, 100), `dividendEvery` (10 turns), `reserve` (800) and `payout` (0.5 of the gold above the reserve). See [Chartered companies](#chartered-companies). |
 | `victory` | The ways the game can end, in the order they are checked. See [Victory](#victory). |
 | `rumours` | The outcomes of a Lost City Rumour and their odds, in the order they are drawn. The Caribbean reuses the Americas' table. |
@@ -118,7 +119,7 @@ A council member's catalogue entry (`FATHERS`) carries its `modifiers` and `onJo
 
 ## Mechanics switches
 
-`Scenario.mechanics` has fifteen switches. A system that is off is skipped where it would run, draws no random numbers, has its commands refused with a reason, is left out of the computer players' plans and is hidden in the web game.
+`Scenario.mechanics` has sixteen switches. A system that is off is skipped where it would run, draws no random numbers, has its commands refused with a reason, is left out of the computer players' plans and is hidden in the web game.
 
 | Switch | Meaning |
 | --- | --- |
@@ -137,6 +138,7 @@ A council member's catalogue entry (`FATHERS`) carries its `modifiers` and `onJo
 | `alliances` | Alliances between European nations: the rung after Favoured Nation, with a defensive pact, open colonies, shared sight and bells, and joint expeditions. Absent means off. See [Alliances](#alliances). |
 | `companies` | Chartered companies from `nations.companies`: nations found them, buy shares and receive dividends. Absent means off. See [Chartered companies](#chartered-companies). |
 | `confederation` | Allies may declare independence together and fight one war. Needs `alliances` and `independence`. Absent means off. |
+| `peopleTreaties` | The kinds of treaty with native peoples in play (`'people-trade'`, the trade treaty, so far; `'land-use'`, `'exchange'` and `'defence'` come in later steps of Beta 2). Absent or empty means none. See [Treaties with peoples](#treaties-with-peoples). |
 
 The numbers of the Crown and the war (REF growth, demands, royal wars, mercenaries, intervention) are still code.
 
@@ -159,7 +161,7 @@ A kind is a pure function of the state. The Americas use `[independence-war, con
 
 - `pace` (absent means 1): how fast the game's arc runs against the Americas' 609 turns. The computer players' turn thresholds (when to explore, arm, start wars, plan independence) and the council's late-offer turn are scaled with `aiTurn(s, turn)`. Durations in turns (cooldowns, patience, war weariness) are not scaled, because a turn is the same half-year in every scenario that has seasons. The Caribbean uses 0.35.
 - `islands`: the land is islands, so when no good site is within walking distance the advanced levels send a settler by ship to another island.
-- `cooperation`: how readily the computer players cooperate, merged over `COOPERATION` in `alliances.ts`: `proposeAlliance` (0.5) and `acceptAlliance` (0.8), chances per review (every five turns) for the most cooperative level (Creative; the others take a share, Naive never proposes); `proposeLongPeace` (0.001), the chance of proposing to old friends (`alliances.longPeace`) where the usual way is not open; `joinWar` (0.8), how good a target an ally's enemy must be before a computer ally joins the war; `foundCompany` (0.03) and `buyShares` (0.1), for nations with gold to spare, which means `foundMargin` (0.5) of the capital again or `sharesMargin` (1,500 gold) beyond the price, on top of the nation's reserve; `jointExpedition` (0.05); `confederation` (0.6), for a nation ready to declare independence: to propose to an ally, or to wait up to 20 turns for one with an independence plan; and `confederationReadiness` (0.65), the share of its usual margin over the Royal Expeditionary Force a Creative nation wants when it declares together with an ally. The Caribbean raises the company rates, lowers the margins (0 and 500) and lowers the alliance proposals. The defaults aim at the targets in [design/cooperation.md](design/cooperation.md), C11 (measured in its section 8): an alliance in about one computer-only game in four, a company in about one in ten, a `concord` victory about once in 30–40 and a confederation about once in 30–50 even with every nation Creative. A scenario that wants more cooperation raises them (and may lower the thresholds in `Scenario.alliances`, or concord's `share`).
+- `cooperation`: how readily the computer players cooperate, merged over `COOPERATION` in `alliances.ts`: `proposeAlliance` (0.5) and `acceptAlliance` (0.8), chances per review (every five turns) for the most cooperative level (Creative; the others take a share, Naive never proposes); `proposeLongPeace` (0.001), the chance of proposing to old friends (`alliances.longPeace`) where the usual way is not open; `joinWar` (0.8), how good a target an ally's enemy must be before a computer ally joins the war; `foundCompany` (0.03) and `buyShares` (0.1), for nations with gold to spare, which means `foundMargin` (0.5) of the capital again or `sharesMargin` (1,500 gold) beyond the price, on top of the nation's reserve; `jointExpedition` (0.05); `proposePeopleTrade` (0.5), the chance per review of proposing a trade treaty to a people it may make one with, and `acceptPeopleOffer` (0.9), of accepting a people's own offer (levels take `LEVEL_COOPERATION`'s `people` and `peopleAccept` shares: Creative 1 and 1, Competent 0.8 and 1, Combative 0.5 and 0.7 and only with a people it has traded 300 gold with, Naive 0 and 0.8); `confederation` (0.6), for a nation ready to declare independence: to propose to an ally, or to wait up to 20 turns for one with an independence plan; and `confederationReadiness` (0.65), the share of its usual margin over the Royal Expeditionary Force a Creative nation wants when it declares together with an ally. The Caribbean raises the company rates, lowers the margins (0 and 500), lowers the alliance proposals and raises `proposePeopleTrade` to 0.8. The defaults aim at the targets in [design/cooperation.md](design/cooperation.md), C11 (measured in its section 8): an alliance in about one computer-only game in four, a company in about one in ten, a `concord` victory about once in 30–40 and a confederation about once in 30–50 even with every nation Creative. A scenario that wants more cooperation raises them (and may lower the thresholds in `Scenario.alliances`, or concord's `share`).
 - `goods`: four ordered lists, `trade`, `export`, `road` and `farm`. The order decides ties, so keep it deliberate. Name only goods in play.
 
 ## The arena and the tournament
@@ -211,7 +213,26 @@ Settlement kinds are rows of `SETTLEMENT_KINDS` (`rules/natives.ts`): `camp`, `v
 
 Chartered companies (`Player.kind: 'company'`) stand outside all of this: the peoples feel no tension towards them, their braves never demand from or attack a company, nobody can incite a people against one, and its explorers find no burial grounds.
 
-**Standing with a people** (`GameState.peopleRelations`, `natives.ts`): a record per nation and people, written on the nation's first trade with that people, with the gold traded both ways (`volume`) and the turn the current run of good relations began (`goodSince`: at peace, the people's settlements content on average). Beta 2's treaties with peoples will unlock on it, against hidden thresholds drawn per pair from the seed (`peopleThreshold`), never stored. See [design/native-partners.md](design/native-partners.md).
+**Standing with a people** (`GameState.peopleRelations`, `natives.ts`): a record per nation and people, written on the nation's first trade with that people, with the gold traded both ways (`volume`) and the turn the current run of good relations began (`goodSince`: at peace, the people's settlements content on average). With `mechanics.peopleTreaties` it is also written on contact: a scout's visit, a mission or a brave come to trade. Treaties with peoples unlock on it, against hidden thresholds drawn per pair from the seed (`peopleThreshold`), never stored. See [design/native-partners.md](design/native-partners.md).
+
+## Treaties with peoples
+
+With `mechanics.peopleTreaties` naming `'people-trade'`, a nation and a native people can make a **trade treaty** (`peopletreaties.ts`): a treaty in `GameState.treaties` between one nation and one people (`{ kind: 'people', id }`). It unlocks once the nation is in contact with the people (its standing is written), and its years of good relations and the gold traded with the people reach hidden thresholds drawn per pair. A nation proposes it (the `proposePeopleTreaty` command, Foreign Affairs) and the people answers at once: never while one of its settlements is angry with the nation or within `landYears` of land taken from it, otherwise at `accept` times its temperament. A people offers one itself through a brave come to trade at a colony (`offer`): a turn-start notice for a person (a `NativeDemand` of kind `'treaty'`), answered at once by a computer player. Submitted peoples make no treaties with the nation they submitted to.
+
+A treaty in force: the people's settlements pay `sell` times as much for the partner's goods and ask `buy` times as much for theirs, gather `gather` times as much for sale (while the people trades by treaty with anyone), send their braves to trade `braveTrade` times as often, and calm `tensionFall` more a round towards the partner; the partner's trade routes may stop at the people's settlements (one sale and one purchase there, as a wagon train makes). Taking a partner's land, attacking it, or paying it to make war (inciting) **breaks faith**: every treaty with that people ends, each of its settlements gains `breachTension` towards the nation, and the people makes no new treaty for `waitingYears` and treats the nation as hostile (no gifts or trade visits, no offers) for `hostilityYears`. A people ends its treaties itself when one of its settlements turns angry with the partner, or with war.
+
+`Scenario.peopleTreaties` changes the engine's numbers, the tables field by field:
+
+| Field | What it says (engine value) |
+| --- | --- |
+| `trade.years`, `trade.volume` | The hidden thresholds: years of good relations (8 ± 3) and gold traded with the people (100–400), drawn per pair. |
+| `trade.sell`, `trade.buy`, `trade.gather`, `trade.braveTrade`, `trade.tensionFall` | The effects: 1.2, 0.8, 1.25, 2 and 2. |
+| `accept`, `offer` | The people's chance to accept a proposal it is free to accept (0.8), and to offer a treaty on a brave's trade visit (0.3). |
+| `landYears` | Years after land was taken from a people during which it refuses new treaties (20). |
+| `breachTension`, `waitingYears`, `hostilityYears` | What breaking faith costs: 200 tension at each settlement, waiting 15 ± 3 years, hostility 25 ± 5. |
+| `temperaments` | `open` (accept × 1.2, offer × 1.5, thresholds × 0.75), `guarded` (0.7, 0.5, 1.25) and `proud` (0.5, 0.25, 1); a people without one (`peoples.overrides[id].temperament`) uses neither. |
+
+The Americas and the Caribbean switch the trade treaty on. The Caribbean needs no gold traded (`trade.volume` 0–0: its colonies hardly trade at settlements) and its peoples offer at 0.5. Measured in [design/native-partners.md](design/native-partners.md), section 9.
 
 ## The map grid
 
