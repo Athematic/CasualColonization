@@ -1,3 +1,4 @@
+import { anyPlayingPeople, onPairWar, pactPlayersOf } from './peoplediplomacy.js';
 import { gridOf } from './grid.js';
 import { fail } from './errors.js';
 import { noteHistory } from './history.js';
@@ -162,6 +163,8 @@ export function declareWar(s: GameState, a: string, b: string): void {
       message(s, `${nationOf(s, ally).name} stands by its ally ${nationOf(s, pb.id).name}.`);
       declareWar(s, pa.id, ally);
     }
+    // Treaties with a playing people end with the war, and its defence partners stand by it (peoplediplomacy.ts, Beta 3 step 4).
+    if (anyPlayingPeople(s)) for (const id of onPairWar(s, pa.id, pb.id)) if (pa.stance[id] !== 'war') declareWar(s, pa.id, id);
   }
 }
 
@@ -448,6 +451,13 @@ function hostile(s: GameState, tribeId: TribeId, nation: PlayerId, at: { x: numb
     message(s, `${nationOf(s, partner).name} stands by its pact with the ${TRIBES[tribeId].name}: the attack on them is war.`);
     noteHistory(s, 'war', [nation, partner], `${nationOf(s, partner).name} goes to war with ${nationOf(s, nation).name} to defend the ${TRIBES[tribeId].name}, its partners in a mutual defence pact.`);
     declareWar(s, nation, partner);
+  }
+  // A playing people bound by a pact to the people attacked stands by it (Beta 3 step 4).
+  if (s.treaties && anyPlayingPeople(s)) {
+    for (const id of pactPlayersOf(s, tribeId, nation)) {
+      message(s, `${nationOf(s, id).name} stand by their pact with the ${TRIBES[tribeId].name}: the attack on them is war.`);
+      declareWar(s, nation, id);
+    }
   }
   if (tribe.submitted?.includes(nation)) tribe.submitted = tribe.submitted.filter((n) => n !== nation);
   if (tribe.stance[nation] !== 'war') {

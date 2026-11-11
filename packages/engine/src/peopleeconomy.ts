@@ -27,6 +27,7 @@
  * unclaimed land next to its own (`claimLand`). Other players' colonies do not work a people's
  * claimed land or found colonies on it (leases and sales come with step 4's treaties).
  */
+import { isSick } from './epidemics.js';
 import { bestJob } from './colony.js';
 import { fail } from './errors.js';
 import { gridOf } from './grid.js';
@@ -165,7 +166,8 @@ export function growPeopleTown(s: GameState, colony: Colony): void {
     colony.goods.food >= toGrow + reserveOf(s, colony, pop) &&
     townDwellers(s, colony) < housingOf(s, colony) &&
     !hungryThisYear(s, colony) &&
-    !foughtThisYear(s, colony)
+    !foughtThisYear(s, colony) &&
+    !isSick(s, colony)
   ) {
     colony.goods.food -= toGrow;
     const u = createUnit(s, colony.owner, bornType(s, colony.owner), { kind: 'map', x: colony.x, y: colony.y });

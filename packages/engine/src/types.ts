@@ -353,6 +353,16 @@ export interface Colony {
   hunger?: { since: number; last: number };
   /** The last turn a playing people's town was attacked (no birth that year, T10). Missing when never. */
   foughtAt?: number;
+  /**
+   * An epidemic (native-nations.md T12, epidemics.ts): no birth or growth in the town or colony
+   * before this turn. Written only while the scenario has `mechanics.epidemics`; missing when well.
+   */
+  sickUntil?: number;
+  /**
+   * A playing people's town under a cultural exchange (Beta 3 step 4): the turn it last taught a
+   * colonist of each partner nation. Written only by a people player's exchange; missing when never.
+   */
+  taughtAt?: Partial<Record<PlayerId, number>>;
 }
 
 /**
@@ -550,7 +560,16 @@ export interface PeopleRelation {
   /** Treaties with the people broken so far; seeds the next waiting and hostility draws. */
   breaks?: number;
   /** A proposal waiting for an answer: made by the nation to the people, or offered by the people. */
-  proposal?: { kind: PeopleTreatyKind; from: 'nation' | 'people'; turn: number };
+  proposal?: {
+    kind: PeopleTreatyKind;
+    from: 'nation' | 'people';
+    turn: number;
+    /**
+     * The player who proposed, in a pair with a playing people (native-nations.md T11, Beta 3 step
+     * 4): its answer waits for the person on the other side. Missing in Beta 2's pairs.
+     */
+    by?: PlayerId;
+  };
   /**
    * Turn the nation last took land from the people (without paying for it) (step 1, N8: the people
    * refuses new treaties for `PeopleTreatyRules.landYears` after). Written only while the

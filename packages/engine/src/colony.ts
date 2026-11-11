@@ -1,3 +1,5 @@
+import { isSick } from './epidemics.js';
+import { exchangeTeachBonus } from './peoplediplomacy.js';
 import { gridOf } from './grid.js';
 import { fail } from './errors.js';
 import { noteHistory } from './history.js';
@@ -519,7 +521,7 @@ export function processColony(s: GameState, colony: Colony): void {
   if (town) {
     // A people's town: births from food above its reserve, stores and hunger (peopleeconomy.ts).
     growPeopleTown(s, colony);
-  } else if (colony.goods.food >= foodToGrow(s, colony)) {
+  } else if (colony.goods.food >= foodToGrow(s, colony) && !(colony.sickUntil !== undefined && isSick(s, colony))) {
     colony.goods.food -= foodToGrow(s, colony);
     createUnit(s, colony.owner, bornType(s, colony.owner), { kind: 'map', x: colony.x, y: colony.y });
     track(colony.owner, 'colony:colonist born');
@@ -610,7 +612,7 @@ function teachWays(s: GameState, colony: Colony, teacher: Unit, students: Unit[]
 
 /** Turns an elder needs to teach: a schoolhouse's, less what the people's council takes off (the Elders), at least 1. */
 function elderTeachTurns(s: GameState, colony: Colony, teacher: Unit): number {
-  return Math.max(1, TEACH_TURNS[(UNIT_TYPES[teacher.type].teach ?? 1) - 1] + addOf(modifiers(s, colony.owner, 'teachTurns')));
+  return Math.max(1, TEACH_TURNS[(UNIT_TYPES[teacher.type].teach ?? 1) - 1] + addOf(modifiers(s, colony.owner, 'teachTurns')) - exchangeTeachBonus(s, colony.owner));
 }
 
 /** Counts the furs and game a colony's workers and centre took this turn against their regions' renewal (land.ts). */

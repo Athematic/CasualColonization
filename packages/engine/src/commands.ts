@@ -19,6 +19,8 @@ import {
 import { boardShip, leaveShip, moveUnit, setDestination, setRoadTo, startImprovement } from './movement.js';
 import { answerNativeDemand } from './braves.js';
 import { proposePeopleTreaty } from './peopletreaties.js';
+import { answerPairProposal, endPairTreaty, learnAtTown, proposePairTreaty } from './peoplediplomacy.js';
+import { barter, tradeWithPeople } from './peopletrade.js';
 import { buyFromSettlement, buyLand, denounceMission, establishMission, giftToTribe, inciteTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
 import { claimLand } from './peopleeconomy.js';
 import { chooseFather } from './fathers.js';
@@ -128,6 +130,22 @@ export type Command =
   | { type: 'giftTribe'; tribe: TribeId; gold: number }
   /** Proposes a treaty to a native people, which answers at once (peopletreaties.ts); a trade treaty when `kind` is left out. */
   | { type: 'proposePeopleTreaty'; people: TribeId; kind?: PeopleTreatyKind }
+  /**
+   * Diplomacy with a playing people (peoplediplomacy.ts, native-nations.md T11): a treaty proposed
+   * to a nation or people by a playing people, or to a playing people by a nation; a person answers
+   * later, a computer at once.
+   */
+  | { type: 'proposePairTreaty'; to: PlayerId; kind?: PeopleTreatyKind }
+  /** Answers the treaty proposal `from` made (a pair with a playing people). */
+  | { type: 'answerPairProposal'; from: PlayerId; accept: boolean }
+  /** Ends a treaty with a playing people, or a playing people's treaty: breaking faith. */
+  | { type: 'endPairTreaty'; with: PlayerId; kind: PeopleTreatyKind }
+  /** A carrier next to a town or colony of the other side (a nation and a playing people) sells (`load` false) or buys goods for gold (peopletrade.ts). */
+  | { type: 'tradeWithPeople'; unitId: string; colonyId: string; good: GoodId; amount: number; load: boolean }
+  /** A playing people's carrier next to another people's town or settlement gives goods for goods (peopletrade.ts). */
+  | { type: 'barter'; unitId: string; colonyId?: string; settlementId?: string; give: GoodId; amount: number; take: GoodId }
+  /** A colonist next to a playing people's town learns a skill there, under a cultural exchange (peoplediplomacy.ts). */
+  | { type: 'learnAtTown'; unitId: string; colonyId: string }
   | { type: 'declareIndependence' }
   /** Abandons a small colony without a stockade (leaving.ts). */
   | { type: 'abandonColony'; colonyId: string }
@@ -452,6 +470,26 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'proposePeopleTreaty':
         text = proposePeopleTreaty(s, nation, cmd.people, cmd.kind ?? 'people-trade');
+        break;
+      case 'proposePairTreaty':
+        text = proposePairTreaty(s, nation, cmd.to, cmd.kind ?? 'people-trade');
+        break;
+      case 'answerPairProposal':
+        text = answerPairProposal(s, nation, cmd.from, cmd.accept);
+        break;
+      case 'endPairTreaty':
+        text = endPairTreaty(s, nation, cmd.with, cmd.kind);
+        break;
+      case 'tradeWithPeople':
+        text = tradeWithPeople(s, nation, cmd.unitId, cmd.colonyId, cmd.good, cmd.amount, cmd.load);
+        break;
+      case 'barter':
+        ownUnit(s, nation, cmd.unitId);
+        text = barter(s, nation, cmd.unitId, { colonyId: cmd.colonyId, settlementId: cmd.settlementId }, cmd.give, cmd.amount, cmd.take);
+        break;
+      case 'learnAtTown':
+        ownUnit(s, nation, cmd.unitId);
+        text = learnAtTown(s, cmd.unitId, cmd.colonyId);
         break;
       case 'abandonColony':
         ownColony(s, nation, cmd.colonyId);

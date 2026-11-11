@@ -54,7 +54,8 @@ import { cooperationOf, LEVEL_COOPERATION, warOnFriend } from './alliances.js';
 import { calendarOf, mechanicsOf, nationOf, nativeRulesOf, peopleOf, scenarioOf, Term, turnAfterYears, yearValue } from './scenarios/index.js';
 import type { PeopleTreatyRules, Scenario, TemperamentRules, YearsAround } from './scenarios/types.js';
 import { track } from './telemetry.js';
-import { addTreaty, endTreaty, nationParty, peopleParty, peopleTreatyBetween, treatiesWithPeople, treatyNations, treatyPeoples } from './treaties.js';
+import { addTreaty, endTreaty, nationParty, partyIsNation, peopleParty, peopleTreatyBetween, treatiesWithPeople, treatyNations, treatyPeoples } from './treaties.js';
+import { anyPlayingPeople, withPlayingPeople } from './peoplediplomacy.js';
 import type { Colony, GameState, LandUseTerms, PeopleTreatyKind, Settlement, Treaty, TreatyEnd, Unit } from './types.js';
 import { colonyList, setUnitLoc, unitList } from './unitindex.js';
 
@@ -765,7 +766,8 @@ export function hasDefence(s: GameState, nation: PlayerId, people: TribeId): boo
 export function defencePartner(s: GameState, people: TribeId): PlayerId | undefined {
   const list = s.treaties;
   if (!list) return undefined;
-  for (const t of list) if (!t.end && t.kind === 'defence' && treatyPeoples(t).includes(people)) return treatyNations(t)[0];
+  // A pact between two peoples (Beta 3 step 4) binds no nation.
+  for (const t of list) if (!t.end && t.kind === 'defence' && treatyPeoples(t).includes(people) && t.parties.some(partyIsNation)) return treatyNations(t)[0];
   return undefined;
 }
 
@@ -978,8 +980,11 @@ export function processPeopleTreaties(s: GameState): void {
   const list = s.treaties;
   if (!list) return;
   const angry = nativeRulesOf(s).tension.angry;
+  // Treaties with a playing people keep their own rules (peoplediplomacy.ts, Beta 3 step 4).
+  const playing = anyPlayingPeople(s);
   for (const t of list) {
     if (t.end) continue;
+    if (playing && withPlayingPeople(s, t)) continue;
     const people = treatyPeoples(t)[0];
     if (!people) continue;
     const nation = treatyNations(t)[0];

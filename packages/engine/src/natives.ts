@@ -11,7 +11,7 @@ import { random, randInt } from './rng.js';
 import { noteTrade } from './stats.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
-import { systemsOf, systemsOfId } from './playerkind.js';
+import { kindOfId, systemsOf, systemsOfId } from './playerkind.js';
 import { NATIVE_RULES, type TensionThresholds } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
@@ -38,6 +38,11 @@ function adjacentSettlement(s: GameState, u: Unit, settlementId: string, deal?: 
   const tribe = s.tribes.find((t) => t.id === st.tribe)!;
   if (tribe.stance[u.owner] === 'war') fail(`The ${TRIBES[st.tribe].name} refuse to meet you.`);
   return st;
+}
+
+/** A playing people trades with a people nobody plays by barter, not for gold (peopletrade.ts, T10). */
+function noPeopleCarrier(u: Unit): void {
+  if (kindOfId(u.owner) === 'people') fail('Peoples barter with each other; gold comes only from trade with Europeans.');
 }
 
 function noteDeal(s: GameState, u: Unit, st: Settlement, deal: 'sold' | 'bought'): void {
@@ -141,6 +146,7 @@ export function nativeOffer(s: GameState, st: Settlement, good: GoodId, amount: 
 export function tradeWithSettlement(s: GameState, unitId: string, settlementId: string, good?: GoodId, routed = false): string {
   const u = s.units[unitId];
   const st = adjacentSettlement(s, u, settlementId, 'sold', routed);
+  noPeopleCarrier(u);
   const cargo = u.cargo ?? {};
   const chosen = good ?? goodsOf(s).filter((g) => (cargo[g] ?? 0) > 0).sort((a, b) => nativeOffer(s, st, b, cargo[b]!, u.owner) - nativeOffer(s, st, a, cargo[a]!, u.owner))[0];
   if (!chosen || !(cargo[chosen] ?? 0)) fail('There is nothing to trade.');
@@ -176,6 +182,7 @@ export function buyFromSettlement(s: GameState, unitId: string, settlementId: st
   const u = s.units[unitId];
   if (!u || !['wagon', 'ship'].includes(UNIT_TYPES[u.type].kind) || UNIT_TYPES[u.type].cargo <= 0) fail('Only wagon trains and ships can buy goods.');
   const st = adjacentSettlement(s, u, settlementId, 'bought', routed);
+  noPeopleCarrier(u);
   if (!nativeProduceOf(s).includes(good)) fail(`The ${TRIBES[st.tribe].name} do not sell ${GOOD_DEFS[good].name.toLowerCase()}.`);
   const stock = st.goods?.[good] ?? 0;
   const n = Math.min(amount, stock, cargoRoomFor(s, u, good));
@@ -564,7 +571,13 @@ export function goodRelations(s: GameState, nation: PlayerId, people: TribeId): 
   // A people playing as a nation has no settlements: its relations are good while the two are at
   // peace (its side of Beta 2's standing record, native-nations.md T10).
   const playing = s.players.find((p) => p.id === people);
-  if (playing) return playing.stance[nation] !== 'war' && s.players.some((p) => p.id === nation);
+  if (playing) {
+    if (playing.stance[nation] === 'war') return false;
+    if (s.players.some((p) => p.id === nation)) return true;
+    // Two peoples (Beta 3 step 4): the other one nobody plays, while it has settlements.
+    for (const id in s.settlements) if (s.settlements[id].tribe === nation) return true;
+    return false;
+  }
   const tribe = s.tribes.find((t) => t.id === people);
   if (!tribe || tribe.stance[nation] === 'war') return false;
   let n = 0;

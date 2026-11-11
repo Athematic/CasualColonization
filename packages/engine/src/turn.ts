@@ -7,6 +7,8 @@ import { advanceSailing, processImmigration, recoverMarkets } from './europe.js'
 import { advanceWork, continueOrders, continueRoadTo, placeOnMap } from './movement.js';
 import { processNatives } from './natives.js';
 import { processLand } from './land.js';
+import { processEpidemics } from './epidemics.js';
+import { anyPlayingPeople, processPeopleDiplomacy } from './peoplediplomacy.js';
 import { processCongress } from './fathers.js';
 import { processCrown } from './crown.js';
 import { processCompanies } from './chartered.js';
@@ -104,6 +106,10 @@ function advance(s: GameState): void {
     perfEnd('natives (incl. braves)', t);
     // Hard years and land health, in scenarios that have them (land.ts).
     if (s.land) processLand(s);
+    // Epidemics after contact, in scenarios that have them (epidemics.ts, native-nations.md T12).
+    processEpidemics(s);
+    // Treaties with a playing people (peoplediplomacy.ts, Beta 3 step 4).
+    if (anyPlayingPeople(s)) processPeopleDiplomacy(s);
     t = perfStart();
     recoverMarkets(s);
     perfEnd('markets', t);

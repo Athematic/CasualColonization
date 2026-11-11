@@ -46,7 +46,8 @@ export function sameParty(a: TreatyParty, b: TreatyParty): boolean {
 
 /** A party's name: the nation's ("France") or the people's, with its article ("the Kalinago"). */
 export function partyName(s: GameState, p: TreatyParty): string {
-  return partyIsPeople(p) ? `the ${TRIBES[p.id].name}` : nationOf(s, p.id).name;
+  // A playing people (Beta 3) is named as a player: "the Haudenosaunee".
+  return partyIsPeople(p) && !s.players.some((o) => o.id === p.id) ? `the ${TRIBES[p.id].name}` : nationOf(s, p.id).name;
 }
 
 /** Whether a nation is a party to the treaty. */

@@ -206,6 +206,28 @@ export interface Mechanics {
    * down, and its fur and game yields scale with its health. Absent or false means off.
    */
   landHealth?: false | LandHealthRules;
+  /**
+   * Epidemics after contact (native-nations.md T12, epidemics.ts): in each region each year, once
+   * Europeans and a people have met there, an epidemic with this chance, drawn from the game seed;
+   * it strikes every town and colony in the region alike. Absent or false means off (the Americas
+   * and the Caribbean).
+   */
+  epidemics?: false | EpidemicRules;
+}
+
+/** Epidemics (`Mechanics.epidemics`). */
+export interface EpidemicRules {
+  /** Chance of an epidemic in a region in contact, each year (1 in 25). */
+  chance: number;
+  /** Years without births in a town or colony an epidemic struck (3). */
+  years: number;
+  /** People a town or colony an epidemic struck loses, never its last (1). */
+  loss: number;
+  /**
+   * How near a European colony and a people's town (or a settlement of a people nobody plays) must
+   * be for a region to be in contact, in tiles (8): an epidemic strikes only where the two have met.
+   */
+  reach: number;
 }
 
 /** Hard years (`Mechanics.hardYears`). */
