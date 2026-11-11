@@ -20,6 +20,9 @@ import {
   nativeLandOwner,
   nativeLandClosedTo,
   leasableTiles,
+  openRings,
+  scenarioOf,
+  workReach,
   leaseRent,
   peopleTreatyOn,
   peopleTreatyProblem,
@@ -46,13 +49,16 @@ import {
   type RoleId,
   type Unit,
 } from '@cc/engine';
-import type { MapRenderer } from '@cc/render-api';
+import { tileCentre, tileShape, type MapRenderer } from '@cc/render-api';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
-import { activeStyle, icon } from '../styles.js';
+import { activeStyle, icon, mapStyleFor } from '../styles.js';
 import { choose, confirmDialog, toast } from './dialogs.js';
 
 const TILE = 76;
+/** The hex flower's tile size (one hex across the flats): ring 1 only, and with ring 2 (H8: five hexes across). */
+const HEX_TILE = 76;
+const HEX_TILE_TWO_RINGS = 54;
 
 function targetKey(t: BuildTarget | null): string {
   return t ? `${t.kind}:${t.id}` : '';
@@ -75,7 +81,12 @@ export class ColonyScreen implements Screen {
     this.el = h('section', { class: 'screen colony-screen', role: 'dialog', 'aria-label': 'Colony' }, this.body);
     this.landCanvas = h('canvas', { class: 'colony-land' });
     this.styleId = activeStyle().id;
-    this.landRenderer = activeStyle().createMapRenderer(this.landCanvas);
+    this.landRenderer = this.mapStyle().createMapRenderer(this.landCanvas);
+  }
+
+  /** The style that draws the colony's land: the chosen one, or one that draws the game's grid. */
+  private mapStyle() {
+    return mapStyleFor(gridOf(this.app.state).kind);
   }
 
   close(): void {
@@ -104,7 +115,7 @@ export class ColonyScreen implements Screen {
     if (activeStyle().id !== this.styleId) {
       this.landRenderer.dispose();
       this.styleId = activeStyle().id;
-      this.landRenderer = activeStyle().createMapRenderer(this.landCanvas);
+      this.landRenderer = this.mapStyle().createMapRenderer(this.landCanvas);
     }
     const s = this.app.state;
     if (this.selected && !s.units[this.selected]) this.selected = undefined;
@@ -135,6 +146,7 @@ export class ColonyScreen implements Screen {
 
   private landPanel(colony: Colony, workers: Record<string, number>): HTMLElement {
     const s = this.app.state;
+    if (gridOf(s).kind === 'hex') return this.hexLandPanel(colony, workers);
     const scene = {
       state: { ...s, units: Object.fromEntries(Object.entries(s.units).filter(([, u]) => u.loc.kind === 'colony')) },
       viewer: this.app.viewer,
@@ -170,24 +182,141 @@ export class ColonyScreen implements Screen {
           h('div', { class: 'yields' }, (Object.entries(out) as [GoodId, number][]).map(([g, n]) => h('span', { class: 'yield' }, icon({ kind: 'product', product: g }, 18), n)))));
         continue;
       }
-      const worker = colonyWorkers(s, colony).find((w) => w.loc.kind === 'colony' && w.loc.job.kind === 'tile' && w.loc.job.x === x && w.loc.job.y === y);
-      const other = !worker && Object.values(s.units).some((u) => u.loc.kind === 'colony' && u.loc.job.kind === 'tile' && u.loc.job.x === x && u.loc.job.y === y);
-      const settlement = Object.values(s.settlements).some((st) => st.x === x && st.y === y);
-      const native = nativeLandOwner(s, x, y);
-      // Land leased to the colony's nation (land use, N5) is worked like its own, and stays the people's.
-      const leased = !!native && tile.use === colony.owner;
-      const job = worker?.loc.kind === 'colony' ? (worker.loc.job as Extract<Job, { kind: 'tile' }>) : undefined;
-      cells.push(h('button', {
-        class: `cell${worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}${leased ? ' leased' : native ? ' native' : ''}`,
-        style,
-        'data-leased': leased ? 'true' : undefined,
-        title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : leased ? ` (land of the ${TRIBES[native!.tribe].name}, leased to you)` : native ? ` (land of the ${TRIBES[native.tribe].name})` : ''}`,
-        onclick: () => this.clickTile(colony, x, y, worker),
-      },
-      worker ? icon({ kind: 'unit', type: worker.type, role: 'none', color: nationOf(this.app.state, worker.owner).color }, 40, unitName(worker)) : null,
-      job ? h('span', { class: 'yield' }, icon({ kind: 'product', product: job.good }, 18), workers[worker!.id] ?? 0) : null));
+      cells.push(this.fieldCell(colony, workers, x, y, tile, style, 40));
     }
     return h('div', { class: 'card land' }, h('h3', null, 'Fields'), h('div', { class: 'land-wrap', style: `width:${TILE * 3}px;height:${TILE * 3}px` }, this.landCanvas, cells));
+  }
+
+  /**
+   * The colony's land on hexes (docs/design/hex-maps.md H8): a flower of seven hexes, or nineteen
+   * where the scenario lets a colony reach a second ring, placed from the render API's geometry in
+   * the scenario's orientation. A ring the colony has not opened yet is dimmed and says what opens
+   * it, and shows what a free colonist would make there.
+   */
+  private hexLandPanel(colony: Colony, workers: Record<string, number>): HTMLElement {
+    const s = this.app.state;
+    const grid = gridOf(s);
+    const reach = workReach(s);
+    const open = openRings(s, colony);
+    const T = reach > 1 ? HEX_TILE_TWO_RINGS : HEX_TILE;
+    const shape = tileShape(grid);
+    const home = tileCentre(grid, colony.x, colony.y);
+    // The flower's tiles, the colony's first: their centres relative to the colony's, in world units.
+    const area = grid.withinOffsets(colony.x, colony.y, reach);
+    const tiles: { x: number; y: number; cx: number; cy: number; ring: number }[] = [];
+    for (let k = 0; k < area.length; k += 2) {
+      const x = colony.x + area[k];
+      const y = colony.y + area[k + 1];
+      const c = tileCentre(grid, x, y);
+      tiles.push({ x, y, cx: c.x - home.x, cy: c.y - home.y, ring: grid.distance(colony.x, colony.y, x, y) });
+    }
+    const hw = Math.max(...shape.map((p) => p.x));
+    const hh = Math.max(...shape.map((p) => p.y));
+    const minX = Math.min(...tiles.map((t) => t.cx)) - hw;
+    const maxX = Math.max(...tiles.map((t) => t.cx)) + hw;
+    const minY = Math.min(...tiles.map((t) => t.cy)) - hh;
+    const maxY = Math.max(...tiles.map((t) => t.cy)) + hh;
+    const width = Math.ceil((maxX - minX) * T);
+    const height = Math.ceil((maxY - minY) * T);
+    const scene = {
+      state: { ...s, units: Object.fromEntries(Object.entries(s.units).filter(([, u]) => u.loc.kind === 'colony')) },
+      viewer: this.app.viewer,
+      camera: { x: home.x + (minX + maxX) / 2, y: home.y + (minY + maxY) / 2, zoom: T },
+      width,
+      height,
+      pixelRatio: Math.min(2.5, window.devicePixelRatio || 1),
+      visible: new Uint8Array(s.map.width * s.map.height).fill(1),
+      labels: false,
+    };
+    this.landCanvas.style.width = `${width}px`;
+    this.landCanvas.style.height = `${height}px`;
+    this.landRenderer.render(scene);
+    // Keep only the flower: clear the canvas outside its hexes.
+    const ctx = this.landCanvas.getContext('2d');
+    if (ctx) {
+      ctx.save();
+      ctx.setTransform(scene.pixelRatio, 0, 0, scene.pixelRatio, 0, 0);
+      ctx.globalCompositeOperation = 'destination-in';
+      ctx.beginPath();
+      for (const t of tiles) {
+        const px = (t.cx - minX) * T;
+        const py = (t.cy - minY) * T;
+        shape.forEach((p, i) => (i ? ctx.lineTo(px + p.x * T, py + p.y * T) : ctx.moveTo(px + p.x * T, py + p.y * T)));
+        ctx.closePath();
+      }
+      ctx.fill();
+      ctx.restore();
+    }
+    // Each cell is the hex's bounding box, clipped to the hex.
+    const clip = `polygon(${shape.map((p) => `${(((p.x + hw) / (2 * hw)) * 100).toFixed(2)}% ${(((p.y + hh) / (2 * hh)) * 100).toFixed(2)}%`).join(', ')})`;
+    const rings = scenarioOf(s).map.workArea?.rings ?? [];
+    /** What opens a ring, short ("size 5", "Docks", "size 5 + Docks"). */
+    const gateShort = (ring: number): string => {
+      const g = rings[ring - 1];
+      return [g?.size !== undefined ? `size ${g.size}` : '', g?.building ? buildingName(g.building, 1) : ''].filter(Boolean).join(' + ');
+    };
+    const gate = (ring: number): string => {
+      const g = rings[ring - 1];
+      const size = g?.size !== undefined ? `at size ${g.size}` : '';
+      const building = g?.building ? `with the ${buildingName(g.building, 1)}` : '';
+      return size || building ? `opens ${[size, building].filter(Boolean).join(' ')}` : 'not open yet';
+    };
+    const iconSize = Math.round(T * 0.52);
+    const cells: HTMLElement[] = [];
+    for (const t of tiles) {
+      const tile = tileAt(s, t.x, t.y);
+      const style = `left:${((t.cx - hw - minX) * T).toFixed(1)}px;top:${((t.cy - hh - minY) * T).toFixed(1)}px;width:${(2 * hw * T).toFixed(1)}px;height:${(2 * hh * T).toFixed(1)}px;clip-path:${clip}`;
+      if (!tile) {
+        cells.push(h('div', { class: 'cell hex off', style }));
+        continue;
+      }
+      if (t.ring === 0) {
+        const out = centreProduction(s, colony);
+        cells.push(h('div', { class: 'cell hex centre', style, title: `${tileDescription(tile)} (colony square)` },
+          h('div', { class: 'yields' }, (Object.entries(out) as [GoodId, number][]).map(([g, n]) => h('span', { class: 'yield' }, icon({ kind: 'product', product: g }, 16), n)))));
+        continue;
+      }
+      if (t.ring > open) {
+        // A ring not open yet: dimmed, with its gate and what a free colonist would make there.
+        const best = goodsOf(s)
+          .map((g) => ({ g, n: tileYield(s, colony, t.x, t.y, g, 'freeColonist') }))
+          .filter((o) => o.n > 0)
+          .sort((a, b) => b.n * (b.g === 'food' ? 3 : GOOD_DEFS[b.g].price) - a.n * (a.g === 'food' ? 3 : GOOD_DEFS[a.g].price))[0];
+        cells.push(this.fieldCell(colony, workers, t.x, t.y, tile, style, iconSize, ' hex closed', ` (${gate(t.ring)})`, [
+          best ? h('span', { class: 'yield' }, icon({ kind: 'product', product: best.g }, 16), best.n) : null,
+          h('span', { class: 'gate' }, gateShort(t.ring)),
+        ]));
+        continue;
+      }
+      cells.push(this.fieldCell(colony, workers, t.x, t.y, tile, style, iconSize, ' hex'));
+    }
+    return h('div', { class: 'card land' }, h('h3', null, reach > 1 ? `Fields (${open > 1 ? 'two rings' : `ring 2 ${gate(2)}`})` : 'Fields'),
+      h('div', { class: 'land-wrap hex-flower', 'data-rings': String(reach), style: `width:${width}px;height:${height}px` }, this.landCanvas, cells));
+  }
+
+  /**
+   * A field of the colony's work area: who works it and what, or why it is taken. `extraClass`,
+   * `note` and `extra` add to it (the hex flower's closed ring).
+   */
+  private fieldCell(colony: Colony, workers: Record<string, number>, x: number, y: number, tile: NonNullable<ReturnType<typeof tileAt>>, style: string, iconSize: number, extraClass = '', note = '', extra: (HTMLElement | null)[] = []): HTMLElement {
+    const s = this.app.state;
+    const worker = colonyWorkers(s, colony).find((w) => w.loc.kind === 'colony' && w.loc.job.kind === 'tile' && w.loc.job.x === x && w.loc.job.y === y);
+    const other = !worker && Object.values(s.units).some((u) => u.loc.kind === 'colony' && u.loc.job.kind === 'tile' && u.loc.job.x === x && u.loc.job.y === y);
+    const settlement = Object.values(s.settlements).some((st) => st.x === x && st.y === y);
+    const native = nativeLandOwner(s, x, y);
+    // Land leased to the colony's nation (land use, N5) is worked like its own, and stays the people's.
+    const leased = !!native && tile.use === colony.owner;
+    const job = worker?.loc.kind === 'colony' ? (worker.loc.job as Extract<Job, { kind: 'tile' }>) : undefined;
+  return h('button', {
+      class: `cell${extraClass}worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}${leased ? ' leased' : native ? ' native' : ''}`,
+      style,
+      'data-leased': leased ? 'true' : undefined,
+      title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : leased ? ` (land of the ${TRIBES[native!.tribe].name}, leased to you)` : native ? ` (land of the ${TRIBES[native.tribe].name})` : ''}${note}`,
+      onclick: () => this.clickTile(colony, x, y, worker),
+    },
+    worker ? icon({ kind: 'unit', type: worker.type, role: 'none', color: nationOf(this.app.state, worker.owner).color }, iconSize, unitName(worker)) : null,
+    job ? h('span', { class: 'yield' }, icon({ kind: 'product', product: job.good }, 18), workers[worker!.id] ?? 0) : null,
+    ...extra);
   }
 
   private bestGood(colony: Colony, u: Unit, x: number, y: number): GoodId | undefined {

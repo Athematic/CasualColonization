@@ -35,6 +35,15 @@ import { loadAuto, loadManual, pickSaveFile } from '../save.js';
 import { activeStyle, availableStyles, icon, setStyle } from '../styles.js';
 import { toast } from './dialogs.js';
 
+/** The query parameter of a testing link that opens the New game screen on a scenario, hidden ones included. */
+export const SCENARIO_PARAM = 'scenario';
+
+/** The scenario a testing link names (`?scenario=hex-test`), if this version has it. */
+export function scenarioFromSearch(search = typeof location === 'undefined' ? '' : location.search): Scenario | undefined {
+  const id = new URLSearchParams(search).get(SCENARIO_PARAM);
+  return id ? getScenario(id) : undefined;
+}
+
 interface Slot {
   nation: NationId;
   /** A person, or the level of a computer player. */
@@ -190,6 +199,12 @@ export function newGameScreen(
   };
 
   if (initialCode) applyCode(initialCode);
+  else {
+    // A testing link (?scenario=<id>) chooses a scenario, hidden ones included (the hex test
+    // scenarios, docs/design/hex-maps.md); it is never in the list of scenarios people choose from.
+    const linked = scenarioFromSearch();
+    if (linked) setScenario(linked);
+  }
 
   const el = h('main', { class: 'menu-screen' });
   // Clearing the screen blurs a focused input, whose change handler may render again; a render

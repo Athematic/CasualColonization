@@ -2319,3 +2319,43 @@ button.report-chip {
 .hall-next {
   flex-basis: 100%;
 }
+
+/* ---- Added in Beta 4: the colony's hex flower (docs/design/hex-maps.md H8) ---- */
+
+/* Hex cells are clipped to the hex, so a border would not show: hover and selection tint instead. */
+.cell.hex {
+  border: 0;
+}
+
+.cell.hex:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.cell.hex.selected {
+  background: color-mix(in srgb, #ffd84a 45%, transparent);
+}
+
+.cell.hex.centre {
+  justify-content: center;
+}
+
+/* A ring the colony has not opened yet: dimmed, with what opens it. */
+.cell.hex.closed {
+  background: rgba(17, 20, 24, 0.5);
+  color: #f4f1e8;
+}
+
+.cell.hex.closed:hover {
+  background: rgba(17, 20, 24, 0.35);
+}
+
+.cell .gate {
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 0 2px #000;
+}
+
+.hex-flower .cell .yield {
+  font-size: 0.75rem;
+}

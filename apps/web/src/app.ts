@@ -50,11 +50,11 @@ import {
   type SettlementAction,
   type Unit,
 } from '@cc/engine';
-import { computeVisibility, screenToTile, type Camera, type MapRenderer, type Point, type Scene } from '@cc/render-api';
+import { clampToWorld, computeVisibility, screenToTile, tileCentre, type Camera, type MapRenderer, type Point, type Scene } from '@cc/render-api';
 import { h } from './dom.js';
 import { saveAuto } from './save.js';
 import { JobCancelled, turnRunner, type Job, type JobResult, type Progress } from './turns/runner.js';
-import { activeStyle, onStyleAssetsChanged, onStyleChange } from './styles.js';
+import { mapStyleFor, onStyleAssetsChanged, onStyleChange } from './styles.js';
 import { ColonyScreen } from './ui/colony.js';
 import { openCheats } from './ui/cheats.js';
 import { choose, confirmDialog, promptDialog, toast } from './ui/dialogs.js';
@@ -198,13 +198,13 @@ export class App {
     const dispatch = game.dispatch.bind(game);
     game.dispatch = (cmd) => (this.busy ? { ok: false, error: 'The computer players are moving. One moment.' } : dispatch(cmd));
     host.appendChild(this.root);
-    this.renderer = activeStyle().createMapRenderer(this.canvas);
+    this.renderer = mapStyleFor(gridOf(this.state).kind).createMapRenderer(this.canvas);
 
     this.disposers.push(
       game.subscribe(() => this.requestRender()),
-      onStyleChange((style) => {
+      onStyleChange(() => {
         this.renderer.dispose();
-        this.renderer = style.createMapRenderer(this.canvas);
+        this.renderer = mapStyleFor(gridOf(this.state).kind).createMapRenderer(this.canvas);
         this.requestRender();
       }),
       onStyleAssetsChanged(() => this.requestRender()),
@@ -425,21 +425,27 @@ export class App {
   }
 
   private clampCamera(): void {
-    const { width, height } = this.state.map;
-    this.camera.x = Math.max(0, Math.min(width, this.camera.x));
-    this.camera.y = Math.max(0, Math.min(height, this.camera.y));
+    // The camera is in world units (render API geometry): on squares a tile is one unit.
+    clampToWorld(this.camera, gridOf(this.state), this.state.map);
     this.camera.zoom = Math.max(20, Math.min(128, this.camera.zoom));
   }
 
+  /** Centres the view on a tile (its centre on the game's grid). */
   centerOn(x: number, y: number, onlyIfOffscreen = false): void {
+    const c = tileCentre(gridOf(this.state), x, y);
     if (onlyIfOffscreen) {
       const r = this.mapWrap.getBoundingClientRect();
       const halfW = r.width / 2 / this.camera.zoom - 1.5;
       const halfH = r.height / 2 / this.camera.zoom - 1.5;
-      if (Math.abs(x + 0.5 - this.camera.x) < halfW && Math.abs(y + 0.5 - this.camera.y) < halfH) return;
+      if (Math.abs(c.x - this.camera.x) < halfW && Math.abs(c.y - this.camera.y) < halfH) return;
     }
-    this.camera.x = x + 0.5;
-    this.camera.y = y + 0.5;
+    this.centerOnWorld(c.x, c.y);
+  }
+
+  /** Centres the view on a point in world units (render API geometry). */
+  centerOnWorld(wx: number, wy: number): void {
+    this.camera.x = wx;
+    this.camera.y = wy;
     this.requestRender();
   }
 
@@ -897,7 +903,7 @@ export class App {
 
   private tileAtEvent(e: { clientX: number; clientY: number }): Point {
     const r = this.mapWrap.getBoundingClientRect();
-    return screenToTile({ camera: this.camera, width: r.width, height: r.height }, e.clientX - r.left, e.clientY - r.top);
+    return screenToTile({ camera: this.camera, width: r.width, height: r.height, grid: gridOf(this.state) }, e.clientX - r.left, e.clientY - r.top);
   }
 
   private bindInput(): void {

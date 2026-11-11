@@ -39,8 +39,9 @@ import {
   type Unit,
   colonyOpenTo,
   FOREIGN_KEEP,
+  gridOf,
 } from '@cc/engine';
-import { riverCourse, traceStrand } from '@cc/render-api';
+import { HEX_ROW, riverCourse, tileCentre, traceStrand, worldSize } from '@cc/render-api';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
 import { downloadSave, saveManual } from '../save.js';
@@ -68,7 +69,9 @@ export class Sidebar {
     this.minimap.addEventListener('click', (e) => {
       const r = this.minimap.getBoundingClientRect();
       const s = this.app.state;
-      this.app.centerOn(((e.clientX - r.left) / r.width) * s.map.width - 0.5, ((e.clientY - r.top) / r.height) * s.map.height - 0.5);
+      // The minimap shows the whole world (render API geometry): squares one unit a tile, hexes as offset rows or columns.
+      const world = worldSize(gridOf(s), s.map);
+      this.app.centerOnWorld(((e.clientX - r.left) / r.width) * world.width, ((e.clientY - r.top) / r.height) * world.height);
     });
     this.body = h('div', { class: 'sidebar-body' });
     const toggle = h('button', { class: 'btn sidebar-toggle', 'aria-label': 'Show or hide the side panel', onclick: () => this.el.classList.toggle('collapsed') }, '☰');
@@ -325,19 +328,33 @@ export class Sidebar {
     const style = activeStyle();
     const scale = 3;
     const c = this.minimap;
-    if (c.width !== s.map.width * scale) {
-      c.width = s.map.width * scale;
-      c.height = s.map.height * scale;
+    const grid = gridOf(s);
+    const hex = grid.kind === 'hex';
+    const world = worldSize(grid, s.map);
+    const cw = Math.ceil(world.width * scale);
+    if (c.width !== cw) {
+      c.width = cw;
+      c.height = Math.ceil(world.height * scale);
     }
     const ctx = c.getContext('2d')!;
     ctx.fillStyle = style.theme['--paper'];
     ctx.fillRect(0, 0, c.width, c.height);
+    // On hexes each tile is a small brick around its centre: offset rows (pointy) or columns (flat)
+    // of bricks tile the plane as the hexes do, and at three pixels a tile they read as hexes.
+    const flat = grid.orientation === 'flat';
+    const bw = hex && flat ? HEX_ROW : 1;
+    const bh = hex && !flat ? HEX_ROW : 1;
     for (let y = 0; y < s.map.height; y++) {
       for (let x = 0; x < s.map.width; x++) {
         const i = y * s.map.width + x;
         if (!this.app.knows(i)) continue;
         ctx.fillStyle = style.tileColor(s.map.tiles[i]);
-        ctx.fillRect(x * scale, y * scale, scale, scale);
+        if (!hex) {
+          ctx.fillRect(x * scale, y * scale, scale, scale);
+          continue;
+        }
+        const p = tileCentre(grid, x, y);
+        ctx.fillRect((p.x - bw / 2) * scale, (p.y - bh / 2) * scale, bw * scale + 0.5, bh * scale + 0.5);
       }
     }
     // Rivers as thin lines in the style's water colour.
@@ -346,17 +363,24 @@ export class Sidebar {
     for (let i = 0; i < s.map.tiles.length; i++) {
       const tile = s.map.tiles[i];
       if (!tile.rv || !tile.rd || !this.app.knows(i)) continue;
-      const cx = (i % s.map.width) * scale + scale / 2;
-      const cy = Math.floor(i / s.map.width) * scale + scale / 2;
+      const tx = i % s.map.width;
+      const ty = Math.floor(i / s.map.width);
+      const p = hex ? tileCentre(grid, tx, ty) : undefined;
+      const cx = p ? p.x * scale : tx * scale + scale / 2;
+      const cy = p ? p.y * scale : ty * scale + scale / 2;
       ctx.lineWidth = tile.rv === 2 ? 1.6 : 1;
       ctx.beginPath();
-      for (const st of riverCourse(s, i % s.map.width, Math.floor(i / s.map.width)).strands) traceStrand(ctx, st, cx, cy, scale, true);
+      for (const st of riverCourse(s, tx, ty).strands) traceStrand(ctx, st, cx, cy, scale, true);
       ctx.stroke();
     }
     for (const col of Object.values(s.colonies)) {
       if (!this.app.knows(col.y * s.map.width + col.x)) continue;
       ctx.fillStyle = nationOf(this.app.state, col.owner).color;
-      ctx.fillRect(col.x * scale - 1, col.y * scale - 1, scale + 2, scale + 2);
+      if (!hex) ctx.fillRect(col.x * scale - 1, col.y * scale - 1, scale + 2, scale + 2);
+      else {
+        const p = tileCentre(grid, col.x, col.y);
+        ctx.fillRect(p.x * scale - scale / 2 - 1, p.y * scale - scale / 2 - 1, scale + 2, scale + 2);
+      }
     }
     const r = this.app.mapWrap.getBoundingClientRect();
     const cam = this.app.camera;

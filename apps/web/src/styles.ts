@@ -1,4 +1,5 @@
-import { drawCongressHallBackdrop, FATHER_FIGURE_ASPECT, getStyle, listStyles, registerStyle, type IconRequest, type StylePlugin } from '@cc/render-api';
+import type { GridKind } from '@cc/engine';
+import { drawCongressHallBackdrop, drawsGrid, FATHER_FIGURE_ASPECT, getStyle, listStyles, registerStyle, type IconRequest, type StylePlugin } from '@cc/render-api';
 import ligneClaire from '@cc/style-ligne-claire';
 import ligneClairePainted from '@cc/style-sprites/packs/ligne-claire-painted';
 import schematic from '@cc/style-schematic';
@@ -21,6 +22,14 @@ let stopAssets: (() => void) | undefined;
 
 export function activeStyle(): StylePlugin {
   return active;
+}
+
+/**
+ * The style that draws the map of a game on this grid: the chosen one when it can, else the
+ * schematic style, which draws every grid (hex-maps.md H14). Panels and icons keep the chosen style.
+ */
+export function mapStyleFor(grid: GridKind): StylePlugin {
+  return drawsGrid(active, grid) ? active : schematic;
 }
 
 export function availableStyles(): StylePlugin[] {

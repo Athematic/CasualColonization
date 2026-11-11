@@ -4,7 +4,7 @@ import { App } from './app.js';
 import { savedStyle, setStyle } from './styles.js';
 import './style.css';
 import { landingScreen } from './ui/landing.js';
-import { newGameScreen } from './ui/newgame.js';
+import { newGameScreen, scenarioFromSearch } from './ui/newgame.js';
 import { pickSaveFile } from './save.js';
 import { toast } from './ui/dialogs.js';
 import { JobCancelled, turnRunner } from './turns/runner.js';
@@ -145,6 +145,11 @@ function boot(data: HotHook['data']): void {
     const rest = searchWithoutGameCode(location.search);
     history.replaceState(null, '', `${location.pathname}${rest}${location.hash}`);
     showMenu(shared);
+    return;
+  }
+  // A testing link (?scenario=<id>) opens the New game screen on that scenario, hidden ones included.
+  if (scenarioFromSearch()) {
+    showMenu();
     return;
   }
   if (data?.save) {

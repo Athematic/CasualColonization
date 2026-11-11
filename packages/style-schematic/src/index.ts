@@ -1,18 +1,28 @@
 /**
  * A deliberately plain board-game style. It exists to show (and test) that the game
  * shell works with any style plugin, and is a starting point for new styles.
+ *
+ * It draws every grid (docs/design/hex-maps.md H14): squares as they always were, and hexes as
+ * polygons from the render API's geometry, with a coastline on the edges between land and water,
+ * rivers and roads through the tiles' centres in the grid's six directions, and towns, units and
+ * braves at the hex centres.
  */
-import { nationOf, RIVER_DIRS, TERRAIN, TRIBES, UNIT_TYPES, colonyWorkers, type GameState, type Tile, type TerrainId } from '@cc/engine';
+import { gridOf, nationOf, TERRAIN, TRIBES, UNIT_TYPES, colonyWorkers, type GameState, type Tile, type TerrainId } from '@cc/engine';
 import {
   braveMarkers,
+  edgeCorners,
   isTileExplored,
   isTileVisible,
   drawFatherCameo,
   drawFatherFigure,
   riverCourse,
   roadDrawing,
+  roadMask,
+  tileCentreOnScreen,
+  tileOutline,
   tileToScreen,
   traceStrand,
+  traceTile,
   unitStacks,
   visibleRange,
   type IconRequest,
@@ -77,11 +87,26 @@ class SchematicRenderer implements MapRenderer {
     const s = scene.state as GameState;
     const z = scene.camera.zoom;
     const r = visibleRange(scene);
+    const grid = gridOf(s);
+    const hex = grid.kind === 'hex';
+    // Where curves meet in a tile: the centre of the box (squares, as always) or the hex's own centre.
+    const centre = (x: number, y: number): [number, number] => {
+      if (hex) {
+        const c = tileCentreOnScreen(scene, x, y);
+        return [c.x, c.y];
+      }
+      const p = tileToScreen(scene, x, y);
+      return [p.x + z / 2, p.y + z / 2];
+    };
     for (let y = r.y0; y <= r.y1; y++) {
       for (let x = r.x0; x <= r.x1; x++) {
         if (!isTileExplored(scene, x, y)) continue;
-        const p = tileToScreen(scene, x, y);
         const tile = s.map.tiles[y * s.map.width + x];
+        if (hex) {
+          this.hexTile(scene, x, y, tile);
+          continue;
+        }
+        const p = tileToScreen(scene, x, y);
         ctx.fillStyle = tileColor(tile);
         ctx.fillRect(p.x, p.y, z, z);
         ctx.strokeStyle = 'rgba(0,0,0,0.25)';
@@ -101,6 +126,7 @@ class SchematicRenderer implements MapRenderer {
         }
       }
     }
+    if (hex) this.hexCoasts(scene, r);
     // Rivers: plain blue lines from each tile's centre towards the neighbours the river links,
     // meandering a little (the shared curves of @cc/render-api, so every style agrees on them).
     ctx.lineCap = 'round';
@@ -109,31 +135,25 @@ class SchematicRenderer implements MapRenderer {
       for (let x = r.x0; x <= r.x1; x++) {
         const tile = s.map.tiles[y * s.map.width + x];
         if (!tile?.rv || !tile.rd || !isTileExplored(scene, x, y)) continue;
-        const p = tileToScreen(scene, x, y);
+        const [cx, cy] = centre(x, y);
         ctx.strokeStyle = isTileVisible(scene, x, y) ? '#4aa3df' : '#3a7fae';
         ctx.lineWidth = Math.max(1.5, z * (tile.rv === 2 ? 0.16 : 0.08));
         ctx.beginPath();
-        for (const st of riverCourse(s, x, y).strands) traceStrand(ctx, st, p.x + z / 2, p.y + z / 2, z, true);
+        for (const st of riverCourse(s, x, y).strands) traceStrand(ctx, st, cx, cy, z, true);
         ctx.stroke();
       }
     }
     // Roads: thin brown lines to neighbouring roads and colonies, over the rivers (bridges).
     const towns = new Set(Object.values(s.colonies).map((c) => c.y * s.map.width + c.x));
-    const road = (x: number, y: number) =>
-      x >= 0 && y >= 0 && x < s.map.width && y < s.map.height && (!!s.map.tiles[y * s.map.width + x].r || towns.has(y * s.map.width + x));
+    const road = (x: number, y: number) => !!s.map.tiles[y * s.map.width + x].r || towns.has(y * s.map.width + x);
     ctx.lineWidth = Math.max(1, z * 0.05);
     for (let y = r.y0; y <= r.y1; y++) {
       for (let x = r.x0; x <= r.x1; x++) {
         if (!s.map.tiles[y * s.map.width + x]?.r || !isTileExplored(scene, x, y)) continue;
-        const p = tileToScreen(scene, x, y);
-        const cx = p.x + z / 2;
-        const cy = p.y + z / 2;
+        const [cx, cy] = centre(x, y);
         const color = isTileVisible(scene, x, y) ? '#5a4630' : '#4a3a28';
         ctx.strokeStyle = color;
-        let mask = 0;
-        RIVER_DIRS.forEach(([dx, dy], dir) => {
-          if (road(x + dx, y + dy)) mask |= 1 << dir;
-        });
+        const mask = roadMask(s, x, y, road);
         const { strands, bridge } = roadDrawing(s, x, y, mask);
         ctx.beginPath();
         for (const st of strands) traceStrand(ctx, st, cx, cy, z, true);
@@ -225,10 +245,16 @@ class SchematicRenderer implements MapRenderer {
       ctx.fillRect(p.x + z * (0.5 - d / 2), p.y + z * (0.5 - d / 2), z * d, z * d);
     }
     if (scene.hover) {
-      const p = tileToScreen(scene, scene.hover.x, scene.hover.y);
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1;
-      ctx.strokeRect(p.x + 1.5, p.y + 1.5, z - 3, z - 3);
+      if (hex) {
+        ctx.beginPath();
+        traceTile(ctx, scene, scene.hover.x, scene.hover.y, 1.5);
+        ctx.stroke();
+      } else {
+        const p = tileToScreen(scene, scene.hover.x, scene.hover.y);
+        ctx.strokeRect(p.x + 1.5, p.y + 1.5, z - 3, z - 3);
+      }
     }
     const end = scene.path?.[scene.path.length - 1];
     if (end && scene.pathTurns && scene.pathTurns > 1) {
@@ -241,6 +267,70 @@ class SchematicRenderer implements MapRenderer {
       ctx.fill();
       this.text(String(scene.pathTurns), p.x + z * 0.8, p.y + z * 0.2 + 0.5, r * 1.3, '#000');
     }
+  }
+
+  /** A hex tile: its polygon in the terrain's colour, the rumour, a lease's dashed frame, and fog when out of sight. */
+  private hexTile(scene: Scene, x: number, y: number, tile: Tile): void {
+    const ctx = this.ctx;
+    const s = scene.state as GameState;
+    const z = scene.camera.zoom;
+    ctx.beginPath();
+    traceTile(ctx, scene, x, y);
+    ctx.fillStyle = tileColor(tile);
+    ctx.fill();
+    // The thin border also covers the hairline seams between neighbouring polygons.
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    const c = tileCentreOnScreen(scene, x, y);
+    if (tile.lcr) this.text('?', c.x, c.y, z * 0.5, '#ffe28a');
+    if (tile.use) {
+      ctx.save();
+      ctx.strokeStyle = nationOf(s, tile.use).color;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      traceTile(ctx, scene, x, y, 3.5);
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (!isTileVisible(scene, x, y)) {
+      ctx.beginPath();
+      traceTile(ctx, scene, x, y);
+      ctx.fillStyle = 'rgba(17,20,24,0.35)';
+      ctx.fill();
+    }
+  }
+
+  /** On hexes, the coastline: a dark line on every edge between explored land and water. */
+  private hexCoasts(scene: Scene, r: { x0: number; y0: number; x1: number; y1: number }): void {
+    const ctx = this.ctx;
+    const s = scene.state as GameState;
+    const grid = gridOf(s);
+    const { width, height, tiles } = s.map;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(20,32,40,0.75)';
+    ctx.lineWidth = Math.max(1.2, scene.camera.zoom * 0.04);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let y = r.y0; y <= r.y1; y++) {
+      for (let x = r.x0; x <= r.x1; x++) {
+        const tile = tiles[y * width + x];
+        if (TERRAIN[tile.t].water || !isTileExplored(scene, x, y)) continue;
+        const o = grid.neighbourOffsets(x, y);
+        let pts: ReturnType<typeof tileOutline> | undefined;
+        for (let d = 0; d < grid.directions.length; d++) {
+          const nx = x + o[2 * d];
+          const ny = y + o[2 * d + 1];
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height || !TERRAIN[tiles[ny * width + nx].t].water) continue;
+          pts ??= tileOutline(scene, x, y);
+          const [a, b] = edgeCorners(grid, d);
+          ctx.moveTo(pts[a].x, pts[a].y);
+          ctx.lineTo(pts[b].x, pts[b].y);
+        }
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   private text(t: string, x: number, y: number, size: number, color: string): void {
@@ -301,6 +391,7 @@ export const schematic: StylePlugin = {
     '--line-width': '1px',
     '--radius': '4px',
   },
+  grids: ['square', 'hex'],
   createMapRenderer: (canvas) => new SchematicRenderer(canvas),
   drawIcon,
   tileColor,

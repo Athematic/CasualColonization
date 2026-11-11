@@ -16,9 +16,14 @@
  *   smoothly; side branches (confluences) and road junctions meet there; a spring ends there;
  * - at a mouth the strand ends on the middle of the coastal edge, running straight out to sea.
  *
+ * Units are world units (geometry.ts): on squares a tile is one unit, on hexes neighbouring centres
+ * are one unit apart, and the strands run towards the game grid's neighbours (six on hexes), in the
+ * river bits' order (`grid.neighbourOffsets`).
+ *
  * Nothing here is game state: it is derived from the tile's coordinates and its river bits.
  */
-import { RIVER_DIRS, TERRAIN, type GameState, type Tile } from '@cc/engine';
+import { gridOf, TERRAIN, type GameState, type Tile } from '@cc/engine';
+import { neighbourVector } from './geometry.js';
 
 /** Largest sideways push of a river tile's hub, in tiles. */
 export const RIVER_MEANDER = 0.15;
@@ -40,8 +45,12 @@ function hash(x: number, y: number, salt: number): number {
  * neighbour in direction `dir`, in tile units from the tile's centre.
  */
 export interface Strand {
-  /** Direction index into RIVER_DIRS (the engine's square grid direction order: n, ne, e, se, s, sw, w, nw). */
+  /**
+   * River bit of the neighbour: the index into the game grid's directions (`grid.neighbourOffsets`;
+   * on squares RIVER_DIRS: n, ne, e, se, s, sw, w, nw).
+   */
   dir: number;
+  /** The step from this tile's centre to the neighbour's, in world units (on squares the tile offset). */
   dx: number;
   dy: number;
   sx: number;
@@ -84,16 +93,18 @@ export function tileHub(s: Readonly<GameState>, x: number, y: number): [number, 
  * neighbour is water, and the point is the middle of the shared edge (or corner).
  */
 export function meetingPoint(s: Readonly<GameState>, x: number, y: number, dir: number, mouth = false): { e: Vec; t: Vec } {
-  const [dx, dy] = RIVER_DIRS[dir];
+  const grid = gridOf(s);
+  const [dx, dy] = neighbourVector(grid, x, y, dir);
   if (mouth) return { e: [dx / 2, dy / 2], t: norm(dx, dy) };
+  const o = grid.neighbourOffsets(x, y);
   const [ax, ay] = tileHub(s, x, y);
-  const [bx, by] = tileHub(s, x + dx, y + dy);
+  const [bx, by] = tileHub(s, x + o[2 * dir], y + o[2 * dir + 1]);
   return { e: [(ax + bx + dx) / 2, (ay + by + dy) / 2], t: norm(bx + dx - ax, by + dy - ay) };
 }
 
 /** The strand from the hub `p` to the meeting point towards `dir`; `u` is the unit tangent at the hub (default: straight at the meeting point). */
 function strand(s: Readonly<GameState>, x: number, y: number, p: Vec, dir: number, mouth: boolean, u?: Vec): Strand {
-  const [dx, dy] = RIVER_DIRS[dir];
+  const [dx, dy] = neighbourVector(gridOf(s), x, y, dir);
   const { e, t } = meetingPoint(s, x, y, dir, mouth);
   const len = Math.hypot(e[0] - p[0], e[1] - p[1]);
   const [ux, uy] = u ?? norm(e[0] - p[0], e[1] - p[1]);
@@ -201,12 +212,16 @@ export function riverCourse(s: Readonly<GameState>, x: number, y: number): River
   const hit = riverCache.get(tile);
   if (hit && hit.x === x && hit.y === y && hit.rd === tile.rd && hit.rv === tile.rv) return hit.course;
   const links: { dir: number; size: 1 | 2; mouth: boolean }[] = [];
-  RIVER_DIRS.forEach(([dx, dy], dir) => {
-    if (!(tile.rd! & (1 << dir))) return;
+  const grid = gridOf(s);
+  const o = grid.neighbourOffsets(x, y);
+  for (let dir = 0; dir < grid.directions.length; dir++) {
+    if (!(tile.rd & (1 << dir))) continue;
+    const dx = o[2 * dir];
+    const dy = o[2 * dir + 1];
     const n = inBounds(s, x + dx, y + dy) ? tiles[(y + dy) * width + x + dx] : undefined;
     const mouth = !n || TERRAIN[n.t].water;
-    links.push({ dir, mouth, size: (mouth ? tile.rv! : Math.min(tile.rv!, n!.rv ?? tile.rv!)) as 1 | 2 });
-  });
+    links.push({ dir, mouth, size: (mouth ? tile.rv : Math.min(tile.rv, n!.rv ?? tile.rv)) as 1 | 2 });
+  }
   const p = tileHub(s, x, y);
   let main: [number, number] | undefined;
   if (links.length >= 2) {
@@ -215,8 +230,8 @@ export function riverCourse(s: Readonly<GameState>, x: number, y: number): River
     let best = -Infinity;
     for (let i = 0; i < links.length; i++)
       for (let j = i + 1; j < links.length; j++) {
-        const [ax, ay] = norm(...RIVER_DIRS[links[i].dir]);
-        const [bx, by] = norm(...RIVER_DIRS[links[j].dir]);
+        const [ax, ay] = norm(...neighbourVector(grid, x, y, links[i].dir));
+        const [bx, by] = norm(...neighbourVector(grid, x, y, links[j].dir));
         const score = (links[i].size + links[j].size) * 0.9 - (ax * bx + ay * by);
         if (score > best) {
           best = score;
@@ -239,7 +254,7 @@ const roadCache = new WeakMap<Tile, { x: number; y: number; byMask: Map<number, 
 
 /**
  * The road strands of tile (x, y) towards the neighbours whose bits are set in `mask` (bit i for
- * RIVER_DIRS[i]: neighbours with a road or a colony). A road with two links bends smoothly through
+ * the grid's direction i, as rivers' bits, `roadMask`: neighbours with a road or a colony). A road with two links bends smoothly through
  * the hub; more meet there as a junction. Where the tile's river runs the same way, the road
  * follows the river's curve, so the two never cross back and forth. Cached per tile and mask.
  */
@@ -253,7 +268,8 @@ export function roadStrands(s: Readonly<GameState>, x: number, y: number, mask: 
   }
   const cached = hit.byMask.get(mask);
   if (cached) return cached;
-  const dirs = RIVER_DIRS.map((_, i) => i).filter((i) => mask & (1 << i));
+  const dirs: number[] = [];
+  for (let i = 0; i < gridOf(s).directions.length; i++) if (mask & (1 << i)) dirs.push(i);
   const river = riverCourse(s, x, y);
   const p = tileHub(s, x, y);
   const tangents = dirs.length === 2 ? hubTangents(s, x, y, p, [dirs[0], dirs[1]], () => false) : undefined;
@@ -296,4 +312,20 @@ export function roadDrawing(s: Readonly<GameState>, x: number, y: number, mask: 
   const lead = river.main?.[1] ?? river.strands[0];
   const [tx, ty] = norm(lead.c1x - lead.sx, lead.c1y - lead.sy);
   return { strands, bridge: { x: lead.sx, y: lead.sy, tx, ty, size: lead.size } };
+}
+
+/**
+ * The road mask of tile (x, y) for `roadStrands`: bit d set when the neighbour in the grid's
+ * direction d (river bit order) is on the map and passes `linked` (a road or a colony there).
+ */
+export function roadMask(s: Readonly<GameState>, x: number, y: number, linked: (x: number, y: number) => boolean): number {
+  const grid = gridOf(s);
+  const o = grid.neighbourOffsets(x, y);
+  let mask = 0;
+  for (let d = 0; d < grid.directions.length; d++) {
+    const nx = x + o[2 * d];
+    const ny = y + o[2 * d + 1];
+    if (inBounds(s, nx, ny) && linked(nx, ny)) mask |= 1 << d;
+  }
+  return mask;
 }

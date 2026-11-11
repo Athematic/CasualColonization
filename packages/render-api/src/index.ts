@@ -7,6 +7,7 @@
  */
 import {
   colonyWorkers,
+  gridOf,
   inBounds,
   isShip,
   nationOf,
@@ -21,6 +22,7 @@ import {
   type GameState,
   type ScenarioLike,
   type GoodId,
+  type GridKind,
   type NationId,
   type ProductId,
   type RoleId,
@@ -181,6 +183,11 @@ export interface StylePlugin {
   css?: string;
   /** Optional CSS file URLs with the same lifetime as `css`; `url()` inside them resolves against the file. */
   cssUrls?: string[];
+  /**
+   * The map grids the style's renderer draws (docs/design/hex-maps.md H14). Absent means squares
+   * only; the shell draws a game on another grid with a style that has it (`drawsGrid`).
+   */
+  grids?: readonly GridKind[];
   /** `hooks` lets another style paint some layers (see MapLayerHooks); a renderer may ignore it. */
   createMapRenderer(canvas: HTMLCanvasElement, hooks?: MapLayerHooks): MapRenderer;
   /** Draws an icon centred in a size×size box at the origin of the context. */
@@ -201,6 +208,11 @@ export interface StylePlugin {
   onAssetsChanged?(listener: () => void): () => void;
 }
 
+/** Whether a style's map renderer draws this grid (squares when the style says nothing). */
+export function drawsGrid(style: Pick<StylePlugin, 'grids'>, grid: GridKind): boolean {
+  return (style.grids ?? ['square']).includes(grid);
+}
+
 // ---- Registry ----
 
 const styles = new Map<string, StylePlugin>();
@@ -217,44 +229,20 @@ export function getStyle(id: string): StylePlugin | undefined {
   return styles.get(id);
 }
 
-// ---- Geometry shared by square-grid renderers ----
-
-export function tileToScreen(scene: Pick<Scene, 'camera' | 'width' | 'height'>, tx: number, ty: number): Point {
-  const { camera, width, height } = scene;
-  return {
-    x: Math.round((tx - camera.x) * camera.zoom + width / 2),
-    y: Math.round((ty - camera.y) * camera.zoom + height / 2),
-  };
-}
-
-export function screenToTile(scene: Pick<Scene, 'camera' | 'width' | 'height'>, sx: number, sy: number): Point {
-  const { camera, width, height } = scene;
-  return {
-    x: Math.floor((sx - width / 2) / camera.zoom + camera.x),
-    y: Math.floor((sy - height / 2) / camera.zoom + camera.y),
-  };
-}
-
-/** Inclusive tile range covering the viewport. */
-export function visibleRange(scene: Pick<Scene, 'camera' | 'width' | 'height' | 'state'>) {
-  const a = screenToTile(scene, 0, 0);
-  const b = screenToTile(scene, scene.width, scene.height);
-  return {
-    x0: Math.max(0, a.x - 1),
-    y0: Math.max(0, a.y - 1),
-    x1: Math.min(scene.state.map.width - 1, b.x + 1),
-    y1: Math.min(scene.state.map.height - 1, b.y + 1),
-  };
-}
-
 // ---- Knowledge helpers ----
 
 export function computeVisibility(s: Readonly<GameState>, viewer: NationId): Uint8Array {
   const w = s.map.width;
   const out = new Uint8Array(w * s.map.height);
+  // The tiles within sight on the game's grid (as the engine's `reveal`).
+  const grid = gridOf(s);
   const mark = (x: number, y: number, r: number) => {
-    for (let dy = -r; dy <= r; dy++)
-      for (let dx = -r; dx <= r; dx++) if (inBounds(s as GameState, x + dx, y + dy)) out[(y + dy) * w + x + dx] = 1;
+    const within = grid.withinOffsets(x, y, r);
+    for (let k = 0; k < within.length; k += 2) {
+      const nx = x + within[k];
+      const ny = y + within[k + 1];
+      if (inBounds(s as GameState, nx, ny)) out[ny * w + nx] = 1;
+    }
   };
   // Allies share their sight (the engine's alliances).
   const sharers = new Set<string>([viewer, ...sightSharers(s as GameState, viewer)]);
@@ -373,6 +361,7 @@ export function hash2(x: number, y: number, salt = 0): number {
 
 export type { GoodId };
 
+export * from './geometry.js';
 export * from './meander.js';
 export * from './congress.js';
 import { FATHER_FEET } from './congress.js';
