@@ -58,6 +58,7 @@ import { addTreaty, endTreaty, nationParty, peopleParty } from './treaties.js';
 import type { Colony, GameState, PeopleRelation, PeopleTreatyKind, Player, Treaty, TreatyParty } from './types.js';
 import { colonyList, setUnitLoc } from './unitindex.js';
 import { gridOf } from './grid.js';
+import { computerLeague, leagueWar, processLeagues } from './peopleleague.js';
 
 // ---------------------------------------------------------------------------
 // Who is who
@@ -160,7 +161,7 @@ export function pairAtWar(s: GameState, a: PlayerId, b: PlayerId): boolean {
 }
 
 /** Whether a side is still in the game: a player with a colony or unit, a people nobody plays with a settlement. */
-function stillThere(s: GameState, id: PlayerId): boolean {
+export function stillThere(s: GameState, id: PlayerId): boolean {
   if (s.players.some((p) => p.id === id)) {
     if (colonyList(s).some((c) => c.owner === id)) return true;
     for (const k in s.units) if (s.units[k].owner === id) return true;
@@ -586,6 +587,8 @@ export function pactDefenders(s: GameState, target: PlayerId, attacker: PlayerId
  */
 export function onPairWar(s: GameState, a: PlayerId, b: PlayerId): PlayerId[] {
   if (s.treaties && pairTreaties(s, a, b).some((t) => withPlayingPeople(s, t))) breakPairFaith(s, a, b, 'war');
+  // A member that goes to war with another leaves their league (T14's confederacy, peopleleague.ts).
+  if (s.treaties) leagueWar(s, a, b);
   const join: PlayerId[] = [];
   if (!s.treaties || a === 'crown' || b === 'crown') return join;
   for (const id of pactDefenders(s, b, a)) {
@@ -696,6 +699,7 @@ export function processPeopleDiplomacy(s: GameState): void {
       peopleRentDay(s, t, n, p);
     }
   }
+  if (s.treaties || s.leagueProposals) processLeagues(s);
 }
 
 // ---------------------------------------------------------------------------
@@ -725,4 +729,6 @@ export function peopleComputerDiplomacy(s: GameState, p: Player, peace: (s: Game
       proposePairTreaty(s, p.id, other, kind);
     }
   }
+  // A league with its pact partners (T14's confederacy, peopleleague.ts).
+  computerLeague(s, p.id, chance);
 }

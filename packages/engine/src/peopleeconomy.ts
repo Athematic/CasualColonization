@@ -140,6 +140,9 @@ export function growPeopleTown(s: GameState, colony: Colony): void {
     const running = h && year - yearOf(h.last, cal).year <= 1;
     const since = running ? h.since : s.turn;
     colony.hunger = { since, last: s.turn };
+    // The people's own record of its last hungry year (the good life, peoplevictory.ts).
+    const owner = s.players.find((p) => p.id === colony.owner);
+    if (owner) owner.lastHunger = s.turn;
     track(colony.owner, 'town:hungry');
     if (running && year - yearOf(since, cal).year >= 1) {
       // The second hungry year in a row: the town loses a person, and a new run begins.

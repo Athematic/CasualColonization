@@ -742,6 +742,17 @@ export interface PlayablePeople {
   townNames: string[];
 }
 
+/**
+ * A people's own data in a scenario (`peoples.overrides[id]`): its skills, wants and temperament
+ * where they differ from the catalogue, and, as a playing people (native-nations.md T14), its own
+ * score weights over the scenario's (`score`) and its own params for the peoples' victory kinds
+ * (`victory`, by kind id: `continuity`, `good-life`), over the scenario's victory entry.
+ */
+export type PeopleOverride = Partial<Pick<PeopleDef, 'skills' | 'wants' | 'temperament'>> & {
+  score?: Partial<ScoreWeights>;
+  victory?: Partial<Record<string, Record<string, number>>>;
+};
+
 export interface ScenarioPeoples {
   /** Peoples in play, north to south (the generator's band order). */
   ids: TribeId[];
@@ -764,7 +775,7 @@ export interface ScenarioPeoples {
    * (TRIBES): goods and experts not in play (the Tupi want no coats in the Caribbean), and its
    * temperament towards treaties (N8). Read with `peopleOf(s, id)`.
    */
-  overrides?: Partial<Record<TribeId, Partial<Pick<PeopleDef, 'skills' | 'wants' | 'temperament'>>>>;
+  overrides?: Partial<Record<TribeId, PeopleOverride>>;
   /**
    * Changes to the engine's native rules (rules/natives.ts NATIVE_RULES): braves, tension
    * thresholds, demands, prices, burial grounds, surrender, missions and inciting. Absent fields
@@ -833,6 +844,12 @@ export interface ScenarioAi {
    * walk, as on the Americas' continents.
    */
   islands?: boolean;
+  /**
+   * Targets for computer peoples (native-nations.md T15, peoplevictory.ts PEOPLE_AI_TARGETS), as
+   * scenario-overridable defaults measured by tournaments: `militaryWins`, the ceiling on the
+   * share of computer-only games won by the military victory (0.01). Absent fields keep the engine's.
+   */
+  peoples?: { militaryWins?: number };
   /** How readily the computer players cooperate; absent fields keep the engine's values (alliances.ts COOPERATION). */
   cooperation?: Partial<Cooperation>;
   goods: {

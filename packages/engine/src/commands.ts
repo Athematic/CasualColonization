@@ -20,6 +20,8 @@ import { boardShip, leaveShip, moveUnit, setDestination, setRoadTo, startImprove
 import { answerNativeDemand } from './braves.js';
 import { proposePeopleTreaty } from './peopletreaties.js';
 import { answerPairProposal, endPairTreaty, learnAtTown, proposePairTreaty } from './peoplediplomacy.js';
+import { answerLeague, leaveLeague, proposeLeague } from './peopleleague.js';
+import { answerIndependence } from './victory.js';
 import { barter, tradeWithPeople } from './peopletrade.js';
 import { buyFromSettlement, buyLand, denounceMission, establishMission, giftToTribe, inciteTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
 import { claimLand } from './peopleeconomy.js';
@@ -138,6 +140,14 @@ export type Command =
   | { type: 'proposePairTreaty'; to: PlayerId; kind?: PeopleTreatyKind }
   /** Answers the treaty proposal `from` made (a pair with a playing people). */
   | { type: 'answerPairProposal'; from: PlayerId; accept: boolean }
+  /** A playing people proposes a league to `peoples` (a new league, or, as a member, invites them into its own; peopleleague.ts). */
+  | { type: 'proposeLeague'; peoples: PlayerId[] }
+  /** Answers the league `by` proposed. */
+  | { type: 'answerLeague'; by: PlayerId; accept: boolean }
+  /** Leaves the player's league. */
+  | { type: 'leaveLeague' }
+  /** After winning the War of Independence at war with a people: keep playing, or end the game with the victory (victory.ts). */
+  | { type: 'answerIndependence'; keepPlaying: boolean }
   /** Ends a treaty with a playing people, or a playing people's treaty: breaking faith. */
   | { type: 'endPairTreaty'; with: PlayerId; kind: PeopleTreatyKind }
   /** A carrier next to a town or colony of the other side (a nation and a playing people) sells (`load` false) or buys goods for gold (peopletrade.ts). */
@@ -476,6 +486,18 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'answerPairProposal':
         text = answerPairProposal(s, nation, cmd.from, cmd.accept);
+        break;
+      case 'proposeLeague':
+        text = proposeLeague(s, nation, cmd.peoples);
+        break;
+      case 'answerLeague':
+        text = answerLeague(s, nation, cmd.by, cmd.accept);
+        break;
+      case 'leaveLeague':
+        text = leaveLeague(s, nation);
+        break;
+      case 'answerIndependence':
+        text = answerIndependence(s, nation, cmd.keepPlaying);
         break;
       case 'endPairTreaty':
         text = endPairTreaty(s, nation, cmd.with, cmd.kind);

@@ -20,6 +20,7 @@ import { maxMoves, message, unitName, unitPosition } from './queries.js';
 import { calendarOf, formatDate } from './scenarios/index.js';
 import { checkVictory } from './victory.js';
 import { processArrivals } from './arrivals.js';
+import { notePeopleWars } from './peoplevictory.js';
 import { recordStats } from './stats.js';
 import type { GameState, Player, Unit } from './types.js';
 import { indexedUnitsOf, colonyList, unitList } from './unitindex.js';
@@ -126,7 +127,11 @@ function advance(s: GameState): void {
     // Epidemics after contact, in scenarios that have them (epidemics.ts, native-nations.md T12).
     processEpidemics(s);
     // Treaties with a playing people (peoplediplomacy.ts, Beta 3 step 4).
-    if (anyPlayingPeople(s)) processPeopleDiplomacy(s);
+    if (anyPlayingPeople(s)) {
+      processPeopleDiplomacy(s);
+      // Each playing people's wars, for the good life's peace (peoplevictory.ts, T14).
+      notePeopleWars(s);
+    }
     t = perfStart();
     recoverMarkets(s);
     perfEnd('markets', t);

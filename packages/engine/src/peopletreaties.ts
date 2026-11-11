@@ -983,7 +983,8 @@ export function processPeopleTreaties(s: GameState): void {
   // Treaties with a playing people keep their own rules (peoplediplomacy.ts, Beta 3 step 4).
   const playing = anyPlayingPeople(s);
   for (const t of list) {
-    if (t.end) continue;
+    // Leagues of peoples keep their own rules (peopleleague.ts, Beta 3 step 7).
+    if (t.end || t.kind === 'league') continue;
     if (playing && withPlayingPeople(s, t)) continue;
     const people = treatyPeoples(t)[0];
     if (!people) continue;

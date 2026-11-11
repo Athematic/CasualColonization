@@ -77,6 +77,23 @@ export const AMERICAS_TEXT = {
   'gameOver.playOn': 'Every nation has fought its {independenceWar}.',
   'gameOver.won': '{nation} has won the {independenceWar}! A new nation is born.',
   'gameOver.lost': "The rebellion in {nation}'s colonies has been crushed.",
+  /**
+   * Games with a playing people (native-nations.md T14): every winner at the end year with its way,
+   * {verdicts} joined from the `gameOver.way.*` phrases ({winners}, {win}: "wins" or "win", {partners}).
+   */
+  'gameOver.judged': 'The year {year} has come and the age of colonization is over. {Verdicts}.',
+  'gameOver.way.independence-war': '{winners} {win} by the {independenceWar}',
+  'gameOver.way.confederacy': '{winners} {win} as a league of peoples',
+  'gameOver.way.confederacy.partners': '{winners} {win} as a league of peoples, with {partners}',
+  'gameOver.way.concord': '{winners} {win} together in concord',
+  'gameOver.way.prosperity': '{winners} {win} by prosperity, with {partners}',
+  'gameOver.way.continuity': '{winners} {win} by continuity, still on their homeland',
+  'gameOver.way.good-life': '{winners} {win} by a good life',
+  'gameOver.way.time': '{winners} {win} with the highest score',
+  /** The military victory (T14): {winners}, {win}. */
+  'gameOver.military': 'No {homelandAdjective} nation holds a colony or an army in {colonyLand} any more: {winners} {win}.',
+  /** A person's nation wins its {independenceWar} while at war with a people (T14): the question. */
+  'independence.keepPlaying': '{nation} has won the {independenceWar}, but is still at war with {peoples}. End the game with the victory, or keep playing to make peace or fight on?',
 
   // ---- The title screen (apps/web landing.ts) ----
   'landing.eyebrow': 'A game of the New World, 1492–1850',

@@ -34,6 +34,7 @@ import { riverLinked } from './rivers.js';
 import { isFavoured, onWar } from './relations.js';
 import { pactAllies, sendOut, warOnFriend } from './alliances.js';
 import { kindOfId, systemsOfId } from './playerkind.js';
+import { noteDefeat } from './peoplevictory.js';
 import { BUILDINGS, STOCKADE_DEFENCE } from './rules/buildings.js';
 import { AMBUSH_BONUS, BOMBARD_CHANCE, CAPTURE_CHANCE, REPAIR_COST, RIVER_DEFENCE } from './rules/combat.js';
 import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
@@ -393,6 +394,8 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
   let text: string;
   if (won) {
     const unarmed = UNIT_TYPES[defender.type].kind === 'colonist' && !isArmed(defender) && UNIT_TYPES[defender.type].offence === 0;
+    // A playing people's part in a military victory (peoplevictory.ts, T14).
+    if (kindOfId(u.owner) === 'people') noteDefeat(s, u.owner, defender.owner, !!colony && (unarmed || defender.loc.kind === 'colony'));
     if (colony && (unarmed || defender.loc.kind === 'colony')) {
       text = captureColony(s, u, colony);
     } else {
@@ -416,7 +419,8 @@ function captureColony(s: GameState, attacker: Unit, colony: Colony): string {
   track(previous, 'combat:colony lost');
   colony.owner = attacker.owner;
   colony.build = null;
-  if (attacker.owner === 'crown') colony.takenFrom = previous;
+  // A playing people's town taken is remembered too (continuity, peoplevictory.ts, T14).
+  if (attacker.owner === 'crown' || kindOfId(previous) === 'people') colony.takenFrom = previous;
   for (const w of colonyWorkers(s, colony)) {
     setUnitOwner(s, w, attacker.owner);
     delete w.teach;

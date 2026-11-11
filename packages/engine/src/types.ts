@@ -207,6 +207,27 @@ export interface Player {
    * the remainder (in hundredths of a bell) not yet given. Written once the nation has allies.
    */
   allyBells?: { seen: number; carry: number };
+  /**
+   * A win recorded before the end (native-nations.md T14, victory.ts): in a game with a playing
+   * people, a nation that wins its War of Independence is finished with its win recorded and play
+   * goes on to the end year, where it is listed among the winners. Missing otherwise.
+   */
+  victory?: { way: string; turn: number };
+  /**
+   * A won War of Independence waiting for the person's answer (T14, Simon): the person was at war
+   * with a people when it was won, and is asked whether to keep playing (`answerIndependence`).
+   * `together` names a confederation's members. Missing otherwise.
+   */
+  independenceChoice?: { turn: number; text: string; together?: PlayerId[] };
+  /**
+   * A playing people's records for its ways of winning (peoplevictory.ts), written only for a
+   * playing people: the last turn it was at war with anyone (checked once a round), the last turn
+   * one of its towns went hungry, and the European units it beat and colonies it took (the
+   * military victory's ranking).
+   */
+  lastWar?: number;
+  lastHunger?: number;
+  defeats?: { units: number; colonies: number };
 }
 
 /** A chartered company's shareholders and bookkeeping (companies.ts). */
@@ -584,7 +605,7 @@ export interface PeopleRelation {
  * native people (docs/design/native-partners.md, N1) the `PeopleTreatyKind`s. A kind says what is
  * agreed, not who agrees, so code that reads European kinds (`'trade'`) never meets a people.
  */
-export type TreatyKind = 'trade' | 'favoured' | 'alliance' | 'confederation' | PeopleTreatyKind;
+export type TreatyKind = 'trade' | 'favoured' | 'alliance' | 'confederation' | PeopleTreatyKind | 'league';
 
 /**
  * Treaties between a nation and a native people (Beta 2, N1–N7): a trade treaty, land use,
@@ -592,6 +613,20 @@ export type TreatyKind = 'trade' | 'favoured' | 'alliance' | 'confederation' | P
  * others are only named.
  */
 export type PeopleTreatyKind = 'people-trade' | 'land-use' | 'exchange' | 'defence';
+
+/**
+ * A league proposed by a playing people (peopleleague.ts, native-nations.md T14's confederacy):
+ * a new league with `peoples`, or `peoples` invited into the league `league` (a treaty id).
+ * Computer peoples and peoples nobody plays answered when it was made; it waits for the persons in
+ * `waiting`.
+ */
+export interface LeagueProposal {
+  by: TribeId;
+  peoples: TribeId[];
+  league?: string;
+  waiting: TribeId[];
+  turn: number;
+}
 
 /** How a treaty ended. */
 export interface TreatyEnd {
@@ -743,7 +778,26 @@ export interface GameState {
      * N10): named on the game-over screen, not winners themselves. Missing for other endings.
      */
     partners?: TribeId[];
+    /**
+     * Each winner's way (native-nations.md T14: `military`, `independence-war`, `confederacy`,
+     * `concord`, `prosperity`, `continuity`, `good-life`, `time`). Written only in games with a
+     * playing people (both sides judged, victory.ts); `waysOf` reads it, or works it out for others.
+     */
+    ways?: Partial<Record<PlayerId, string>>;
+    /** The playing peoples' scores at the end (not compared with the Europeans'). Only in games with a playing people. */
+    peopleScores?: Partial<Record<PlayerId, number>>;
   };
+  /**
+   * What each people held when the game began (native-nations.md T14, peoplevictory.ts): its
+   * homeland's tiles (indexes into the map; a playing people's claimed land, a people nobody plays
+   * the land of its settlements) and, for a playing people, its people (units and town folk).
+   * Written at setup only in games with a playing people.
+   */
+  homelands?: Partial<Record<TribeId, { tiles: number[]; people?: number }>>;
+  /** League proposals waiting for persons' answers (peopleleague.ts). Missing means none. */
+  leagueProposals?: LeagueProposal[];
+  /** The turn every European was first seen defeated (the military victory's `years`), while it holds. */
+  europeansDefeated?: number;
   /**
    * The land's regions (native-nations.md T10, land.ts), while the scenario has hard years or land
    * health: missing otherwise (the Americas and the Caribbean).

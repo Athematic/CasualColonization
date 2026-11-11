@@ -236,7 +236,11 @@ export function peopleIn(scenario: Scenario, tribe: TribeId): PeopleDef {
   let table = PEOPLES.get(scenario);
   if (!table) PEOPLES.set(scenario, (table = new Map()));
   let def = table.get(tribe);
-  if (!def) table.set(tribe, (def = { ...TRIBES[tribe], ...over }));
+  if (!def) {
+    // Its score weights and victory params (T14) are read by score.ts and peoplevictory.ts, not part of the people.
+    const { score: _score, victory: _victory, ...own } = over;
+    table.set(tribe, (def = { ...TRIBES[tribe], ...own }));
+  }
   return def;
 }
 
@@ -461,6 +465,24 @@ export function scoreWeightsOf(s: HasScenario): ScoreWeights {
   let w = SCORE_TABLES.get(scenario);
   if (!w) SCORE_TABLES.set(scenario, (w = { ...SCORE_WEIGHTS, ...scenario.score }));
   return w;
+}
+
+const PEOPLE_SCORE_TABLES = new WeakMap<Scenario, Map<TribeId, ScoreWeights>>();
+
+/**
+ * The score weights for one player: the game's (`scoreWeightsOf`), with a playing people's own
+ * (`peoples.overrides[id].score`, native-nations.md T14) over them.
+ */
+export function scoreWeightsFor(s: HasScenario, id: PlayerId): ScoreWeights {
+  const w = scoreWeightsOf(s);
+  const scenario = scenarioOf(s);
+  const own = scenario.peoples.overrides?.[id as TribeId]?.score;
+  if (!own) return w;
+  let table = PEOPLE_SCORE_TABLES.get(scenario);
+  if (!table) PEOPLE_SCORE_TABLES.set(scenario, (table = new Map()));
+  let out = table.get(id as TribeId);
+  if (!out) table.set(id as TribeId, (out = { ...w, ...own }));
+  return out;
 }
 
 /** The nations a game's setup may choose from: the chosen set, or the scenario's default. */

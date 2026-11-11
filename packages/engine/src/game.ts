@@ -16,6 +16,7 @@ import { modifiers } from './scenarios/modifiers.js';
 import { systemsOf, systemsOfId } from './playerkind.js';
 import { addPeoplePlayer } from './peopleplayer.js';
 import { initLand } from './land.js';
+import { recordHomelands } from './peoplevictory.js';
 import { laterArrivals } from './arrivals.js';
 
 /** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
@@ -71,6 +72,8 @@ export function createGame(config: GameConfig): GameState {
   for (const people of config.peoples ?? []) addPeoplePlayer(s, people, config.humans.includes(people));
   // The land's regions, hard years and health, in scenarios that have them (land.ts, T10).
   initLand(s);
+  // What each people holds at the start, for its ways of winning (peoplevictory.ts, T14).
+  if (config.peoples?.length) recordHomelands(s);
 
   beginPlayerTurn(s, s.players[0]);
   runAiUntilHuman(s);

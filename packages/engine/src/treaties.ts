@@ -153,6 +153,7 @@ const TREATY_NAME: Record<TreatyKind, string> = {
   'land-use': 'Land use',
   exchange: 'Cultural exchange',
   defence: 'Mutual defence',
+  league: 'League of peoples',
 };
 
 /** The treaty's name for the diplomacy screen ("Trade agreement"). */
