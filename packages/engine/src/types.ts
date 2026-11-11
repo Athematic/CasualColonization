@@ -112,8 +112,12 @@ export type Stance = 'peace' | 'war';
 
 export interface Player {
   id: NationId;
-  /** A chartered company (companies.ts) rather than a nation; missing means a nation (or the Crown). */
-  kind?: 'company';
+  /**
+   * A chartered company (companies.ts) or a native people played as a nation (native-nations.md
+   * T1) rather than a European nation; missing means a nation (or the Crown). Read through
+   * `playerKind` and the systems table (playerkind.ts).
+   */
+  kind?: 'company' | 'people';
   /** A company's shareholders and bookkeeping; only on a company. */
   company?: CompanyBook;
   human: boolean;

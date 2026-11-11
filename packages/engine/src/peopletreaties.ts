@@ -47,7 +47,8 @@ import { bestJob } from './colony.js';
 import { addTension, goodRelations, landPrice, nativeLandClosedTo, nativeLandOwner, peopleRelation, peopleRelationOf, peopleThreshold, settlementName, tensionOf } from './natives.js';
 import { isShip, message, player, tileAt, tileWorkedBy, unitName, unitPosition, workArea } from './queries.js';
 import { isFavoured, peoplePairRandom, settlementRandom } from './relations.js';
-import { isCompanyIdent, TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import { systemsOfId } from './playerkind.js';
 import type { UnitTypeId } from './rules/units.js';
 import { cooperationOf, LEVEL_COOPERATION, warOnFriend } from './alliances.js';
 import { calendarOf, mechanicsOf, nationOf, nativeRulesOf, peopleOf, scenarioOf, Term, turnAfterYears, yearValue } from './scenarios/index.js';
@@ -137,9 +138,9 @@ export function peopleTreatiesOn(s: GameState): boolean {
   return !!mechanicsOf(s).peopleTreaties?.length;
 }
 
-/** Whether a nation can make treaties with peoples: a European nation, neither the Crown nor a company. */
+/** Whether a nation can make treaties with peoples: a European nation, neither the Crown nor a company (playerkind.ts `peoples`). */
 function treatyNation(nation: NationId): boolean {
-  return nation !== 'crown' && !isCompanyIdent(nation);
+  return systemsOfId(nation).peoples;
 }
 
 /** The trade treaty in force between a nation and a people, if any. */
@@ -827,7 +828,8 @@ export function callToDefence(s: GameState, colony: Colony, attacker: Unit): voi
   if (!s.treaties || !peopleTreatyOn(s, 'defence')) return;
   const by = attacker.owner;
   const partner = colony.owner;
-  if (by === partner || isCompanyIdent(by) || attacker.type === 'privateer') return;
+  // A neutral attacker (a chartered company) makes no war (playerkind.ts `war`).
+  if (by === partner || !systemsOfId(by).war || attacker.type === 'privateer') return;
   const peoples = defencePeoples(s, partner);
   if (!peoples.length) return;
   const grid = gridOf(s);

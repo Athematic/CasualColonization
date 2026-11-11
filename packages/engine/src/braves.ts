@@ -34,7 +34,8 @@ import { track } from './telemetry.js';
 import { BUILDINGS, type BuildingKind } from './rules/buildings.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { UNIT_TYPES } from './rules/units.js';
-import { isCompanyIdent, TRIBES, type NationId } from './rules/nations.js';
+import { TRIBES, type NationId } from './rules/nations.js';
+import { systemsOfId } from './playerkind.js';
 import { braveCombat } from './rules/natives.js';
 import { landStepCost } from './movement.js';
 import { RIVER_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './rules/terrain.js';
@@ -309,7 +310,8 @@ function nearestColony(s: GameState, st: Settlement): Colony | undefined {
   let best: Colony | undefined;
   let bestD = Infinity;
   for (const c of colonyList(s)) {
-    if (c.owner === 'crown') continue;
+    // Not the Crown's colonies, nor a playing people's towns (playerkind.ts `visitedByBraves`).
+    if (!systemsOfId(c.owner).visitedByBraves) continue;
     const d = grid.distance(c.x, c.y, st.x, st.y);
     if (d <= range && d < bestD) {
       best = c;
@@ -331,7 +333,7 @@ function nearbyEnemy(s: GameState, st: Settlement, index: PhaseIndex): Unit | un
     const y = Math.floor(i / w);
     const d = grid.distance(x, y, st.x, st.y);
     if (d > 3 || d >= bestD || index.colonies.has(i)) continue;
-    const u = units.find((o) => o.owner !== 'crown' && !isCompanyIdent(o.owner) && tribe.stance[o.owner] === 'war' && !hasSubmitted(s, st.tribe, o.owner));
+    const u = units.find((o) => systemsOfId(o.owner).peoples && tribe.stance[o.owner] === 'war' && !hasSubmitted(s, st.tribe, o.owner));
     if (u) {
       best = u;
       bestD = d;
@@ -358,7 +360,7 @@ function chooseTask(s: GameState, b: Brave, st: Settlement, index: PhaseIndex): 
     const nation = c.owner;
     const t = tensionOf(st, nation);
     // A people that submitted, and every people towards a chartered company (fix c), neither attacks nor demands.
-    const hostile = !hasSubmitted(s, st.tribe, nation) && !isCompanyIdent(nation);
+    const hostile = !hasSubmitted(s, st.tribe, nation) && systemsOfId(nation).peoples;
     const raid = difficultyOf(s, player(s, nation)).raidChance;
     if (hostile && tribe.stance[nation] === 'war') {
       if (roll < rules.braveChances.attackAtWar * raid) b.task = { kind: 'attack', colonyId: c.id };

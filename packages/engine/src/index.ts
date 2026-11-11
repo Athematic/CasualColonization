@@ -42,6 +42,7 @@ export * from './treaties.js';
 export * from './peopletreaties.js';
 export * from './alliances.js';
 export * from './companies.js';
+export * from './playerkind.js';
 export * from './chartered.js';
 export * from './confederation.js';
 export * from './cheats.js';

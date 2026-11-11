@@ -10,7 +10,8 @@ import { cargoRoomFor, colonyPopulation, createUnit, message, player, reveal, ti
 import { random, randInt } from './rng.js';
 import { noteTrade } from './stats.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
-import { isCompanyIdent, TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import { systemsOf, systemsOfId } from './playerkind.js';
 import { NATIVE_RULES, type TensionThresholds } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
@@ -219,8 +220,8 @@ export function tensionSeverity(t: number, tension: TensionThresholds = NATIVE_R
 }
 
 export function addTension(st: Settlement, nation: NationId, amount: number): void {
-  // The Crown's forces and the chartered companies (neutral to the peoples, fix c) raise no tension.
-  if (nation === 'crown' || isCompanyIdent(nation)) return;
+  // The Crown's forces and the chartered companies (neutral to the peoples, fix c) raise no tension (playerkind.ts `peoples`).
+  if (!systemsOfId(nation).peoples) return;
   st.tension[nation] = Math.max(0, Math.min(1000, tensionOf(st, nation) + amount));
 }
 
@@ -385,7 +386,7 @@ export function convertType(s: GameState, nation: NationId): UnitTypeId {
 export function processNatives(s: GameState): void {
   const grid = gridOf(s);
   // Chartered companies are neutral to the peoples (fix c): no pressure, no drift, no war.
-  const nations = s.players.filter((p) => p.id !== 'crown' && p.kind !== 'company').map((p) => p.id);
+  const nations = s.players.filter((p) => systemsOf(p).peoples).map((p) => p.id);
   const difficulty = new Map(s.players.map((p) => [p.id, difficultyOf(s, p)]));
   const rules = nativeRulesOf(s);
   // Nearby colonies press on native land, more so as they grow: 3 and one per two colonists for
@@ -492,7 +493,7 @@ export function inciteTribe(s: GameState, unitId: string, settlementId: string, 
   const rules = nativeRulesOf(s);
   const st = adjacentSettlement(s, u, settlementId);
   if (u.role !== 'missionary') fail('Only missionaries can incite the natives.');
-  if (target === u.owner || target === 'crown' || isCompanyIdent(target) || !s.players.some((p) => p.id === target)) fail('Choose a rival European nation.');
+  if (target === u.owner || !systemsOfId(target).peoples || !s.players.some((p) => p.id === target)) fail('Choose a rival European nation.');
   if (tensionOf(st, u.owner) >= rules.tension.angry) fail(`The ${TRIBES[st.tribe].name} will not listen to you.`);
   const tribe = tribeOf(s, st);
   if (tribe.stance[target] === 'war') fail(`The ${TRIBES[st.tribe].name} are already at war with ${nationOf(s, target).name}.`);
@@ -552,7 +553,7 @@ export function peopleRelationOf(s: GameState, nation: NationId, people: TribeId
 
 /** Whether a nation can stand in relations with a people: a European nation, neither the Crown nor a company. */
 function standsWithPeoples(nation: NationId): boolean {
-  return nation !== 'crown' && !isCompanyIdent(nation);
+  return systemsOfId(nation).peoples;
 }
 
 /**

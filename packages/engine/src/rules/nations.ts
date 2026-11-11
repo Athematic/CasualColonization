@@ -99,6 +99,12 @@ export const HOME_PORTS: Record<AmericasNationId | 'crown', string> = {
 
 export const NATION_ORDER: AmericasNationId[] = ['england', 'france', 'netherlands', 'spain', 'portugal', 'sweden', 'denmark', 'russia'];
 
+/**
+ * Any player's id (native-nations.md T1): a nation (the Crown and companies included) or a native
+ * people played as a nation, which keeps its own people id. The ids never overlap.
+ */
+export type PlayerId = NationId | TribeId;
+
 export type TribeId = 'iroquois' | 'cherokee' | 'sioux' | 'apache' | 'aztec' | 'arawak' | 'tupi' | 'inca' | 'kalinago';
 
 /**
