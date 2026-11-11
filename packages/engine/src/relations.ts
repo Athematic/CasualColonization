@@ -15,7 +15,8 @@ import { noteTrade } from './stats.js';
 import { cargoRoomFor, colonyAt, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
 import { random } from './rng.js';
 import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, term, turnAfterYears, yearValue } from './scenarios/index.js';
-import { COMPANY_IDS, type NationId, type TribeId } from './rules/nations.js';
+import { type NationId, type TribeId } from './rules/nations.js';
+import { systemsOfId } from './playerkind.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, treatyBetween } from './treaties.js';
 import { aiAcceptsAlliance, aiAcceptsExpedition, allianceProblem, expeditionProblem, isAllied, leaveAlliance, makeAlliance, makeExpedition } from './alliances.js';
@@ -87,9 +88,9 @@ export function relationKey(a: NationId, b: NationId): string {
   return [a, b].sort().join('|');
 }
 
-/** Whether two nations can have relations at all: two different European nations (no Crown, no company: companies make no agreements). */
+/** Whether two nations can have relations at all: two different European nations (no Crown, no company: companies make no agreements; playerkind.ts `relations`). */
 function europeanPair(a: NationId, b: NationId): boolean {
-  return a !== b && a !== 'crown' && b !== 'crown' && !COMPANY_IDS.has(a) && !COMPANY_IDS.has(b);
+  return a !== b && systemsOfId(a).relations && systemsOfId(b).relations;
 }
 
 /** The relation between two nations, created (with its seeded thresholds) when first needed. */

@@ -42,6 +42,7 @@ import {
 import type { GoodId } from '../rules/goods.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import type { NationId } from '../rules/nations.js';
+import { systemsOf } from '../playerkind.js';
 import { track } from '../telemetry.js';
 import type { Colony, GameState, Player, ProposalKind, Unit } from '../types.js';
 import { allianceRules, alliancesOn, allianceOf, longPeaceUnlocked, tiesUnlocked, expeditionProblem, allianceProblem, alliesOf, cooperationOf, isAllied, LEVEL_COOPERATION, leaveAlliance, warOnFriend } from '../alliances.js';
@@ -187,7 +188,7 @@ export function favouredPays(s: GameState, p: Player, prof: AiProfile, other: Na
 function makeProposals(s: GameState, p: Player, prof: AiProfile, strength: number): void {
   const memory = p.aiMemory ?? {};
   for (const o of s.players) {
-    if (o.id === p.id || o.id === 'crown' || o.kind === 'company' || !atPeace(s, p.id, o.id) || isHostile(s, p.id, o.id)) continue;
+    if (o.id === p.id || !systemsOf(o).relations || !atPeace(s, p.id, o.id) || isHostile(s, p.id, o.id)) continue;
     if (memory.warTarget && s.colonies[memory.warTarget]?.owner === o.id) continue;
     if (memory.warPlan?.nation === o.id) continue;
     if (!hasTradeAgreement(s, p.id, o.id)) {
@@ -402,7 +403,7 @@ export function bestWarTarget(s: GameState, p: Player, prof: AiProfile, strength
     if (s.treaties && (isAllied(s, p.id, c.owner) ? !favoured : warOnFriend(s, p.id, c.owner))) continue;
     if (memory.warPlan && memory.warPlan.nation === c.owner && s.turn < memory.warPlan.turn) continue;
     const enemy = s.players.find((o) => o.id === c.owner);
-    if (!enemy || enemy.independence !== 'none' || enemy.kind === 'company') continue;
+    if (!enemy || enemy.independence !== 'none' || !systemsOf(enemy).war) continue;
     const hostile = isHostile(s, p.id, c.owner);
     const aggression = hostile ? Math.max(prof.aggression, HOSTILE_AGGRESSION) : prof.aggression;
     if (aggression <= 0) continue;

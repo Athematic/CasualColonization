@@ -23,6 +23,7 @@ import { noteHistory } from './history.js';
 import { cargoRoomFor, colonyAt, createUnit, isShip, isWater, message, neighbours, player, tileAt, unitName, unitsAboard, unitsAt } from './queries.js';
 import { atPeace, cancelFavoured, cancelTrade, FOREIGN_KEEP, hasTradeAgreement, inWaitingPeriod, isFavoured, isHostile, pairRandom, relation, tradeAtForeignColony, yearsOfPeace } from './relations.js';
 import type { NationId } from './rules/nations.js';
+import { systemsOf, systemsOfId } from './playerkind.js';
 import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, scenarioOf, turnAfterYears } from './scenarios/index.js';
 import type { AllianceRules, Cooperation, YearsAround } from './scenarios/types.js';
 import type { AiLevel } from './ai/profiles.js';
@@ -212,7 +213,7 @@ function bothHuman(s: GameState, a: NationId, b: NationId): boolean {
  */
 export function allianceProblem(s: GameState, from: NationId, to: NationId): string | null {
   if (!alliancesOn(s)) return 'There are no alliances in this scenario.';
-  if (from === to || from === 'crown' || to === 'crown' || s.players.find((p) => p.id === from)?.kind === 'company' || s.players.find((p) => p.id === to)?.kind === 'company') return 'Alliances are made between European nations.';
+  if (from === to || !systemsOfId(from).alliances || !systemsOfId(to).alliances) return 'Alliances are made between European nations.';
   if (!s.players.some((p) => p.id === from) || !s.players.some((p) => p.id === to)) return `${nationOf(s, to).name} is not taking part.`;
   const name = nationOf(s, to).name;
   if (!atPeace(s, from, to)) return `You are at war with ${name}.`;
@@ -220,7 +221,7 @@ export function allianceProblem(s: GameState, from: NationId, to: NationId): str
   if (allianceOf(s, to)) return `${nationTitle(s, to)} already belongs to another alliance.`;
   // An alliance is a bloc, not the whole table: at most half the nations taking part (at least two).
   const members = alliesOf(s, from).length + 1;
-  const nations = s.players.filter((p) => p.id !== 'crown' && p.kind !== 'company').length;
+  const nations = s.players.filter((p) => systemsOf(p).alliances).length;
   if (members >= 2 && members + 1 > Math.max(2, Math.floor(nations / 2))) return `An alliance may hold at most half the nations; yours is full.`;
   for (const m of alliesOf(s, from)) {
     if (!atPeace(s, m, to)) return `Your ally ${nationOf(s, m).name} is at war with ${name}.`;
@@ -425,7 +426,7 @@ export function shareBells(s: GameState, nation: NationId): void {
   if (!give) return;
   for (const a of allies) {
     const ally = player(s, a);
-    if (ally.kind === 'company' || ally.finished) continue;
+    if (!systemsOf(ally).congress || ally.finished) continue;
     ally.fatherBells += give;
     track(a, 'alliance:bells received', give);
   }

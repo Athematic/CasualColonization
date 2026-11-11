@@ -23,7 +23,6 @@ import {
 import { attack, cashTreasure, defencePower, offencePower, repairArtillery } from '../combat.js';
 import { proposePeace, startWar } from '../diplomacy.js';
 import { favouredPartners, hasTradeAgreement, isHostile } from '../relations.js';
-import { isCompanyId } from '../companies.js';
 import { boardInEurope, buyGoods, buyPrice, inHomePort, portOf, recruit, recruitPrice, sailToAmerica, sellGoods, train, trainPrice } from '../europe.js';
 import { canDeclareIndependence, declareIndependence, rebelShare } from '../independence.js';
 import { abandonColony } from '../leaving.js';
@@ -68,7 +67,7 @@ import { equippedPrice, trainEquipped } from './outfit.js';
 import { AI_PROFILES, type AiProfile } from './profiles.js';
 import { buildRoads, equipPioneer, pioneerToolsWanted } from './roads.js';
 import { aiGoodsOf, aiTurn, buildingsOf, goodsOf, mechanicsOf, scenarioOf } from '../scenarios/index.js';
-import { systemsOf } from '../playerkind.js';
+import { systemsOf, systemsOfId } from '../playerkind.js';
 
 const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
 
@@ -1349,7 +1348,7 @@ function privateer(s: GameState, p: Player, ship: Unit): boolean {
   const grid = gridOf(s);
   const pos = unitPosition(s, ship)!;
   // Never a Favoured Nation's ships, nor a trade partner's.
-  const prey = (o: Unit) => o.owner !== p.id && isShip(o) && UNIT_TYPES[o.type].offence === 0 && o.owner !== 'crown' && !hasTradeAgreement(s, p.id, o.owner) && !isCompanyId(s, o.owner);
+  const prey = (o: Unit) => o.owner !== p.id && isShip(o) && UNIT_TYPES[o.type].offence === 0 && o.owner !== 'crown' && !hasTradeAgreement(s, p.id, o.owner) && systemsOfId(o.owner).war;
   for (const n of neighbours(s, pos.x, pos.y)) {
     const target = unitsAt(s, n.x, n.y).find(prey);
     if (target && ship.moves > 0 && offencePower(s, ship) > defencePower(s, target)) {
