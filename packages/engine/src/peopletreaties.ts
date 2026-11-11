@@ -550,8 +550,9 @@ function rentDay(s: GameState, t: Treaty, terms: LandUseTerms, nation: NationId,
   for (const p of gone) delete tileAt(s, p.x, p.y)!.use;
   evictWorkers(s, gone);
   for (const p of tiles) tileAt(s, p.x, p.y)!.use = nation;
-  payRent(s, nation, tiles, terms.rent);
+  const paid = payRent(s, nation, tiles, terms.rent);
   terms.due = turnAfterYears(terms.due, 1, calendarOf(s));
+  if (paid > 0) message(s, `You pay the ${name} ${paid} gold rent for ${tiles.length} ${tiles.length === 1 ? 'tile' : 'tiles'} of their land.`, nation);
 }
 
 /** The benefits of a lease, in one line, from the game's numbers. */
