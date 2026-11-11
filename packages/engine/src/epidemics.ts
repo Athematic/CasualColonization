@@ -73,8 +73,8 @@ function regionOfTile(s: GameState, x: number, y: number): number {
 export function epidemicText(c: Colony, lost: number, years: number, town: boolean): string {
   const folk = town ? 'people' : 'colonists';
   const it = town ? 'the town' : 'the colony';
-  const deaths = lost === 0 ? `Many of its ${folk} fall ill, and all of them live` : lost === 1 ? `One of its ${folk} has died of it` : `${lost} of its ${folk} have died of it`;
-  return `An epidemic has reached ${c.name}. ${deaths}, and ${it} will see no births for ${years} ${years === 1 ? 'year' : 'years'} while it recovers.`;
+  const deaths = lost === 0 ? `Many of its ${folk} fall ill, but none die` : lost === 1 ? `One of its ${folk} has died of it` : `${lost} of its ${folk} have died of it`;
+  return `An epidemic has reached ${c.name}. ${deaths}; ${it} will see no births for ${years} ${years === 1 ? 'year' : 'years'} while it recovers.`;
 }
 
 /** Strikes a town or colony: it loses up to `loss` people (never its last) and has no births for `years` years. */

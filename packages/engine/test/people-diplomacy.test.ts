@@ -16,6 +16,7 @@ import {
   assignJob,
   barter,
   colonyAt,
+  computerTradeVisits,
   colonyWorkers,
   createGame,
   createUnit,
@@ -363,6 +364,26 @@ describe('trade for gold between a people and Europeans (T10)', () => {
     expect(pairPrice(s, 'england', 'iroquois', 'cloth', 'iroquois')).toBeLessThan(europeanGoodsPrice(s, 'iroquois', 'cloth'));
   });
 
+  it('a computer people takes furs to a computer nation’s colony nearby once a year, as braves do', () => {
+    const s = createGame(config());
+    const t = town(s);
+    const c = colonyBeside(s);
+    t.goods.furs = 150;
+    player(s, 'england').gold = 1000;
+    computerTradeVisits(s, 'iroquois');
+    const price = peopleGoodsPrice(s, 'furs');
+    expect(player(s, 'iroquois').gold).toBe(100 * price);
+    expect(c.goods.furs).toBe(100);
+    expect(t.goods.furs).toBe(50);
+    expect(standingOf(s, 'england', 'iroquois')!.volume).toBe(100 * price);
+    // A colony of a nation a person plays is left to the person.
+    const h = createGame(config({ humans: ['england'] }));
+    town(h).goods.furs = 150;
+    colonyBeside(h);
+    computerTradeVisits(h, 'iroquois');
+    expect(player(h, 'iroquois').gold).toBe(0);
+  });
+
   it('a people does not sell to a settlement for gold, and no trade at war', () => {
     const s = createGame(config({ humans: ['iroquois'] }));
     const st = Object.values(s.settlements)[0];
@@ -503,9 +524,9 @@ describe('epidemics (T12)', () => {
 
   it('the words are sober and the same for both sides', () => {
     const c = { name: 'Onondaga' } as Colony;
-    expect(epidemicText(c, 1, 3, true)).toBe('An epidemic has reached Onondaga. One of its people has died of it, and the town will see no births for 3 years while it recovers.');
-    expect(epidemicText({ name: 'Jamestown' } as Colony, 2, 3, false)).toBe('An epidemic has reached Jamestown. 2 of its colonists have died of it, and the colony will see no births for 3 years while it recovers.');
-    expect(epidemicText(c, 0, 1, true)).toBe('An epidemic has reached Onondaga. Many of its people fall ill, and all of them live, and the town will see no births for 1 year while it recovers.');
+    expect(epidemicText(c, 1, 3, true)).toBe('An epidemic has reached Onondaga. One of its people has died of it; the town will see no births for 3 years while it recovers.');
+    expect(epidemicText({ name: 'Jamestown' } as Colony, 2, 3, false)).toBe('An epidemic has reached Jamestown. 2 of its colonists have died of it; the colony will see no births for 3 years while it recovers.');
+    expect(epidemicText(c, 0, 1, true)).toBe('An epidemic has reached Onondaga. Many of its people fall ill, but none die; the town will see no births for 1 year while it recovers.');
   });
 });
 
@@ -514,9 +535,12 @@ describe('a game with a playing people’s diplomacy (save and load)', () => {
     const s = createGame(config({ peoples: ['iroquois', 'cherokee'] }));
     play(s, 60);
     friends(s, 'iroquois', 'england');
-    makePairTreaty(s, 'iroquois', 'england', 'people-trade');
+    player(s, 'england').gold += 2000;
+    colonyBeside(s);
+    for (const kind of ['people-trade', 'land-use', 'exchange', 'defence'] as const) makePairTreaty(s, 'iroquois', 'england', kind);
     friends(s, 'iroquois', 'cherokee');
     makePairTreaty(s, 'iroquois', 'cherokee', 'people-trade');
+    makePairTreaty(s, 'iroquois', 'cherokee', 'defence');
     play(s, 60);
     expect(s.gameOver).toBeUndefined();
     // First contacts were written for the peoples.

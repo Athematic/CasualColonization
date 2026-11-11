@@ -34,6 +34,8 @@ import { UNIT_TYPES } from './rules/units.js';
 import { goodsOf, nativeRulesOf, peopleOf } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
+import { colonyList } from './unitindex.js';
+import { sellPrice } from './europe.js';
 
 /** What a European pays a people for a unit of its goods (a settlement's asking price, Beta 2). */
 export function peopleGoodsPrice(s: GameState, good: GoodId): number {
@@ -189,4 +191,60 @@ export function barter(s: GameState, by: PlayerId, unitId: string, at: { colonyI
   message(s, text, u.owner, place);
   if (town) message(s, text, town.owner, place);
   return text;
+}
+
+// ---------------------------------------------------------------------------
+// A computer people's trade visits (simple rules until step 9)
+
+/** Furs a computer people's town takes to a European colony on a trade visit, at most. */
+export const TRADE_VISIT_FURS = 100;
+
+/**
+ * A computer people trades as the braves of Beta 2 do, once a year (ai/index.ts): each of its towns
+ * with spare furs takes up to `TRADE_VISIT_FURS` to the nearest colony, within its braves' reach
+ * (`visitRange`), of a computer European nation at peace with it, which buys them when they fetch
+ * more in Europe than they cost and it can pay (as a computer nation buys what a brave offers). The
+ * people comes to trade, so a trade treaty gives it the treaty's price. Colonies of nations a person
+ * plays are left to the person (trade by hand, `tradeWithPeople`).
+ */
+export function computerTradeVisits(s: GameState, people: PlayerId): void {
+  const grid = gridOf(s);
+  const range = nativeRulesOf(s).visitRange;
+  const colonies = colonyList(s).filter((c) => {
+    if (kindOfId(c.owner) === 'people' || !systemsOfId(c.owner).peoples) return false;
+    const o = player(s, c.owner);
+    return !o.human && !pairAtWar(s, c.owner, people);
+  });
+  if (!colonies.length) return;
+  for (const town of colonyList(s)) {
+    if (town.owner !== people) continue;
+    const furs = Math.min(TRADE_VISIT_FURS, spare(s, town, 'furs'));
+    if (furs <= 0) continue;
+    let best: Colony | undefined;
+    let bestD = Infinity;
+    for (const c of colonies) {
+      const d = grid.distance(c.x, c.y, town.x, town.y);
+      if (d <= range && d < bestD) {
+        best = c;
+        bestD = d;
+      }
+    }
+    if (!best) continue;
+    const buyer = player(s, best.owner);
+    const price = pairPrice(s, people, best.owner, 'furs', people);
+    const worth = sellPrice(buyer, 'furs') * (1 - buyer.tax / 100);
+    if (worth <= price) continue;
+    let n = Math.min(furs, Math.max(0, warehouseCapacity(best) - best.goods.furs));
+    while (n > 0 && dealGold(n, price) > buyer.gold) n--;
+    if (n <= 0) continue;
+    const gold = dealGold(n, price);
+    town.goods.furs -= n;
+    best.goods.furs += n;
+    buyer.gold -= gold;
+    player(s, people).gold += gold;
+    notePeopleTrade(s, best.owner, people as TribeId, gold);
+    track(people, 'trade:people sold', gold);
+    message(s, `${sideName(s, people).replace(/^the /, 'The ')} bring ${n} furs from ${town.name} to ${best.name} and sell them for ${gold} gold.`, people, best);
+    message(s, `${sideName(s, people).replace(/^the /, 'The ')} bring ${n} furs from ${town.name} to ${best.name} and sell them for ${gold} gold.`, best.owner, best);
+  }
 }

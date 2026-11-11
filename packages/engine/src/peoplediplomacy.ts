@@ -51,7 +51,7 @@ import { peoplePairRandom } from './relations.js';
 import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { cooperationOf, LEVEL_COOPERATION } from './alliances.js';
-import { calendarOf, nationOf, peopleOf, scenarioOf, settlementKindIn, turnAfterYears, yearValue } from './scenarios/index.js';
+import { calendarOf, nationOf, peopleOf, scenarioOf, settlementKindIn, turnAfterYears, yearOf, yearValue } from './scenarios/index.js';
 import type { YearsAround } from './scenarios/types.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, nationParty, peopleParty } from './treaties.js';
@@ -703,12 +703,16 @@ export function processPeopleDiplomacy(s: GameState): void {
 
 /**
  * A computer people's diplomacy, once a turn (ai/index.ts): it settles wars it is tired of, as a
- * computer nation does, and every fifth year offers a trade treaty to each side it may make one
+ * computer nation does, makes its trade visits once a year (peopletrade.ts `computerTradeVisits`,
+ * passed in as `trade`), and every fifth turn offers a trade treaty to each side it may make one
  * with (and a defence pact to a people it trades with), at Beta 2's `offer` chance times its
  * temperament, drawn from the pair's own stream.
  */
-export function peopleComputerDiplomacy(s: GameState, p: Player, peace: (s: GameState, id: PlayerId) => void): void {
+export function peopleComputerDiplomacy(s: GameState, p: Player, peace: (s: GameState, id: PlayerId) => void, trade?: (s: GameState, id: PlayerId) => void): void {
   peace(s, p.id);
+  // Trade visits once a year, on the year's first turn.
+  const cal = calendarOf(s);
+  if (trade && (s.turn === 0 || yearOf(s.turn, cal).year !== yearOf(s.turn - 1, cal).year)) trade(s, p.id);
   if (!peopleTreatiesOn(s) || s.turn % 5 !== 0) return;
   const chance = peopleTreatyRules(s).offer * temperamentOf(s, p.id as TribeId).offer;
   for (const other of counterparts(s, p.id)) {

@@ -7,6 +7,7 @@ import { cooperationOf, LEVEL_COOPERATION } from '../alliances.js';
 import { companyRules } from '../companies.js';
 import { systemsOf } from '../playerkind.js';
 import { peopleComputerDiplomacy } from '../peoplediplomacy.js';
+import { computerTradeVisits } from '../peopletrade.js';
 import { aiPeace } from '../diplomacy.js';
 import { creativeProfile } from './creative.js';
 import { runNaive } from './naive.js';
@@ -28,7 +29,7 @@ export function runAi(s: GameState, p: Player): void {
   const ai = systemsOf(p).ai;
   if (ai === 'crown') return runCrown(s);
   if (ai === 'company') return runAdvanced(s, p, companyProfile(s));
-  if (ai === 'people') return peopleComputerDiplomacy(s, p, aiPeace);
+  if (ai === 'people') return peopleComputerDiplomacy(s, p, aiPeace, computerTradeVisits);
   const level = p.ai ?? 'naive';
   if (level === 'naive') return runNaive(s, p);
   const base = inScenario(s, AI_PROFILES[level]);

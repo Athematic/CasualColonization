@@ -249,7 +249,9 @@ export class DiplomacyScreen implements Screen {
     const me = app.me;
     const treaties = peopleTreatiesOn(s);
     const thresholds = nativeRulesOf(s).tension;
+    // A people that plays (Beta 3) is in the card of native nations, not here.
     const rows = s.tribes
+      .filter((t) => !s.players.some((p) => p.id === t.id))
       .map((t) => {
         const settlements = Object.values(s.settlements).filter((st) => st.tribe === t.id);
         const contact = inContact(s, me.id, t.id);

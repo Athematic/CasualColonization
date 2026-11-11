@@ -164,7 +164,9 @@ function expectNoEurope(s: GameState): void {
     expect(council, id).toContain(id);
     expect(AMERICAS.councils.congress.members, id).not.toContain(id);
   }
-  expect(p.gold).toBe(0);
+  // Gold only from trade with Europeans (T10; step 4 brought the trade): a sale behind any gold.
+  expect(p.gold).toBeGreaterThanOrEqual(0);
+  if (p.gold > 0) expect(s.messages.some((m) => m.to === p.id && /sell (them )?for \d+ gold|for \d+ gold rent|gold paid for the first year/.test(m.text))).toBe(true);
   const own = unitList(s).filter((u) => u.owner === p.id);
   expect(own.filter((u) => u.loc.kind === 'europe' || u.loc.kind === 'sailing')).toEqual([]);
   expect(own.filter((u) => u.type === 'caravel')).toEqual([]);
