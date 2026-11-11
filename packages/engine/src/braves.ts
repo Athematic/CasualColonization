@@ -42,7 +42,7 @@ import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from '.
 import { difficultyOf, goodsOf, nativeProduceOf, nativeRulesOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
 import { removeUnit, colonyList, unitList } from './unitindex.js';
-import { aiAcceptsPeopleOffer, answerPeopleOffer, defenceEnemy, defencePartner, notePeopleContact, peopleBraveTradeFactor, peopleBuyFactor, peopleGatherFactor, peopleHostile, peopleTreatyRules, peopleTreatyText, peopleWouldOffer } from './peopletreaties.js';
+import { aiAcceptsPeopleOffer, answerPeopleOffer, defenceEnemy, defencePartner, hasPeopleTrade, notePeopleContact, peopleBraveTradeFactor, peopleBuyFactor, peopleGatherFactor, peopleHostile, peopleTreatyRules, peopleTreatyText, peopleWouldOffer } from './peopletreaties.js';
 
 /** The kind of a settlement in its game's scenario (camp, village, city…), with its numbers. */
 export function settlementKind(s: GameState, st: Settlement): SettlementKindDef {
@@ -740,8 +740,13 @@ export function aiPaysTribute(s: GameState, b: Brave, c: Colony, d: Pick<NativeD
   const risk = off / (off + def);
   const value = d.good ? d.amount * sellPrice(p, d.good) : d.amount;
   if (!d.good && p.gold < d.amount) return false;
+  // Creative, the peoples' main partner (native-partners.md N11), keeps its partners' goodwill (step 6).
+  if (p.ai === 'creative' && hasPeopleTrade(s, p.id, b.tribe) && value <= PARTNER_TRIBUTE) return true;
   return risk >= 0.35 || value <= 120;
 }
+
+/** The most (gold, or goods at home prices) a Creative computer nation pays a trade partner people's brave without weighing the fight. */
+export const PARTNER_TRIBUTE = 400;
 
 /** Answers a demand (pay or refuse) or an offer (buy or decline). */
 export function resolveDemand(s: GameState, d: NativeDemand, accept: boolean): string {

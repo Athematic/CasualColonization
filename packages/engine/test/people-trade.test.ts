@@ -61,6 +61,10 @@ import {
   LEVEL_COOPERATION,
 } from '../src/index.js';
 import { manageLogistics } from '../src/ai/logistics.js';
+import { GIFTS_ABOVE } from '../src/ai/advanced.js';
+import { AI_PROFILES } from '../src/ai/profiles.js';
+import { aiPaysTribute, PARTNER_TRIBUTE } from '../src/braves.js';
+import type { Brave, Colony } from '../src/types.js';
 
 /** The Americas with trade treaties with peoples switched on (hidden, for these tests). */
 const TREATIES: Scenario = { ...AMERICAS, id: 'test-people-trade', name: 'test-people-trade', hidden: true, mechanics: { ...AMERICAS.mechanics, peopleTreaties: ['people-trade'] } };
@@ -412,6 +416,44 @@ describe('effects of a trade treaty (N4)', () => {
     expect(bought).toBe(true);
     expect(sold).toBe(true);
     expect(peopleRelationOf(s, 'england', st.tribe)!.volume).toBeGreaterThan(0);
+  });
+
+  it('Creative pays a trade partner\'s tribute it would otherwise refuse; other levels and other peoples as before (step 6)', () => {
+    const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['france'], ai: { england: 'creative' }, scenario: TREATIES.id });
+    const grid = gridOf(s);
+    let st: Settlement | undefined;
+    let c: Colony | undefined;
+    for (const o of Object.values(s.settlements)) {
+      for (let i = 0; i < s.map.tiles.length && !c; i++) {
+        const x = i % s.map.width;
+        const y = Math.floor(i / s.map.width);
+        const d = grid.distance(x, y, o.x, o.y);
+        if (d < 2 || d > 4 || colonySiteProblem(s, x, y)) continue;
+        const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', x, y });
+        u.moves = 3;
+        c = foundColony(s, u.id, 'Tribute');
+        st = o;
+      }
+      if (c) break;
+    }
+    if (!c || !st) throw new Error('no site');
+    for (let i = 0; i < 3; i++) createUnit(s, 'england', 'veteranSoldier', { kind: 'map', x: c.x, y: c.y }).role = 'soldier';
+    const b = { id: 'bt-tribute', tribe: st.tribe, home: st.id, x: st.x, y: st.y } as Brave;
+    player(s, 'england').gold = 5_000;
+    const demand = { amount: 300 };
+    // A well-defended colony refuses 300 gold, Creative too, without a treaty.
+    expect(aiPaysTribute(s, b, c, demand)).toBe(false);
+    makePeopleTreaty(s, 'england', st.tribe);
+    expect(aiPaysTribute(s, b, c, demand)).toBe(true);
+    expect(aiPaysTribute(s, b, c, { amount: PARTNER_TRIBUTE + 1 })).toBe(false);
+    player(s, 'england').ai = 'competent';
+    expect(aiPaysTribute(s, b, c, demand)).toBe(false);
+  });
+
+  it('Creative gives a people gifts sooner than the other levels (step 6)', () => {
+    expect(AI_PROFILES.creative.giftsAbove).toBe(300);
+    expect(AI_PROFILES.competent.giftsAbove).toBeUndefined();
+    expect(GIFTS_ABOVE).toBe(450);
   });
 
   it('computer nations put an idle wagon train on a route to a partner\'s settlement that pays for their spare goods (step 6)', () => {
