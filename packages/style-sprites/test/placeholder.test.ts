@@ -108,9 +108,9 @@ describe('the placeholder pack', () => {
     expect(drawsGrid(placeholder, 'square')).toBe(true);
   });
 
-  it('leaves the painted pack square-only, as its Ligne claire fallback', () => {
-    expect(ligneClairePainted.grids).toBeUndefined();
-    expect(drawsGrid(ligneClairePainted, 'hex')).toBe(false);
+  it('draws the painted pack on squares and hexes, as its Ligne claire fallback (step 6)', () => {
+    expect(ligneClairePainted.grids).toEqual(['square', 'hex']);
+    expect(drawsGrid(ligneClairePainted, 'hex')).toBe(true);
     expect(ligneClairePaintedPack.fallback).toBeUndefined();
   });
 
