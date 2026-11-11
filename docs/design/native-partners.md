@@ -1,6 +1,6 @@
 # Design note: Native peoples as partners (Beta 2)
 
-Status: **design draft, decisions open** (November 2026). For Simon to decide N1–N14 (section 4; one line each in section 7). Builds on Beta 1, [cooperation.md](cooperation.md) (built), and reuses its shapes: the `Treaty` record, scenario data and mechanics switches for every new rule, computer behaviour per level at seeded chances with targets a scenario can change, and `gameOver.winners`. The 0.9 scenario framework ([scenario-framework.md](scenario-framework.md), [SCENARIOS.md](../SCENARIOS.md)) applies throughout. Australia ([australia.md](australia.md)) is the scenario that will lean on this most, so the shapes chosen here must serve it later.
+Status: **decided** (11 November 2026): Simon agreed to every recommendation N1–N14 and to the five fixes of today's native rules in step 0 (section 5). He added one direction for N1: native peoples are to become a **nation type of their own** later (section 4, after the table), so the people party must be built to grow into that. Builds on Beta 1, [cooperation.md](cooperation.md) (built), and reuses its shapes: the `Treaty` record, scenario data and mechanics switches for every new rule, computer behaviour per level at seeded chances with targets a scenario can change, and `gameOver.winners`. The 0.9 scenario framework ([scenario-framework.md](scenario-framework.md), [SCENARIOS.md](../SCENARIOS.md)) applies throughout. Australia ([australia.md](australia.md)) is the scenario that will lean on this most, so the shapes chosen here must serve it later.
 
 ## 1. Goal
 
@@ -110,7 +110,14 @@ The natives work came in 0.5 (see the roadmap's 0.5 table and [AI_FEATURE_AUDIT.
 | N13 | **Interface.** | Where to propose and see treaties. | **Foreign Affairs:** the "Native peoples" card gets a row per people with its treaties, its standing in words ("trusts you", "wary"), and a Propose menu (only after contact: a scout's visit, a mission or a trade); the Treaties card lists treaties with peoples beside the European ones. **Settlement screen** (a unit next to it, `apps/web/src/ui/natives.ts`): shows the treaty, its benefits and rent, and the "teach again in n years" date. Answers come at once; a people's own offers come in the turn-start briefing. The rows must stay usable with dozens of peoples (Australia): sort by contact, collapse those not met. Also fix the mood labels to the real thresholds (oddity 2). |
 | N14 | **Explicitly out of scope.** | Confirm the list. | Natives as players; peoples' diplomacy and wars with each other; peoples founding settlements or growing; peoples in European alliances or in `winners`; the Crown's native alliances; hostile treaty kinds (tribute, protectorate) and changes to surrender; Australia's moving lifeway and Country map (only the shapes in N1, N6, N10); network play. |
 
-Not separate decisions, but part of step 0 unless Simon says otherwise: move the native constants into `peoples.rules` (framework row 22), add switches for burial grounds and surrender (row 23), make France's teaching a modifier, spare companies from native hostility and inciting (oddities 3–5).
+**Simon's direction on N1: native peoples as a nation type later.** Beyond Beta 2 (roadmap, Later), native peoples become a nation type of their own: playable, with their own units, buildings and council members, and no Home Port. That could be a whole new way to play, for example starting as a native people around the year 1000, with the Europeans arriving later. Beta 2 does not build it, but it must not stand in its way:
+- **One id for a people everywhere.** The `TribeId` used in `{ kind: 'people', id }` is the id the people would keep as a nation of that type; no second id or mapping is introduced.
+- **`TreatyParty` stays a union keyed by `kind`,** and treaty code reads parties through small helpers (`partyIsPeople`, `peopleOf`, `nationsOf`), not by assuming "nations are players, peoples are not". When a people becomes a player, those helpers change, not every call site.
+- **Treaty kinds describe what is agreed, not who agrees.** The effects of `people-trade`, `land-use`, `exchange` and `defence` read the people's settlements and land through `natives.ts` functions, so a people played as a nation can keep the same treaties.
+- **People rules live together** (`natives.ts`, `peoples.rules`, the people relation record), so they can move behind a player of the new type without being untangled from European code.
+- **Out of scope for Beta 2 stays as N14 says** (natives as players), but the design work for the nation type gets its own note when it is planned.
+
+Part of step 0 (Simon agreed): move the native constants into `peoples.rules` (framework row 22), add switches for burial grounds and surrender (row 23), and fix five oddities of today's rules (section 2): native land's reach becomes scenario data (`landRadius`, N6; the Americas stay at 1 unless step 6's tournaments argue otherwise), the mood labels match the real thresholds, companies are spared native hostility and inciting, France's teaching becomes a modifier, and Pocahontas's peace holds with a people whose burial ground was desecrated.
 
 ## 5. Phased plan (sizes as in the roadmap)
 
@@ -118,7 +125,7 @@ Each step keeps existing games identical while the switches are off (golden and 
 
 | Step | What | Size | Prio |
 | --- | --- | --- | --- |
-| 0 | `TreatyParty` with `people`; `peopleRelations` (N3); `peoples.rules` and the oddities' fixes; `landRadius` (N6); Foreign Affairs lists treaties with peoples | M | P1 |
+| 0 | `TreatyParty` with `people`, read through party helpers (Simon's nation-type direction, section 4); `peopleRelations` (N3); `peoples.rules`, burial and surrender switches, and the five fixes (land reach, mood labels, companies spared, France's teaching as a modifier, Pocahontas's peace); `landRadius` (N6); Foreign Affairs lists treaties with peoples | M | P1 |
 | 1 | Trade treaty with a people: unlocking, proposals, the people's answers and own offers, prices and goods, route stops at settlements; breaking faith (N8) | L | P1 |
 | 2 | Land use: leases, rent, `Tile.use`, tension from leased land, the renderer marks leased tiles | M–L | P1 |
 | 3 | Cultural exchange: renewed teaching, second skill, scouts welcome again | M | P2 |
@@ -139,7 +146,7 @@ What Beta 2 leaves ready, without building Australia's content:
 
 The care asked for in [australia.md](australia.md) applies here too: the text must treat peoples as nations that choose, not as obstacles or resources.
 
-## 7. Questions for Simon
+## 7. Questions for Simon (answered: all recommendations agreed, 11 November 2026)
 
 1. **N1** A people is a treaty party `{ kind: 'people', id }` with new treaty kinds; natives stay as tribes and settlements, not players. Agree?
 2. **N2** Four kinds as a ladder (trade → land use or exchange → defence); defence with one nation at a time?

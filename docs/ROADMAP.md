@@ -42,7 +42,7 @@ Each beta gets design notes first.
 
 Beta 1, cooperation between Europeans, is built (design in [design/cooperation.md](design/cooperation.md)); its steps are in [SHIPPED.md](SHIPPED.md#beta-1-cooperation-between-europeans).
 
-Beta 2, native peoples as partners: design in [design/native-partners.md](design/native-partners.md) (status: `design`; decisions N1–N14 open for Simon).
+Beta 2, native peoples as partners: design in [design/native-partners.md](design/native-partners.md) (status: `planned`; N1–N14 decided by Simon, 11 November 2026, as recommended, with the five fixes of today's native rules in step 0).
 
 ## Scenarios (content)
 
@@ -78,6 +78,7 @@ The Australia map (geography preview with the current rules; ships arrive from t
   5. The sprite style on hexagons; terrain sprites regenerated as hexagons (unit, colony and building sprites carry over). Waits for cheaper image generation (L).
   6. Ligne claire on hexagons, or it stays square-only (L).
   Stored maps can be read as offset hexagon rows (alternate rows shifted half a tile) with a review pass per map. A first candidate is a new scenario without square-tuned history, such as Vinland, rather than converting the Americas.
+- Native peoples as a nation type (Simon's idea, November 2026): native peoples become playable nations of their own kind, with their own units, buildings and council members and no Home Port. A new way to play: start as a native people around the year 1000, with the Europeans arriving later to complicate matters. Builds on Beta 2, whose people treaty party is designed to grow into this type ([design/native-partners.md](design/native-partners.md), section 4). Needs its own design note. Roughly XL.
 - Network play (the deterministic engine already supports replays).
 - Converting all Scenarios to use haxagonal tiles
 
