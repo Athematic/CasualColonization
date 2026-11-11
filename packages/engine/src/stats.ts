@@ -37,7 +37,7 @@ export type StatKey = (typeof STAT_KEYS)[number];
 
 /** Names and descriptions of the statistics; `{…}` are the scenario's terms (`withTerms(s, text)`). */
 export const STAT_INFO: Record<StatKey, { name: string; description: string; perTurn?: boolean; percent?: boolean }> = {
-  score: { name: 'Score', description: 'Score as it would be counted at the end of the game: colonists, experts at work, buildings, production, liberty, {members}, wealth, peace and cooperation. Saves from before version 0.7 keep the old formula’s numbers for turns already recorded.' },
+  score: { name: 'Score', description: 'Score as it would be counted at the end of the game: colonists, experts at work, buildings, production, liberty, {members}, wealth, peace and cooperation, and treaties with native peoples where the scenario counts them. Saves from before version 0.7 keep the old formula’s numbers for turns already recorded.' },
   gold: { name: 'Gold', description: 'Gold in the treasury.' },
   colonies: { name: 'Colonies', description: 'Colonies held.' },
   population: { name: 'Colonists', description: 'Colonists living and working in colonies.' },

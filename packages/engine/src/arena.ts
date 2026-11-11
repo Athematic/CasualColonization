@@ -327,7 +327,8 @@ export function playArenaGame(
     setFeatureSink(previous);
   }
   const rule = scenarioOf(s).victory.find((v) => v.id === 'prosperity');
-  const finals = rule ? finalScores(s) : undefined;
+  // Judged on the scores the game ended with (the round's next turn has begun since), as the victory was.
+  const finals = rule ? (s.gameOver?.scores ?? finalScores(s)) : undefined;
   const entries = line.map((l) => {
     const fails = rule ? { prosperityFails: prosperityStanding(s, l.nation, finals!, prosperityParams(rule.params)).fails } : {};
     const e = { ...standing(s, seed, l.nation, l.level), relations: endRelations(s, l.nation, tallies.get(l.nation)), ...fails, ...(events ? { events: eventTallies.get(l.nation) ?? {} } : {}) };
