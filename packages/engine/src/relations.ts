@@ -15,7 +15,7 @@ import { noteTrade } from './stats.js';
 import { cargoRoomFor, colonyAt, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
 import { random } from './rng.js';
 import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, term, turnAfterYears, yearValue } from './scenarios/index.js';
-import type { CompanyId, NationId } from './rules/nations.js';
+import { COMPANY_IDS, type NationId } from './rules/nations.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, treatyBetween } from './treaties.js';
 import { aiAcceptsAlliance, aiAcceptsExpedition, allianceProblem, expeditionProblem, isAllied, leaveAlliance, makeAlliance, makeExpedition } from './alliances.js';
@@ -69,13 +69,10 @@ export function relationKey(a: NationId, b: NationId): string {
   return [a, b].sort().join('|');
 }
 
-/** Whether two nations can have relations at all: two different European nations (no Crown, no company). */
+/** Whether two nations can have relations at all: two different European nations (no Crown, no company: companies make no agreements). */
 function europeanPair(a: NationId, b: NationId): boolean {
   return a !== b && a !== 'crown' && b !== 'crown' && !COMPANY_IDS.has(a) && !COMPANY_IDS.has(b);
 }
-
-/** Company ids (rules/nations.ts CompanyId): companies make no agreements with nations. */
-const COMPANY_IDS: ReadonlySet<string> = new Set<CompanyId>(['hudsonsBay', 'westIndia', 'mississippi', 'darien', 'courlandCompany']);
 
 /** The relation between two nations, created (with its seeded thresholds) when first needed. */
 export function relation(s: GameState, a: NationId, b: NationId): Relation {

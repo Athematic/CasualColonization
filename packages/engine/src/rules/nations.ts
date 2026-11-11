@@ -18,6 +18,14 @@ export type NationId = AmericasNationId | 'courland' | 'brandenburg' | 'scotland
  */
 export type CompanyId = 'hudsonsBay' | 'westIndia' | 'mississippi' | 'darien' | 'courlandCompany';
 
+/** Every company id, for the rules that need no game at hand (relations, native tension). */
+export const COMPANY_IDS: ReadonlySet<NationId> = new Set<CompanyId>(['hudsonsBay', 'westIndia', 'mississippi', 'darien', 'courlandCompany']);
+
+/** Whether a nation id names a chartered company (companies.ts `isCompanyId` asks the game instead). */
+export function isCompanyIdent(id: NationId): id is CompanyId {
+  return COMPANY_IDS.has(id);
+}
+
 /**
  * Every nation id but the Crown, in a fixed order that never changes: game codes store a nation as
  * its index here (seedphrase.ts). The Americas' eight come first, as NATION_ORDER.

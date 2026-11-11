@@ -8,7 +8,7 @@ import { randomImmigrant } from './europe.js';
 import { modifiers } from './scenarios/modifiers.js';
 import type { RumourOutcome } from './rules/modifiers.js';
 import { difficultyOf, mechanicsOf, nationOf, nativeRulesOf, rumoursOf, term } from './scenarios/index.js';
-import { TRIBES } from './rules/nations.js';
+import { isCompanyIdent, TRIBES } from './rules/nations.js';
 import type { GameState, Settlement, Unit } from './types.js';
 import { removeUnit } from './unitindex.js';
 
@@ -60,8 +60,9 @@ export function resolveRumour(s: GameState, u: Unit): void {
   const pos = unitPosition(s, u)!;
   const expert = u.type === 'seasonedScout';
   const p = player(s, u.owner);
-  // Only on tribal land can a rumour turn out to be a burial ground, and only with `mechanics.burialGrounds`.
-  const tribal = u.owner === 'crown' || !mechanicsOf(s).burialGrounds ? undefined : tribalLandOwner(s, pos.x, pos.y);
+  // Only on tribal land can a rumour turn out to be a burial ground, and only with `mechanics.burialGrounds`;
+  // never for the Crown, or for a chartered company, which the peoples leave alone (fix c).
+  const tribal = u.owner === 'crown' || isCompanyIdent(u.owner) || !mechanicsOf(s).burialGrounds ? undefined : tribalLandOwner(s, pos.x, pos.y);
   const outcome = weightedPick<Outcome>(s, rumourOdds(s, u, tribal));
   track(u.owner, 'explore:rumour explored');
   if (outcome === 'lost') track(u.owner, 'explore:expedition lost');

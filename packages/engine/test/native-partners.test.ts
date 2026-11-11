@@ -9,8 +9,16 @@ import './mechanics-variants.js';
 import {
   addTreaty,
   AMERICAS,
+  addTension,
   applyCommand,
+  bravesOf,
   buyLand,
+  colonySiteProblem,
+  foundColony,
+  foundCompany,
+  inciteTribe,
+  pendingDemands,
+  tensionOf,
   CARIBBEAN,
   gridOf,
   landPrice,
@@ -357,5 +365,78 @@ describe("Pocahontas's peace holds after a desecrated burial ground (fix e)", ()
     joinCongress(s, player(s, 'england'), 'pocahontas');
     expect(tribe.burial).toBeUndefined();
     expect(serialize(deserialize(serialize(s)))).toBe(serialize(s));
+  });
+});
+
+describe('chartered companies are spared by the peoples (fix c)', () => {
+  /** A game with the Hudson's Bay Company founded and a company colony 2–3 tiles from a settlement. */
+  function withCompanyColony() {
+    const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['england', 'france'] });
+    s.turn = 300;
+    player(s, 'england').gold = 10_000;
+    foundCompany(s, 'england', 'hudsonsBay');
+    const grid = gridOf(s);
+    for (const st of Object.values(s.settlements)) {
+      for (let i = 0; i < s.map.tiles.length; i++) {
+        const x = i % s.map.width;
+        const y = Math.floor(i / s.map.width);
+        const d = grid.distance(x, y, st.x, st.y);
+        if (d < 2 || d > 3 || colonySiteProblem(s, x, y)) continue;
+        const u = createUnit(s, 'hudsonsBay', 'freeColonist', { kind: 'map', x, y });
+        u.moves = 3;
+        const c = foundColony(s, u.id, 'Fort Test');
+        return { s, st, c };
+      }
+    }
+    throw new Error('no site');
+  }
+
+  it('raise no tension: not by founding nearby, nor by the pressure of their colonies', () => {
+    const { s, st } = withCompanyColony();
+    expect(tensionOf(st, 'hudsonsBay')).toBe(0);
+    addTension(st, 'hudsonsBay', 500);
+    expect(st.tension.hudsonsBay).toBeUndefined();
+    for (let i = 0; i < 20; i++) processNatives(s);
+    expect(tensionOf(st, 'hudsonsBay')).toBe(0);
+    expect(tribeOf(s, st).stance.hudsonsBay).not.toBe('war');
+  });
+
+  it('are never raided, threatened or attacked by braves, even by a people at war with them', () => {
+    const { s, st, c } = withCompanyColony();
+    // Force the worst case past the rules: furious and at war.
+    for (const o of Object.values(s.settlements)) o.tension.hudsonsBay = 1000;
+    for (const t of s.tribes) t.stance.hudsonsBay = 'war';
+    const attacks: string[] = [];
+    for (let i = 0; i < 60; i++) {
+      processNatives(s);
+      for (const b of Object.values(bravesOf(s))) {
+        if (b.task?.kind === 'attack' && (b.task.colonyId === c.id || (b.task.unitId && s.units[b.task.unitId]?.owner === 'hudsonsBay'))) attacks.push(b.id);
+      }
+      expect(pendingDemands(s, 'hudsonsBay')).toEqual([]);
+    }
+    expect(attacks).toEqual([]);
+    expect(s.colonies[c.id]).toBeDefined();
+    expect(st).toBeDefined();
+  });
+
+  it('cannot be the target of inciting', () => {
+    const { s, st } = withCompanyColony();
+    const m = createUnit(s, 'france', 'freeColonist', { kind: 'map', ...landBeside(s, st.x, st.y) });
+    m.role = 'missionary';
+    m.moves = 3;
+    player(s, 'france').gold = 10_000;
+    expect(() => inciteTribe(s, m.id, st.id, 'hudsonsBay')).toThrow(/rival European nation/);
+    expect(tensionOf(st, 'hudsonsBay')).toBe(0);
+  });
+
+  it('never find a burial ground', () => {
+    const { s, st } = withCompanyColony();
+    const at = landBeside(s, st.x, st.y);
+    for (let i = 0; i < 1500; i++) {
+      const u = createUnit(s, 'hudsonsBay', 'freeColonist', { kind: 'map', ...at });
+      resolveRumour(s, u);
+      removeUnit(s, u.id);
+    }
+    expect(s.tribes.some((t) => t.burial?.includes('hudsonsBay'))).toBe(false);
   });
 });
