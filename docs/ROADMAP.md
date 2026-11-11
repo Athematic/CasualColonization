@@ -46,7 +46,7 @@ Beta 2, native peoples as partners: design in [design/native-partners.md](design
 
 ## Beta 3: Native nations
 
-Status: `design`, decisions mostly made; T14 (victory) open, rethought from the peoples' own view (continuity, a confederacy of peoples, a good life), except its military victory, which is decided (Simon, 11 November 2026). Native peoples become a nation type of their own: playable by a person or the computer, with their own units, buildings and council members, and no Home Port. A new way to play: start as a native people in the year 1000 and face the Europeans from 1492, one turn a year to 1850 (about 850 turns), with head starts for a shorter game. Builds on Beta 2, whose people treaty party was built to grow into this. Design: [design/native-nations.md](design/native-nations.md). About XL, larger than Beta 2.
+Status: `planned`; every decision made (Simon, 11 November 2026). A people wins by continuity, a confederacy of peoples, a good life, or by defeating every European nation (T14). Native peoples become a nation type of their own: playable by a person or the computer, with their own units, buildings and council members, and no Home Port. A new way to play: start as a native people in the year 1000 and face the Europeans from 1492, one turn a year to 1850 (about 850 turns), with head starts for a shorter game. Builds on Beta 2, whose people treaty party was built to grow into this. Design: [design/native-nations.md](design/native-nations.md). About XL, larger than Beta 2.
 
 Simon's decisions (11 November 2026): all as recommended except these.
 - One turn a year from 1000 to 1850; a shorter game is a head start (T16). No multi-year turns.
@@ -54,7 +54,7 @@ Simon's decisions (11 November 2026): all as recommended except these.
 - Growth from the peoples' side (T10, after a rewrite): births from food, stores against winter and hard years, and the health of the land; standing only as Beta 2's standing record read from the people's side; gold only as what Europeans pay in trade. Kin ties and elders passing on knowledge are kept for a separate scenario.
 - If every European nation is defeated, the people or peoples win (T14, military victory); in computer-only games 1 in 100 or fewer.
 - No save compatibility (T21). The Americas and the Caribbean stay bit-identical (golden and bench hashes) as a testing aid.
-- To confirm: the 1000–1850 game is played on the new North-east map on squares, which Beta 4 turns into hexes for Vinland (T19).
+- The 1000–1850 game is played on a new North-east map on squares, which Beta 4 turns into hexes for Vinland (T19).
 
 Folded in from elsewhere on this roadmap:
 - Specialised councils per scenario (from Scenarios), built as a general council system per nation type and scenario; Australia's Legislative Council and Vinland's Thing use it later.
