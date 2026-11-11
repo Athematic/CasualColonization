@@ -7,7 +7,7 @@ import { gridOf } from '../grid.js';
 import { nativeUnitPrice, settlementForSale } from '../braves.js';
 import { sellPrice } from '../europe.js';
 import { buyFromSettlement, incitePrice, inciteTribe, peopleRelationOf, tensionOf } from '../natives.js';
-import { hasExchange, hasLandUse, hasPeopleTrade, leasableTiles, leaseRent, peopleRefusal, peopleTreatyOn, peopleTreatyProblem, proposePeopleTreaty, settlementTeaches } from '../peopletreaties.js';
+import { defencePartner, hasDefence, hasExchange, hasLandUse, hasPeopleTrade, leasableTiles, leaseRent, peopleRefusal, peopleTreatyOn, peopleTreatyProblem, proposePeopleTreaty, settlementTeaches } from '../peopletreaties.js';
 import { cooperationOf, LEVEL_COOPERATION } from '../alliances.js';
 import { peoplePairRandom } from '../relations.js';
 import type { TribeId } from '../rules/nations.js';
@@ -68,8 +68,10 @@ export function maybeIncite(s: GameState, p: Player, u: Unit, st: Settlement, pr
   // Paying a partner to make war would break faith with it (N8): not worth a treaty.
   if (hasPeopleTrade(s, p.id, st.tribe)) return false;
   const tribe = s.tribes.find((t) => t.id === st.tribe)!;
+  // Nobody can incite a people against its partner in a mutual defence pact (N7).
+  const partner = s.treaties ? defencePartner(s, st.tribe) : undefined;
   const enemy = (Object.keys(p.stance) as NationId[]).find(
-    (n) => n !== 'crown' && p.stance[n] === 'war' && tribe.stance[n] !== 'war' && colonyList(s).some((c) => c.owner === n && grid.distance(c.x, c.y, st.x, st.y) <= 6),
+    (n) => n !== 'crown' && n !== partner && p.stance[n] === 'war' && tribe.stance[n] !== 'war' && colonyList(s).some((c) => c.owner === n && grid.distance(c.x, c.y, st.x, st.y) <= 6),
   );
   if (!enemy) return false;
   let ok = false;
@@ -107,6 +109,7 @@ export function peopleAffairs(s: GameState, p: Player, prof?: AiProfile): void {
     if (hasPeopleTrade(s, p.id, people)) {
       leaseLand(s, p, people);
       seekExchange(s, p, people);
+      seekDefence(s, p, people);
       if (!learner) learner = sendLearner(s, p, people);
       continue;
     }
@@ -167,6 +170,49 @@ function seekExchange(s: GameState, p: Player, people: TribeId): void {
   // Whether the nation wants an exchange with this people at all is drawn once per pair, not per review.
   if (peoplePairRandom(s, p.id, people, `${p.id} seeks exchange`) >= chance) return;
   safely(() => proposePeopleTreaty(s, p.id, people, 'exchange'));
+}
+
+/**
+ * Seeks a mutual defence pact (N7, N11) with a trade partner: Creative and Competent (at a share,
+ * `LEVEL_COOPERATION.defence`) with a people that has a settlement within LEARNER_RANGE of one of
+ * their colonies (whose braves could defend them), Combative with a people that has one within
+ * LEARNER_RANGE of an enemy's colony (a nation it is at war with or plans war on), Naive never.
+ * Whether it seeks a pact with a people is drawn once per pair from the pair's own stream, at the
+ * scenario's `proposeDefence` times the level's share (as the exchange: a chance per review
+ * overshoots). The pact needs land use or an exchange first (the ladder): Combative, which makes
+ * neither on its own, asks such a people for an exchange first.
+ */
+function seekDefence(s: GameState, p: Player, people: TribeId): void {
+  if (!peopleTreatyOn(s, 'defence') || hasDefence(s, p.id, people)) return;
+  const chance = cooperationOf(s).proposeDefence * LEVEL_COOPERATION[p.ai ?? 'naive'].defence;
+  if (chance <= 0) return;
+  const other = defencePartner(s, people);
+  if (other && other !== p.id) return;
+  const grid = gridOf(s);
+  const combative = p.ai === 'combative';
+  const target = p.aiMemory?.warTarget;
+  const colonies = combative
+    ? colonyList(s).filter((c) => c.owner !== p.id && c.owner !== 'crown' && (p.stance[c.owner] === 'war' || c.owner === target))
+    : ownColonies(s, p);
+  if (!colonies.length) return;
+  let near = false;
+  for (const id in s.settlements) {
+    const st = s.settlements[id];
+    if (st.tribe === people && colonies.some((c) => grid.distance(c.x, c.y, st.x, st.y) <= LEARNER_RANGE)) {
+      near = true;
+      break;
+    }
+  }
+  if (!near) return;
+  // Whether the nation wants a pact with this people at all is drawn once per pair, not per review.
+  if (peoplePairRandom(s, p.id, people, `${p.id} seeks defence`) >= chance) return;
+  if (peopleRefusal(s, p.id, people)) return;
+  if (combative && !hasLandUse(s, p.id, people) && !hasExchange(s, p.id, people)) {
+    if (peopleTreatyOn(s, 'exchange') && !peopleTreatyProblem(s, p.id, people, 'exchange')) safely(() => proposePeopleTreaty(s, p.id, people, 'exchange'));
+    return;
+  }
+  if (peopleTreatyProblem(s, p.id, people, 'defence')) return;
+  safely(() => proposePeopleTreaty(s, p.id, people, 'defence'));
 }
 
 /** Tiles from one of its colonies within which a computer nation sends a colonist to a settlement that teaches again. */

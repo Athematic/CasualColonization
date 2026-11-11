@@ -89,8 +89,12 @@ async function main(): Promise<void> {
     const exchanges = rows.reduce((n, r) => n + (r.relations?.exchanges ?? 0), 0);
     const exchangesEnded = rows.reduce((n, r) => n + (r.relations?.exchangesEnded ?? 0), 0);
     const renewed = rows.reduce((n, r) => n + (r.relations?.renewedTeachings ?? 0), 0);
+    const defences = rows.reduce((n, r) => n + (r.relations?.defences ?? 0), 0);
+    const defencesEnded = rows.reduce((n, r) => n + (r.relations?.defencesEnded ?? 0), 0);
+    const defenceFights = rows.reduce((n, r) => n + (r.relations?.defenceFights ?? 0), 0);
+    const pactWars = rows.reduce((n, r) => n + (r.relations?.pactWars ?? 0), 0);
     const last = Math.max(...rows.map((r) => r.lastTurn ?? 0));
-    console.error(`  game ${g + 1}/${options.games} (seed ${rows[0].seed}, to turn ${last}): ${line}  | agreements ${half('agreements')}, favoured ${half('favoured')}, wars ${wars} (royal ${royal}), alliances ${alliances}, companies ${companies}, people treaties ${peopleMade} (ended ${peopleEnded}, breaches ${breaches}), leases ${leases} (lapsed ${lapsed}), exchanges ${exchanges} (ended ${exchangesEnded}, taught again ${renewed})${declared ? `, independence: ${declared}` : ''}${confederation ? `, confederation: ${confederation}` : ''}${concord ? `, concord: ${concord}` : ''}`);
+    console.error(`  game ${g + 1}/${options.games} (seed ${rows[0].seed}, to turn ${last}): ${line}  | agreements ${half('agreements')}, favoured ${half('favoured')}, wars ${wars} (royal ${royal}), alliances ${alliances}, companies ${companies}, people treaties ${peopleMade} (ended ${peopleEnded}, breaches ${breaches}), leases ${leases} (lapsed ${lapsed}), exchanges ${exchanges} (ended ${exchangesEnded}, taught again ${renewed}), defence pacts ${defences} (ended ${defencesEnded}, fights ${defenceFights}, wars ${pactWars})${declared ? `, independence: ${declared}` : ''}${confederation ? `, confederation: ${confederation}` : ''}${concord ? `, concord: ${concord}` : ''}`);
   };
   const result = jobs === 1 ? runArena(options, report) : await runParallel(options, jobs, report);
   if (args.includes('--json')) console.log(JSON.stringify(result, null, 2));

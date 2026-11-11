@@ -121,6 +121,15 @@ export interface RelationsTally {
   exchanges: number;
   exchangesEnded: number;
   renewedTeachings: number;
+  /**
+   * Mutual defence pacts (step 4): made, ended, fights of the people's braves for the partner, and
+   * wars the pacts brought (the partner drawn in by an attack on its people, or the people going to
+   * war for an attack on the partner's colony), counted for the partner.
+   */
+  defences: number;
+  defencesEnded: number;
+  defenceFights: number;
+  pactWars: number;
 }
 
 const TALLY: Record<string, keyof RelationsTally> = {
@@ -160,13 +169,17 @@ const TALLY: Record<string, keyof RelationsTally> = {
   'natives:exchange made': 'exchanges',
   'natives:exchange ended': 'exchangesEnded',
   'natives:renewed teaching': 'renewedTeachings',
+  'natives:defence made': 'defences',
+  'natives:defence ended': 'defencesEnded',
+  'natives:defence fight': 'defenceFights',
+  'natives:pact war': 'pactWars',
 };
 
 /** Tally keys that add up the amount reported, not the number of reports. */
 const AMOUNTS = new Set<keyof RelationsTally>(['foreignStopSales', 'partnerPortSales', 'refAdded', 'shares', 'dividends', 'sharedBells', 'rent']);
 
 function emptyTally(): RelationsTally {
-  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0, alliances: 0, alliancesLeft: 0, alliesAtEnd: 0, allyWars: 0, companies: 0, shares: 0, dividends: 0, expeditions: 0, sharedBells: 0, confederations: 0, peopleTreaties: 0, peopleTreatiesEnded: 0, peopleBreaches: 0, peopleTreatiesAtEnd: 0, leases: 0, leasesLapsed: 0, rent: 0, exchanges: 0, exchangesEnded: 0, renewedTeachings: 0 };
+  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0, alliances: 0, alliancesLeft: 0, alliesAtEnd: 0, allyWars: 0, companies: 0, shares: 0, dividends: 0, expeditions: 0, sharedBells: 0, confederations: 0, peopleTreaties: 0, peopleTreatiesEnded: 0, peopleBreaches: 0, peopleTreatiesAtEnd: 0, leases: 0, leasesLapsed: 0, rent: 0, exchanges: 0, exchangesEnded: 0, renewedTeachings: 0, defences: 0, defencesEnded: 0, defenceFights: 0, pactWars: 0 };
 }
 
 /** What one event did to one nation over a game: times it fired, the choices taken (by index) and the computer players' gold value of the outcomes. */
@@ -497,7 +510,11 @@ export function peopleTreatyLine(entries: ArenaEntry[]): string {
   const withExchange = [...byGame.values()].filter((g) => g.some((e) => (e.relations?.exchanges ?? 0) > 0)).length;
   const exchangeLevels = [...new Set(entries.map((e) => e.level))].map((l) => `${l} ${per(sum('exchanges', entries.filter((e) => e.level === l)))}`).join(', ');
   const exchange = exchanges ? `Cultural exchange: ${withExchange} of ${games} games with one, ${per(exchanges)} made per game (${exchangeLevels}), ${per(sum('exchangesEnded'))} ended, ${per(sum('renewedTeachings'))} colonists taught again per game. ` : '';
-  return `Treaties with peoples: ${withTreaty} of ${games} games with one, ${per(made)} made per game (${levels}), ${per(sum('peopleTreatiesEnded'))} ended and ${per(sum('peopleBreaches'))} breaches of faith per game, ${per(sum('peopleTreatiesAtEnd'))} in force at the end. ${land}${exchange}`;
+  const defences = sum('defences');
+  const withDefence = [...byGame.values()].filter((g) => g.some((e) => (e.relations?.defences ?? 0) > 0)).length;
+  const defenceLevels = [...new Set(entries.map((e) => e.level))].map((l) => `${l} ${per(sum('defences', entries.filter((e) => e.level === l)))}`).join(', ');
+  const defence = defences ? `Mutual defence: ${withDefence} of ${games} games with a pact, ${per(defences)} made per game (${defenceLevels}), ${per(sum('defencesEnded'))} ended, ${per(sum('defenceFights'))} fights of braves for a partner and ${per(sum('pactWars'))} wars brought by pacts per game. ` : '';
+  return `Treaties with peoples: ${withTreaty} of ${games} games with one, ${per(made)} made per game (${levels}), ${per(sum('peopleTreatiesEnded'))} ended and ${per(sum('peopleBreaches'))} breaches of faith per game, ${per(sum('peopleTreatiesAtEnd'))} in force at the end. ${land}${exchange}${defence}`;
 }
 
 /**

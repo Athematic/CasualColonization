@@ -173,7 +173,7 @@ export interface Mechanics {
   /**
    * Treaties between a nation and a native people (peopletreaties.ts, docs/design/native-partners.md):
    * the kinds in play. Absent or empty means none (Beta 2 step 1 builds `people-trade`, step 2
-   * `land-use`, step 3 `exchange`).
+   * `land-use`, step 3 `exchange`, step 4 `defence`).
    */
   peopleTreaties?: PeopleTreatyKind[];
 }
@@ -262,6 +262,29 @@ export interface PeopleExchangeRules {
   gather: number;
 }
 
+/**
+ * What a mutual defence pact with a people (`defence`, N7, N9) needs and does. It needs a trade
+ * treaty and one of land use or a cultural exchange first (the ladder, N2), and a people keeps a
+ * pact with one nation at a time.
+ */
+export interface PeopleDefenceRules {
+  /** Hidden: years of good relations the pair needs, drawn per pair (on its own, apart from the other kinds'). */
+  years: YearsAround;
+  /**
+   * Tension each of the people's settlements gains towards a nation whose attack on the partner's
+   * colony near their land brings them into the war, so the war lasts until it has calmed.
+   */
+  tension: number;
+  /**
+   * Chance that a brave at home sets out against an enemy of the partner standing near one of the
+   * partner's colonies within the settlement's reach (the partner's enemies the people is at war
+   * with, and the King's troops against a partner that declared independence).
+   */
+  defend: number;
+  /** Tiles from one of the partner's colonies within which an enemy unit is "near" it. */
+  near: number;
+}
+
 /** How a people's temperament (`peoples.overrides[id].temperament`) shifts its answers and offers. */
 export interface TemperamentRules {
   /** Times the chance to accept a proposal. */
@@ -281,6 +304,7 @@ export interface PeopleTreatyRules {
   trade: PeopleTradeRules;
   landUse: PeopleLandUseRules;
   exchange: PeopleExchangeRules;
+  defence: PeopleDefenceRules;
   /** Chance that a people accepts a treaty it is free to accept (unlocked, nothing against it). */
   accept: number;
   /** Chance, on a brave's trade visit to a nation's colony, that its people offers an unlocked treaty itself. */
@@ -298,10 +322,11 @@ export interface PeopleTreatyRules {
 }
 
 /** A scenario's changes to PEOPLE_TREATY_RULES: any field, and any part of the tables. */
-export type PeopleTreatyRulesOverride = Partial<Omit<PeopleTreatyRules, 'trade' | 'landUse' | 'exchange' | 'temperaments'>> & {
+export type PeopleTreatyRulesOverride = Partial<Omit<PeopleTreatyRules, 'trade' | 'landUse' | 'exchange' | 'defence' | 'temperaments'>> & {
   trade?: Partial<PeopleTradeRules>;
   landUse?: Partial<PeopleLandUseRules>;
   exchange?: Partial<PeopleExchangeRules>;
+  defence?: Partial<PeopleDefenceRules>;
   temperaments?: Partial<Record<Temperament, Partial<TemperamentRules>>>;
 };
 
@@ -354,6 +379,12 @@ export interface Cooperation {
    * Creative seeks it, Competent at a share; Combative and Naive do not propose).
    */
   proposeExchange: number;
+  /**
+   * Chance that a nation seeks a mutual defence pact (N7, N9) with a partner people near its colonies
+   * (N11: Creative seeks it, Competent at a share, Combative with peoples near its enemies, Naive
+   * does not propose). Like `proposeExchange`, drawn once per nation and people, not per review.
+   */
+  proposeDefence: number;
 }
 
 /** One way the game can end: a registered victory kind (victory.ts) and its data. */

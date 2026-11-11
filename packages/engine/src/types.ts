@@ -374,7 +374,8 @@ export type BraveTask =
   | { kind: 'visit'; colonyId: string; purpose: 'gift' | 'trade' | 'demand' }
   /** Waiting next to a colony for the answer to a demand. */
   | { kind: 'wait'; demandId: string; turns: number }
-  | { kind: 'attack'; colonyId?: string; unitId?: string };
+  /** `defend`: the partner nation whose colony the brave sets out to defend under a mutual defence pact (N7, written only then). */
+  | { kind: 'attack'; colonyId?: string; unitId?: string; defend?: NationId };
 
 /**
  * A brave's demand for tribute, or offer of goods for sale, waiting for a person to answer it in

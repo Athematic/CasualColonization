@@ -60,7 +60,8 @@ import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { stopPort } from '../routes.js';
 import { forEachUnitNear, indexedUnitsOf, ownedUnitsView, unitList } from '../unitindex.js';
 import { maybeIncite } from './natives.js';
-import { chiefWelcomes, settlementTeaches } from '../peopletreaties.js';
+import { chiefWelcomes, defencePartner, settlementTeaches } from '../peopletreaties.js';
+import type { TribeId } from '../rules/nations.js';
 import { armyForIndependence, expectedSupport, colonyDefences, supportParts, rebelColonyDefence, rebelPower, crownAffairs, defenceShort, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
 import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './plan.js';
 import { equippedPrice, trainEquipped } from './outfit.js';
@@ -1478,6 +1479,12 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
 // ---------------------------------------------------------------------------
 // Diplomacy and war
 
+/** Whether a people has a mutual defence pact with a nation other than `p` that `p` is at peace with (raiding it would be war with that nation). */
+function defendedAgainst(s: GameState, p: Player, people: TribeId): boolean {
+  const partner = defencePartner(s, people);
+  return partner !== undefined && partner !== p.id && p.stance[partner] !== 'war';
+}
+
 function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
   const grid = gridOf(s);
   const colonies = ownColonies(s, p);
@@ -1498,8 +1505,9 @@ function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
 
   // Raid nearby native settlements for treasure.
   if (prof.raidNatives && army.length >= 2 && s.turn > aiTurn(s, 40)) {
+    // Not a people defended by a nation at peace with it (native-partners.md N7): the raid would be war with that nation.
     const st = Object.values(s.settlements)
-      .filter((o) => colonies.some((c) => grid.distance(c.x, c.y, o.x, o.y) <= 6))
+      .filter((o) => colonies.some((c) => grid.distance(c.x, c.y, o.x, o.y) <= 6) && !(s.treaties && defendedAgainst(s, p, o.tribe)))
       .sort((a, b) => a.defenders - b.defenders)[0];
     if (st) {
       for (const u of army) {

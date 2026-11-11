@@ -18,7 +18,7 @@ import type { Colony, GameState, PeopleRelation, Settlement, Unit } from './type
 import { calendarOf, difficultyOf, goodsOf, landReachOf, mechanicsOf, nationOf, nativeProduceOf, nativeRulesOf, peopleOf, yearValue } from './scenarios/index.js';
 import { peoplePairRandom } from './relations.js';
 import { removeUnit, colonyList } from './unitindex.js';
-import { breakFaith, chiefAgainTurn, chiefWelcomes, leasedFromBeside, noteLandTaken, notePeopleContact, noteSpoken, noteTaught, peopleSellFactor, peopleTensionFall, peopleTreatyRules, processPeopleTreaties, settlementTeaches } from './peopletreaties.js';
+import { breakFaith, chiefAgainTurn, chiefWelcomes, defencePartner, leasedFromBeside, noteLandTaken, notePeopleContact, noteSpoken, noteTaught, peopleSellFactor, peopleTensionFall, peopleTreatyRules, processPeopleTreaties, settlementTeaches } from './peopletreaties.js';
 
 /**
  * The settlement next to a unit, checked for a visit. A wagon train or ship trading there may
@@ -493,6 +493,8 @@ export function inciteTribe(s: GameState, unitId: string, settlementId: string, 
   if (tensionOf(st, u.owner) >= rules.tension.angry) fail(`The ${TRIBES[st.tribe].name} will not listen to you.`);
   const tribe = tribeOf(s, st);
   if (tribe.stance[target] === 'war') fail(`The ${TRIBES[st.tribe].name} are already at war with ${nationOf(s, target).name}.`);
+  // Nobody can incite a people against its partner in a mutual defence pact (N7).
+  if (s.treaties && defencePartner(s, st.tribe) === target) fail(`The ${TRIBES[st.tribe].name} will not turn on ${nationOf(s, target).name}: they are bound to it by a mutual defence pact.`);
   const price = incitePrice(s, st);
   const p = player(s, u.owner);
   if (p.gold < price) fail(`The ${TRIBES[st.tribe].name} want ${price} gold to take up arms.`);

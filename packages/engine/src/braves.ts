@@ -40,7 +40,7 @@ import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from '.
 import { difficultyOf, goodsOf, nativeProduceOf, nativeRulesOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
 import { removeUnit, colonyList, unitList } from './unitindex.js';
-import { aiAcceptsPeopleOffer, answerPeopleOffer, notePeopleContact, peopleBraveTradeFactor, peopleBuyFactor, peopleGatherFactor, peopleHostile, peopleTreatyRules, peopleTreatyText, peopleWouldOffer } from './peopletreaties.js';
+import { aiAcceptsPeopleOffer, answerPeopleOffer, defenceEnemy, defencePartner, notePeopleContact, peopleBraveTradeFactor, peopleBuyFactor, peopleGatherFactor, peopleHostile, peopleTreatyRules, peopleTreatyText, peopleWouldOffer } from './peopletreaties.js';
 
 /** The kind of a settlement in its game's scenario (camp, village, city…), with its numbers. */
 export function settlementKind(s: GameState, st: Settlement): SettlementKindDef {
@@ -277,7 +277,9 @@ function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
         }
         if (grid.distance(b.x, b.y, target.loc.x, target.loc.y) > 1) walk(s, b, target.loc.x, target.loc.y, points, index, false);
         if (grid.distance(b.x, b.y, target.loc.x, target.loc.y) === 1) {
-          attackUnit(s, b, target);
+          // A brave defending a partner's colony under a mutual defence pact (N7).
+          if (task.defend) track(task.defend, 'natives:defence fight');
+          attackUnit(s, b, target, task.defend);
           if (bravesOf(s)[b.id]) delete b.task;
         }
         return;
@@ -341,6 +343,15 @@ function chooseTask(s: GameState, b: Brave, st: Settlement, index: PhaseIndex): 
   const tribe = tribeOf(s, st);
   const c = nearestColony(s, st);
   const roll = random(s);
+  // Under a mutual defence pact (N7), braves set out against the partner's enemies near its
+  // colonies: nations at war with both, and the King's troops against a partner in revolt.
+  if (s.treaties) {
+    const enemy = defenceEnemy(s, st, index.units, index.colonies);
+    if (enemy && roll < peopleTreatyRules(s).defence.defend) {
+      b.task = { kind: 'attack', unitId: enemy.id, defend: defencePartner(s, st.tribe) };
+      return;
+    }
+  }
   if (c) {
     const nation = c.owner;
     const t = tensionOf(st, nation);
@@ -775,8 +786,12 @@ function pillage(s: GameState, b: Brave, c: Colony): void {
   message(s, `The ${tribe} raid ${c.name} and steal ${gold} gold.`, c.owner, c);
 }
 
-/** A brave attacks a unit in the open. Unarmed units that lose are killed; armed ones lose their arms to the brave. */
-function attackUnit(s: GameState, b: Brave, target: Unit): void {
+/**
+ * A brave attacks a unit in the open. Unarmed units that lose are killed; armed ones lose their arms
+ * to the brave (a King's regular, disarmed, is destroyed, as in combat). `defend`: the partner whose
+ * colony the brave defends (N7), told of the fight.
+ */
+function attackUnit(s: GameState, b: Brave, target: Unit, defend?: NationId): void {
   if (target.loc.kind !== 'map') return;
   const units = unitsAt(s, target.loc.x, target.loc.y).filter((u) => u.owner === target.owner && !isShip(u));
   const defender = chooseDefender(s, units, b);
@@ -792,9 +807,14 @@ function attackUnit(s: GameState, b: Brave, target: Unit): void {
     message(s, `${unitName(defender)} beats off an attack by the ${tribe}.${promote(s, defender)}`, defender.owner, at);
     return;
   }
-  const stripped = strip(b, defender) ?? (UNIT_TYPES[defender.type].kind === 'artillery' ? hurtArtillery(s, defender) : null);
+  let stripped = strip(b, defender) ?? (UNIT_TYPES[defender.type].kind === 'artillery' ? hurtArtillery(s, defender) : null);
+  if (stripped && defender.type === 'kingsRegular' && defender.role === 'none') {
+    removeUnit(s, defender.id);
+    stripped = `${unitName(defender)} is destroyed`;
+  }
   if (stripped) {
     message(s, `The ${tribe} attack: ${stripped}.`, defender.owner, at);
+    if (defend) message(s, `The ${tribe} fight for you: ${stripped}.`, defend, at);
     return;
   }
   const name = unitName(defender);

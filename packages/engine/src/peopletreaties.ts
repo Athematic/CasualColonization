@@ -24,6 +24,14 @@
  *   of the people's settlements teaches the partner again `exchange.teachYears` (25 ± 5) after it
  *   last taught (a skill drawn from its people's skills), its chiefs welcome the partner's scouts
  *   again once a decade, and the people gathers more for sale. Missions stay as they are.
+ * - **Mutual defence (N7, N9, step 4):** with a trade treaty and land use or an exchange, a nation
+ *   and a people may make a defensive pact; a people keeps one with a single nation at a time. A
+ *   European attack on the people is war with its partner (combat.ts); an attack on the partner's
+ *   colony within reach of one of the people's settlements brings its braves, the people going to
+ *   war with the attacker (`callToDefence`), and against a partner that declared independence the
+ *   braves fight the King's troops near their land; nobody can incite the people against its
+ *   partner. A people in an alliance falls out of the rules: attacking the partner of one's ally is
+ *   war on that ally, which is leaving the alliance (relations.ts onWar).
  * - **Breaking faith (N8):** taking a partner's land, attacking it or inciting it ends every
  *   treaty with that people, raises tension across it, and sets waiting and hostility. A people
  *   ends its treaties itself when one of its settlements turns angry, or with war.
@@ -32,20 +40,21 @@
  * off nothing here runs, writes or draws, so games play as before.
  */
 import { fail } from './errors.js';
-import { hasSubmitted } from './braves.js';
+import { bravesOf, hasSubmitted } from './braves.js';
+import { gridOf } from './grid.js';
 import { noteHistory } from './history.js';
 import { bestJob } from './colony.js';
 import { addTension, goodRelations, landPrice, nativeLandClosedTo, nativeLandOwner, peopleRelation, peopleRelationOf, peopleThreshold, settlementName, tensionOf } from './natives.js';
-import { message, player, tileAt, tileWorkedBy, unitName, unitPosition, workArea } from './queries.js';
-import { peoplePairRandom, settlementRandom } from './relations.js';
+import { isShip, message, player, tileAt, tileWorkedBy, unitName, unitPosition, workArea } from './queries.js';
+import { isFavoured, peoplePairRandom, settlementRandom } from './relations.js';
 import { isCompanyIdent, TRIBES, type NationId, type TribeId } from './rules/nations.js';
 import type { UnitTypeId } from './rules/units.js';
-import { cooperationOf, LEVEL_COOPERATION } from './alliances.js';
-import { calendarOf, mechanicsOf, nationOf, nativeRulesOf, peopleOf, scenarioOf, turnAfterYears, yearValue } from './scenarios/index.js';
+import { cooperationOf, LEVEL_COOPERATION, warOnFriend } from './alliances.js';
+import { calendarOf, mechanicsOf, nationOf, nativeRulesOf, peopleOf, scenarioOf, Term, turnAfterYears, yearValue } from './scenarios/index.js';
 import type { PeopleTreatyRules, Scenario, TemperamentRules, YearsAround } from './scenarios/types.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, nationParty, peopleParty, peopleTreatyBetween, treatiesWithPeople, treatyNations, treatyPeoples } from './treaties.js';
-import type { Colony, GameState, LandUseTerms, PeopleTreatyKind, Settlement, Treaty, TreatyEnd } from './types.js';
+import type { Colony, GameState, LandUseTerms, PeopleTreatyKind, Settlement, Treaty, TreatyEnd, Unit } from './types.js';
 import { colonyList, setUnitLoc, unitList } from './unitindex.js';
 
 /** The engine's rules for treaties with peoples; a scenario's `peopleTreaties` is merged over them. */
@@ -73,6 +82,13 @@ export const PEOPLE_TREATY_RULES: PeopleTreatyRules = {
     teachYears: { base: 25, spread: 5 },
     speakYears: 10,
     gather: 1.25,
+  },
+  defence: {
+    // The top of the ladder: more years again than land use or an exchange.
+    years: { base: 16, spread: 4 },
+    tension: 300,
+    defend: 0.5,
+    near: 2,
   },
   accept: 0.8,
   offer: 0.3,
@@ -102,7 +118,7 @@ export function peopleTreatyRules(s: GameState): PeopleTreatyRules {
     else {
       const temperaments = { ...PEOPLE_TREATY_RULES.temperaments };
       for (const k of Object.keys(over.temperaments ?? {}) as (keyof typeof temperaments)[]) temperaments[k] = { ...temperaments[k], ...over.temperaments![k] };
-      rules = { ...PEOPLE_TREATY_RULES, ...over, trade: { ...PEOPLE_TREATY_RULES.trade, ...over.trade }, landUse: { ...PEOPLE_TREATY_RULES.landUse, ...over.landUse }, exchange: { ...PEOPLE_TREATY_RULES.exchange, ...over.exchange }, temperaments };
+      rules = { ...PEOPLE_TREATY_RULES, ...over, trade: { ...PEOPLE_TREATY_RULES.trade, ...over.trade }, landUse: { ...PEOPLE_TREATY_RULES.landUse, ...over.landUse }, exchange: { ...PEOPLE_TREATY_RULES.exchange, ...over.exchange }, defence: { ...PEOPLE_TREATY_RULES.defence, ...over.defence }, temperaments };
     }
     RULES.set(scenario, rules);
   }
@@ -273,7 +289,6 @@ function pendingOffer(s: GameState, nation: NationId, people: TribeId): boolean 
 export function peopleTreatyProblem(s: GameState, nation: NationId, people: TribeId, kind: PeopleTreatyKind = 'people-trade'): string | null {
   if (!peopleTreatiesOn(s)) return 'There are no treaties with native peoples in this scenario.';
   if (!peopleTreatyOn(s, kind)) return `There is no ${KIND_TEXT[kind].replace(/^an? /, '')} with native peoples in this scenario.`;
-  if (kind === 'defence') return `${KIND_TEXT[kind][0].toUpperCase()}${KIND_TEXT[kind].slice(1)} is not made yet.`;
   if (!treatyNation(nation) || !s.players.some((p) => p.id === nation)) return 'Treaties with native peoples are made by European nations.';
   const name = peopleName(people);
   const tribe = s.tribes.find((t) => t.id === people);
@@ -286,6 +301,7 @@ export function peopleTreatyProblem(s: GameState, nation: NationId, people: Trib
   if (peopleWaiting(s, nation, people) || peopleHostile(s, nation, people)) return `The ${name} do not trust you again yet.`;
   if (kind === 'land-use') return landUseProblem(s, nation, people);
   if (kind === 'exchange') return exchangeProblem(s, nation, people);
+  if (kind === 'defence') return defenceProblem(s, nation, people);
   if (!peopleTradeUnlocked(s, nation, people)) return `The ${name} do not know you well enough yet: it takes more years of good relations${peopleTreatyRules(s).trade.volume.max > 0 ? ' and more trade with them' : ''}.`;
   return null;
 }
@@ -323,12 +339,15 @@ export function makePeopleTreaty(s: GameState, nation: NationId, people: TribeId
   if (!peopleTreatyBetween(s, kind, nation, people)) addTreaty(s, kind, [nationParty(nation), peopleParty(people)]);
   track(nation, 'natives:people treaty made');
   if (kind === 'exchange') track(nation, 'natives:exchange made');
+  if (kind === 'defence') track(nation, 'natives:defence made');
   const name = peopleName(people);
   const text = kind === 'people-trade'
     ? `${nationOf(s, nation).name} and the ${name} have made a trade treaty: better prices both ways, more goods for sale, more visits to trade, and trade routes may call at their settlements.`
     : kind === 'exchange'
       ? `${nationOf(s, nation).name} and the ${name} agree on a cultural exchange: ${exchangeBenefits(s)}.`
-      : `${nationOf(s, nation).name} and the ${name} have made ${KIND_TEXT[kind]}.`;
+      : kind === 'defence'
+        ? `${nationOf(s, nation).name} and the ${name} make a mutual defence pact: ${defenceBenefits(s)}.`
+        : `${nationOf(s, nation).name} and the ${name} have made ${KIND_TEXT[kind]}.`;
   message(s, text, nation);
   noteHistory(s, 'tribe', [nation], `${nationOf(s, nation).name} and the ${name} make ${KIND_TEXT[kind]}.`);
   return text;
@@ -715,6 +734,164 @@ export function exchangeBenefits(s: GameState): string {
 }
 
 // ---------------------------------------------------------------------------
+// Mutual defence (N7, N9)
+
+/** The mutual defence pact in force between a nation and a people, if any. */
+export function defenceTreaty(s: GameState, nation: NationId, people: TribeId): Treaty | undefined {
+  return s.treaties ? peopleTreatyBetween(s, 'defence', nation, people) : undefined;
+}
+
+/** Whether a nation and a people have a mutual defence pact in force. */
+export function hasDefence(s: GameState, nation: NationId, people: TribeId): boolean {
+  return !!defenceTreaty(s, nation, people);
+}
+
+/** The nation a people has its mutual defence pact with (a people keeps one with a single nation at a time, N2), if any. */
+export function defencePartner(s: GameState, people: TribeId): NationId | undefined {
+  const list = s.treaties;
+  if (!list) return undefined;
+  for (const t of list) if (!t.end && t.kind === 'defence' && treatyPeoples(t).includes(people)) return treatyNations(t)[0];
+  return undefined;
+}
+
+/** The peoples a nation has a mutual defence pact with, in the order the pacts were made. */
+export function defencePeoples(s: GameState, nation: NationId): TribeId[] {
+  const out: TribeId[] = [];
+  for (const t of s.treaties ?? []) if (!t.end && t.kind === 'defence' && treatyNations(t).includes(nation)) out.push(...treatyPeoples(t));
+  return out;
+}
+
+/** The hidden years of good relations a nation needs with a people before a mutual defence pact (drawn, never stored). */
+export function defenceThreshold(s: GameState, nation: NationId, people: TribeId): number {
+  const years = peopleThreshold(s, nation, people, 'defence years', peopleTreatyRules(s).defence.years);
+  return Math.round(years * temperamentOf(s, people).thresholds);
+}
+
+/** Whether a nation's years of good relations with a people reach the hidden threshold for a defence pact. */
+export function defenceUnlocked(s: GameState, nation: NationId, people: TribeId): boolean {
+  return !!peopleRelationOf(s, nation, people) && yearsOfGood(s, nation, people) >= defenceThreshold(s, nation, people);
+}
+
+/** What stands in the way of a defence pact, beyond the checks every treaty with a people shares. */
+function defenceProblem(s: GameState, nation: NationId, people: TribeId): string | null {
+  const name = peopleName(people);
+  if (!hasPeopleTrade(s, nation, people)) return `A mutual defence pact needs a trade treaty with the ${name} first.`;
+  if (!hasLandUse(s, nation, people) && !hasExchange(s, nation, people)) return `A mutual defence pact needs land use or a cultural exchange with the ${name} first.`;
+  const other = defencePartner(s, people);
+  if (other && other !== nation) return `The ${name} already have a mutual defence pact with ${nationOf(s, other).name}.`;
+  if (!defenceUnlocked(s, nation, people)) return `The ${name} do not know you well enough to stand with you in war yet: it takes more years of good relations.`;
+  return null;
+}
+
+/** The benefits of a mutual defence pact, in one line. */
+export function defenceBenefits(s: GameState): string {
+  const king = mechanicsOf(s).independence ? `, also against ${Term(s, 'royalTroops').toLowerCase()} once you declare independence` : '';
+  return `an attack on them is war with you, their braves come to defend your colonies near their land${king}, and nobody can turn them against you`;
+}
+
+/**
+ * Whether `nation` may not attack `people` because of the people's defence pact (N9, as Beta 1's
+ * rule for computer players): its partner is the nation's Favoured Nation or ally, or war on the
+ * partner would bring in one of the nation's friends. Only computer players are held to it.
+ */
+export function defendedByFriend(s: GameState, nation: NationId, people: TribeId): boolean {
+  const partner = s.treaties ? defencePartner(s, people) : undefined;
+  if (!partner || partner === nation) return false;
+  return isFavoured(s, nation, partner) || warOnFriend(s, nation, partner);
+}
+
+/**
+ * The partner's colony `colony` is attacked by `attacker` (combat.ts): every people with a defence
+ * pact with the colony's owner and a settlement within its braves' reach of the colony comes to its
+ * defence. Against a European nation the people goes to war with the attacker (each of its
+ * settlements growing angrier, so the war lasts a while); against the Crown (a partner that
+ * declared independence) the braves fight without a war of the people's own. Braves of those
+ * settlements that are idle or wandering set out against the attacking unit. A people that
+ * submitted to the attacker stays out. Messages tell the partner (a turn-start notice).
+ */
+export function callToDefence(s: GameState, colony: Colony, attacker: Unit): void {
+  if (!s.treaties || !peopleTreatyOn(s, 'defence')) return;
+  const by = attacker.owner;
+  const partner = colony.owner;
+  if (by === partner || isCompanyIdent(by) || attacker.type === 'privateer') return;
+  const peoples = defencePeoples(s, partner);
+  if (!peoples.length) return;
+  const grid = gridOf(s);
+  const range = nativeRulesOf(s).visitRange;
+  const rules = peopleTreatyRules(s).defence;
+  const onLand = !!unitPosition(s, attacker) && !isShip(attacker);
+  for (const people of peoples) {
+    const near = settlementsOf(s, people).filter((st) => grid.distance(st.x, st.y, colony.x, colony.y) <= range);
+    if (!near.length) continue;
+    const tribe = s.tribes.find((o) => o.id === people);
+    if (!tribe) continue;
+    const name = peopleName(people);
+    if (by !== 'crown') {
+      if (hasSubmitted(s, people, by)) continue;
+      if (tribe.stance[by] !== 'war') {
+        tribe.stance[by] = 'war';
+        for (const st of settlementsOf(s, people)) addTension(st, by, rules.tension);
+        track(by, 'natives:tribe went to war');
+        track(partner, 'natives:pact war');
+        message(s, `The ${name} take up arms against ${nationOf(s, by).name} for its attack on ${colony.name}, as their pact with you binds them.`, partner, colony);
+        message(s, `The ${name} have dug up the hatchet against ${nationOf(s, by).name} for its attack on ${colony.name} of their ally ${nationOf(s, partner).name}!`, by, colony);
+        noteHistory(s, 'tribe', [by, partner], `The ${name} go to war with ${nationOf(s, by).name} to defend ${colony.name} of their ally ${nationOf(s, partner).name}.`, { at: colony });
+      }
+    }
+    if (!onLand) continue;
+    const homes = new Set(near.map((st) => st.id));
+    let called = 0;
+    for (const b of Object.values(bravesOf(s))) {
+      if (!homes.has(b.home) || (b.task && b.task.kind !== 'wander')) continue;
+      b.task = { kind: 'attack', unitId: attacker.id, defend: partner };
+      called++;
+    }
+    if (called) {
+      track(partner, 'natives:braves called');
+      const enemy = by === 'crown' ? Term(s, 'royalTroops').toLowerCase() : `the ${nationOf(s, by).adjective}`;
+      message(s, `${called} ${name} ${called === 1 ? 'brave comes' : 'braves come'} to defend ${colony.name} against ${enemy}.`, partner, colony);
+    }
+  }
+}
+
+/**
+ * An enemy of a people's defence partner near one of the partner's colonies within the
+ * settlement's reach, for its braves to set out against (braves.ts): a unit in the open (not in a
+ * colony) within `defence.near` tiles of the colony, of a nation the people and the partner are
+ * both at war with, or of the King's troops sent against a partner that declared independence. The
+ * nearest to the settlement; undefined without a pact. `units` are the land units on the map by
+ * tile index and `colonyTiles` the tiles with a colony (braves.ts's phase index).
+ */
+export function defenceEnemy(s: GameState, st: Settlement, units: ReadonlyMap<number, Unit[]>, colonyTiles: ReadonlyMap<number, Colony>): Unit | undefined {
+  const partner = defencePartner(s, st.tribe);
+  if (!partner) return undefined;
+  const p = s.players.find((o) => o.id === partner);
+  const tribe = s.tribes.find((o) => o.id === st.tribe);
+  if (!p || !tribe) return undefined;
+  const grid = gridOf(s);
+  const range = nativeRulesOf(s).visitRange;
+  const near = peopleTreatyRules(s).defence.near;
+  const colonies = colonyList(s).filter((c) => c.owner === partner && grid.distance(c.x, c.y, st.x, st.y) <= range);
+  if (!colonies.length) return undefined;
+  const w = s.map.width;
+  let best: Unit | undefined;
+  let bestD = Infinity;
+  for (const [i, list] of units) {
+    if (colonyTiles.has(i)) continue;
+    const x = i % w;
+    const y = (i - x) / w;
+    const d = grid.distance(x, y, st.x, st.y);
+    if (d > range || d >= bestD || !colonies.some((c) => grid.distance(c.x, c.y, x, y) <= near)) continue;
+    const u = list.find((o) => (o.owner === 'crown' ? o.against === partner && p.independence === 'declared' : p.stance[o.owner] === 'war' && tribe.stance[o.owner] === 'war' && !hasSubmitted(s, st.tribe, o.owner)));
+    if (u) {
+      best = u;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+// ---------------------------------------------------------------------------
 // Ending: breaking faith (N8), and the people's own ending
 
 /** A whole number of years from base − spread to base + spread, from a seeded number in [0, 1). */
@@ -738,6 +915,7 @@ export function breakFaith(s: GameState, nation: NationId, people: TribeId, why:
     endTreaty(s, t, 'broken', nation);
     track(nation, 'natives:people treaty ended');
     if (t.kind === 'exchange') track(nation, 'natives:exchange ended');
+    if (t.kind === 'defence') track(nation, 'natives:defence ended');
     if (t.kind === 'land-use') releaseLease(s, nation, people);
   }
   track(nation, 'natives:faith broken');
@@ -760,6 +938,7 @@ function peopleEnds(s: GameState, t: Treaty, nation: NationId, people: TribeId, 
   endTreaty(s, t, why, why === 'lapsed' ? undefined : peopleParty(people));
   track(nation, 'natives:people treaty ended');
   if (t.kind === 'exchange') track(nation, 'natives:exchange ended');
+  if (t.kind === 'defence') track(nation, 'natives:defence ended');
   if (t.kind === 'land-use') releaseLease(s, nation, people);
   pruneSettlementStops(s, nation, people);
   const name = peopleName(people);
@@ -776,7 +955,8 @@ function treatyNameOf(t: Treaty): string {
  * Once a round, after the braves (natives.ts processNatives): a people ends its treaties with a
  * nation it is at war with, or when one of its settlements has turned angry with it; a treaty
  * with a people that has no settlements left lapses; land use and an exchange end with the trade
- * treaty they stand on (the ladder). Only treaties in force are looked at.
+ * treaty they stand on, a defence pact with the trade treaty or with the last of land use and an
+ * exchange (the ladder). Only treaties in force are looked at.
  */
 export function processPeopleTreaties(s: GameState): void {
   const list = s.treaties;
@@ -792,7 +972,8 @@ export function processPeopleTreaties(s: GameState): void {
     if (!tribe || !settlements.length) peopleEnds(s, t, nation, people, 'lapsed');
     else if (tribe.stance[nation] === 'war') peopleEnds(s, t, nation, people, 'war');
     else if (settlements.some((st) => tensionOf(st, nation) >= angry)) peopleEnds(s, t, nation, people, 'cancelled');
-    else if ((t.kind === 'land-use' || t.kind === 'exchange') && !hasPeopleTrade(s, nation, people)) peopleEnds(s, t, nation, people, 'cancelled');
+    else if ((t.kind === 'land-use' || t.kind === 'exchange' || t.kind === 'defence') && !hasPeopleTrade(s, nation, people)) peopleEnds(s, t, nation, people, 'cancelled');
+    else if (t.kind === 'defence' && !hasLandUse(s, nation, people) && !hasExchange(s, nation, people)) peopleEnds(s, t, nation, people, 'cancelled');
     else if (t.kind === 'land-use' && t.terms?.kind === 'land-use' && s.turn >= t.terms.due) rentDay(s, t, t.terms, nation, people);
   }
 }
