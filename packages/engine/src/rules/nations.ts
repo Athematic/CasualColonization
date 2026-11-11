@@ -117,7 +117,16 @@ export interface PeopleDef {
   lifeway: Lifeway;
   skills: UnitTypeId[];
   wants: GoodId[];
+  /**
+   * How the people meets proposals of treaties (native-partners.md N8): open, guarded or proud
+   * (peopletreaties.ts, `PeopleTreatyRules.temperaments`). Missing means none: the rules as they are.
+   * Scenario data (`peoples.overrides`); the catalogue gives none.
+   */
+  temperament?: Temperament;
 }
+
+/** A people's temperament towards treaties (N8). Not "wary", which is a mood word (tensionLabel). */
+export type Temperament = 'open' | 'guarded' | 'proud';
 
 /** The engine's older name for a people; the state keeps `tribe` ids. */
 export type TribeDef = PeopleDef;

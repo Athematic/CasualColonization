@@ -585,7 +585,7 @@ function nativeTrade(s: GameState, p: Player, wagon: Unit): void {
   const carrying = tradeGoods(s).filter((g) => (cargo[g] ?? 0) > 0);
   const buyers = nativeBuyers(s, p, pos).sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y));
   if (carrying.length) {
-    const st = buyers.find((o) => carrying.some((g) => nativeOffer(s, o, g, Math.min(100, cargo[g]!)) >= 40));
+    const st = buyers.find((o) => carrying.some((g) => nativeOffer(s, o, g, Math.min(100, cargo[g]!), p.id) >= 40));
     if (!st) return;
     if (grid.distance(st.x, st.y, pos.x, pos.y) === 1) {
       if (wagon.moves > 0) tradeWithSettlement(s, wagon.id, st.id);

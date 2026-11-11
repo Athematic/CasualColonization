@@ -14,7 +14,7 @@ import type { FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
 import type { Modifier, RumourOutcome } from '../rules/modifiers.js';
 import type { Effect } from '../events/types.js';
-import type { CompanyId, Lifeway, NationId, PeopleDef, TribeId } from '../rules/nations.js';
+import type { CompanyId, Lifeway, NationId, PeopleDef, Temperament, TribeId } from '../rules/nations.js';
 import type { NativeRulesOverride, SettlementKindDef } from '../rules/natives.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { ScoreWeights } from '../rules/score.js';
@@ -22,7 +22,7 @@ import type { UnitTypeId } from '../rules/units.js';
 import type { EntrySide } from '../mapgen.js';
 import type { GridKind } from '../grid.js';
 import type { TerrainId } from '../rules/terrain.js';
-import type { GameState, MapSize } from '../types.js';
+import type { GameState, MapSize, PeopleTreatyKind } from '../types.js';
 import type { Calendar } from './calendar.js';
 import type { ScenarioText } from './terms.js';
 
@@ -80,6 +80,12 @@ export interface Scenario {
   alliances?: Partial<AllianceRules>;
   /** Chartered company rules merged over the engine's COMPANY_RULES (companies.ts). */
   companyRules?: Partial<CompanyRules>;
+  /**
+   * Rules for treaties with native peoples (peopletreaties.ts, native-partners.md N3, N4, N8),
+   * merged over the engine's PEOPLE_TREATY_RULES, the tables field by field. Only read while
+   * `mechanics.peopleTreaties` names a kind.
+   */
+  peopleTreaties?: PeopleTreatyRulesOverride;
   /**
    * How the game can end, checked in this order (victory.ts registers the kinds). The first rule
    * that ends the game decides the reason and the winner.
@@ -164,6 +170,11 @@ export interface Mechanics {
    * `alliances` and `independence`. Absent means off.
    */
   confederation?: boolean;
+  /**
+   * Treaties between a nation and a native people (peopletreaties.ts, docs/design/native-partners.md):
+   * the kinds in play. Absent or empty means none (Beta 2 step 1 builds `people-trade`).
+   */
+  peopleTreaties?: PeopleTreatyKind[];
 }
 
 /** A whole number of years from `base − spread` to `base + spread`, drawn from the game seed. */
@@ -199,6 +210,63 @@ export interface AllianceRules {
   expeditionCost: number;
 }
 
+/** What a trade treaty with a people (`people-trade`, N4) needs and does. */
+export interface PeopleTradeRules {
+  /** Hidden: years of good relations (at peace, settlements content on average) the pair needs, drawn per pair. */
+  years: YearsAround;
+  /** Hidden: gold that must have changed hands in trade with the people, drawn per pair from `min` to `max`. */
+  volume: { min: number; max: number };
+  /** What the people's settlements pay for goods sold to them, against the usual (1.2: 20% more). */
+  sell: number;
+  /** What their goods cost the partner, against the usual (0.8: 20% less). */
+  buy: number;
+  /** What the people's settlements gather for sale while they have a trade treaty with anyone (1.25). */
+  gather: number;
+  /** How much more often the people's braves come to the partner's colonies to trade (2: twice). */
+  braveTrade: number;
+  /** Tension that falls each round, towards the partner, on top of the usual drift (2). */
+  tensionFall: number;
+}
+
+/** How a people's temperament (`peoples.overrides[id].temperament`) shifts its answers and offers. */
+export interface TemperamentRules {
+  /** Times the chance to accept a proposal. */
+  accept: number;
+  /** Times the chance to offer a treaty itself. */
+  offer: number;
+  /** Times the hidden thresholds (years and gold) that unlock a treaty. */
+  thresholds: number;
+}
+
+/**
+ * The rules for treaties with native peoples a scenario can change (peopletreaties.ts
+ * PEOPLE_TREATY_RULES has the engine's): unlocking, the people's answers and offers (N8), each
+ * kind's effects (N4) and what breaking faith costs.
+ */
+export interface PeopleTreatyRules {
+  trade: PeopleTradeRules;
+  /** Chance that a people accepts a treaty it is free to accept (unlocked, nothing against it). */
+  accept: number;
+  /** Chance, on a brave's trade visit to a nation's colony, that its people offers an unlocked treaty itself. */
+  offer: number;
+  /** Years after a nation took land from a people (without paying) during which the people refuses new treaties. */
+  landYears: number;
+  /** Tension each of the people's settlements gains towards a nation that breaks faith. */
+  breachTension: number;
+  /** After breaking faith: no new treaty with the people for these years. */
+  waitingYears: YearsAround;
+  /** After breaking faith: the people treats the nation as hostile (no gifts or trade visits, no offers) for these years. */
+  hostilityYears: YearsAround;
+  /** The peoples' temperaments; a people without one answers with no change. */
+  temperaments: Record<Temperament, TemperamentRules>;
+}
+
+/** A scenario's changes to PEOPLE_TREATY_RULES: any field, and any part of the tables. */
+export type PeopleTreatyRulesOverride = Partial<Omit<PeopleTreatyRules, 'trade' | 'temperaments'>> & {
+  trade?: Partial<PeopleTradeRules>;
+  temperaments?: Partial<Record<Temperament, Partial<TemperamentRules>>>;
+};
+
 /**
  * How readily the computer players cooperate (alliances.ts COOPERATION has the engine's values,
  * tuned for the targets in docs/design/cooperation.md, C11). Each is a chance per review (every
@@ -230,6 +298,13 @@ export interface Cooperation {
    * declares together with an ally rather than alone (1: the same; it still faces its own REF).
    */
   confederationReadiness: number;
+  /**
+   * Chance per review that a nation proposes a trade treaty to a people it may make one with
+   * (native-partners.md N11; Combative only where the trade pays).
+   */
+  proposePeopleTrade: number;
+  /** Chance that a nation accepts a treaty a people offers it through a visiting brave. */
+  acceptPeopleOffer: number;
 }
 
 /** One way the game can end: a registered victory kind (victory.ts) and its data. */
@@ -472,10 +547,10 @@ export interface ScenarioPeoples {
   settlements: Partial<Record<Lifeway, SettlementKindDef>>;
   /**
    * A people's skills or wants as they are in this scenario, where they differ from the catalogue
-   * (TRIBES): goods and experts not in play (the Tupi want no coats in the Caribbean). Read with
-   * `peopleOf(s, id)`.
+   * (TRIBES): goods and experts not in play (the Tupi want no coats in the Caribbean), and its
+   * temperament towards treaties (N8). Read with `peopleOf(s, id)`.
    */
-  overrides?: Partial<Record<TribeId, Partial<Pick<PeopleDef, 'skills' | 'wants'>>>>;
+  overrides?: Partial<Record<TribeId, Partial<Pick<PeopleDef, 'skills' | 'wants' | 'temperament'>>>>;
   /**
    * Changes to the engine's native rules (rules/natives.ts NATIVE_RULES): braves, tension
    * thresholds, demands, prices, burial grounds, surrender, missions and inciting. Absent fields

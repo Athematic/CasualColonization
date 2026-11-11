@@ -7,6 +7,7 @@ import { mechanicsOf, nationOf, nationTitle, nativeRulesOf, settlementKindOf, te
 import { canAttack } from './movement.js';
 import { braveDefence, braveName, bravesOf, killBrave } from './braves.js';
 import { addTension, settlementName } from './natives.js';
+import { breakFaith } from './peopletreaties.js';
 import { sonsOfLiberty } from './production.js';
 import {
   colonyAt,
@@ -406,9 +407,11 @@ function captureColony(s: GameState, attacker: Unit, colony: Colony): string {
   return `${nationOf(s, attacker.owner).name} captures ${colony.name}!`;
 }
 
-/** Attacking a tribe makes it an enemy, and ends any submission to the attacker. */
+/** Attacking a tribe makes it an enemy, ends any submission to the attacker, and breaks faith with it (its treaties end). */
 function hostile(s: GameState, tribeId: TribeId, nation: NationId, at: { x: number; y: number }, cause: string): void {
   const tribe = s.tribes.find((t) => t.id === tribeId)!;
+  // Attacking a partner breaks faith with it (native-partners.md N8).
+  breakFaith(s, nation, tribeId, 'attack');
   if (tribe.submitted?.includes(nation)) tribe.submitted = tribe.submitted.filter((n) => n !== nation);
   if (tribe.stance[nation] !== 'war') {
     tribe.stance[nation] = 'war';

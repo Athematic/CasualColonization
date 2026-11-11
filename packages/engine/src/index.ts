@@ -38,6 +38,7 @@ export * from './leaving.js';
 export * from './routes.js';
 export * from './relations.js';
 export * from './treaties.js';
+export * from './peopletreaties.js';
 export * from './alliances.js';
 export * from './companies.js';
 export * from './chartered.js';

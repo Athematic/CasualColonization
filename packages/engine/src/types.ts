@@ -376,7 +376,11 @@ export type BraveTask =
  */
 export interface NativeDemand {
   id: string;
-  kind: 'demand' | 'offer';
+  /**
+   * A demand for tribute, an offer of goods for sale, or (Beta 2, native-partners.md N8) the
+   * people's offer of a treaty (`treaty` names its kind; no goods, `amount` 0).
+   */
+  kind: 'demand' | 'offer' | 'treaty';
   nation: NationId;
   colonyId: string;
   settlementId: string;
@@ -386,6 +390,8 @@ export interface NativeDemand {
   amount: number;
   /** For an offer: the price asked in gold. */
   price?: number;
+  /** For a treaty offer: the kind of treaty the people offers. */
+  treaty?: PeopleTreatyKind;
   turn: number;
 }
 
@@ -475,6 +481,12 @@ export interface PeopleRelation {
   breaks?: number;
   /** A proposal waiting for an answer: made by the nation to the people, or offered by the people. */
   proposal?: { kind: PeopleTreatyKind; from: 'nation' | 'people'; turn: number };
+  /**
+   * Turn the nation last took land from the people (without paying for it) (step 1, N8: the people
+   * refuses new treaties for `PeopleTreatyRules.landYears` after). Written only while the
+   * scenario has treaties with peoples.
+   */
+  tookLand?: number;
 }
 
 /**
@@ -487,7 +499,8 @@ export type TreatyKind = 'trade' | 'favoured' | 'alliance' | 'confederation' | P
 
 /**
  * Treaties between a nation and a native people (Beta 2, N1–N7): a trade treaty, land use,
- * cultural exchange and mutual defence. Step 0 only names them; none is made yet.
+ * cultural exchange and mutual defence. Step 1 makes the trade treaty (peopletreaties.ts); the
+ * others are only named.
  */
 export type PeopleTreatyKind = 'people-trade' | 'land-use' | 'exchange' | 'defence';
 
@@ -496,11 +509,16 @@ export interface TreatyEnd {
   turn: number;
   /**
    * Cancelled by one side, ended by a war between the parties, lapsed (Favoured Nation at a
-   * declaration of independence), or left: an alliance's last members but one left it.
+   * declaration of independence; a treaty with a people that has no settlements left), left: an
+   * alliance's last members but one left it, or broken: a nation broke faith with a people (N8).
    */
-  why: 'cancelled' | 'war' | 'lapsed' | 'left' | 'concluded';
-  /** The nation that ended it, when one did. */
-  by?: NationId;
+  why: 'cancelled' | 'war' | 'lapsed' | 'left' | 'concluded' | 'broken';
+  /**
+   * The party that ended it, when one did: a nation by its bare id (as every treaty between
+   * nations is saved), a people as a party (`{ kind: 'people', id }`). Read with treaties.ts
+   * `treatyEndedBy`.
+   */
+  by?: NationId | TreatyParty;
 }
 
 /**

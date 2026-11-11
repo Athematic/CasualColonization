@@ -1,11 +1,16 @@
 /**
  * Native affairs for the advanced computer levels: buying goods from settlements with wagon
- * trains (see logistics.ts), and Combative's missionaries inciting tribes against its enemies.
+ * trains (see logistics.ts), Combative's missionaries inciting tribes against its enemies, and
+ * proposing treaties to peoples (Beta 2, native-partners.md N11).
  */
 import { gridOf } from '../grid.js';
 import { nativeUnitPrice, settlementForSale } from '../braves.js';
 import { sellPrice } from '../europe.js';
-import { buyFromSettlement, incitePrice, inciteTribe, tensionOf } from '../natives.js';
+import { buyFromSettlement, incitePrice, inciteTribe, peopleRelationOf, tensionOf } from '../natives.js';
+import { hasPeopleTrade, peopleRefusal, peopleTreatyOn, peopleTreatyProblem, proposePeopleTreaty } from '../peopletreaties.js';
+import { cooperationOf, LEVEL_COOPERATION } from '../alliances.js';
+import { peoplePairRandom } from '../relations.js';
+import type { TribeId } from '../rules/nations.js';
 import { cargoRoomFor, isCoastal } from '../queries.js';
 import { nativeRulesOf } from '../scenarios/index.js';
 import type { NationId } from '../rules/nations.js';
@@ -57,6 +62,8 @@ export function maybeIncite(s: GameState, p: Player, u: Unit, st: Settlement, pr
   if (tensionOf(st, p.id) >= nativeRulesOf(s).tension.angry) return false;
   const price = incitePrice(s, st);
   if (p.gold < price + prof.reserve + 1000) return false;
+  // Paying a partner to make war would break faith with it (N8): not worth a treaty.
+  if (hasPeopleTrade(s, p.id, st.tribe)) return false;
   const tribe = s.tribes.find((t) => t.id === st.tribe)!;
   const enemy = (Object.keys(p.stance) as NationId[]).find(
     (n) => n !== 'crown' && p.stance[n] === 'war' && tribe.stance[n] !== 'war' && Object.values(s.colonies).some((c) => c.owner === n && grid.distance(c.x, c.y, st.x, st.y) <= 6),
@@ -71,3 +78,29 @@ export function maybeIncite(s: GameState, p: Player, u: Unit, st: Settlement, pr
   return ok;
 }
 
+
+/** Gold a Combative nation must have traded with a people before a trade treaty pays it (N11: "where it pays"). */
+export const COMBATIVE_TREATY_VOLUME = 300;
+
+/**
+ * Proposes trade treaties to peoples (N11), on the nation's review turns: to each people it may
+ * make one with (unlocked, as `peopleTreatyProblem` says, and nothing the people holds against it),
+ * at a seeded chance, the scenario's `proposePeopleTrade` times the level's share (Creative all of
+ * it, Competent most, Combative half and only where it has traded enough with the people to pay,
+ * Naive none: it only accepts a people's own offer). Drawn from the pair's own stream.
+ */
+export function peopleAffairs(s: GameState, p: Player): void {
+  if (!peopleTreatyOn(s, 'people-trade') || p.independence === 'lost') return;
+  const chance = cooperationOf(s).proposePeopleTrade * LEVEL_COOPERATION[p.ai ?? 'naive'].people;
+  if (chance <= 0) return;
+  const combative = p.ai === 'combative';
+  for (const t of s.tribes) {
+    const people: TribeId = t.id;
+    const rel = peopleRelationOf(s, p.id, people);
+    if (!rel || hasPeopleTrade(s, p.id, people)) continue;
+    if (combative && rel.volume < COMBATIVE_TREATY_VOLUME) continue;
+    if (peopleTreatyProblem(s, p.id, people) || peopleRefusal(s, p.id, people)) continue;
+    if (peoplePairRandom(s, p.id, people, `${p.id} propose trade ${s.turn}`) >= chance) continue;
+    safely(() => proposePeopleTreaty(s, p.id, people));
+  }
+}

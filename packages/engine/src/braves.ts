@@ -40,6 +40,7 @@ import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from '.
 import { difficultyOf, goodsOf, nativeProduceOf, nativeRulesOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
 import { removeUnit } from './unitindex.js';
+import { aiAcceptsPeopleOffer, answerPeopleOffer, peopleBraveTradeFactor, peopleBuyFactor, peopleGatherFactor, peopleHostile, peopleTreatyText, peopleWouldOffer } from './peopletreaties.js';
 
 /** The kind of a settlement in its game's scenario (camp, village, city…), with its numbers. */
 export function settlementKind(s: GameState, st: Settlement): SettlementKindDef {
@@ -114,6 +115,8 @@ export function killBrave(s: GameState, b: Brave, killer?: NationId, atWar = fal
 /** Goods a settlement gathers from its land each round. */
 export function settlementProduce(s: GameState, st: Settlement): Partial<Record<GoodId, number>> {
   const kind = settlementKind(s, st);
+  // A people that trades by treaty gathers more for sale (N4).
+  const more = peopleGatherFactor(s, st.tribe);
   const sums: Partial<Record<GoodId, number>> = {};
   const land = gridOf(s).withinOffsets(st.x, st.y, 1);
   for (let k = 0; k < land.length; k += 2) {
@@ -128,7 +131,7 @@ export function settlementProduce(s: GameState, st: Settlement): Partial<Record<
   }
   const out: Partial<Record<GoodId, number>> = {};
   for (const g of nativeProduceOf(s)) {
-    const n = Math.round((sums[g] ?? 0) * kind.produceRate);
+    const n = Math.round((sums[g] ?? 0) * kind.produceRate * more);
     if (n > 0) out[g] = n;
   }
   return out;
@@ -150,12 +153,12 @@ export function settlementForSale(s: GameState, st: Settlement): { good: GoodId;
   return nativeProduceOf(s).map((good) => ({ good, amount: st.goods?.[good] ?? 0 })).filter((r) => r.amount > 0);
 }
 
-/** Price per unit a settlement asks a nation for one of its goods: dearer when tense, cheaper when it has plenty. */
+/** Price per unit a settlement asks a nation for one of its goods: dearer when tense, cheaper when it has plenty, and with a trade treaty (N4). */
 export function nativeUnitPrice(s: GameState, st: Settlement, good: GoodId, nation: NationId): number {
   const stock = st.goods?.[good] ?? 0;
   const plenty = stock >= settlementKind(s, st).produceCap * 0.75 ? nativeRulesOf(s).buyPricePlenty : 1;
   const mood = 1 + tensionOf(st, nation) / 1000;
-  return Math.max(1, Math.round(GOOD_DEFS[good].price * nativeRulesOf(s).buyPriceFactor * mood * plenty * (st.capital ? 1.1 : 1)));
+  return Math.max(1, Math.round(GOOD_DEFS[good].price * nativeRulesOf(s).buyPriceFactor * mood * plenty * (st.capital ? 1.1 : 1) * peopleBuyFactor(s, nation, st.tribe)));
 }
 
 // ---------------------------------------------------------------------------
@@ -347,9 +350,11 @@ function chooseTask(s: GameState, b: Brave, st: Settlement, index: PhaseIndex): 
       if (roll < rules.braveChances.attackAngry * raid) b.task = { kind: 'attack', colonyId: c.id };
     } else if (hostile && t >= rules.tension.uneasy) {
       if (roll < rules.braveChances.demand * raid) b.task = { kind: 'visit', colonyId: c.id, purpose: 'demand' };
-    } else if (t < rules.tension.content) {
+    } else if (t < rules.tension.content && !peopleHostile(s, nation, st.tribe)) {
+      // A people that feels betrayed (a broken treaty, N8) neither brings gifts nor comes to trade;
+      // a trade treaty brings its braves to trade more often (N4).
       if (roll < rules.braveChances.gift) b.task = { kind: 'visit', colonyId: c.id, purpose: 'gift' };
-      else if (roll < rules.braveChances.gift + rules.braveChances.trade) b.task = { kind: 'visit', colonyId: c.id, purpose: 'trade' };
+      else if (roll < rules.braveChances.gift + rules.braveChances.trade * peopleBraveTradeFactor(s, nation, st.tribe)) b.task = { kind: 'visit', colonyId: c.id, purpose: 'trade' };
     }
     if (b.task) return;
   }
@@ -459,11 +464,23 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
     makeDemand(s, b, st, c);
     return;
   }
+  // A people free to make a trade treaty with the nation may offer one through the brave (N8).
+  if (peopleWouldOffer(s, st, nation)) {
+    if (p.human) {
+      const d = addDemand(s, { kind: 'treaty', nation, colonyId: c.id, settlementId: st.id, braveId: b.id, amount: 0, treaty: 'people-trade' });
+      b.task = { kind: 'wait', demandId: d.id, turns: nativeRulesOf(s).demandWait };
+      track(nation, 'natives:people treaty offered');
+      message(s, `${aBrave(tribe)} at ${c.name} brings an offer from the ${tribe}: ${peopleTreatyText('people-trade')}.`, nation, c);
+      return;
+    }
+    track(nation, 'natives:people treaty offered');
+    answerPeopleOffer(s, nation, st.tribe, 'people-trade', aiAcceptsPeopleOffer(s, nation, st.tribe));
+  }
   // Trade: the brave buys goods the tribe wants, then offers the settlement's own goods.
   for (const g of peopleOf(s, st.tribe).wants) {
     if (NOT_FOR_SALE.has(g) || c.goods[g] < 50) continue;
     const amount = Math.min(100, Math.floor(c.goods[g] / 2));
-    const gold = nativeOffer(s, st, g, amount);
+    const gold = nativeOffer(s, st, g, amount, nation);
     if (gold < 10) continue;
     c.goods[g] -= amount;
     st.gold -= gold;
@@ -574,6 +591,7 @@ export function resolveDemand(s: GameState, d: NativeDemand, accept: boolean): s
   if (b) delete b.task;
   if (!st || !c || c.owner !== d.nation) return 'The natives have gone.';
   const p = player(s, d.nation);
+  if (d.kind === 'treaty') return answerPeopleOffer(s, d.nation, st.tribe, d.treaty ?? 'people-trade', accept);
   if (d.kind === 'offer') {
     if (!accept) return `You decline the ${tribe} offer.`;
     const price = d.price ?? 0;

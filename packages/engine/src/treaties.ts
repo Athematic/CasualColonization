@@ -112,9 +112,35 @@ export function addTreaty(s: GameState, kind: TreatyKind, parties: readonly (Nat
   return t;
 }
 
-/** Ends a treaty now. */
-export function endTreaty(s: GameState, t: Treaty, why: TreatyEnd['why'], by?: NationId): void {
-  t.end = by ? { turn: s.turn, why, by } : { turn: s.turn, why };
+/** The treaty of this kind in force between a nation and a people, if any. */
+export function peopleTreatyBetween(s: GameState, kind: TreatyKind, nation: NationId, people: TribeId): Treaty | undefined {
+  const list = s.treaties;
+  if (!list) return undefined;
+  for (const t of list) if (!t.end && t.kind === kind && bound(t, nation) && boundPeople(t, people)) return t;
+  return undefined;
+}
+
+/** The treaties in force between a nation and a people, in the order made. */
+export function treatiesWithPeople(s: GameState, nation: NationId, people: TribeId): Treaty[] {
+  const list = s.treaties;
+  if (!list) return [];
+  return list.filter((t) => !t.end && bound(t, nation) && boundPeople(t, people));
+}
+
+/**
+ * Ends a treaty now. `by` is the party that ended it: a bare id is a nation (saved as the bare id,
+ * as treaties between nations always were), a people is given as a party.
+ */
+export function endTreaty(s: GameState, t: Treaty, why: TreatyEnd['why'], by?: NationId | TreatyParty): void {
+  const who = by === undefined ? undefined : typeof by === 'string' ? by : partyIsNation(by) ? by.id : { ...by };
+  t.end = who ? { turn: s.turn, why, by: who } : { turn: s.turn, why };
+}
+
+/** The party that ended a treaty, if one did. */
+export function treatyEndedBy(t: Treaty): TreatyParty | undefined {
+  const by = t.end?.by;
+  if (by === undefined) return undefined;
+  return typeof by === 'string' ? nationParty(by) : by;
 }
 
 const TREATY_NAME: Record<TreatyKind, string> = {
@@ -139,6 +165,7 @@ export function describeTreaty(s: GameState, t: Treaty): string {
   const names = t.parties.map((p) => partyName(s, p));
   const who = names.length > 2 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names.join(' and ');
   if (!t.end) return `${who}, since ${formatDate(t.start, cal)}`;
-  const how = t.end.why === 'war' ? 'ended by war' : t.end.why === 'lapsed' ? 'lapsed' : t.end.why === 'left' ? 'left' : t.end.why === 'concluded' ? 'its war over' : 'cancelled';
-  return `${who}, ${formatDate(t.start, cal)} to ${formatDate(t.end.turn, cal)}, ${how}${t.end.by && t.end.why !== 'lapsed' ? ` by ${nationOf(s, t.end.by).name}` : ''}`;
+  const how = t.end.why === 'war' ? 'ended by war' : t.end.why === 'lapsed' ? 'lapsed' : t.end.why === 'left' ? 'left' : t.end.why === 'concluded' ? 'its war over' : t.end.why === 'broken' ? 'broken' : 'cancelled';
+  const by = treatyEndedBy(t);
+  return `${who}, ${formatDate(t.start, cal)} to ${formatDate(t.end.turn, cal)}, ${how}${by && t.end.why !== 'lapsed' ? ` by ${partyName(s, by)}` : ''}`;
 }
