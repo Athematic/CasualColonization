@@ -42,6 +42,8 @@ Each beta gets design notes first.
 
 Beta 1, cooperation between Europeans, is built (design in [design/cooperation.md](design/cooperation.md)); its steps are in [SHIPPED.md](SHIPPED.md#beta-1-cooperation-between-europeans).
 
+Beta 2, native peoples as partners: design in [design/native-partners.md](design/native-partners.md) (status: `design`; decisions N1–N14 open for Simon).
+
 ## Scenarios (content)
 
 Scenario content, built on the 0.9 framework.
