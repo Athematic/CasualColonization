@@ -113,6 +113,10 @@ export interface RelationsTally {
   peopleTreatiesEnded: number;
   peopleBreaches: number;
   peopleTreatiesAtEnd: number;
+  /** Land use treaties (leases, step 2): made, lapsed for unpaid rent, and the rent paid in gold. */
+  leases: number;
+  leasesLapsed: number;
+  rent: number;
 }
 
 const TALLY: Record<string, keyof RelationsTally> = {
@@ -146,13 +150,16 @@ const TALLY: Record<string, keyof RelationsTally> = {
   'natives:people treaty made': 'peopleTreaties',
   'natives:people treaty ended': 'peopleTreatiesEnded',
   'natives:faith broken': 'peopleBreaches',
+  'natives:lease made': 'leases',
+  'natives:lease lapsed': 'leasesLapsed',
+  'natives:rent paid': 'rent',
 };
 
 /** Tally keys that add up the amount reported, not the number of reports. */
-const AMOUNTS = new Set<keyof RelationsTally>(['foreignStopSales', 'partnerPortSales', 'refAdded', 'shares', 'dividends', 'sharedBells']);
+const AMOUNTS = new Set<keyof RelationsTally>(['foreignStopSales', 'partnerPortSales', 'refAdded', 'shares', 'dividends', 'sharedBells', 'rent']);
 
 function emptyTally(): RelationsTally {
-  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0, alliances: 0, alliancesLeft: 0, alliesAtEnd: 0, allyWars: 0, companies: 0, shares: 0, dividends: 0, expeditions: 0, sharedBells: 0, confederations: 0, peopleTreaties: 0, peopleTreatiesEnded: 0, peopleBreaches: 0, peopleTreatiesAtEnd: 0 };
+  return { proposals: 0, agreements: 0, favoured: 0, favouredAtEnd: 0, cancelled: 0, volume: 0, foreignStopSales: 0, partnerPortSales: 0, triangles: 0, wars: 0, warsOnPartners: 0, taxRefusals: 0, demands: 0, demandsPaid: 0, demandsRefused: 0, royalWars: 0, refAdded: 0, alliances: 0, alliancesLeft: 0, alliesAtEnd: 0, allyWars: 0, companies: 0, shares: 0, dividends: 0, expeditions: 0, sharedBells: 0, confederations: 0, peopleTreaties: 0, peopleTreatiesEnded: 0, peopleBreaches: 0, peopleTreatiesAtEnd: 0, leases: 0, leasesLapsed: 0, rent: 0 };
 }
 
 /** What one event did to one nation over a game: times it fired, the choices taken (by index) and the computer players' gold value of the outcomes. */
@@ -475,7 +482,11 @@ export function peopleTreatyLine(entries: ArenaEntry[]): string {
   const withTreaty = [...byGame.values()].filter((g) => g.some((e) => (e.relations?.peopleTreaties ?? 0) > 0)).length;
   const per = (n: number) => Math.round((n / games) * 10) / 10;
   const levels = [...new Set(entries.map((e) => e.level))].map((l) => `${l} ${per(sum('peopleTreaties', entries.filter((e) => e.level === l)))}`).join(', ');
-  return `Treaties with peoples: ${withTreaty} of ${games} games with one, ${per(made)} made per game (${levels}), ${per(sum('peopleTreatiesEnded'))} ended and ${per(sum('peopleBreaches'))} breaches of faith per game, ${per(sum('peopleTreatiesAtEnd'))} in force at the end. `;
+  const leases = sum('leases');
+  const withLease = [...byGame.values()].filter((g) => g.some((e) => (e.relations?.leases ?? 0) > 0)).length;
+  const leaseLevels = [...new Set(entries.map((e) => e.level))].map((l) => `${l} ${per(sum('leases', entries.filter((e) => e.level === l)))}`).join(', ');
+  const land = leases ? `Land use: ${withLease} of ${games} games with a lease, ${per(leases)} made per game (${leaseLevels}), ${per(sum('leasesLapsed'))} lapsed for want of rent, ${Math.round(sum('rent') / games)} gold of rent per game. ` : '';
+  return `Treaties with peoples: ${withTreaty} of ${games} games with one, ${per(made)} made per game (${levels}), ${per(sum('peopleTreatiesEnded'))} ended and ${per(sum('peopleBreaches'))} breaches of faith per game, ${per(sum('peopleTreatiesAtEnd'))} in force at the end. ${land}`;
 }
 
 /**
