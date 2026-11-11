@@ -7,7 +7,7 @@ import { gridOf } from '../grid.js';
 import { nativeUnitPrice, settlementForSale } from '../braves.js';
 import { sellPrice } from '../europe.js';
 import { buyFromSettlement, incitePrice, inciteTribe, peopleRelationOf, tensionOf } from '../natives.js';
-import { hasPeopleTrade, peopleRefusal, peopleTreatyOn, peopleTreatyProblem, proposePeopleTreaty } from '../peopletreaties.js';
+import { hasLandUse, hasPeopleTrade, leasableTiles, leaseRent, peopleRefusal, peopleTreatyOn, peopleTreatyProblem, proposePeopleTreaty } from '../peopletreaties.js';
 import { cooperationOf, LEVEL_COOPERATION } from '../alliances.js';
 import { peoplePairRandom } from '../relations.js';
 import type { TribeId } from '../rules/nations.js';
@@ -98,10 +98,37 @@ export function peopleAffairs(s: GameState, p: Player): void {
   for (const t of s.tribes) {
     const people: TribeId = t.id;
     const rel = peopleRelationOf(s, p.id, people);
-    if (!rel || hasPeopleTrade(s, p.id, people)) continue;
+    if (!rel) continue;
+    if (hasPeopleTrade(s, p.id, people)) {
+      leaseLand(s, p, people);
+      continue;
+    }
     if (combative && rel.volume < COMBATIVE_TREATY_VOLUME) continue;
     if (peopleTreatyProblem(s, p.id, people) || peopleRefusal(s, p.id, people)) continue;
     if (peoplePairRandom(s, p.id, people, `${p.id} propose trade ${s.turn}`) >= chance) continue;
     safely(() => proposePeopleTreaty(s, p.id, people));
   }
+}
+
+/** Gold a computer nation keeps beyond a few years' rent before it leases land (N5). */
+export const LEASE_RESERVE = 300;
+/** Years of rent a computer nation wants in hand, beyond LEASE_RESERVE, before it leases land. */
+export const LEASE_YEARS_IN_HAND = 3;
+
+/**
+ * Proposes land use (a lease, N5, N11) to a trade partner whose land lies beside the nation's
+ * colonies: Creative and Competent only (`LEVEL_COOPERATION.land`; Combative takes land, Naive never
+ * proposes), with a few years' rent in hand, at the scenario's `proposeLandUse` times the level's
+ * share, drawn from the pair's own stream. Its colonies then work the leased tiles where the job
+ * search values them (the tiles are open to them, colony.ts `colonyOccupancy`).
+ */
+function leaseLand(s: GameState, p: Player, people: TribeId): void {
+  if (!peopleTreatyOn(s, 'land-use') || hasLandUse(s, p.id, people)) return;
+  const chance = cooperationOf(s).proposeLandUse * LEVEL_COOPERATION[p.ai ?? 'naive'].land;
+  if (chance <= 0) return;
+  if (peopleTreatyProblem(s, p.id, people, 'land-use') || peopleRefusal(s, p.id, people)) return;
+  const tiles = leasableTiles(s, p.id, people);
+  if (p.gold < leaseRent(s, p.id, tiles) * tiles.length * LEASE_YEARS_IN_HAND + LEASE_RESERVE) return;
+  if (peoplePairRandom(s, p.id, people, `${p.id} propose land ${s.turn}`) >= chance) return;
+  safely(() => proposePeopleTreaty(s, p.id, people, 'land-use'));
 }

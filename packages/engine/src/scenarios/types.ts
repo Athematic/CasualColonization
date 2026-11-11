@@ -172,7 +172,8 @@ export interface Mechanics {
   confederation?: boolean;
   /**
    * Treaties between a nation and a native people (peopletreaties.ts, docs/design/native-partners.md):
-   * the kinds in play. Absent or empty means none (Beta 2 step 1 builds `people-trade`).
+   * the kinds in play. Absent or empty means none (Beta 2 step 1 builds `people-trade`, step 2
+   * `land-use`).
    */
   peopleTreaties?: PeopleTreatyKind[];
 }
@@ -228,6 +229,24 @@ export interface PeopleTradeRules {
   tensionFall: number;
 }
 
+/**
+ * What a land use treaty with a people (`land-use`, a lease, N5) needs and does. It needs a trade
+ * treaty with the people first (the ladder, N2).
+ */
+export interface PeopleLandUseRules {
+  /** Hidden: years of good relations the pair needs, drawn per pair (on its own, apart from the trade treaty's). */
+  years: YearsAround;
+  /**
+   * The yearly rent for each tile, as a share of the tile's price when the lease is made (0.05: a
+   * twentieth of what buying it would cost, at least 1 gold). Set then, kept while the lease holds.
+   */
+  rent: number;
+  /** What a settlement still gathers from a leased tile, against the usual (0.5: half). */
+  gather: number;
+  /** How hard a colony with leased land next to it presses on the people's settlements, against the usual (0.5: half). */
+  pressure: number;
+}
+
 /** How a people's temperament (`peoples.overrides[id].temperament`) shifts its answers and offers. */
 export interface TemperamentRules {
   /** Times the chance to accept a proposal. */
@@ -245,6 +264,7 @@ export interface TemperamentRules {
  */
 export interface PeopleTreatyRules {
   trade: PeopleTradeRules;
+  landUse: PeopleLandUseRules;
   /** Chance that a people accepts a treaty it is free to accept (unlocked, nothing against it). */
   accept: number;
   /** Chance, on a brave's trade visit to a nation's colony, that its people offers an unlocked treaty itself. */
@@ -262,8 +282,9 @@ export interface PeopleTreatyRules {
 }
 
 /** A scenario's changes to PEOPLE_TREATY_RULES: any field, and any part of the tables. */
-export type PeopleTreatyRulesOverride = Partial<Omit<PeopleTreatyRules, 'trade' | 'temperaments'>> & {
+export type PeopleTreatyRulesOverride = Partial<Omit<PeopleTreatyRules, 'trade' | 'landUse' | 'temperaments'>> & {
   trade?: Partial<PeopleTradeRules>;
+  landUse?: Partial<PeopleLandUseRules>;
   temperaments?: Partial<Record<Temperament, Partial<TemperamentRules>>>;
 };
 
@@ -305,6 +326,12 @@ export interface Cooperation {
   proposePeopleTrade: number;
   /** Chance that a nation accepts a treaty a people offers it through a visiting brave. */
   acceptPeopleOffer: number;
+  /**
+   * Chance per review that a nation proposes a land use treaty (a lease, N5) to a trade partner
+   * whose land next to its colonies it would work (N11: Creative and Competent; Combative takes
+   * land instead, Naive never proposes).
+   */
+  proposeLandUse: number;
 }
 
 /** One way the game can end: a registered victory kind (victory.ts) and its data. */

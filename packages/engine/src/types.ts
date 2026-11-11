@@ -87,6 +87,12 @@ export interface Tile {
   d?: boolean;
   /** European nation that bought or took this land from the natives. */
   claim?: NationId;
+  /**
+   * European nation that leases this tile of a people's land while a land use treaty holds (Beta 2,
+   * native-partners.md N5, peopletreaties.ts): its colonies next to the tile may work it, and the
+   * land stays the people's (`nativeLandOwner` still names its settlement). Absent when unleased.
+   */
+  use?: NationId;
 }
 
 export interface GameMap {
@@ -552,7 +558,20 @@ export interface Treaty {
 /**
  * The terms of a treaty, by kind. A union, so other kinds of treaty can bring their own terms.
  */
-export type TreatyTerms = AllianceTerms;
+export type TreatyTerms = AllianceTerms | LandUseTerms;
+
+/**
+ * What a land use treaty with a people binds the nation to (Beta 2, native-partners.md N5,
+ * peopletreaties.ts): a yearly rent in gold for each tile it leases, set when the lease is made.
+ * The tiles themselves carry the lease (`Tile.use`).
+ */
+export interface LandUseTerms {
+  kind: 'land-use';
+  /** Gold a year for each tile leased, set when the lease was made. */
+  rent: number;
+  /** Turn the next year's rent is due (the first year's is paid when the lease is made). */
+  due: number;
+}
 
 /** What an alliance binds its members to (alliances.ts reads them; ALLIANCE_TERMS are the standard ones). */
 export interface AllianceTerms {

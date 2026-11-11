@@ -833,6 +833,8 @@ function acquireLand(s: GameState, p: Player, c: Colony, prof: AiProfile): void 
     const st = nativeLandOwner(s, n.x, n.y);
     if (!st) continue;
     const tile = tileAt(s, n.x, n.y)!;
+    // Land leased to the nation is worked already (N5): no need to buy it.
+    if (tile.use === p.id) continue;
     const def = tile.f ? 'forest' : tile.t;
     if (def === 'arctic' || def === 'mountains') continue;
     if (prof.land === 'take' && tensionOf(st, p.id) < 600) {

@@ -40,7 +40,7 @@ import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from '.
 import { difficultyOf, goodsOf, nativeProduceOf, nativeRulesOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
 import { removeUnit, colonyList, unitList } from './unitindex.js';
-import { aiAcceptsPeopleOffer, answerPeopleOffer, notePeopleContact, peopleBraveTradeFactor, peopleBuyFactor, peopleGatherFactor, peopleHostile, peopleTreatyText, peopleWouldOffer } from './peopletreaties.js';
+import { aiAcceptsPeopleOffer, answerPeopleOffer, notePeopleContact, peopleBraveTradeFactor, peopleBuyFactor, peopleGatherFactor, peopleHostile, peopleTreatyRules, peopleTreatyText, peopleWouldOffer } from './peopletreaties.js';
 
 /** The kind of a settlement in its game's scenario (camp, village, city…), with its numbers. */
 export function settlementKind(s: GameState, st: Settlement): SettlementKindDef {
@@ -117,6 +117,9 @@ export function settlementProduce(s: GameState, st: Settlement): Partial<Record<
   const kind = settlementKind(s, st);
   // A people that trades by treaty gathers more for sale (N4).
   const more = peopleGatherFactor(s, st.tribe);
+  // A tile leased to a nation still gives its people something (N5); read only where a tile is leased.
+  let leased = 1;
+  if (s.treaties) leased = peopleTreatyRules(s).landUse.gather;
   const sums: Partial<Record<GoodId, number>> = {};
   const land = gridOf(s).withinOffsets(st.x, st.y, 1);
   for (let k = 0; k < land.length; k += 2) {
@@ -126,7 +129,7 @@ export function settlementProduce(s: GameState, st: Settlement): Partial<Record<
     const yields = tile.f && def.forest ? def.forest.yields : def.yields;
     for (const g of nativeProduceOf(s)) {
       const y = yields[g] ?? 0;
-      if (y > 0) sums[g] = (sums[g] ?? 0) + y * (kind.gather?.[g] ?? 1);
+      if (y > 0) sums[g] = (sums[g] ?? 0) + y * (kind.gather?.[g] ?? 1) * (tile.use ? leased : 1);
     }
   }
   const out: Partial<Record<GoodId, number>> = {};

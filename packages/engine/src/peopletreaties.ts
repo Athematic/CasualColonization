@@ -14,6 +14,12 @@
  *   notice (`NativeDemand` of kind 'treaty') for a person, answered at once by a computer player.
  * - **Effects (N4):** better prices both ways, more goods gathered, more trade visits, faster calm,
  *   and trade routes may stop at a partner's settlement (routes.ts). All numbers scenario data.
+ * - **Land use (N5, step 2):** a lease. With a trade treaty, a nation may lease the people's land
+ *   next to its colonies (`Tile.use`) for a yearly rent per tile set when the lease is made
+ *   (`LandUseTerms`); its colonies work the tiles while the land stays the people's, whose
+ *   settlements still gather from them at half rate, and those colonies press half as hard on the
+ *   people. The rent is paid each year; a nation that cannot pay loses the lease (it lapses, no
+ *   breach). Buying a leased tile stays possible; taking one breaks faith.
  * - **Breaking faith (N8):** taking a partner's land, attacking it or inciting it ends every
  *   treaty with that people, raises tension across it, and sets waiting and hostility. A people
  *   ends its treaties itself when one of its settlements turns angry, or with war.
@@ -24,8 +30,9 @@
 import { fail } from './errors.js';
 import { hasSubmitted } from './braves.js';
 import { noteHistory } from './history.js';
-import { addTension, goodRelations, peopleRelation, peopleRelationOf, peopleThreshold, settlementName, tensionOf } from './natives.js';
-import { message, player, unitName, unitPosition } from './queries.js';
+import { bestJob } from './colony.js';
+import { addTension, goodRelations, landPrice, nativeLandClosedTo, nativeLandOwner, peopleRelation, peopleRelationOf, peopleThreshold, settlementName, tensionOf } from './natives.js';
+import { message, player, tileAt, tileWorkedBy, unitName, unitPosition, workArea } from './queries.js';
 import { peoplePairRandom } from './relations.js';
 import { isCompanyIdent, TRIBES, type NationId, type TribeId } from './rules/nations.js';
 import { cooperationOf, LEVEL_COOPERATION } from './alliances.js';
@@ -33,8 +40,8 @@ import { calendarOf, mechanicsOf, nationOf, nativeRulesOf, peopleOf, scenarioOf,
 import type { PeopleTreatyRules, Scenario, TemperamentRules, YearsAround } from './scenarios/types.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, nationParty, peopleParty, peopleTreatyBetween, treatiesWithPeople, treatyNations, treatyPeoples } from './treaties.js';
-import type { GameState, PeopleTreatyKind, Settlement, Treaty, TreatyEnd } from './types.js';
-import { unitList } from './unitindex.js';
+import type { Colony, GameState, LandUseTerms, PeopleTreatyKind, Settlement, Treaty, TreatyEnd } from './types.js';
+import { colonyList, setUnitLoc, unitList } from './unitindex.js';
 
 /** The engine's rules for treaties with peoples; a scenario's `peopleTreaties` is merged over them. */
 export const PEOPLE_TREATY_RULES: PeopleTreatyRules = {
@@ -47,6 +54,13 @@ export const PEOPLE_TREATY_RULES: PeopleTreatyRules = {
     gather: 1.25,
     braveTrade: 2,
     tensionFall: 2,
+  },
+  landUse: {
+    // Some years more than the trade treaty's, drawn on their own.
+    years: { base: 12, spread: 4 },
+    rent: 0.05,
+    gather: 0.5,
+    pressure: 0.5,
   },
   accept: 0.8,
   offer: 0.3,
@@ -76,7 +90,7 @@ export function peopleTreatyRules(s: GameState): PeopleTreatyRules {
     else {
       const temperaments = { ...PEOPLE_TREATY_RULES.temperaments };
       for (const k of Object.keys(over.temperaments ?? {}) as (keyof typeof temperaments)[]) temperaments[k] = { ...temperaments[k], ...over.temperaments![k] };
-      rules = { ...PEOPLE_TREATY_RULES, ...over, trade: { ...PEOPLE_TREATY_RULES.trade, ...over.trade }, temperaments };
+      rules = { ...PEOPLE_TREATY_RULES, ...over, trade: { ...PEOPLE_TREATY_RULES.trade, ...over.trade }, landUse: { ...PEOPLE_TREATY_RULES.landUse, ...over.landUse }, temperaments };
     }
     RULES.set(scenario, rules);
   }
@@ -242,7 +256,7 @@ function pendingOffer(s: GameState, nation: NationId, people: TribeId): boolean 
 export function peopleTreatyProblem(s: GameState, nation: NationId, people: TribeId, kind: PeopleTreatyKind = 'people-trade'): string | null {
   if (!peopleTreatiesOn(s)) return 'There are no treaties with native peoples in this scenario.';
   if (!peopleTreatyOn(s, kind)) return `There is no ${KIND_TEXT[kind].replace(/^an? /, '')} with native peoples in this scenario.`;
-  if (kind !== 'people-trade') return `${KIND_TEXT[kind][0].toUpperCase()}${KIND_TEXT[kind].slice(1)} is not made yet.`;
+  if (kind !== 'people-trade' && kind !== 'land-use') return `${KIND_TEXT[kind][0].toUpperCase()}${KIND_TEXT[kind].slice(1)} is not made yet.`;
   if (!treatyNation(nation) || !s.players.some((p) => p.id === nation)) return 'Treaties with native peoples are made by European nations.';
   const name = peopleName(people);
   const tribe = s.tribes.find((t) => t.id === people);
@@ -253,6 +267,7 @@ export function peopleTreatyProblem(s: GameState, nation: NationId, people: Trib
   if (peopleTreatyBetween(s, kind, nation, people)) return `You already have ${KIND_TEXT[kind]} with the ${name}.`;
   if (pendingOffer(s, nation, people)) return `The ${name} are waiting for your answer to their own offer.`;
   if (peopleWaiting(s, nation, people) || peopleHostile(s, nation, people)) return `The ${name} do not trust you again yet.`;
+  if (kind === 'land-use') return landUseProblem(s, nation, people);
   if (!peopleTradeUnlocked(s, nation, people)) return `The ${name} do not know you well enough yet: it takes more years of good relations${peopleTreatyRules(s).trade.volume.max > 0 ? ' and more trade with them' : ''}.`;
   return null;
 }
@@ -286,6 +301,7 @@ export function proposePeopleTreaty(s: GameState, nation: NationId, people: Trib
 
 /** Makes a treaty between a nation and a people, in force from now. */
 export function makePeopleTreaty(s: GameState, nation: NationId, people: TribeId, kind: PeopleTreatyKind = 'people-trade'): string {
+  if (kind === 'land-use') return makeLease(s, nation, people);
   if (!peopleTreatyBetween(s, kind, nation, people)) addTreaty(s, kind, [nationParty(nation), peopleParty(people)]);
   track(nation, 'natives:people treaty made');
   const name = peopleName(people);
@@ -340,6 +356,235 @@ export function answerPeopleOffer(s: GameState, nation: NationId, people: TribeI
 }
 
 // ---------------------------------------------------------------------------
+// Land use: a lease (N5)
+
+/** The land use treaty in force between a nation and a people, if any. */
+export function landUseTreaty(s: GameState, nation: NationId, people: TribeId): Treaty | undefined {
+  return s.treaties ? peopleTreatyBetween(s, 'land-use', nation, people) : undefined;
+}
+
+/** Whether a nation leases land from a people. */
+export function hasLandUse(s: GameState, nation: NationId, people: TribeId): boolean {
+  return !!landUseTreaty(s, nation, people);
+}
+
+/** Whether any land use treaty is in force in the game (a quick check for hot paths). */
+export function anyLandUse(s: GameState): boolean {
+  const list = s.treaties;
+  if (!list) return false;
+  for (const t of list) if (!t.end && t.kind === 'land-use') return true;
+  return false;
+}
+
+/** The terms of a land use treaty: the rent per tile and when the next is due. */
+export function leaseTerms(t: Treaty): LandUseTerms | undefined {
+  return t.terms?.kind === 'land-use' ? t.terms : undefined;
+}
+
+/** The hidden years of good relations a nation needs with a people before it may lease its land (drawn, never stored). */
+export function landUseThreshold(s: GameState, nation: NationId, people: TribeId): number {
+  const years = peopleThreshold(s, nation, people, 'land years', peopleTreatyRules(s).landUse.years);
+  return Math.round(years * temperamentOf(s, people).thresholds);
+}
+
+/** Whether a nation's years of good relations with a people reach the hidden threshold for land use. */
+export function landUseUnlocked(s: GameState, nation: NationId, people: TribeId): boolean {
+  return !!peopleRelationOf(s, nation, people) && yearsOfGood(s, nation, people) >= landUseThreshold(s, nation, people);
+}
+
+/** A tile of a people's land, with the settlement whose land it is. */
+export interface LandTile {
+  x: number;
+  y: number;
+  st: Settlement;
+}
+
+/**
+ * The tiles of a people's land a nation's colonies could lease: next to one of its colonies (its
+ * work area), the people's (`nativeLandOwner`: not bought or taken), and not leased to another
+ * nation. In the order of the colonies and their work areas, each tile once.
+ */
+export function leasableTiles(s: GameState, nation: NationId, people: TribeId): LandTile[] {
+  const out: LandTile[] = [];
+  const seen = new Set<number>();
+  const w = s.map.width;
+  for (const c of colonyList(s)) {
+    if (c.owner !== nation) continue;
+    for (const p of workArea(s, c.x, c.y)) {
+      const i = p.y * w + p.x;
+      if (seen.has(i)) continue;
+      seen.add(i);
+      const st = nativeLandOwner(s, p.x, p.y);
+      if (!st || st.tribe !== people) continue;
+      const use = tileAt(s, p.x, p.y)!.use;
+      if (use && use !== nation) continue;
+      out.push({ x: p.x, y: p.y, st });
+    }
+  }
+  return out;
+}
+
+/** The tiles a nation leases from a people now (`Tile.use`, beside its colonies), with the settlement whose land each is. */
+export function leasedTiles(s: GameState, nation: NationId, people: TribeId): LandTile[] {
+  if (!hasLandUse(s, nation, people)) return [];
+  return leasableTiles(s, nation, people).filter((p) => tileAt(s, p.x, p.y)!.use === nation);
+}
+
+/**
+ * The yearly rent per tile a people would ask of a nation for these tiles now: the scenario's
+ * `landUse.rent` share of their average price (`landPrice`: the settlement's kind, a capital,
+ * tension, Peter Minuit), at least 1 gold.
+ */
+export function leaseRent(s: GameState, nation: NationId, tiles: readonly { x: number; y: number }[]): number {
+  if (!tiles.length) return 0;
+  let sum = 0;
+  for (const p of tiles) sum += landPrice(s, nation, p.x, p.y);
+  return Math.max(1, Math.round((peopleTreatyRules(s).landUse.rent * sum) / tiles.length));
+}
+
+/** What stands in the way of a lease, beyond the checks every treaty with a people shares (`peopleTreatyProblem`). */
+function landUseProblem(s: GameState, nation: NationId, people: TribeId): string | null {
+  const name = peopleName(people);
+  if (!hasPeopleTrade(s, nation, people)) return `Land use needs a trade treaty with the ${name} first.`;
+  if (!landUseUnlocked(s, nation, people)) return `The ${name} do not know you well enough to lend you land yet: it takes more years of good relations.`;
+  const tiles = leasableTiles(s, nation, people);
+  if (!tiles.length) return `None of the land of the ${name} lies beside your colonies.`;
+  const first = leaseRent(s, nation, tiles) * tiles.length;
+  if (player(s, nation).gold < first) return `The first year's rent for ${tiles.length} ${tiles.length === 1 ? 'tile' : 'tiles'} is ${first} gold.`;
+  return null;
+}
+
+/** Pays a year's rent to the settlements whose land the tiles are, each tile's to its own. Returns the gold paid. */
+function payRent(s: GameState, nation: NationId, tiles: readonly LandTile[], rent: number): number {
+  const total = rent * tiles.length;
+  player(s, nation).gold -= total;
+  for (const p of tiles) p.st.gold += rent;
+  if (total > 0) track(nation, 'natives:rent paid', total);
+  return total;
+}
+
+/** Makes a lease: the rent per tile is set now and the first year's paid, and the people's land beside the nation's colonies is leased. */
+function makeLease(s: GameState, nation: NationId, people: TribeId): string {
+  const tiles = leasableTiles(s, nation, people);
+  const rent = leaseRent(s, nation, tiles);
+  const paid = payRent(s, nation, tiles, rent);
+  addTreaty(s, 'land-use', [nationParty(nation), peopleParty(people)], { kind: 'land-use', rent, due: turnAfterYears(s.turn, 1, calendarOf(s)) });
+  for (const p of tiles) tileAt(s, p.x, p.y)!.use = nation;
+  track(nation, 'natives:people treaty made');
+  track(nation, 'natives:lease made');
+  const name = peopleName(people);
+  const n = `${tiles.length} ${tiles.length === 1 ? 'tile' : 'tiles'}`;
+  const text = `${nationOf(s, nation).name} and the ${name} agree on land use: your colonies may work ${n} of their land beside them for ${rent} gold a tile a year (${paid} gold paid for the first year). The land stays theirs.`;
+  message(s, text, nation);
+  noteHistory(s, 'tribe', [nation], `${nationOf(s, nation).name} and the ${name} make ${KIND_TEXT['land-use']}.`);
+  return text;
+}
+
+/**
+ * Moves the workers off tiles their colony may no longer work (a lease ended or shrank): each takes
+ * the best job left in its colony, or waits at the colony's gate if there is none.
+ */
+function evictWorkers(s: GameState, tiles: readonly { x: number; y: number }[]): void {
+  for (const p of tiles) {
+    const u = tileWorkedBy(s, p.x, p.y);
+    if (!u || u.loc.kind !== 'colony') continue;
+    const owner = nativeLandClosedTo(s, u.owner, p.x, p.y);
+    if (!owner) continue;
+    const colony = s.colonies[u.loc.colonyId];
+    // The tile is closed to the colony now, so the best job is elsewhere.
+    const job = bestJob(s, colony, u);
+    if (job) setUnitLoc(s, u, { kind: 'colony', colonyId: colony.id, job });
+    else {
+      setUnitLoc(s, u, { kind: 'map', x: colony.x, y: colony.y });
+      u.moves = 0;
+    }
+    message(s, `${unitName(u)} in ${colony.name} may no longer work the land of the ${peopleName(owner.tribe)} and finds other work.`, u.owner, colony);
+  }
+}
+
+/**
+ * The tiles a nation's lease with a people marks: leased to it, and the people's land or nobody's
+ * (bought since, or its settlement gone). Scans the map: only when a lease ends or on rent day.
+ */
+function tilesUsedBy(s: GameState, nation: NationId, people: TribeId): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  const { width, tiles } = s.map;
+  for (let i = 0; i < tiles.length; i++) {
+    if (tiles[i].use !== nation) continue;
+    const x = i % width;
+    const y = (i - x) / width;
+    const st = nativeLandOwner(s, x, y);
+    if (!st || st.tribe === people) out.push({ x, y });
+  }
+  return out;
+}
+
+/** A lease ended: its tiles are the people's alone again, and whoever worked them finds other work. */
+function releaseLease(s: GameState, nation: NationId, people: TribeId): void {
+  const tiles = tilesUsedBy(s, nation, people);
+  for (const p of tiles) delete tileAt(s, p.x, p.y)!.use;
+  evictWorkers(s, tiles);
+}
+
+/**
+ * Rent day, once a year from the making: the lease covers the people's land beside the nation's
+ * colonies now (tiles beside a new colony join, tiles no longer beside one leave), and the rent is
+ * paid for each tile at the rate set when the lease was made. A nation that cannot pay loses the
+ * lease: the people ends it (it lapses), with no breach of faith.
+ */
+function rentDay(s: GameState, t: Treaty, terms: LandUseTerms, nation: NationId, people: TribeId): void {
+  const name = peopleName(people);
+  const tiles = leasableTiles(s, nation, people);
+  const due = terms.rent * tiles.length;
+  if (player(s, nation).gold < due) {
+    endTreaty(s, t, 'lapsed', peopleParty(people));
+    track(nation, 'natives:people treaty ended');
+    track(nation, 'natives:lease lapsed');
+    releaseLease(s, nation, people);
+    message(s, `${nationOf(s, nation).name} cannot pay the ${due} gold rent for the land of the ${name}: the lease has lapsed, and the land is theirs alone again.`, nation);
+    noteHistory(s, 'cancel', [nation], `The ${name} take back the land they lent ${nationOf(s, nation).name}, its rent unpaid.`, { secret: true });
+    return;
+  }
+  const keep = new Set(tiles.map((p) => p.y * s.map.width + p.x));
+  const gone = tilesUsedBy(s, nation, people).filter((p) => !keep.has(p.y * s.map.width + p.x));
+  for (const p of gone) delete tileAt(s, p.x, p.y)!.use;
+  evictWorkers(s, gone);
+  for (const p of tiles) tileAt(s, p.x, p.y)!.use = nation;
+  payRent(s, nation, tiles, terms.rent);
+  terms.due = turnAfterYears(terms.due, 1, calendarOf(s));
+}
+
+/** The benefits of a lease, in one line, from the game's numbers. */
+export function landUseBenefits(s: GameState): string {
+  const r = peopleTreatyRules(s).landUse;
+  const gather = r.gather === 0.5 ? 'half as much' : `${Math.round(r.gather * 100)}% as much`;
+  const press = r.pressure === 0.5 ? 'half as hard' : `${Math.round(r.pressure * 100)}% as hard`;
+  return `your colonies may work their land beside them for a yearly rent in gold, set when the lease is made; the land stays theirs, they still gather ${gather} from it, and your colonies beside it press ${press} on them`;
+}
+
+/**
+ * The peoples each colony leases land from beside it (for processNatives: such a colony presses
+ * `landUse.pressure` times as hard on that people's settlements), by index in `colonies`. Empty
+ * while no lease is in force, so the pressure is as before.
+ */
+export function leasedFromBeside(s: GameState, colonies: readonly Colony[]): Map<number, Set<TribeId>> {
+  const out = new Map<number, Set<TribeId>>();
+  if (!anyLandUse(s)) return out;
+  for (let i = 0; i < colonies.length; i++) {
+    const c = colonies[i];
+    for (const p of workArea(s, c.x, c.y)) {
+      if (tileAt(s, p.x, p.y)!.use !== c.owner) continue;
+      const st = nativeLandOwner(s, p.x, p.y);
+      if (!st || !hasLandUse(s, c.owner, st.tribe)) continue;
+      let set = out.get(i);
+      if (!set) out.set(i, (set = new Set()));
+      set.add(st.tribe);
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Ending: breaking faith (N8), and the people's own ending
 
 /** A whole number of years from base − spread to base + spread, from a seeded number in [0, 1). */
@@ -362,6 +607,7 @@ export function breakFaith(s: GameState, nation: NationId, people: TribeId, why:
   for (const t of treaties) {
     endTreaty(s, t, 'broken', nation);
     track(nation, 'natives:people treaty ended');
+    if (t.kind === 'land-use') releaseLease(s, nation, people);
   }
   track(nation, 'natives:faith broken');
   for (const st of settlementsOf(s, people)) addTension(st, nation, rules.breachTension);
@@ -382,6 +628,7 @@ export function breakFaith(s: GameState, nation: NationId, people: TribeId, why:
 function peopleEnds(s: GameState, t: Treaty, nation: NationId, people: TribeId, why: TreatyEnd['why']): void {
   endTreaty(s, t, why, why === 'lapsed' ? undefined : peopleParty(people));
   track(nation, 'natives:people treaty ended');
+  if (t.kind === 'land-use') releaseLease(s, nation, people);
   pruneSettlementStops(s, nation, people);
   const name = peopleName(people);
   const reason = why === 'war' ? 'with the war' : why === 'lapsed' ? 'with their last settlement' : 'in anger';
@@ -412,6 +659,8 @@ export function processPeopleTreaties(s: GameState): void {
     if (!tribe || !settlements.length) peopleEnds(s, t, nation, people, 'lapsed');
     else if (tribe.stance[nation] === 'war') peopleEnds(s, t, nation, people, 'war');
     else if (settlements.some((st) => tensionOf(st, nation) >= angry)) peopleEnds(s, t, nation, people, 'cancelled');
+    else if (t.kind === 'land-use' && !hasPeopleTrade(s, nation, people)) peopleEnds(s, t, nation, people, 'cancelled');
+    else if (t.kind === 'land-use' && t.terms?.kind === 'land-use' && s.turn >= t.terms.due) rentDay(s, t, t.terms, nation, people);
   }
 }
 

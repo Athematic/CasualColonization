@@ -56,7 +56,7 @@ export const ALLIANCE_RULES: AllianceRules = {
  * computer-only tournaments to give an alliance in about one game in four and a concord victory
  * about once in 30–40 games (docs/design/cooperation.md, C11).
  */
-export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace: 0.001, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1, foundMargin: 0.5, sharesMargin: 1500, jointExpedition: 0.05, confederation: 0.6, confederationReadiness: 0.65, proposePeopleTrade: 0.5, acceptPeopleOffer: 0.9 };
+export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace: 0.001, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1, foundMargin: 0.5, sharesMargin: 1500, jointExpedition: 0.05, confederation: 0.6, confederationReadiness: 0.65, proposePeopleTrade: 0.5, acceptPeopleOffer: 0.9, proposeLandUse: 0.5 };
 
 /**
  * Each level's share of COOPERATION's chances: Creative seeks alliances out, Naive never proposes.
@@ -67,12 +67,14 @@ export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace
  * `people` and `peopleAccept` (Beta 2, native-partners.md N11): the level's share of
  * `proposePeopleTrade` and `acceptPeopleOffer`. Creative is the peoples' main partner, Competent
  * proposes too, Combative where the trade pays, Naive only accepts what a people offers.
+ * `land` (step 2): the level's share of `proposeLandUse`: Creative and Competent lease land (Competent
+ * buys it today), Combative takes it instead, Naive never proposes.
  */
-export const LEVEL_COOPERATION: Record<AiLevel, { propose: number; accept: number; together: number; people: number; peopleAccept: number }> = {
-  naive: { propose: 0, accept: 0.5, together: 0, people: 0, peopleAccept: 0.8 },
-  competent: { propose: 0.6, accept: 0.8, together: 0, people: 0.8, peopleAccept: 1 },
-  combative: { propose: 0.5, accept: 0.7, together: 0, people: 0.5, peopleAccept: 0.7 },
-  creative: { propose: 1, accept: 1, together: 1, people: 1, peopleAccept: 1 },
+export const LEVEL_COOPERATION: Record<AiLevel, { propose: number; accept: number; together: number; people: number; peopleAccept: number; land: number }> = {
+  naive: { propose: 0, accept: 0.5, together: 0, people: 0, peopleAccept: 0.8, land: 0 },
+  competent: { propose: 0.6, accept: 0.8, together: 0, people: 0.8, peopleAccept: 1, land: 0.8 },
+  combative: { propose: 0.5, accept: 0.7, together: 0, people: 0.5, peopleAccept: 0.7, land: 0 },
+  creative: { propose: 1, accept: 1, together: 1, people: 1, peopleAccept: 1, land: 1 },
 };
 
 /** The game's cooperation: the scenario's `ai.cooperation` over COOPERATION. */

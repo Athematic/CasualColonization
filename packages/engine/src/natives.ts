@@ -18,7 +18,7 @@ import type { Colony, GameState, PeopleRelation, Settlement, Unit } from './type
 import { calendarOf, difficultyOf, goodsOf, landReachOf, mechanicsOf, nationOf, nativeProduceOf, nativeRulesOf, peopleOf, yearValue } from './scenarios/index.js';
 import { peoplePairRandom } from './relations.js';
 import { removeUnit, colonyList } from './unitindex.js';
-import { breakFaith, noteLandTaken, notePeopleContact, peopleSellFactor, peopleTensionFall, processPeopleTreaties } from './peopletreaties.js';
+import { breakFaith, leasedFromBeside, noteLandTaken, notePeopleContact, peopleSellFactor, peopleTensionFall, peopleTreatyRules, processPeopleTreaties } from './peopletreaties.js';
 
 /**
  * The settlement next to a unit, checked for a visit. A wagon train or ship trading there may
@@ -236,6 +236,15 @@ export function nativeLandOwner(s: GameState, x: number, y: number): Settlement 
   return best;
 }
 
+/**
+ * The settlement whose land this tile is, if that keeps `nation`'s colonies from working it: native
+ * land not leased to the nation (`Tile.use`, a land use treaty, N5). What colonies read.
+ */
+export function nativeLandClosedTo(s: GameState, nation: NationId, x: number, y: number): Settlement | undefined {
+  const st = nativeLandOwner(s, x, y);
+  return st && tileAt(s, x, y)!.use !== nation ? st : undefined;
+}
+
 export function landPrice(s: GameState, nation: NationId, x: number, y: number): number {
   const st = nativeLandOwner(s, x, y);
   if (!st) return 0;
@@ -254,7 +263,10 @@ export function buyLand(s: GameState, nation: NationId, x: number, y: number): s
   if (p.gold < price) fail(`The ${TRIBES[st.tribe].name} ask ${price} gold for this land.`);
   p.gold -= price;
   st.gold += price;
-  tileAt(s, x, y)!.claim = nation;
+  const tile = tileAt(s, x, y)!;
+  tile.claim = nation;
+  // A leased tile bought is the buyer's own: the lease no longer covers it (N5).
+  delete tile.use;
   addTension(st, nation, -20);
   track(nation, 'cmd:buyLand');
   return price ? `You buy the land from the ${TRIBES[st.tribe].name} for ${price} gold.` : `The ${TRIBES[st.tribe].name} let you use the land freely.`;
@@ -263,10 +275,13 @@ export function buyLand(s: GameState, nation: NationId, x: number, y: number): s
 export function takeLand(s: GameState, nation: NationId, x: number, y: number): string {
   const st = nativeLandOwner(s, x, y);
   if (!st) fail('Nobody claims that land.');
+  // The tile is the taker's first, so a colonist working it under a lease stays (N5).
+  const tile = tileAt(s, x, y)!;
+  tile.claim = nation;
+  delete tile.use;
   // Taking a partner's land breaks faith with it (N8); any land taken keeps treaties away for years.
   breakFaith(s, nation, st.tribe, 'land');
   noteLandTaken(s, nation, st.tribe);
-  tileAt(s, x, y)!.claim = nation;
   const anger = difficultyOf(s, player(s, nation)).nativeTension;
   addTension(st, nation, Math.round(250 * anger));
   track(nation, 'cmd:takeLand');
@@ -363,6 +378,9 @@ export function processNatives(s: GameState): void {
   // numbers, so their order does not matter.
   const colonies = colonyList(s);
   const weight = colonies.map((c) => 3 + Math.floor(colonyPopulation(s, c) / 2));
+  // A colony with land leased from a people beside it presses less on that people (N5).
+  const leased = leasedFromBeside(s, colonies);
+  const leasePressure = leased.size ? peopleTreatyRules(s).landUse.pressure : 1;
   const pressureOn = new Map<string, number>();
   for (const st of Object.values(s.settlements)) {
     st.gold += st.capital ? 6 : 3;
@@ -370,7 +388,7 @@ export function processNatives(s: GameState): void {
     pressureOn.clear();
     for (let i = 0; i < colonies.length; i++) {
       const c = colonies[i];
-      if (grid.distance(c.x, c.y, st.x, st.y) <= 3) pressureOn.set(c.owner, (pressureOn.get(c.owner) ?? 0) + weight[i]);
+      if (grid.distance(c.x, c.y, st.x, st.y) <= 3) pressureOn.set(c.owner, (pressureOn.get(c.owner) ?? 0) + (leased.get(i)?.has(st.tribe) ? weight[i] * leasePressure : weight[i]));
     }
     for (const nation of nations) {
       const pressure = pressureOn.get(nation) ?? 0;
