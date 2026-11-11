@@ -363,8 +363,8 @@ export const CARIBBEAN: Scenario = {
     surrender: true,
     alliances: true,
     companies: true,
-    // Treaties with native peoples (peopletreaties.ts, Beta 2): the trade treaty so far.
-    peopleTreaties: ['people-trade', 'land-use'],
+    // Treaties with native peoples (peopletreaties.ts, Beta 2): trade, land use and cultural exchange so far.
+    peopleTreaties: ['people-trade', 'land-use', 'exchange'],
   },
   // A century of trading companies and small powers: alliances need only a trade agreement (no
   // Favoured Nation forms between the computer players here) and half a century of peace, and
