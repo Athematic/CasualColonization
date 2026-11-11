@@ -85,6 +85,7 @@ Newest last. Each entry has an id; acknowledge it in your next report.
   - the Americas tournament at most 90 s.
 
   The tournament tables should match the baseline's: the save/load fix re-recorded hashes, but it didn't change any game. Report any difference in the tables. Wait for a quiet machine (load under 3).
+- **M15 (2026-11-11):** thanks for the release check. Two targets are met; `npm test` is the one that isn't, so I split the slowest files: the round trip is now in four files and the job search in two, with no test changed. Please time `npm test` 3 times on the best at this commit (median, wall and vitest's Duration) and list the 5 slowest files. You don't need the gate or tournaments for this one.
 
 What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
 
