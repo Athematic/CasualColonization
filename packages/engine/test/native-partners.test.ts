@@ -5,8 +5,24 @@
  * settlement kind (N6); and the five fixes of today's native rules.
  */
 import { describe, expect, it } from 'vitest';
+import './mechanics-variants.js';
 import {
   addTreaty,
+  AMERICAS,
+  applyCommand,
+  CARIBBEAN,
+  createUnit,
+  isWater,
+  NATIVE_RULES,
+  nativeRulesIn,
+  nativeRulesOf,
+  neighbours,
+  processNatives,
+  registerScenario,
+  removeUnit,
+  tileAt,
+  type Scenario,
+  type Settlement,
   allTreaties,
   bound,
   boundPeople,
@@ -28,6 +44,7 @@ import {
   type GameState,
   type NationId,
 } from '../src/index.js';
+import { resolveRumour } from '../src/rumours.js';
 
 function game(seed = 42, humans: NationId[] = ['england']): GameState {
   return createGame({ seed, mapSize: 'small', nations: ['england', 'france'], humans });
@@ -79,5 +96,94 @@ describe('a people as a treaty party (N1)', () => {
     const s = game();
     const names = (['people-trade', 'land-use', 'exchange', 'defence'] as const).map((k) => treatyName(addTreaty(s, k, [nationParty('england'), peopleParty('sioux')])));
     expect(names).toEqual(['Trade treaty', 'Land use', 'Cultural exchange', 'Mutual defence']);
+  });
+});
+
+function landBeside(s: GameState, x: number, y: number): { x: number; y: number } {
+  const n = neighbours(s, x, y).find(
+    (p) => !isWater(tileAt(s, p.x, p.y)) && !Object.values(s.colonies).some((c) => c.x === p.x && c.y === p.y) && !Object.values(s.settlements).some((o) => o.x === p.x && o.y === p.y),
+  );
+  if (!n) throw new Error('no land');
+  return n;
+}
+
+const tribeOf = (s: GameState, st: Settlement) => s.tribes.find((t) => t.id === st.tribe)!;
+
+/** A hidden copy of the Americas with other native rules, for these tests. */
+const RULES_SCENARIO: Scenario = {
+  ...AMERICAS,
+  id: 'test-native-rules',
+  name: 'test-native-rules',
+  hidden: true,
+  peoples: { ...AMERICAS.peoples, rules: { tension: { war: 500 }, braveChances: { gift: 0.5 }, firstBraveAfter: 9 } },
+};
+registerScenario(RULES_SCENARIO);
+
+describe('native rules as scenario data (peoples.rules)', () => {
+  it('are the engine defaults in the Americas and the Caribbean', () => {
+    expect(nativeRulesOf(game())).toBe(NATIVE_RULES);
+    expect(nativeRulesIn(CARIBBEAN)).toBe(NATIVE_RULES);
+    expect(NATIVE_RULES.tension).toEqual({ content: 200, uneasy: 300, angry: 600, war: 800 });
+  });
+
+  it('merge a scenario override over the defaults, the tables field by field', () => {
+    const rules = nativeRulesIn(RULES_SCENARIO);
+    expect(rules.tension).toEqual({ ...NATIVE_RULES.tension, war: 500 });
+    expect(rules.braveChances).toEqual({ ...NATIVE_RULES.braveChances, gift: 0.5 });
+    expect(rules.firstBraveAfter).toBe(9);
+    expect(rules.maxBraves).toBe(NATIVE_RULES.maxBraves);
+  });
+
+  it('are what the engine reads: a new map, and war at the scenario threshold', () => {
+    const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['england'], scenario: 'test-native-rules' });
+    for (const st of Object.values(s.settlements)) expect(st.braveTimer).toBe(9);
+    const st = Object.values(s.settlements)[0];
+    st.tension.england = 560;
+    processNatives(s);
+    expect(tribeOf(s, st).stance.england).toBe('war');
+    const americas = game();
+    const other = Object.values(americas.settlements)[0];
+    other.tension.england = 560;
+    processNatives(americas);
+    expect(tribeOf(americas, other).stance.england).not.toBe('war');
+  });
+});
+
+describe('switches for burial grounds and surrender (framework row 23)', () => {
+  it('burial grounds: on in the Americas and the Caribbean, never drawn when off', () => {
+    expect(AMERICAS.mechanics.burialGrounds).toBe(true);
+    expect(CARIBBEAN.mechanics.burialGrounds).toBe(true);
+    const s = createGame({ seed: 3, mapSize: 'small', nations: ['england', 'france'], humans: ['england'], difficulty: 'viceroy', scenario: 'test-no-burial-grounds' });
+    const st = Object.values(s.settlements)[0];
+    const at = landBeside(s, st.x, st.y);
+    for (let i = 0; i < 1500; i++) {
+      const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', ...at });
+      resolveRumour(s, u);
+      removeUnit(s, u.id);
+    }
+    expect(s.tribes.some((t) => t.burial?.length)).toBe(false);
+  });
+
+  it('surrender: on in the Americas and the Caribbean; when off, a burned capital never brings it', () => {
+    expect(AMERICAS.mechanics.surrender).toBe(true);
+    expect(CARIBBEAN.mechanics.surrender).toBe(true);
+    let burned = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const s = createGame({ seed, mapSize: 'small', nations: ['england', 'france'], humans: ['england'], scenario: 'test-no-surrender' });
+      const capital = Object.values(s.settlements).find((st) => st.capital && Object.values(s.settlements).some((o) => o.tribe === st.tribe && !o.capital));
+      if (!capital) continue;
+      capital.defenders = 1;
+      const spot = landBeside(s, capital.x, capital.y);
+      let guard = 0;
+      while (s.settlements[capital.id] && guard++ < 50) {
+        const art = createUnit(s, 'england', 'artillery', { kind: 'map', ...spot });
+        art.moves = 3;
+        applyCommand(s, { type: 'attack', unitId: art.id, target: { settlementId: capital.id } });
+      }
+      if (s.settlements[capital.id]) continue;
+      burned++;
+      expect(tribeOf(s, capital).submitted).toBeUndefined();
+    }
+    expect(burned).toBeGreaterThan(2);
   });
 });

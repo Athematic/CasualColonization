@@ -15,7 +15,7 @@ import type { GoodId } from '../rules/goods.js';
 import type { Modifier, RumourOutcome } from '../rules/modifiers.js';
 import type { Effect } from '../events/types.js';
 import type { CompanyId, Lifeway, NationId, PeopleDef, TribeId } from '../rules/nations.js';
-import type { SettlementKindDef } from '../rules/natives.js';
+import type { NativeRulesOverride, SettlementKindDef } from '../rules/natives.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { ScoreWeights } from '../rules/score.js';
 import type { UnitTypeId } from '../rules/units.js';
@@ -139,6 +139,16 @@ export interface Mechanics {
   customHouse: boolean;
   /** Missionaries found missions among the natives and denounce rivals' missions (natives.ts). */
   missions: boolean;
+  /**
+   * A Lost City Rumour on tribal land may be a desecrated burial ground: the people goes to war
+   * with the nation for good (rumours.ts, natives.ts). Off: the outcome is never drawn.
+   */
+  burialGrounds: boolean;
+  /**
+   * When a people's capital is burned, its other settlements may submit to the attacker
+   * (combat.ts `surrender`, natives.ts `hasSubmitted`). Off: they fight on.
+   */
+  surrender: boolean;
   /**
    * Alliances between European nations (alliances.ts, docs/design/cooperation.md): the rung after
    * Favoured Nation, with a defensive pact, open colonies and shared sight. Absent means off.
@@ -466,6 +476,12 @@ export interface ScenarioPeoples {
    * `peopleOf(s, id)`.
    */
   overrides?: Partial<Record<TribeId, Partial<Pick<PeopleDef, 'skills' | 'wants'>>>>;
+  /**
+   * Changes to the engine's native rules (rules/natives.ts NATIVE_RULES): braves, tension
+   * thresholds, demands, prices, burial grounds, surrender, missions and inciting. Absent fields
+   * keep the engine's values. Read with `nativeRulesOf(s)`.
+   */
+  rules?: NativeRulesOverride;
 }
 
 /** The scenario's council (the Americas: the Continental Congress's Founding Fathers). */

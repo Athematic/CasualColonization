@@ -34,26 +34,10 @@ import { BUILDINGS, type BuildingKind } from './rules/buildings.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { TRIBES, type NationId } from './rules/nations.js';
-import {
-  BRAVE_CHANCES,
-  BRAVE_EQUIPMENT,
-  BRAVE_KILLED_TENSION,
-  braveCombat,
-  BUY_PRICE_FACTOR,
-  BUY_PRICE_PLENTY,
-  CAPITAL_EXTRA_BRAVES,
-  DEMAND_MET_TENSION,
-  DEMAND_REFUSED_TENSION,
-  DEMAND_WAIT,
-  MAX_BRAVES,
-  TENSION,
-  VISIT_RANGE,
-  WANDER_RADIUS,
-  WANDER_TURNS,
-} from './rules/natives.js';
+import { braveCombat } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from './types.js';
-import { difficultyOf, goodsOf, nativeProduceOf, peopleOf, settlementKindOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, nativeProduceOf, nativeRulesOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
 import { removeUnit } from './unitindex.js';
 
@@ -68,7 +52,7 @@ export function bravesOf(s: GameState): Record<string, Brave> {
 
 /** Braves a settlement keeps out at most. */
 export function maxBraves(s: GameState, st: Settlement): number {
-  return settlementKind(s, st).braves + (st.capital ? CAPITAL_EXTRA_BRAVES : 0);
+  return settlementKind(s, st).braves + (st.capital ? nativeRulesOf(s).capitalExtraBraves : 0);
 }
 
 /** The braves standing on a tile. */
@@ -115,12 +99,12 @@ export function killBrave(s: GameState, b: Brave, killer?: NationId, atWar = fal
   home.braveTimer = Math.max(home.braveTimer ?? 0, settlementKind(s, home).respawn);
   if (!killer || killer === 'crown') return;
   if (atWar) {
-    addTension(home, killer, Math.round(BRAVE_KILLED_TENSION / 3));
+    addTension(home, killer, Math.round(nativeRulesOf(s).braveKilledTension / 3));
     return;
   }
   for (const st of Object.values(s.settlements)) {
     if (st.tribe !== b.tribe) continue;
-    addTension(st, killer, st.id === home.id ? BRAVE_KILLED_TENSION : Math.round(BRAVE_KILLED_TENSION / 3));
+    addTension(st, killer, st.id === home.id ? nativeRulesOf(s).braveKilledTension : Math.round(nativeRulesOf(s).braveKilledTension / 3));
   }
 }
 
@@ -169,9 +153,9 @@ export function settlementForSale(s: GameState, st: Settlement): { good: GoodId;
 /** Price per unit a settlement asks a nation for one of its goods: dearer when tense, cheaper when it has plenty. */
 export function nativeUnitPrice(s: GameState, st: Settlement, good: GoodId, nation: NationId): number {
   const stock = st.goods?.[good] ?? 0;
-  const plenty = stock >= settlementKind(s, st).produceCap * 0.75 ? BUY_PRICE_PLENTY : 1;
+  const plenty = stock >= settlementKind(s, st).produceCap * 0.75 ? nativeRulesOf(s).buyPricePlenty : 1;
   const mood = 1 + tensionOf(st, nation) / 1000;
-  return Math.max(1, Math.round(GOOD_DEFS[good].price * BUY_PRICE_FACTOR * mood * plenty * (st.capital ? 1.1 : 1)));
+  return Math.max(1, Math.round(GOOD_DEFS[good].price * nativeRulesOf(s).buyPriceFactor * mood * plenty * (st.capital ? 1.1 : 1)));
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +193,7 @@ export function processBraves(s: GameState): void {
   const braves = bravesOf(s);
   for (const b of Object.values(braves)) if (!s.settlements[b.home]) delete braves[b.id];
   let total = Object.keys(braves).length;
+  const maxTotal = nativeRulesOf(s).maxBraves;
   const counts = new Map<string, number>();
   for (const b of Object.values(braves)) counts.set(b.home, (counts.get(b.home) ?? 0) + 1);
   for (const st of Object.values(s.settlements)) {
@@ -217,7 +202,7 @@ export function processBraves(s: GameState): void {
       st.braveTimer--;
       continue;
     }
-    if ((counts.get(st.id) ?? 0) >= maxBraves(s, st) || total >= MAX_BRAVES) continue;
+    if ((counts.get(st.id) ?? 0) >= maxBraves(s, st) || total >= maxTotal) continue;
     const b: Brave = { id: newId(s, 'b'), tribe: st.tribe, home: st.id, x: st.x, y: st.y };
     braves[b.id] = b;
     total++;
@@ -232,15 +217,15 @@ export function processBraves(s: GameState): void {
   expireDemands(s);
 }
 
-function equipAtHome(st: Settlement, b: Brave): void {
+function equipAtHome(st: Settlement, b: Brave, equipment: number): void {
   const goods = st.goods;
   if (!goods) return;
-  if (!b.armed && (goods.muskets ?? 0) >= BRAVE_EQUIPMENT) {
-    goods.muskets! -= BRAVE_EQUIPMENT;
+  if (!b.armed && (goods.muskets ?? 0) >= equipment) {
+    goods.muskets! -= equipment;
     b.armed = true;
   }
-  if (!b.mounted && (goods.horses ?? 0) >= BRAVE_EQUIPMENT) {
-    goods.horses! -= BRAVE_EQUIPMENT;
+  if (!b.mounted && (goods.horses ?? 0) >= equipment) {
+    goods.horses! -= equipment;
     b.mounted = true;
   }
 }
@@ -250,7 +235,7 @@ function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
   const st = s.settlements[b.home];
   if (!st) return;
   const home = b.x === st.x && b.y === st.y;
-  if (home) equipAtHome(st, b);
+  if (home) equipAtHome(st, b, nativeRulesOf(s).braveEquipment);
   const points = braveCombat(b).moves * 3;
   if (!b.task) {
     if (home) chooseTask(s, b, st, index);
@@ -280,7 +265,7 @@ function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
     case 'attack': {
       if (task.kind === 'attack' && task.unitId) {
         const target = s.units[task.unitId];
-        if (!target || target.loc.kind !== 'map' || grid.distance(target.loc.x, target.loc.y, st.x, st.y) > VISIT_RANGE) {
+        if (!target || target.loc.kind !== 'map' || grid.distance(target.loc.x, target.loc.y, st.x, st.y) > nativeRulesOf(s).visitRange) {
           delete b.task;
           return;
         }
@@ -310,12 +295,13 @@ function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
 /** The nearest colony within reach of a settlement, if any. */
 function nearestColony(s: GameState, st: Settlement): Colony | undefined {
   const grid = gridOf(s);
+  const range = nativeRulesOf(s).visitRange;
   let best: Colony | undefined;
   let bestD = Infinity;
   for (const c of Object.values(s.colonies)) {
     if (c.owner === 'crown') continue;
     const d = grid.distance(c.x, c.y, st.x, st.y);
-    if (d <= VISIT_RANGE && d < bestD) {
+    if (d <= range && d < bestD) {
       best = c;
       bestD = d;
     }
@@ -345,6 +331,7 @@ function nearbyEnemy(s: GameState, st: Settlement, index: PhaseIndex): Unit | un
 }
 
 function chooseTask(s: GameState, b: Brave, st: Settlement, index: PhaseIndex): void {
+  const rules = nativeRulesOf(s);
   const tribe = tribeOf(s, st);
   const c = nearestColony(s, st);
   const roll = random(s);
@@ -354,25 +341,25 @@ function chooseTask(s: GameState, b: Brave, st: Settlement, index: PhaseIndex): 
     const submitted = hasSubmitted(s, st.tribe, nation);
     const raid = difficultyOf(s, player(s, nation)).raidChance;
     if (!submitted && tribe.stance[nation] === 'war') {
-      if (roll < BRAVE_CHANCES.attackAtWar * raid) b.task = { kind: 'attack', colonyId: c.id };
-    } else if (!submitted && t >= TENSION.angry) {
-      if (roll < BRAVE_CHANCES.attackAngry * raid) b.task = { kind: 'attack', colonyId: c.id };
-    } else if (!submitted && t >= TENSION.uneasy) {
-      if (roll < BRAVE_CHANCES.demand * raid) b.task = { kind: 'visit', colonyId: c.id, purpose: 'demand' };
-    } else if (t < TENSION.content) {
-      if (roll < BRAVE_CHANCES.gift) b.task = { kind: 'visit', colonyId: c.id, purpose: 'gift' };
-      else if (roll < BRAVE_CHANCES.gift + BRAVE_CHANCES.trade) b.task = { kind: 'visit', colonyId: c.id, purpose: 'trade' };
+      if (roll < rules.braveChances.attackAtWar * raid) b.task = { kind: 'attack', colonyId: c.id };
+    } else if (!submitted && t >= rules.tension.angry) {
+      if (roll < rules.braveChances.attackAngry * raid) b.task = { kind: 'attack', colonyId: c.id };
+    } else if (!submitted && t >= rules.tension.uneasy) {
+      if (roll < rules.braveChances.demand * raid) b.task = { kind: 'visit', colonyId: c.id, purpose: 'demand' };
+    } else if (t < rules.tension.content) {
+      if (roll < rules.braveChances.gift) b.task = { kind: 'visit', colonyId: c.id, purpose: 'gift' };
+      else if (roll < rules.braveChances.gift + rules.braveChances.trade) b.task = { kind: 'visit', colonyId: c.id, purpose: 'trade' };
     }
     if (b.task) return;
   }
   if (Object.values(tribe.stance).includes('war')) {
     const enemy = nearbyEnemy(s, st, index);
-    if (enemy && roll < BRAVE_CHANCES.attackAtWar) {
+    if (enemy && roll < rules.braveChances.attackAtWar) {
       b.task = { kind: 'attack', unitId: enemy.id };
       return;
     }
   }
-  if (random(s) < BRAVE_CHANCES.wander) b.task = { kind: 'wander', turns: WANDER_TURNS };
+  if (random(s) < rules.braveChances.wander) b.task = { kind: 'wander', turns: rules.wanderTurns };
 }
 
 /** Whether a brave may step onto a tile: open land, no colony, no other settlement, no European unit. */
@@ -422,6 +409,7 @@ function walk(s: GameState, b: Brave, tx: number, ty: number, points: number, in
 
 function wanderStep(s: GameState, b: Brave, st: Settlement, points: number, index: PhaseIndex): void {
   const grid = gridOf(s);
+  const radius = nativeRulesOf(s).wanderRadius;
   let left = points;
   let guard = 4;
   while (left > 0 && guard-- > 0) {
@@ -429,7 +417,7 @@ function wanderStep(s: GameState, b: Brave, st: Settlement, points: number, inde
     const options: { x: number; y: number }[] = [];
     for (let k = 0; k < steps.length; k += 2) {
       const p = { x: b.x + steps[k], y: b.y + steps[k + 1] };
-      if (grid.distance(p.x, p.y, st.x, st.y) <= WANDER_RADIUS && open(s, b, p.x, p.y, index)) options.push(p);
+      if (grid.distance(p.x, p.y, st.x, st.y) <= radius && open(s, b, p.x, p.y, index)) options.push(p);
     }
     if (!options.length) return;
     const p = options[randInt(s, options.length)];
@@ -496,7 +484,7 @@ function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gif
   if (p.gold < price) return;
   if (p.human) {
     const d = addDemand(s, { kind: 'offer', nation, colonyId: c.id, settlementId: st.id, braveId: b.id, good: offer.good, amount: offer.amount, price });
-    b.task = { kind: 'wait', demandId: d.id, turns: DEMAND_WAIT };
+    b.task = { kind: 'wait', demandId: d.id, turns: nativeRulesOf(s).demandWait };
     message(s, `${aBrave(tribe)} at ${c.name} offers ${offer.amount} ${GOOD_DEFS[offer.good].name.toLowerCase()} for ${price} gold.`, nation, c);
     return;
   }
@@ -545,7 +533,7 @@ function makeDemand(s: GameState, b: Brave, st: Settlement, c: Colony): void {
   track(c.owner, 'natives:tribute demanded');
   const p = player(s, c.owner);
   if (p.human) {
-    b.task = { kind: 'wait', demandId: d.id, turns: DEMAND_WAIT };
+    b.task = { kind: 'wait', demandId: d.id, turns: nativeRulesOf(s).demandWait };
     message(s, `${aBrave(tribe)} at ${c.name} demands ${demandText(d)} as tribute.`, c.owner, c);
     return;
   }
@@ -609,12 +597,12 @@ export function resolveDemand(s: GameState, d: NativeDemand, accept: boolean): s
       st.gold += n;
       text = `You pay the ${tribe} ${n} gold.`;
     }
-    addTension(st, d.nation, DEMAND_MET_TENSION);
+    addTension(st, d.nation, nativeRulesOf(s).demandMetTension);
     track(d.nation, 'natives:tribute paid');
     message(s, text, d.nation, c);
     return text;
   }
-  addTension(st, d.nation, DEMAND_REFUSED_TENSION);
+  addTension(st, d.nation, nativeRulesOf(s).demandRefusedTension);
   track(d.nation, 'natives:tribute refused');
   const text = `${c.name} refuses the ${tribe} demand. The brave attacks!`;
   message(s, text, d.nation, c);

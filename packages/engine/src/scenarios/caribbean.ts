@@ -359,6 +359,8 @@ export const CARIBBEAN: Scenario = {
     charter: { base: 150, cap: 3000 },
     customHouse: true,
     missions: true,
+    burialGrounds: true,
+    surrender: true,
     alliances: true,
     companies: true,
   },

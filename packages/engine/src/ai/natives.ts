@@ -7,7 +7,7 @@ import { nativeUnitPrice, settlementForSale } from '../braves.js';
 import { sellPrice } from '../europe.js';
 import { buyFromSettlement, incitePrice, inciteTribe, tensionOf } from '../natives.js';
 import { cargoRoomFor, isCoastal } from '../queries.js';
-import { TENSION } from '../rules/natives.js';
+import { nativeRulesOf } from '../scenarios/index.js';
 import type { NationId } from '../rules/nations.js';
 import type { GameState, Player, Settlement, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
@@ -54,7 +54,7 @@ export function maybeIncite(s: GameState, p: Player, u: Unit, st: Settlement, pr
   if (prof.aggression < 1 || prof.adaptive) return false;
   const memory = (p.aiMemory = p.aiMemory ?? {});
   if (memory.lastIncite !== undefined && s.turn - memory.lastIncite < INCITE_EVERY) return false;
-  if (tensionOf(st, p.id) >= TENSION.angry) return false;
+  if (tensionOf(st, p.id) >= nativeRulesOf(s).tension.angry) return false;
   const price = incitePrice(s, st);
   if (p.gold < price + prof.reserve + 1000) return false;
   const tribe = s.tribes.find((t) => t.id === st.tribe)!;

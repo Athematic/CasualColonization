@@ -3,7 +3,7 @@ import { fail } from './errors.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { hasModifier, modifiers, mulOf } from './scenarios/modifiers.js';
-import { nationOf, nationTitle, settlementKindOf, term, Term } from './scenarios/index.js';
+import { mechanicsOf, nationOf, nationTitle, nativeRulesOf, settlementKindOf, term, Term } from './scenarios/index.js';
 import { canAttack } from './movement.js';
 import { braveDefence, braveName, bravesOf, killBrave } from './braves.js';
 import { addTension, settlementName } from './natives.js';
@@ -33,7 +33,6 @@ import { isCompanyId } from './companies.js';
 import { STOCKADE_DEFENCE } from './rules/buildings.js';
 import { AMBUSH_BONUS, BOMBARD_CHANCE, CAPTURE_CHANCE, REPAIR_COST, RIVER_DEFENCE } from './rules/combat.js';
 import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
-import { SURRENDER_CHANCE, SURRENDER_TRIBUTE } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
 import type { Colony, GameState, Unit } from './types.js';
@@ -518,21 +517,22 @@ function destroySettlement(s: GameState, u: Unit, settlementId: string): string 
 
 /**
  * When a tribe's capital burns, its other settlements may submit to the attacker (one seeded roll
- * per tribe; never after a desecrated burial ground). They make peace, forget their anger, pay a
+ * per tribe; never after a desecrated burial ground; only with `mechanics.surrender`). They make peace, forget their anger, pay a
  * tribute, no longer attack or make demands, and give their land freely. Attacking the tribe
  * again ends it. Otherwise they fight on.
  */
 function surrender(s: GameState, tribeId: TribeId, nation: NationId, at: { x: number; y: number }): string {
-  if (nation === 'crown') return '';
+  if (nation === 'crown' || !mechanicsOf(s).surrender) return '';
+  const rules = nativeRulesOf(s);
   const tribe = s.tribes.find((t) => t.id === tribeId)!;
   const rest = Object.values(s.settlements).filter((o) => o.tribe === tribeId);
-  if (!rest.length || tribe.burial?.includes(nation) || random(s) >= SURRENDER_CHANCE) return '';
+  if (!rest.length || tribe.burial?.includes(nation) || random(s) >= rules.surrenderChance) return '';
   tribe.stance[nation] = 'peace';
   tribe.submitted = [...(tribe.submitted ?? []).filter((n) => n !== nation), nation];
   let tribute = 0;
   for (const o of rest) {
     o.tension[nation] = 0;
-    const gold = Math.floor(o.gold * SURRENDER_TRIBUTE);
+    const gold = Math.floor(o.gold * rules.surrenderTribute);
     o.gold -= gold;
     tribute += gold;
   }

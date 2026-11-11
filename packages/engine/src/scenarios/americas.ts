@@ -173,6 +173,8 @@ export const AMERICAS: Scenario = {
     charter: COLONY_CHARTER,
     customHouse: true,
     missions: true,
+    burialGrounds: true,
+    surrender: true,
     alliances: true,
     companies: true,
     confederation: true,
