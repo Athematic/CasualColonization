@@ -20,7 +20,7 @@
  * numbers. The records they need (`GameState.homelands`, `Player.lastWar`, `lastHunger`,
  * `defeats`) are written only in games with a playing people.
  */
-import { playerKind } from './playerkind.js';
+import { kindOfId, playerKind } from './playerkind.js';
 import { playingPeople, standingOf, stillThere } from './peoplediplomacy.js';
 import { leagueMembers, leagues } from './peopleleague.js';
 import { storeCapacity, yearlyNeed } from './peopleeconomy.js';
@@ -162,7 +162,7 @@ export function notePeopleWars(s: GameState): void {
 /** A playing people's unit beat a European's, or took a colony (combat.ts): its part in a military victory. */
 export function noteDefeat(s: GameState, winner: PlayerId, loser: PlayerId, colony: boolean): void {
   const p = s.players.find((o) => o.id === winner);
-  if (!p || p.kind !== 'people' || playerKind({ id: loser }) === 'people') return;
+  if (!p || p.kind !== 'people' || kindOfId(loser) === 'people') return;
   const d = (p.defeats ??= { units: 0, colonies: 0 });
   if (colony) d.colonies++;
   else d.units++;
@@ -265,9 +265,15 @@ export function confederacyLeagues(s: GameState, params: Record<string, unknown>
 // ---------------------------------------------------------------------------
 // The military victory
 
-/** Whether a European (a nation, a company or the Crown) is still present on the map: a colony or a land unit there (the Crown: land units only). */
+/**
+ * Whether a European (a nation, a company or the Crown) is still present on the map: a colony or a
+ * land unit there (the Crown: land units only). A nation that has never founded a colony is still
+ * arriving (its first expedition at sea or exploring), not defeated.
+ */
 export function europeanPresent(s: GameState, p: Player): boolean {
-  if (playerKind(p) !== 'crown' && colonyList(s).some((c) => c.owner === p.id)) return true;
+  const kind = playerKind(p);
+  if (kind === 'nation' && !p.coloniesFounded) return true;
+  if (kind !== 'crown' && colonyList(s).some((c) => c.owner === p.id)) return true;
   for (const u of unitList(s)) {
     if (u.owner !== p.id || UNIT_TYPES[u.type].kind === 'ship') continue;
     if (u.loc.kind === 'map' || u.loc.kind === 'colony') return true;

@@ -92,9 +92,9 @@ export function leagueProblem(s: GameState, from: PlayerId, peoples: readonly Pl
   if (!own && members.length + peoples.length < LEAGUE_MIN) return `A league is made by at least ${LEAGUE_MIN} peoples.`;
   if (s.leagueProposals?.some((p) => p.by === from)) return 'Your last proposal of a league has not been answered yet.';
   const after = [...members, ...peoples];
+  for (const id of peoples) if (kindOfId(id) !== 'people') return `Only peoples join a league: ${sideName(s, id)} is not a people.`;
   for (const id of peoples) {
     const name = sideName(s, id);
-    if (kindOfId(id) !== 'people') return `Only peoples join a league: ${capital(name)} is a nation.`;
     if (!stillThere(s, id)) return `${capital(name)} are no longer on the map.`;
     if (leagueOf(s, id)) return `${capital(name)} already belong to a league.`;
     if (s.leagueProposals?.some((p) => p.waiting.includes(id as TribeId))) return `${capital(name)} are still answering another proposal of a league.`;

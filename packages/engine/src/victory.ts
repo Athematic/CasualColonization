@@ -48,7 +48,7 @@ import { fail } from './errors.js';
 import { treatyNations } from './treaties.js';
 import { peopleList, prosperityParams, prosperityWinners } from './prosperity.js';
 import type { PlayerId } from './rules/nations.js';
-import { playerKind, systemsOf } from './playerkind.js';
+import { kindOfId, systemsOf } from './playerkind.js';
 import type { GameState, Player } from './types.js';
 import type { VictoryRule } from './scenarios/types.js';
 import type { TribeId } from './rules/nations.js';
@@ -293,7 +293,7 @@ export function answerIndependence(s: GameState, id: PlayerId, keepPlaying: bool
 
 /** Whether a player is a European one that can win (a nation or a company; the Crown never wins). */
 function european(id: PlayerId): boolean {
-  const k = playerKind({ id });
+  const k = kindOfId(id);
   return k === 'nation' || k === 'company';
 }
 

@@ -21,12 +21,13 @@ import {
   serialize,
   turnOfYear,
   yetToArrive,
+  europeansDefeated,
   type GameConfig,
   type GameState,
   type NationEntry,
   type Scenario,
 } from '../src/index.js';
-import { colonyList, unitList } from '../src/unitindex.js';
+import { colonyList, removeColony, removeUnit, unitList } from '../src/unitindex.js';
 
 /** The Americas (from 1492) with France arriving in 1500 and the Netherlands in 1505, and a playable people. */
 const ARRIVALS: Partial<Record<string, number>> = { france: 1500, netherlands: 1505 };
@@ -39,6 +40,8 @@ const ARRIVALS_GAME: Scenario = {
   nations: { ...AMERICAS.nations, sets: { alternative: AMERICAS.nations.sets.alternative.map(withArrivals) } },
   peoples: { ...AMERICAS.peoples, playable: [{ id: 'iroquois', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga'] }] },
   nationTypes: { people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS] } },
+  // Step 7: the peoples' ways of winning beside the Europeans', both sides judged (T14).
+  victory: [{ id: 'military' }, { id: 'independence-war' }, { id: 'confederacy' }, { id: 'concord' }, { id: 'prosperity' }, { id: 'continuity' }, { id: 'good-life' }, { id: 'time' }],
 };
 registerScenario(ARRIVALS_GAME);
 
@@ -225,5 +228,28 @@ describe('arrivals (T18)', () => {
     const s = createGame({ ...config(), scenario: undefined, peoples: undefined });
     expect('arrivals' in s).toBe(false);
     expect(ids(s)).toEqual(['england', 'france', 'netherlands']);
+  });
+
+  it('the military victory waits until every nation has arrived (T14)', () => {
+    const s = createGame(config());
+    play(s, 2);
+    expect(s.arrivals?.length).toBe(2);
+    // England, the only nation in, has a colony once and loses everything on land.
+    const england = s.players.find((p) => p.id === 'england')!;
+    england.coloniesFounded = 1;
+    for (const c of colonyList(s)) if (c.owner === 'england') removeColony(s, c.id);
+    for (const u of unitList(s)) if (u.owner === 'england' && u.loc.kind !== 'carrier' && u.type !== 'caravel') removeUnit(s, u.id);
+    expect(europeansDefeated(s)).toBe(false);
+    play(s, 1);
+    expect(s.gameOver).toBeUndefined();
+    // Once the others have arrived (and been beaten in turn), the peoples win.
+    while (s.arrivals) play(s, 1);
+    expect(s.gameOver).toBeUndefined();
+    for (const p of s.players) if (p.kind !== 'people') p.coloniesFounded = Math.max(1, p.coloniesFounded);
+    for (const c of colonyList(s)) if (c.owner !== 'iroquois') removeColony(s, c.id);
+    for (const u of unitList(s)) if (u.owner !== 'iroquois' && u.loc.kind !== 'carrier' && u.type !== 'caravel') removeUnit(s, u.id);
+    expect(europeansDefeated(s)).toBe(true);
+    play(s, 1);
+    expect(s.gameOver?.ways).toEqual({ iroquois: 'military' });
   });
 });
