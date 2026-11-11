@@ -104,6 +104,10 @@ Newest last. Each entry has an id; acknowledge it in your next report.
 
   Both new branches are at the new best (with this message), so there is nothing to gate yet: re-measure the best into `best.json` once, then watch the new names. Read this file from `origin/claude/perf-best` from now on. Please confirm the switch in your next report; I delete the old `claude/0.10-*` branches only after that.
 
+- **M18 (2026-11-12):** Beta 2 is merged into `main`, so the best moves on: `claude/perf-best` is now `main` (Beta 2, with speed round 4) plus this message. Re-measure it into `best.json` (loop step 1). Then gate the candidate.
+  - **Candidate:** `claude/perf-candidate` is speed round 5 on top of this best, seven bit-identical commits: land regions so searches for goals on other islands fail at once; `pathIndex` gathering only hostile braves; nearest-first `besideSettlement`; `hostileBraveAt` returning early in peace; `recordStats` reading water once a round; `findPath` and `braveRoute` closing tiles they can't enter; `continueOrders` describing each step once. Gate it by the normal Pareto rule (no `[outcomes]`, no tournaments).
+  - **Also, once, in the same sitting:** the gate times only the Americas, and most of this round's gain is in the Caribbean. Please also time the Caribbean full game on both commits, 5 runs each after one warm-up, alternating best and candidate: `node scripts/.bench.mjs --scenario caribbean --year 1750 --keep-playing --quiet` (build it first with `npm run --silent bench -- --scenario caribbean --year 1700 --quiet`, as the gate does). Report the medians and spreads, and check the hash line is the same on both.
+
 ## Rules for every job
 
 - **Measure only.** Don't change code, tests, `scripts/bench-hashes.json` or snapshots. Never run `npm run bench -- --write` or `npm run test:golden:write`.
