@@ -148,7 +148,7 @@ A speed-up that changes game outcomes re-records the hashes on the branch. Its c
 
 ## Job 3: release check (at the end of 0.10)
 
-Do job 2 on the release candidate commit with all five steps, and compare with the baseline. The 0.10 target for a head start to 1700 is set from job 1's numbers and recorded in `docs/ROADMAP.md`.
+Do job 2 on the release candidate commit with all five steps, and compare with the baseline. The 0.10 target for a head start to 1700 is set from job 1's numbers and recorded in `docs/SHIPPED.md` (0.10).
 
 ## Job 4: hill-climbing gate (each candidate speed-up)
 
