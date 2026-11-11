@@ -32,10 +32,12 @@ If a change is meant to change games, re-record with `npm run test:golden:write`
 | `goods` | Goods in play. The order is the order of keys in markets and warehouses. |
 | `units` | Unit types in play. Europe offers, colonies build and immigrants arrive only from this list. The engine's named slots (treasure, the King's regulars, the starting ship) must be on it. |
 | `buildings` | Buildings in play, in production order (tools are made before the armory uses them). |
+| `nationTypes` | Optional selections per nation type ([design/native-nations.md](design/native-nations.md) T6, T7): `nationTypes.people` gives the `units` and `buildings` a people playing as a nation uses, from the same catalogues; `units[0]` is the unit its towns are peopled and grow with. `units` and `buildings` above are the European nations' selection. Absent: the catalogue's people's entries (`PEOPLE_UNIT_TYPES`, `PEOPLE_BUILDINGS`). See [Peoples playing as nations](#peoples-playing-as-nations). |
+| `peopleEconomy` | Optional overrides of a playing people's stores and gardens (`PEOPLE_ECONOMY` in `rules/peoples.ts`): `storeYears` (1), `storeBase` (50) and `gardens` (the terrains where maize, beans and squash grow). A people may have its own `storeYears` through `peoples.overrides`. |
 | `council` | The scenario's council (the Americas: the Continental Congress). `categories`, `members` (ids from the catalogue's `FATHERS`) and optional `effects` that replace a member's effects in this scenario. |
 | `ai` | What the computer players need to know: `pace`, `islands` and four goods lists. See [Computer players](#computer-players). |
 | `events` | The id of a registered event set. See [Events](#events). |
-| `mechanics` | Sixteen switches. See [Mechanics switches](#mechanics-switches). |
+| `mechanics` | Eighteen switches. See [Mechanics switches](#mechanics-switches). |
 | `alliances` | Optional overrides of the alliance rules (`ALLIANCE_RULES` in `alliances.ts`): `requires` (the rung an alliance builds on, `'favoured'` or only `'trade'`), `peaceYears` and `volume` (the hidden thresholds that unlock it), `longPeace` (the years of peace with a trade agreement after which "old friends" may ally without the rung or the trade, 150 ± 30), `waitingYears` and `hostilityYears` after leaving one, `sharedBells` (the share of each ally's bells that helps the others' Congress, 0.1) and `expeditionCost` (a joint expedition, 1,200 gold, half each). See [Alliances](#alliances). |
 | `peopleTreaties` | Optional overrides of the rules for treaties with native peoples (`PEOPLE_TREATY_RULES` in `peopletreaties.ts`), the tables field by field. See [Treaties with peoples](#treaties-with-peoples). |
 | `companyRules` | Optional overrides of the chartered companies' rules (`COMPANY_RULES` in `companies.ts`): `capital` (2,000), `foundingShares` (20), `sharePrice` (the least, 100), `dividendEvery` (10 turns), `reserve` (800) and `payout` (0.5 of the gold above the reserve). See [Chartered companies](#chartered-companies). |
@@ -119,7 +121,7 @@ A council member's catalogue entry (`FATHERS`) carries its `modifiers` and `onJo
 
 ## Mechanics switches
 
-`Scenario.mechanics` has sixteen switches. A system that is off is skipped where it would run, draws no random numbers, has its commands refused with a reason, is left out of the computer players' plans and is hidden in the web game.
+`Scenario.mechanics` has eighteen switches. A system that is off is skipped where it would run, draws no random numbers, has its commands refused with a reason, is left out of the computer players' plans and is hidden in the web game.
 
 | Switch | Meaning |
 | --- | --- |
@@ -139,6 +141,8 @@ A council member's catalogue entry (`FATHERS`) carries its `modifiers` and `onJo
 | `companies` | Chartered companies from `nations.companies`: nations found them, buy shares and receive dividends. Absent means off. See [Chartered companies](#chartered-companies). |
 | `confederation` | Allies may declare independence together and fight one war. Needs `alliances` and `independence`. Absent means off. |
 | `peopleTreaties` | The kinds of treaty with native peoples in play (`'people-trade'`, the trade treaty, `'land-use'`, a lease, `'exchange'`, a cultural exchange, and `'defence'`, a mutual defence pact). Absent or empty means none. See [Treaties with peoples](#treaties-with-peoples). |
+| `hardYears` | `false`, or `{ chance }` (1/8): each year each region of the map has a hard year with this chance, drawn from the game seed; food yields there are halved for everyone that year. Absent means off. See [Peoples playing as nations](#peoples-playing-as-nations). |
+| `landHealth` | `false`, or `{ regionSize, renewal, recovery, floor }` (8, 40, 5, 0.2): land health per region; furs and game taken beyond a region's renewal in a year wear it down, it recovers by `recovery` a year while less is taken, and fur and game yields there are multiplied by its health (at least `floor`). Absent means off. |
 
 The numbers of the Crown and the war (REF growth, demands, royal wars, mercenaries, intervention) are still code.
 
@@ -215,6 +219,18 @@ Settlement kinds are rows of `SETTLEMENT_KINDS` (`rules/natives.ts`): `camp`, `v
 Chartered companies (`Player.kind: 'company'`) stand outside all of this: the peoples feel no tension towards them, their braves never demand from or attack a company, nobody can incite a people against one, and its explorers find no burial grounds.
 
 **Standing with a people** (`GameState.peopleRelations`, `natives.ts`): a record per nation and people, written on the nation's first trade with that people, with the gold traded both ways (`volume`) and the turn the current run of good relations began (`goodSince`: at peace, the people's settlements content on average). With `mechanics.peopleTreaties` it is also written on contact: a scout's visit, a mission or a brave come to trade. Treaties with peoples unlock on it, against hidden thresholds drawn per pair from the seed (`peopleThreshold`), never stored. See [design/native-partners.md](design/native-partners.md).
+
+## Peoples playing as nations
+
+`Scenario.peoples.playable` names the peoples setup may play as nations (`PlayablePeople`: the id, and the name, adjective and town names the game uses for it); `GameConfig.peoples` picks which play, by a person (`config.humans`) or the computer (`config.ai`). A playing people is a player of `kind: 'people'` with its own id: its settlements become its towns, colonies it owns, and the systems table (`playerkind.ts`) keeps every Europe-only system (market, immigration, the Crown, taxes, independence, the Congress) away from it. The Americas and the Caribbean list no playable peoples. The rules and their reasons are in [design/native-nations.md](design/native-nations.md); the hidden test scenario `test-people-player` (`test/people-player.test.ts`) is the Americas with the Iroquois playable, the people's selection, and hard years and land health on.
+
+**Units and buildings** (`nationTypes.people`): the catalogue's people's entries are the townsperson (born in the towns), hunter, fisher, gardener, crafter, runner, warrior, elder and birchbark canoe, and the longhouse, drying racks and smokehouse, storage pits, workshop, canoe landing, palisade and council house (`rules/units.ts`, `rules/buildings.ts`, marked `people: true`). Experts are taught by elders in the longhouse (the skill of the student's work), never bought. A `UnitTypeDef` may have `ways` (`hunting`, `fishing`, `gardens`, multipliers on the land's yield, `rules/peoples.ts` `wayOf`), `sight`, and `teachesWays`; a `BuildingDef` may have `housing`, `store` (food), `capacity` (other goods), `defence`, `school` and `water` per level. `COLONY_BUILDS` entries may need a building (`needs`).
+
+**Growth** (`peopleeconomy.ts`): a town grows when its food above its reserve (`storeYears` years of its people's food, as far as its stores keep) reaches `foodToGrow`; the child joins the town's work. No birth in a year the town went hungry or was attacked, or while its longhouses are full. Food beyond `foodToGrow` and the town's store capacity (`storeBase` and its buildings' `store`) spoils. A town whose store runs out goes hungry; a second hungry year in a row costs it a person. `Colony.hunger` and `Colony.foughtAt` record it; both are written only for a people's towns.
+
+**The land** (`land.ts`): with `mechanics.hardYears` or `landHealth`, `GameState.land` holds the regions (squares of `regionSize` tiles until a stored map brings regions of its own), each region's health and what was taken in it this year, and this year's hard regions. Absent otherwise.
+
+**A people's land**: each town claims the unclaimed land within its people's `landRadius` (`Tile.claim` the people's id), never a settlement's land; the `claimLand` command claims more next to it. Other players' colonies do not work it or found colonies on it.
 
 ## Treaties with peoples
 
