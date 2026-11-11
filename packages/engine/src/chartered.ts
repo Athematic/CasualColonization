@@ -13,6 +13,7 @@ import type { NationId } from './rules/nations.js';
 import { calendarOf, nationOf, nationTitle, term, yearOf } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import type { GameState, Player } from './types.js';
+import { ownedUnitsView } from './unitindex.js';
 
 /** Why `nation` cannot found the company now, or null. */
 export function foundProblem(s: GameState, nation: NationId, id: NationId): string | null {
@@ -59,7 +60,7 @@ export function foundCompany(s: GameState, nation: NationId, id: NationId): stri
   const soldier = createUnit(s, id, 'veteranSoldier', aboard());
   soldier.role = 'soldier';
   for (let i = 0; i < 2; i++) createUnit(s, id, 'freeColonist', aboard());
-  for (const u of Object.values(s.units)) if (u.owner === id && u.loc.kind === 'carrier') u.state = 'sentry';
+  for (const u of ownedUnitsView(s, id)) if (u.loc.kind === 'carrier') u.state = 'sentry';
   track(nation, 'company:founded');
   const text = `${nationTitle(s, nation)} charters ${entry.name} with ${rules.capital} gold. Its first ship sails for ${term(s, 'colonyLand')}.`;
   message(s, text);

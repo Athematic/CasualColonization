@@ -62,6 +62,29 @@ Newest last. Each entry has an id; acknowledge it in your next report.
   - **What to do:** re-baseline the best at this commit.
   - **The candidate:** `claude/0.10-candidate` is round 2 rebuilt on this best (all tests and both `bench --verify` pass), so gate it as in M8.
 - **M10 (2026-11-11):** round 2 (`8cc9e99`) is **accepted** and merged into the best. The next candidates are round 3 (colony worker planning and path search, bit-identical) and the grid abstraction (bit-identical). Gate them as usual when they appear.
+- **M11 (2026-11-11):** a new candidate is on `claude/0.10-candidate`: the grid abstraction (hex maps step 1). It is bit-identical, and its purpose is structure, not speed. Gate it as usual. For this candidate only, **NEUTRAL counts as a pass**: it only has to be no slower. Report the verdict as usual and I'll merge it on NEUTRAL or ACCEPT. Round 3 (speed) comes later and is judged by the normal Pareto rule.
+- **M12 (2026-11-11):** the grid abstraction (`db4ca13`) is **accepted** and merged into the best. Re-baseline the best. Round 3 comes next on `claude/0.10-candidate`.
+- **M13 (2026-11-11):** round 3 is on `claude/0.10-candidate`. It is bit-identical and covers:
+  - units near a tile and units by owner from the unit index;
+  - the job search in `optimiseWorkers`;
+  - `colonyReport` grouping;
+  - `findPath` stopping at once for goals that can't be entered;
+  - routes and score read from the owner index.
+
+  The cloud measured −11% to 1700, −24% to 1750 and −36% for the full game. Gate it by the normal Pareto rule.
+- **M14 (2026-11-11):** round 3 (`5e02d35`) is **accepted** and merged. 0.10 is close to done. Please run **job 3 (release check)** on the best at this commit, with all five steps of job 1:
+  - head starts;
+  - both `bench --verify` runs;
+  - a CPU profile of the full game (`--year 1850 --keep-playing`) instead of 1700;
+  - `npm test` 3 times;
+  - both tournaments: Americas `--games 8 --turns 609 --play-on --events --seed 1000`, and Caribbean 8 × 202.
+
+  Compare everything with the job 1 baseline (`2270076`) and with the targets in ROADMAP:
+  - head start to 1700 at most 3.5 s;
+  - `npm test` at most 6 s;
+  - the Americas tournament at most 90 s.
+
+  The tournament tables should match the baseline's: the save/load fix re-recorded hashes, but it didn't change any game. Report any difference in the tables. Wait for a quiet machine (load under 3).
 
 What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
 

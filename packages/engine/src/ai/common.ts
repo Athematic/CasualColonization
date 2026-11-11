@@ -1,3 +1,4 @@
+import { gridOf, type Grid } from '../grid.js';
 import { colonySiteProblem } from '../colony.js';
 import { braveDefence } from '../braves.js';
 import { attack, defencePower, offencePower } from '../combat.js';
@@ -8,8 +9,6 @@ import { baseTileYield } from '../production.js';
 import {
   cargoFree,
   colonyAt,
-  DIRECTIONS,
-  distance,
   isCoastal,
   isShip,
   isWater,
@@ -18,10 +17,10 @@ import {
   unitPosition,
   unitsAboard,
   unitsAt,
-  type Direction,
 } from '../queries.js';
 import type { Brave, Colony, GameState, Player, Tile, Unit } from '../types.js';
 import { goodsOf } from '../scenarios/index.js';
+import { ownedUnitsView } from '../unitindex.js';
 
 /** Runs an AI action, ignoring moves the rules turn down. */
 export function safely(fn: () => void): void {
@@ -83,12 +82,14 @@ function siteScoresFor(s: GameState): SiteScores {
 
 /** Colonies close enough to share a work tile with a colony at x, y. */
 function neighbourColonies(s: GameState, x: number, y: number): Colony[] {
+  const grid = gridOf(s);
   // Within the search's square, only the colonies within two tiles of it can be (in the same order).
-  const pool = search && distance(search.x, search.y, x, y) <= search.radius ? search.colonies : Object.values(s.colonies);
-  return pool.filter((c) => distance(c.x, c.y, x, y) <= 2);
+  const pool = search && grid.distance(search.x, search.y, x, y) <= search.radius ? search.colonies : Object.values(s.colonies);
+  return pool.filter((c) => grid.distance(c.x, c.y, x, y) <= 2 * grid.workRadius);
 }
 
-const shared = (near: Colony[], x: number, y: number) => near.some((c) => distance(c.x, c.y, x, y) <= 1);
+/** Whether a tile is in the work area of one of these colonies (or under one). */
+const shared = (grid: Grid, near: Colony[], x: number, y: number) => near.some((c) => grid.distance(c.x, c.y, x, y) <= grid.workRadius);
 
 export function siteScore(s: GameState, x: number, y: number): number {
   const memo = search?.scores.plain;
@@ -104,17 +105,23 @@ export function siteScore(s: GameState, x: number, y: number): number {
  * leaves no colony on the site or next to it, so none of its tiles is a colony's.
  */
 function plainSiteScore(s: GameState, x: number, y: number, near: Colony[]): number {
+  const grid = gridOf(s);
+  const work = grid.workOffsets(x, y);
   let score = 0;
   let water = 0;
-  for (const p of [{ x, y }, ...neighbours(s, x, y)]) {
-    const tile = tileAt(s, p.x, p.y)!;
-    const weight = shared(near, p.x, p.y) ? SHARED_TILE_VALUE : 1;
+  // The site itself (k = -2), then its work area.
+  for (let k = -2; k < work.length; k += 2) {
+    const px = k < 0 ? x : x + work[k];
+    const py = k < 0 ? y : y + work[k + 1];
+    const tile = tileAt(s, px, py);
+    if (!tile) continue;
+    const weight = shared(grid, near, px, py) ? SHARED_TILE_VALUE : 1;
     if (isWater(tile)) {
       water++;
       score += 1.5 * weight;
       continue;
     }
-    score += landValue(s, p.y * s.map.width + p.x, tile) * weight;
+    score += landValue(s, py * s.map.width + px, tile) * weight;
   }
   // A river through the centre: road-speed travel inland, and its yield bonus counted above.
   const centre = tileAt(s, x, y)!;
@@ -153,11 +160,17 @@ function workKeenSiteScore(s: GameState, x: number, y: number): number {
   if (colonySiteProblem(s, x, y)) return -Infinity;
   const near = neighbourColonies(s, x, y);
   const base = plainSiteScore(s, x, y, near);
+  const grid = gridOf(s);
+  const work = grid.workOffsets(x, y);
   let extra = 0;
   let water = 0;
-  for (const p of [{ x, y }, ...neighbours(s, x, y)]) {
-    const tile = tileAt(s, p.x, p.y)!;
-    const weight = shared(near, p.x, p.y) ? SHARED_TILE_VALUE : 1;
+  // The site itself (k = -2), then its work area.
+  for (let k = -2; k < work.length; k += 2) {
+    const px = k < 0 ? x : x + work[k];
+    const py = k < 0 ? y : y + work[k + 1];
+    const tile = tileAt(s, px, py);
+    if (!tile) continue;
+    const weight = shared(grid, near, px, py) ? SHARED_TILE_VALUE : 1;
     if (tile.b) extra += 5 * weight;
     if (isWater(tile)) {
       water++;
@@ -182,20 +195,20 @@ export function bestColonySite(
   y: number,
   opts: { radius: number; score: (x: number, y: number) => number; perTile: number; stay: boolean; penalty?: (x: number, y: number) => number; overLand?: boolean },
 ): { x: number; y: number; score: number } {
+  const grid = gridOf(s);
   const outer = search;
-  search = { x, y, radius: opts.radius, colonies: Object.values(s.colonies).filter((c) => distance(c.x, c.y, x, y) <= opts.radius + 2), land: new Map(), scores: siteScoresFor(s) };
+  search = { x, y, radius: opts.radius, colonies: Object.values(s.colonies).filter((c) => grid.distance(c.x, c.y, x, y) <= opts.radius + 2), land: new Map(), scores: siteScoresFor(s) };
   try {
     let best = { x, y, score: opts.stay ? opts.score(x, y) : -Infinity };
     const reach = opts.overLand ? landReach(s, x, y, opts.radius) : undefined;
-    for (let dy = -opts.radius; dy <= opts.radius; dy++) {
-      for (let dx = -opts.radius; dx <= opts.radius; dx++) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (!tileAt(s, nx, ny)) continue;
-        if (reach && !reach.has(ny * s.map.width + nx)) continue;
-        const score = opts.score(nx, ny) - distance(x, y, nx, ny) * opts.perTile - (opts.penalty?.(nx, ny) ?? 0);
-        if (score > best.score) best = { x: nx, y: ny, score };
-      }
+    const within = grid.withinOffsets(x, y, opts.radius);
+    for (let k = 0; k < within.length; k += 2) {
+      const nx = x + within[k];
+      const ny = y + within[k + 1];
+      if (!tileAt(s, nx, ny)) continue;
+      if (reach && !reach.has(ny * s.map.width + nx)) continue;
+      const score = opts.score(nx, ny) - grid.distance(x, y, nx, ny) * opts.perTile - (opts.penalty?.(nx, ny) ?? 0);
+      if (score > best.score) best = { x: nx, y: ny, score };
     }
     return best;
   } finally {
@@ -203,8 +216,9 @@ export function bestColonySite(
   }
 }
 
-/** Land tiles (as y × width + x) a colonist at x, y can walk to without leaving the square of the given radius. */
+/** Land tiles (as y × width + x) a colonist at x, y can walk to without going further than the given radius. */
 export function landReach(s: GameState, x: number, y: number, radius: number): Set<number> {
+  const grid = gridOf(s);
   const w = s.map.width;
   const seen = new Set([y * w + x]);
   const queue = [{ x, y }];
@@ -212,7 +226,7 @@ export function landReach(s: GameState, x: number, y: number, radius: number): S
     const cur = queue.shift()!;
     for (const n of neighbours(s, cur.x, cur.y)) {
       const i = n.y * w + n.x;
-      if (seen.has(i) || distance(n.x, n.y, x, y) > radius || isWater(tileAt(s, n.x, n.y)!)) continue;
+      if (seen.has(i) || grid.distance(n.x, n.y, x, y) > radius || isWater(tileAt(s, n.x, n.y)!)) continue;
       seen.add(i);
       queue.push(n);
     }
@@ -220,16 +234,13 @@ export function landReach(s: GameState, x: number, y: number, radius: number): S
   return seen;
 }
 
-export function directionTo(fx: number, fy: number, tx: number, ty: number): Direction | undefined {
-  return DIRECTIONS.find((d) => d.dx === Math.sign(tx - fx) && d.dy === Math.sign(ty - fy))?.id;
-}
-
 export function nearestColony(s: GameState, p: Player, x: number, y: number, coastalOnly = false): Colony | undefined {
+  const grid = gridOf(s);
   let best: Colony | undefined;
   for (const c of Object.values(s.colonies)) {
     if (c.owner !== p.id) continue;
     if (coastalOnly && !isCoastal(s, c.x, c.y)) continue;
-    if (!best || distance(c.x, c.y, x, y) < distance(best.x, best.y, x, y)) best = c;
+    if (!best || grid.distance(c.x, c.y, x, y) < grid.distance(best.x, best.y, x, y)) best = c;
   }
   return best;
 }
@@ -246,10 +257,8 @@ export function ownColonies(s: GameState, p: Player): Colony[] {
 /** How many of the player's units pass the test (a plain loop, in record order). */
 export function countUnits(s: GameState, p: Player, test: (u: Unit) => boolean): number {
   let n = 0;
-  for (const id in s.units) {
-    const u = s.units[id];
-    if (u.owner === p.id && test(u)) n++;
-  }
+  const own = ownedUnitsView(s, p.id);
+  for (let i = 0; i < own.length; i++) if (test(own[i])) n++;
   return n;
 }
 
@@ -278,23 +287,24 @@ interface TileAround {
  */
 function tilesAround(s: GameState, x: number, y: number): (TileAround | undefined)[] {
   const out: (TileAround | undefined)[] = new Array(9);
-  const at = (tx: number, ty: number): TileAround | undefined => {
-    const dx = tx - x;
-    const dy = ty - y;
-    if (dx < -1 || dx > 1 || dy < -1 || dy > 1 || (dx === 0 && dy === 0)) return undefined;
-    const i = (dy + 1) * 3 + (dx + 1);
-    return (out[i] ??= { units: [], braves: [] });
-  };
-  for (const id in s.units) {
-    const o = s.units[id];
-    if (o.loc.kind === 'map') at(o.loc.x, o.loc.y)?.units.push(o);
+  // Units and colonies from the tile indexes (each list in record order, as unitsAt and colonyAt
+  // give them), braves in one pass.
+  for (const n of neighbours(s, x, y)) {
+    const units = unitsAt(s, n.x, n.y);
+    const colony = colonyAt(s, n.x, n.y);
+    if (units.length || colony) out[(n.y - y + 1) * 3 + (n.x - x + 1)] = { units, colony, braves: [] };
   }
-  for (const id in s.colonies) {
-    const c = s.colonies[id];
-    const t = at(c.x, c.y);
-    if (t && !t.colony) t.colony = c;
+  const braves = s.braves;
+  if (braves) {
+    for (const id in braves) {
+      const b = braves[id];
+      const dx = b.x - x;
+      const dy = b.y - y;
+      if (dx < -1 || dx > 1 || dy < -1 || dy > 1 || (dx === 0 && dy === 0)) continue;
+      const i = (dy + 1) * 3 + (dx + 1);
+      (out[i] ??= { units: [], braves: [] }).braves.push(b);
+    }
   }
-  for (const b of Object.values(s.braves ?? {})) at(b.x, b.y)?.braves.push(b);
   return out;
 }
 
@@ -368,7 +378,7 @@ export function landingSpot(s: GameState, p: Player, ship: Unit): { x: number; y
  */
 export function strandedSettlers(s: GameState, p: Player): Unit[] {
   if (Object.values(s.colonies).some((c) => c.owner === p.id)) return [];
-  return Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'map' && u.role !== 'scout' && UNIT_TYPES[u.type].kind === 'colonist' && stranded(s, u));
+  return ownedUnitsView(s, p.id).filter((u) => u.loc.kind === 'map' && u.role !== 'scout' && UNIT_TYPES[u.type].kind === 'colonist' && stranded(s, u));
 }
 
 /** Whether a colonist ashore has no tile it could found a colony on within 5 tiles' walk. */
@@ -384,13 +394,14 @@ function stranded(s: GameState, u: Unit): boolean {
  * Returns whether it is on that errand.
  */
 export function fetchStranded(s: GameState, p: Player, ship: Unit): boolean {
+  const grid = gridOf(s);
   if (ship.loc.kind !== 'map' || cargoFree(s, ship) <= 0) return false;
   const units = strandedSettlers(s, p);
   if (!units.length) return false;
   for (const u of units) {
     if (u.loc.kind !== 'map') continue;
     const { x, y } = u.loc;
-    if (distance(ship.loc.x, ship.loc.y, x, y) <= 1) return true;
+    if (grid.distance(ship.loc.x, ship.loc.y, x, y) <= 1) return true;
     const spot = neighbours(s, x, y).find((n) => isWater(tileAt(s, n.x, n.y)!) && !unitsAt(s, n.x, n.y).some((o) => o.owner !== p.id));
     if (spot && goTo(s, ship, spot.x, spot.y)) {
       return true;
@@ -406,7 +417,7 @@ export function boardRescue(s: GameState, p: Player, u: Unit): boolean {
   for (const n of neighbours(s, x, y)) {
     const ship = unitsAt(s, n.x, n.y).find((o) => o.owner === p.id && isShip(o) && cargoFree(s, o) > 0);
     if (!ship) continue;
-    const dir = directionTo(x, y, n.x, n.y)!;
+    const dir = gridOf(s).directionTowards(x, y, n.x, n.y)!;
     if (describeMove(s, u.id, dir).kind !== 'board') continue;
     moveUnit(s, u.id, dir);
     return true;
@@ -429,7 +440,7 @@ export function disembarkAll(s: GameState, ship: Unit): boolean {
     if (!best || score > best.score) best = { ...n, score };
   }
   if (!best || best.score < 10) return false;
-  const dir = directionTo(ship.loc.x, ship.loc.y, best.x, best.y)!;
+  const dir = gridOf(s).directionTowards(ship.loc.x, ship.loc.y, best.x, best.y)!;
   let landed = false;
   for (const u of passengers) {
     u.moves = Math.max(u.moves, 3);

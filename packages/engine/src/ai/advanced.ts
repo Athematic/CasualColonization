@@ -3,6 +3,7 @@
  * behaviours, steered by an AiProfile: how far to expand, how much to value liberty,
  * how big a garrison to keep, whether to start wars, and so on.
  */
+import { gridOf } from '../grid.js';
 import {
   assignJob,
   buildTargetCost,
@@ -28,26 +29,27 @@ import { canDeclareIndependence, declareIndependence, rebelShare } from '../inde
 import { abandonColony } from '../leaving.js';
 import { boardShip, canImprove, findPath, goTo, setDestination, startImprovement } from '../movement.js';
 import { buyLand, establishMission, giftToTribe, landPrice, learnSkill, nativeLandOwner, speakToChief, takeLand, tensionOf } from '../natives.js';
-import { type ColonyReport } from '../production.js';
+import { buildingCapacityPerWorker, landYield, workerTileYield, type ColonyReport } from '../production.js';
 import { aiColonyReport } from './reports.js';
 import {
   cargoFree,
   cargoRoomFor,
   colonyAt,
   colonyWorkers,
-  distance,
   isCoastal,
   isShip,
   isWater,
   neighbours,
+  workArea,
   settlementAt,
   tileAt,
+  tileWorkedBy,
   unitPosition,
   unitsAboard,
   unitsAt,
   warehouseCapacity,
 } from '../queries.js';
-import { BUILDINGS, type BuildingKind } from '../rules/buildings.js';
+import { BUILDINGS, SCHOOL_TEACHERS, type BuildingKind } from '../rules/buildings.js';
 import type { GoodId, ProductId } from '../rules/goods.js';
 import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import type { BuildTarget, Colony, GameState, Job, Player, Unit } from '../types.js';
@@ -56,13 +58,14 @@ import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
 import { stopPort } from '../routes.js';
+import { forEachUnitNear, indexedUnitsOf, ownedUnitsView } from '../unitindex.js';
 import { maybeIncite } from './natives.js';
 import { armyForIndependence, expectedSupport, colonyDefences, supportParts, rebelColonyDefence, rebelPower, crownAffairs, defenceShort, hireMercenaries, holdsAlone, powerNeeded, REBEL_DEFENCE, weakColonies } from './royal.js';
 import { NO_PLAN, PLAN_LIBERTY, planLiberty, planTurn, type PlanTurn } from './plan.js';
 import { equippedPrice, trainEquipped } from './outfit.js';
 import { AI_PROFILES, type AiProfile } from './profiles.js';
 import { buildRoads, equipPioneer, pioneerToolsWanted } from './roads.js';
-import { aiGoodsOf, aiTurn, goodsOf, mechanicsOf, scenarioOf } from '../scenarios/index.js';
+import { aiGoodsOf, aiTurn, buildingsOf, goodsOf, mechanicsOf, scenarioOf } from '../scenarios/index.js';
 
 const SUPPLIES: GoodId[] = ['tools', 'muskets', 'horses'];
 
@@ -100,7 +103,7 @@ export function runAdvanced(s: GameState, p: Player, base: AiProfile): void {
   for (const c of ownColonies(s, p)) safely(() => manageColony(s, p, c, prof));
   safely(() => sendSettler(s, p, prof));
   safely(() => manageLogistics(s, p));
-  const units = Object.values(s.units).filter((u) => u.owner === p.id);
+  const units = indexedUnitsOf(s, p.id);
   for (const u of units) {
     if (!s.units[u.id] || u.owner !== p.id) continue;
     safely(() => unitTurn(s, p, u, prof));
@@ -162,8 +165,8 @@ function armedAt(s: GameState, p: Player, x: number, y: number): Unit[] {
 function spareArmy(s: GameState, p: Player, prof: AiProfile): Unit[] {
   const out: Unit[] = [];
   const kept = new Map<string, number>();
-  for (const u of Object.values(s.units)) {
-    if (u.owner !== p.id || !isArmed(u) || u.loc.kind !== 'map' || u.ally) continue;
+  for (const u of ownedUnitsView(s, p.id)) {
+    if (!isArmed(u) || u.loc.kind !== 'map' || u.ally) continue;
     const c = colonyAt(s, u.loc.x, u.loc.y);
     if (c && c.owner === p.id) {
       const n = kept.get(c.id) ?? 0;
@@ -231,8 +234,9 @@ export const expansionReady = (s: GameState, p: Player, prof: AiProfile, colonie
 
 /** A site's penalty for native villages within two tiles: colonies there raise tension. */
 const nativeCrowding = (s: GameState) => {
+  const grid = gridOf(s);
   const villages = Object.values(s.settlements);
-  return (x: number, y: number) => villages.filter((st) => distance(st.x, st.y, x, y) <= 2).length * 4;
+  return (x: number, y: number) => villages.filter((st) => grid.distance(st.x, st.y, x, y) <= 2).length * 4;
 };
 
 /** The colonists sent out to found colonies, while they are on their way (forgetting the others). */
@@ -318,6 +322,7 @@ function sendSeaSettler(s: GameState, p: Player, colonies: Colony[], keep: numbe
  * (colonistTurn). Returns whether the ship is on that errand this turn.
  */
 function carrySeaSettler(s: GameState, p: Player, ship: Unit, here: Colony | undefined): boolean {
+  const grid = gridOf(s);
   const sea = p.aiMemory?.seaSettlers;
   if (!sea) return false;
   const passengers = unitsAboard(s, ship);
@@ -338,7 +343,7 @@ function carrySeaSettler(s: GameState, p: Player, ship: Unit, here: Colony | und
   const target = sea[settler.id];
   const pos = unitPosition(s, ship)!;
   // Next to the site (and not in a colony): the usual landing puts the settler ashore.
-  if (distance(pos.x, pos.y, target.x, target.y) <= 1 && !colonyAt(s, pos.x, pos.y)) return false;
+  if (grid.distance(pos.x, pos.y, target.x, target.y) <= 1 && !colonyAt(s, pos.x, pos.y)) return false;
   let found: { x: number; y: number }[] | null = null;
   const spot = neighbours(s, target.x, target.y).find((n) => isWater(tileAt(s, n.x, n.y)!) && (found = findPath(s, ship, n.x, n.y)));
   if (!spot) {
@@ -436,8 +441,12 @@ function currentValue(p: Player, c: Colony, u: Unit, report: ColonyReport, prof:
   return jobValueFor(p, c, u, job, amount, report, prof, sol);
 }
 
-/** `report`, `sol` and `occupancy` are the colony's current report, Sons of Liberty share and occupancy. */
-function bestJobFor(s: GameState, p: Player, c: Colony, u: Unit, prof: AiProfile, report: ColonyReport, sol: number, occupancy: ColonyOccupancy): { job: Job; value: number } | null {
+/**
+ * The best job for a worker: the first of jobOptions (in its order) with the highest
+ * jobValueFor. `report`, `sol` and `occupancy` are the colony's current report, Sons of Liberty
+ * share and occupancy. The plain version, kept to check bestJobFor against (setJobSearchChecks).
+ */
+function bestJobByOptions(s: GameState, p: Player, c: Colony, u: Unit, prof: AiProfile, report: ColonyReport, sol: number, occupancy: ColonyOccupancy): { job: Job; value: number } | null {
   let best: { job: Job; value: number } | null = null;
   for (const opt of jobOptions(s, c, u, occupancy)) {
     const v = jobValueFor(p, c, u, opt.job, opt.amount, report, prof, sol);
@@ -446,23 +455,179 @@ function bestJobFor(s: GameState, p: Player, c: Colony, u: Unit, prof: AiProfile
   return best;
 }
 
+/**
+ * What optimiseWorkers works out once per colony instead of once per worker and job (none of it
+ * moves when workers change jobs): the goods each tile around can yield at all, with the land's
+ * part of the yield (landYield); the yields by unit type; and each good's value for the current
+ * report.
+ */
+interface JobSearch {
+  bonus: number;
+  /** For each tile of the occupancy, its first entry in `goods` and `land`. */
+  start: number[];
+  /** The goods with a land yield above 0, tile by tile in goodsOf order, and that yield. */
+  goods: GoodId[];
+  land: number[];
+  /** workerTileYield for each entry, by unit type; NaN until needed. */
+  yields: Map<UnitTypeId, Float64Array>;
+  report: ColonyReport | null;
+  values: Map<ProductId, number>;
+}
+
+function newJobSearch(s: GameState, c: Colony, occupancy: ColonyOccupancy): JobSearch {
+  const start: number[] = [];
+  const goods: GoodId[] = [];
+  const land: number[] = [];
+  for (const q of occupancy.tiles) {
+    start.push(goods.length);
+    const tile = tileAt(s, q.x, q.y);
+    for (const g of goodsOf(s)) {
+      const a = landYield(s, c, tile, g);
+      if (a === 0) continue;
+      goods.push(g);
+      land.push(a);
+    }
+  }
+  start.push(goods.length);
+  return { bonus: occupancy.bonus, start, goods, land, yields: new Map(), report: null, values: new Map() };
+}
+
+/** On with CC_AI_CHECKS=1 in the environment: optimiseWorkers checks its job search against the plain one (slow). */
+let jobSearchChecks = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.CC_AI_CHECKS === '1';
+let jobSearchChecked = 0;
+
+/**
+ * Turns on checking optimiseWorkers' job search (bestJobFor, the kept occupancy) against the plain
+ * versions, which throw on a difference (for tests). Returns how many searches were checked so far.
+ */
+export function setJobSearchChecks(on: boolean): number {
+  jobSearchChecks = on;
+  return jobSearchChecked;
+}
+
+/**
+ * bestJobByOptions without building the option list: the same options in the same order (the
+ * tiles around the colony with each good, then the buildings and the school, as jobOptions lists
+ * them), valued as jobValueFor values them, the first of the best kept. Tile yields and the goods'
+ * values come from `search`.
+ */
+function bestJobFor(s: GameState, p: Player, c: Colony, u: Unit, prof: AiProfile, report: ColonyReport, sol: number, occupancy: ColonyOccupancy, search: JobSearch): { job: Job; value: number } | null {
+  // (A change of jobs keeps the population, so the liberty bonus too; a new one starts afresh.)
+  if (search.bonus !== occupancy.bonus || search.start.length !== occupancy.tiles.length + 1) Object.assign(search, newJobSearch(s, c, occupancy));
+  if (search.report !== report) {
+    search.report = report;
+    search.values.clear();
+  }
+  const { goods, land, start } = search;
+  const tiles = occupancy.tiles;
+  let yields = search.yields.get(u.type);
+  if (!yields) search.yields.set(u.type, (yields = new Float64Array(goods.length).fill(NaN)));
+  const expertFor = UNIT_TYPES[u.type].expertFor;
+  const w = s.map.width;
+  let best: { job: Job; value: number } | null = null;
+  // Tile jobs, valued as jobValueFor values them (no input, never the school). A good without a
+  // land yield yields nothing (tileYield), so only those with one are tried.
+  for (let t = 0; t < tiles.length; t++) {
+    const q = tiles[t];
+    const i = q.y * w + q.x;
+    const worker = occupancy.worked.get(i);
+    if (worker && worker.id !== u.id) continue;
+    if (occupancy.closed.has(i)) continue;
+    for (let k = start[t]; k < start[t + 1]; k++) {
+      const g = goods[k];
+      let amount = yields[k];
+      if (amount !== amount) amount = yields[k] = workerTileYield(s, c, tileAt(s, q.x, q.y), g, u.type, land[k], occupancy.bonus);
+      if (!(amount > 0)) continue;
+      let pv = search.values.get(g);
+      if (pv === undefined) search.values.set(g, (pv = productValue(p, c, report, g, prof, sol)));
+      let v = amount * pv;
+      if (expertFor && expertFor !== g) v *= 0.6;
+      if (!best || v > best.value) best = { job: { kind: 'tile', x: q.x, y: q.y, good: g }, value: v };
+    }
+  }
+  // Building jobs and the school, as jobOptions lists them.
+  const own = u.loc.kind === 'colony' && u.loc.colonyId === c.id && u.loc.job.kind === 'building' ? u.loc.job.building : null;
+  const others = (kind: string) => (occupancy.inBuilding.get(kind) ?? 0) - (own === kind ? 1 : 0);
+  for (const kind of buildingsOf(s)) {
+    const def = BUILDINGS[kind];
+    if (def.workplaces === 0 || c.buildings[kind] === 0 || !def.output) continue;
+    if (others(kind) >= def.workplaces) continue;
+    const job: Job = { kind: 'building', building: kind };
+    const v = jobValueFor(p, c, u, job, buildingCapacityPerWorker(s, c, kind, u.type, occupancy.bonus), report, prof, sol);
+    if (!best || v > best.value) best = { job, value: v };
+  }
+  const level = c.buildings.schoolhouse;
+  const teach = UNIT_TYPES[u.type].teach;
+  // jobValueFor values teaching at -1.
+  if (level && teach && teach <= level && others('schoolhouse') < SCHOOL_TEACHERS[level - 1] && (!best || -1 > best.value)) best = { job: { kind: 'building', building: 'schoolhouse' }, value: -1 };
+  if (jobSearchChecks) {
+    jobSearchChecked++;
+    const want = bestJobByOptions(s, p, c, u, prof, report, sol, occupancy);
+    if (JSON.stringify(want) !== JSON.stringify(best) || want?.value !== best?.value) {
+      throw new Error(`bestJobFor in ${c.name} for ${u.id}: ${JSON.stringify(best)} instead of ${JSON.stringify(want)}`);
+    }
+  }
+  return best;
+}
+
+/**
+ * The occupancy after a worker changed jobs inside the colony (assignJob) from `from` to `to`:
+ * only those two jobs' tiles and buildings change. The population, and with it the liberty bonus,
+ * stay the same. Updates `occupancy` in place.
+ */
+function occupancyAfterMove(s: GameState, c: Colony, occupancy: ColonyOccupancy, from: Job, to: Job): ColonyOccupancy {
+  const w = s.map.width;
+  const retile = (job: Job) => {
+    if (job.kind !== 'tile' || !occupancy.tiles.some((q) => q.x === job.x && q.y === job.y)) return;
+    const i = job.y * w + job.x;
+    const v = tileWorkedBy(s, job.x, job.y);
+    if (v) occupancy.worked.set(i, v);
+    else occupancy.worked.delete(i);
+  };
+  retile(from);
+  retile(to);
+  if (from.kind === 'building') {
+    const n = (occupancy.inBuilding.get(from.building) ?? 0) - 1;
+    if (n > 0) occupancy.inBuilding.set(from.building, n);
+    else occupancy.inBuilding.delete(from.building);
+  }
+  if (to.kind === 'building') occupancy.inBuilding.set(to.building, (occupancy.inBuilding.get(to.building) ?? 0) + 1);
+  if (jobSearchChecks) {
+    const want = colonyOccupancy(s, c);
+    const same =
+      want.pop === occupancy.pop &&
+      want.bonus === occupancy.bonus &&
+      want.tiles.length === occupancy.tiles.length &&
+      want.closed.size === occupancy.closed.size &&
+      [...want.closed].every((i) => occupancy.closed.has(i)) &&
+      want.worked.size === occupancy.worked.size &&
+      [...want.worked].every(([i, v]) => occupancy.worked.get(i) === v) &&
+      want.inBuilding.size === occupancy.inBuilding.size &&
+      [...want.inBuilding].every(([k, n]) => occupancy.inBuilding.get(k) === n);
+    if (!same) throw new Error(`Kept occupancy of ${c.name} differs from colonyOccupancy`);
+  }
+  return occupancy;
+}
+
 /** Shuffles a few workers to better jobs each turn. */
 function optimiseWorkers(s: GameState, p: Player, c: Colony, prof: AiProfile): void {
   let changes = 0;
   const workers = colonyWorkers(s, c).sort((a, b) => UNIT_TYPES[b.type].skill - UNIT_TYPES[a.type].skill);
   // The report, the Sons of Liberty share (the report's) and who works where only change when
-  // someone changes jobs.
+  // someone changes jobs. A change of jobs moves only that worker in the occupancy.
   let report = aiColonyReport(s, c);
   let occupancy = colonyOccupancy(s, c);
+  const search = newJobSearch(s, c, occupancy);
   for (const u of workers) {
     if (changes >= 3) break;
     const now = currentValue(p, c, u, report, prof, report.sonsOfLiberty);
-    const best = bestJobFor(s, p, c, u, prof, report, report.sonsOfLiberty, occupancy);
+    const best = bestJobFor(s, p, c, u, prof, report, report.sonsOfLiberty, occupancy, search);
     if (best && best.value > now * 1.15 + 0.5) {
+      const from = u.loc.kind === 'colony' && u.loc.colonyId === c.id ? u.loc.job : null;
       assignJob(s, u.id, c.id, best.job);
       changes++;
       report = aiColonyReport(s, c);
-      occupancy = colonyOccupancy(s, c);
+      occupancy = from ? occupancyAfterMove(s, c, occupancy, from, best.job) : colonyOccupancy(s, c);
     }
   }
   // Never starve: move people onto food until the colony breaks even.
@@ -479,7 +644,8 @@ function optimiseWorkers(s: GameState, p: Player, c: Colony, prof: AiProfile): v
 }
 
 function buildPlan(s: GameState, p: Player, c: Colony, prof: AiProfile): BuildTarget | null {
-  const threatened = Object.values(p.stance).includes('war') || Object.values(s.settlements).some((st) => distance(st.x, st.y, c.x, c.y) <= 5 && tensionOf(st, p.id) > 500);
+  const grid = gridOf(s);
+  const threatened = Object.values(p.stance).includes('war') || Object.values(s.settlements).some((st) => grid.distance(st.x, st.y, c.x, c.y) <= 5 && tensionOf(st, p.id) > 500);
   // Following an independence plan (ai/plan.ts), or at war with the Crown.
   const planning = turnPlan.adopted || p.independence === 'declared';
   const preparing = planning || (!!prof.independence && turnShare >= prof.independence.minShare - 20);
@@ -632,8 +798,8 @@ function mountTroops(s: GameState, p: Player, c: Colony): void {
 function acquireLand(s: GameState, p: Player, c: Colony, prof: AiProfile): void {
   if (prof.land === 'avoid') return;
   // Native land next to the colony before its people: most colonies have none left to acquire.
-  if (!neighbours(s, c.x, c.y).some((n) => nativeLandOwner(s, n.x, n.y)) || colonyWorkers(s, c).length < 3) return;
-  for (const n of neighbours(s, c.x, c.y)) {
+  if (!workArea(s, c.x, c.y).some((n) => nativeLandOwner(s, n.x, n.y)) || colonyWorkers(s, c).length < 3) return;
+  for (const n of workArea(s, c.x, c.y)) {
     const st = nativeLandOwner(s, n.x, n.y);
     if (!st) continue;
     const tile = tileAt(s, n.x, n.y)!;
@@ -684,6 +850,7 @@ function treasureTurn(s: GameState, p: Player, u: Unit): void {
 }
 
 function soldierTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
+  const grid = gridOf(s);
   // Damaged artillery is mended where it can be, before it goes anywhere.
   if (u.type === 'damagedArtillery') safely(() => repairArtillery(s, p.id, u.id));
   if (p.independence === 'declared') return warTurn(s, p, u);
@@ -699,8 +866,8 @@ function soldierTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
     const surplus = (c: Colony) => rebelColonyDefence(s, p, c) - need;
     const thin = surplus(here) >= REBEL_DEFENCE
       ? colonies
-          .filter((c) => c.id !== here.id && distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE && colonyWorkers(s, c).length > 0 && surplus(c) < 0)
-          .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0]
+          .filter((c) => c.id !== here.id && grid.distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE && colonyWorkers(s, c).length > 0 && surplus(c) < 0)
+          .sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0]
       : undefined;
     if (thin && goTo(s, u, thin.x, thin.y)) {
       return;
@@ -714,11 +881,11 @@ function soldierTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   }
   const short = colonies
     .filter((c) => armedAt(s, p, c.x, c.y).length < need)
-    .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];
+    .sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0];
   // Spare troops march on a war target when there is one.
   const target = p.aiMemory?.warTarget ? s.colonies[p.aiMemory.warTarget] : undefined;
   if (target && target.owner !== p.id && p.stance[target.owner] === 'war' && !short) {
-    if (distance(target.x, target.y, pos.x, pos.y) === 1) {
+    if (grid.distance(target.x, target.y, pos.x, pos.y) === 1) {
       attack(s, u.id, { colonyId: target.id });
       return;
     }
@@ -771,7 +938,9 @@ function warTurn(s: GameState, p: Player, u: Unit): void {
 /** Royal land units within `range` tiles of a colony (the War of Independence). */
 function royalsNear(s: GameState, p: Player, c: Colony, range = 2): number {
   let n = 0;
-  for (const o of Object.values(s.units)) if (o.owner === 'crown' && o.against === p.id && o.loc.kind === 'map' && !isShip(o) && distance(o.loc.x, o.loc.y, c.x, c.y) <= range) n++;
+  forEachUnitNear(s, c.x, c.y, range, (o) => {
+    if (o.owner === 'crown' && o.against === p.id && !isShip(o)) n++;
+  });
   return n;
 }
 
@@ -816,6 +985,7 @@ const SORTIE_ODDS = 0.8;
  * land next to the weakest colony, which one stripped of its garrison would become).
  */
 function reinforce(s: GameState, p: Player, u: Unit): boolean {
+  const grid = gridOf(s);
   const pos = unitPosition(s, u);
   if (!pos || u.moves <= 0) return false;
   const here = colonyAt(s, pos.x, pos.y);
@@ -824,10 +994,10 @@ function reinforce(s: GameState, p: Player, u: Unit): boolean {
   const keep = powerNeeded(s, p) * (isCoastal(s, here.x, here.y) ? 2 : 1);
   if (defence - keep < REBEL_DEFENCE || armedAt(s, p, here.x, here.y).length <= 1) return false;
   const target = ownColonies(s, p)
-    .filter((c) => c.id !== here.id && distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE)
+    .filter((c) => c.id !== here.id && grid.distance(c.x, c.y, pos.x, pos.y) <= REINFORCE_RANGE)
     .map((c) => ({ c, threat: royalsNear(s, p, c) - armedAt(s, p, c.x, c.y).length }))
     .filter((e) => e.threat > 0)
-    .sort((a, b) => b.threat - a.threat || distance(a.c.x, a.c.y, pos.x, pos.y) - distance(b.c.x, b.c.y, pos.x, pos.y))[0];
+    .sort((a, b) => b.threat - a.threat || grid.distance(a.c.x, a.c.y, pos.x, pos.y) - grid.distance(b.c.x, b.c.y, pos.x, pos.y))[0];
   return !!target && goTo(s, u, target.c.x, target.c.y);
 }
 
@@ -836,6 +1006,7 @@ const REINFORCE_RANGE = 12;
 
 /** Scouts chase rumours, then chiefs, then the edge of the known world. */
 function scoutTurn(s: GameState, p: Player, u: Unit): void {
+  const grid = gridOf(s);
   const pos = unitPosition(s, u)!;
   const w = s.map.width;
   const known = (x: number, y: number) => p.explored[y * w + x] === 1;
@@ -851,11 +1022,11 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
     for (let x = 0; x < w; x++) {
       if (!known(x, y)) continue;
       const t = s.map.tiles[y * w + x];
-      if (t.lcr) targets.push({ x, y, d: distance(x, y, pos.x, pos.y) });
+      if (t.lcr) targets.push({ x, y, d: grid.distance(x, y, pos.x, pos.y) });
     }
   }
   for (const st of Object.values(s.settlements)) {
-    if (known(st.x, st.y) && !st.visited.includes(p.id) && tensionOf(st, p.id) < 500) targets.push({ x: st.x, y: st.y, d: distance(st.x, st.y, pos.x, pos.y) + 2 });
+    if (known(st.x, st.y) && !st.visited.includes(p.id) && tensionOf(st, p.id) < 500) targets.push({ x: st.x, y: st.y, d: grid.distance(st.x, st.y, pos.x, pos.y) + 2 });
   }
   targets.sort((a, b) => a.d - b.d);
   for (const t of targets.slice(0, 6)) {
@@ -872,7 +1043,7 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
     for (let x = 1; x < w - 1; x++) {
       if (!known(x, y) || isWater(s.map.tiles[y * w + x])) continue;
       if (!neighbours(s, x, y).some((n) => !known(n.x, n.y))) continue;
-      const d = distance(x, y, pos.x, pos.y);
+      const d = grid.distance(x, y, pos.x, pos.y);
       if (d > 0 && (!frontier || d < frontier.d)) frontier = { x, y, d };
     }
   }
@@ -886,8 +1057,9 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
 }
 
 function pioneerTurn(s: GameState, p: Player, u: Unit): void {
+  const grid = gridOf(s);
   const pos = unitPosition(s, u)!;
-  const colonies = ownColonies(s, p).sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y));
+  const colonies = ownColonies(s, p).sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y));
   for (const c of colonies.slice(0, 4)) {
     const spots = [{ x: c.x, y: c.y, good: 'food' as GoodId }, ...colonyWorkers(s, c).flatMap((w) => (w.loc.kind === 'colony' && w.loc.job.kind === 'tile' ? [w.loc.job] : []))];
     for (const t of spots) {
@@ -918,6 +1090,7 @@ function pioneerTurn(s: GameState, p: Player, u: Unit): void {
 }
 
 function missionaryTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
+  const grid = gridOf(s);
   const pos = unitPosition(s, u)!;
   // Combative first stirs a nearby tribe against an enemy, now and then (ai/natives.ts).
   for (const n of neighbours(s, pos.x, pos.y)) {
@@ -926,9 +1099,9 @@ function missionaryTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void
   }
   const st = Object.values(s.settlements)
     .filter((o) => !o.mission && tensionOf(o, p.id) < 500 && s.tribes.find((t) => t.id === o.tribe)?.stance[p.id] !== 'war')
-    .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];
+    .sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0];
   if (!st || !prof.missions) return;
-  if (distance(st.x, st.y, pos.x, pos.y) === 1) {
+  if (grid.distance(st.x, st.y, pos.x, pos.y) === 1) {
     establishMission(s, u.id, st.id);
     return;
   }
@@ -937,6 +1110,7 @@ function missionaryTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void
 }
 
 function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
+  const grid = gridOf(s);
   const pos = unitPosition(s, u)!;
   const here = colonyAt(s, pos.x, pos.y);
   // A settler waiting on the quay for a ship to another island (sendSeaSettler); once ashore, it founds as any settler.
@@ -949,10 +1123,10 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   // Unskilled colonists learn a trade from the natives first.
   if (prof.learnFromNatives && UNIT_TYPES[u.type].skill <= 0 && u.type !== 'pettyCriminal' && u.type !== 'nativeConvert') {
     const teacher = Object.values(s.settlements)
-      .filter((st) => st.skill && tensionOf(st, p.id) < 400 && distance(st.x, st.y, pos.x, pos.y) <= 8 && p.explored[st.y * s.map.width + st.x])
-      .sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];
+      .filter((st) => st.skill && tensionOf(st, p.id) < 400 && grid.distance(st.x, st.y, pos.x, pos.y) <= 8 && p.explored[st.y * s.map.width + st.x])
+      .sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0];
     if (teacher) {
-      if (distance(teacher.x, teacher.y, pos.x, pos.y) === 1 && u.moves > 0) {
+      if (grid.distance(teacher.x, teacher.y, pos.x, pos.y) === 1 && u.moves > 0) {
         learnSkill(s, u.id, teacher.id);
         return;
       }
@@ -965,8 +1139,8 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   }
   // A missionary for an unconverted village, if a church can bless one.
   if (prof.missions && here && here.owner === p.id && here.buildings.church >= 2 && u.type !== 'nativeConvert') {
-    const busy = Object.values(s.units).some((o) => o.owner === p.id && o.role === 'missionary');
-    const open = Object.values(s.settlements).some((st) => !st.mission && distance(st.x, st.y, here.x, here.y) <= 10);
+    const busy = ownedUnitsView(s, p.id).some((o) => o.role === 'missionary');
+    const open = Object.values(s.settlements).some((st) => !st.mission && grid.distance(st.x, st.y, here.x, here.y) <= 10);
     if (!busy && open && (u.type === 'pettyCriminal' || u.type === 'indenturedServant' || u.type === 'firebrandPreacher')) {
       equipInColony(s, u.id, 'missionary');
       return;
@@ -1020,7 +1194,7 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
   // The nearest reachable colony, counting food to spare as nearness. Ranked first (each colony's
   // report once), so that only the colonies up to the first reachable one need a path.
   const ranked = (reachable ?? colonies)
-    .map((c) => ({ c, near: distance(c.x, c.y, pos.x, pos.y) - aiColonyReport(s, c).net.food / 2 }))
+    .map((c) => ({ c, near: grid.distance(c.x, c.y, pos.x, pos.y) - aiColonyReport(s, c).net.food / 2 }))
     .sort((a, b) => a.near - b.near);
   let found: { x: number; y: number }[] | null | undefined;
   const home = reachable ? ranked[0]?.c : ranked.find((e) => (found = findPath(s, u, e.c.x, e.c.y)))?.c;
@@ -1037,6 +1211,7 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
 // Ships and trade
 
 function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
+  const grid = gridOf(s);
   const def = UNIT_TYPES[ship.type];
   if (def.offence > 0 && aiFight(s, p, ship)) return;
   if (ship.type === 'privateer' && prof.piracy && !unitsAboard(s, ship).length && privateer(s, p, ship)) return;
@@ -1094,7 +1269,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
     const weak = turnArming ? new Set(weakColonies(s, p).map((c) => c.id)) : new Set<string>();
     const port = ownColonies(s, p)
       .filter((c) => c.id !== mine?.id && isCoastal(s, c.x, c.y) && room(c))
-      .sort((a, b) => Number(weak.has(b.id)) - Number(weak.has(a.id)) || distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];
+      .sort((a, b) => Number(weak.has(b.id)) - Number(weak.has(a.id)) || grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0];
     if (port) {
       setDestination(s, ship.id, { x: port.x, y: port.y });
       return;
@@ -1113,7 +1288,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
       return;
     }
   }
-  const docks = Object.values(s.units).some((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u));
+  const docks = ownedUnitsView(s, p.id).some((u) => u.loc.kind === 'europe' && !isShip(u));
   if (p.independence === 'none' && (carrying > 0 || docks || p.gold > prof.reserve + recruitPrice(s, p))) {
     // Home, or a Favoured Nation partner's port where the cargo fetches more (foreign.ts).
     if (!ship.dest) setDestination(s, ship.id, { europe: true, port: choosePort(s, p, ship) });
@@ -1127,6 +1302,7 @@ function shipTurn(s: GameState, p: Player, ship: Unit, prof: AiProfile): void {
 
 /** Privateers hunt foreign merchant ships; their attacks start no wars. */
 function privateer(s: GameState, p: Player, ship: Unit): boolean {
+  const grid = gridOf(s);
   const pos = unitPosition(s, ship)!;
   // Never a Favoured Nation's ships, nor a trade partner's.
   const prey = (o: Unit) => o.owner !== p.id && isShip(o) && UNIT_TYPES[o.type].offence === 0 && o.owner !== 'crown' && !hasTradeAgreement(s, p.id, o.owner) && !isCompanyId(s, o.owner);
@@ -1138,8 +1314,8 @@ function privateer(s: GameState, p: Player, ship: Unit): boolean {
     }
   }
   const near = Object.values(s.units)
-    .filter((o) => prey(o) && o.loc.kind === 'map' && distance(o.loc.x, o.loc.y, pos.x, pos.y) <= 8)
-    .sort((a, b) => distance((a.loc as { x: number }).x, (a.loc as { y: number }).y, pos.x, pos.y) - distance((b.loc as { x: number }).x, (b.loc as { y: number }).y, pos.x, pos.y))[0];
+    .filter((o) => prey(o) && o.loc.kind === 'map' && grid.distance(o.loc.x, o.loc.y, pos.x, pos.y) <= 8)
+    .sort((a, b) => grid.distance((a.loc as { x: number }).x, (a.loc as { y: number }).y, pos.x, pos.y) - grid.distance((b.loc as { x: number }).x, (b.loc as { y: number }).y, pos.x, pos.y))[0];
   if (near && near.loc.kind === 'map') {
     const step = adjacentTileTowards(s, ship, near.loc.x, near.loc.y);
     if (step) {
@@ -1162,7 +1338,7 @@ const MUSKETS_PER_COLONY = 100;
 
 function europe(s: GameState, p: Player, prof: AiProfile): void {
   if (p.independence !== 'none') return;
-  const inEurope = () => Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && isShip(u) && !u.repair && !u.route);
+  const inEurope = () => ownedUnitsView(s, p.id).filter((u) => u.loc.kind === 'europe' && isShip(u) && !u.repair && !u.route);
   const ships = inEurope();
   // Ships on routes that call at Europe pick up colonists from the docks as they pass.
   // Only routes calling at the home port: colonists board only there.
@@ -1181,7 +1357,7 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
   }
 
   const colonies = ownColonies(s, p);
-  const docks = () => Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u));
+  const docks = () => ownedUnitsView(s, p.id).filter((u) => u.loc.kind === 'europe' && !isShip(u));
   // Colonists board only in the home port, so only ships there count as room for them. A ship in
   // a partner's port lets two wait on the docks for the next ship home (port choice brings it).
   const abroad = ships.some((sh) => !inHomePort(sh)) ? 2 : 0;
@@ -1260,11 +1436,12 @@ function europe(s: GameState, p: Player, prof: AiProfile): void {
 // Diplomacy and war
 
 function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
+  const grid = gridOf(s);
   const colonies = ownColonies(s, p);
   // Calm angry neighbours with gifts.
   if (prof.gifts) {
     for (const t of s.tribes) {
-      const near = Object.values(s.settlements).filter((st) => st.tribe === t.id && colonies.some((c) => distance(c.x, c.y, st.x, st.y) <= 6));
+      const near = Object.values(s.settlements).filter((st) => st.tribe === t.id && colonies.some((c) => grid.distance(c.x, c.y, st.x, st.y) <= 6));
       if (!near.length) continue;
       const worst = Math.max(...near.map((st) => tensionOf(st, p.id)));
       if ((worst > 450 || t.stance[p.id] === 'war') && p.gold > prof.reserve + 200) {
@@ -1279,12 +1456,12 @@ function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
   // Raid nearby native settlements for treasure.
   if (prof.raidNatives && army.length >= 2 && s.turn > aiTurn(s, 40)) {
     const st = Object.values(s.settlements)
-      .filter((o) => colonies.some((c) => distance(c.x, c.y, o.x, o.y) <= 6))
+      .filter((o) => colonies.some((c) => grid.distance(c.x, c.y, o.x, o.y) <= 6))
       .sort((a, b) => a.defenders - b.defenders)[0];
     if (st) {
       for (const u of army) {
         const pos = unitPosition(s, u)!;
-        if (distance(st.x, st.y, pos.x, pos.y) === 1 && u.moves > 0) safely(() => attack(s, u.id, { settlementId: st.id }));
+        if (grid.distance(st.x, st.y, pos.x, pos.y) === 1 && u.moves > 0) safely(() => attack(s, u.id, { settlementId: st.id }));
         else {
           const step = adjacentTileTowards(s, u, st.x, st.y);
           if (step) safely(() => setDestination(s, u.id, step));

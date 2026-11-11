@@ -1,5 +1,5 @@
-// Indexes of units by where they are (map tile, colony, carrier, worked tile) and of colonies by
-// tile, for the hot lookups in queries.ts. They replace linear scans over every unit and return
+// Indexes of units by where they are (map tile, colony, carrier, worked tile) and by owner, and of
+// colonies by tile, for the hot lookups in queries.ts. They replace linear scans over every unit and return
 // exactly what those scans returned, in the same order: the order `for (id in s.units)` visits
 // the units, which is the order their ids were added to the record.
 //
@@ -7,13 +7,14 @@
 // record, never in the state, so saves and hashes are unchanged), and every change to what it
 // indexes goes through the functions here. The types enforce that: `GameState.units` and
 // `GameState.colonies` are read-only records, and a unit's `loc` (with every field of every
-// location and job) is read-only, so the compiler refuses `u.loc = ...`, `u.loc.x = ...`,
-// `s.units[id] = u` and `delete s.units[id]` everywhere else. Use setUnitLoc, addUnit,
-// removeUnit, addColony and removeColony. A new `units` or `colonies` record (a loaded save, a
+// location and job) and its owner are read-only, so the compiler refuses `u.loc = ...`,
+// `u.loc.x = ...`, `u.owner = ...`, `s.units[id] = u` and `delete s.units[id]` everywhere else.
+// Use setUnitLoc, setUnitOwner, addUnit, removeUnit, addColony and removeColony. A new `units` or `colonies` record (a loaded save, a
 // copied state) gets an index of its own on its first lookup.
 //
 // setIndexChecks(true), or CC_INDEX_CHECKS=1 in the environment, makes every lookup also run the
 // old linear scan and throw if the two differ; test/unitindex.test.ts plays games with it on.
+import { gridOf } from './grid.js';
 import type { Colony, GameState, Unit, UnitLocation } from './types.js';
 
 type Units = GameState['units'];
@@ -33,6 +34,8 @@ interface UnitIndex {
   aboard: Map<string, Unit[]>;
   /** Colony workers on a tile job, by the worked tile. */
   worked: Map<number, Unit[]>;
+  /** Every unit, by owner, each list in key order. */
+  byOwner: Map<string, Unit[]>;
 }
 
 const unitIndexes = new WeakMap<Units, UnitIndex>();
@@ -103,7 +106,7 @@ function place(ix: UnitIndex, u: Unit, loc: UnitLocation, add: boolean): void {
 function unitIndex(s: GameState): UnitIndex | undefined {
   let ix = unitIndexes.get(s.units);
   if (ix && ix.width === s.map.width && ix.height === s.map.height) return ix;
-  ix = { width: s.map.width, height: s.map.height, rank: new Map(), next: 0, onMap: new Map(), inColony: new Map(), aboard: new Map(), worked: new Map() };
+  ix = { width: s.map.width, height: s.map.height, rank: new Map(), next: 0, onMap: new Map(), inColony: new Map(), aboard: new Map(), worked: new Map(), byOwner: new Map() };
   for (const id in s.units) {
     if (INDEX_LIKE.test(id)) return undefined;
     ix.rank.set(id, ix.next++);
@@ -111,6 +114,7 @@ function unitIndex(s: GameState): UnitIndex | undefined {
   for (const id in s.units) {
     const u = s.units[id];
     place(ix, u, u.loc, true);
+    insert(ix, ix.byOwner, u.owner, u);
   }
   unitIndexes.set(s.units, ix);
   return ix;
@@ -137,9 +141,12 @@ export function addUnit(s: GameState, u: Unit): void {
     unitIndexes.delete(s.units);
     return;
   }
-  if (before) place(ix, before, before.loc, false);
-  else ix.rank.set(u.id, ix.next++);
+  if (before) {
+    place(ix, before, before.loc, false);
+    remove(ix.byOwner, before.owner, before);
+  } else ix.rank.set(u.id, ix.next++);
   place(ix, u, u.loc, true);
+  insert(ix, ix.byOwner, u.owner, u);
 }
 
 /** Removes a unit from the state. */
@@ -150,7 +157,18 @@ export function removeUnit(s: GameState, id: string): void {
   const ix = unitIndexes.get(s.units);
   if (!ix || !u) return;
   place(ix, u, u.loc, false);
+  remove(ix.byOwner, u.owner, u);
   ix.rank.delete(id);
+}
+
+/** Gives a unit to another owner: the only way to change `u.owner` (see the top of this file). */
+export function setUnitOwner(s: GameState, u: Unit, owner: Unit['owner']): void {
+  const old = u.owner;
+  (u as { owner: Unit['owner'] }).owner = owner;
+  const ix = unitIndexes.get(s.units);
+  if (!ix || s.units[u.id] !== u || old === owner) return;
+  remove(ix.byOwner, old, u);
+  insert(ix, ix.byOwner, owner, u);
 }
 
 function scan(s: GameState, test: (u: Unit) => boolean): Unit[] {
@@ -183,6 +201,25 @@ export function indexedUnitsAt(s: GameState, x: number, y: number): Unit[] {
   const got = k >= 0 ? (ix!.onMap.get(k)?.slice() ?? []) : scan(s, onTile(x, y));
   return checked(s, `tile ${x},${y}`, got, onTile(x, y));
 }
+
+/** The units of an owner, wherever they are, in key order (a new array). */
+export function indexedUnitsOf(s: GameState, owner: string): Unit[] {
+  const ix = unitIndex(s);
+  const got = ix ? (ix.byOwner.get(owner)?.slice() ?? []) : scan(s, (u) => u.owner === owner);
+  return checked(s, `owner ${owner}`, got, (u) => u.owner === owner);
+}
+
+/**
+ * The units of an owner in key order, without copying: shared with the index, so read it and
+ * don't change the state (move, add, remove or give away units) while looping over it.
+ */
+export function ownedUnitsView(s: GameState, owner: string): readonly Unit[] {
+  const ix = unitIndex(s);
+  if (ix && !checks) return ix.byOwner.get(owner) ?? NONE;
+  return indexedUnitsOf(s, owner);
+}
+
+const NONE: readonly Unit[] = [];
 
 /** Units working in a colony, in key order (a new array). */
 export function indexedColonyWorkers(s: GameState, colonyId: string): Unit[] {
@@ -219,6 +256,26 @@ export function indexedTileWorker(s: GameState, x: number, y: number): Unit | un
   const k = ix && !checks ? tileKey(ix, x, y) : -1;
   if (k >= 0) return ix!.worked.get(k)?.[0];
   return indexedTileWorkers(s, x, y)[0];
+}
+
+/**
+ * Calls `fn` for each unit on the map within `range` tiles (the grid's distance) of x, y: tile by
+ * tile in the grid's `withinOffsets` order (row by row), each tile's units in key order. For
+ * counts and other order-free tests near a tile, instead of a scan over every unit. Units off the
+ * map's bounds are not visited.
+ */
+export function forEachUnitNear(s: GameState, x: number, y: number, range: number, fn: (u: Unit) => void): void {
+  const tiles = unitTiles(s);
+  const w = s.map.width;
+  const h = s.map.height;
+  const within = gridOf(s).withinOffsets(x, y, range);
+  for (let k = 0; k < within.length; k += 2) {
+    const tx = x + within[k];
+    const ty = y + within[k + 1];
+    if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+    const list = tiles.get(ty * w + tx);
+    if (list) for (let i = 0; i < list.length; i++) fn(list[i]);
+  }
 }
 
 /**

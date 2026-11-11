@@ -8,7 +8,7 @@ import {
   createUnit,
   describeMove,
   deserialize,
-  distance,
+  SQUARE,
   foundColony,
   incitePrice,
   isCoastal,
@@ -47,7 +47,7 @@ function colonyNear(s: GameState, nation: NationId = 'england'): { c: Colony; st
       for (let dx = -3; dx <= 3; dx++) {
         const x = st.x + dx;
         const y = st.y + dy;
-        const d = distance(x, y, st.x, st.y);
+        const d = SQUARE.distance(x, y, st.x, st.y);
         if (d < 2 || colonySiteProblem(s, x, y)) continue;
         const u = createUnit(s, nation, 'freeColonist', { kind: 'map', x, y });
         u.moves = 3;

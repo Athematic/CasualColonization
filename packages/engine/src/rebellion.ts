@@ -25,6 +25,7 @@
  * Every random draw comes from a seeded stream per nation and purpose (`pairRandom`), never from
  * `GameState.rng`, so none of this shifts any other random outcome.
  */
+import { gridOf } from './grid.js';
 import { attack, chooseDefender, defencePower, offencePower } from './combat.js';
 import { fail, RuleError } from './errors.js';
 import { noteHistory } from './history.js';
@@ -34,7 +35,6 @@ import {
   colonyAt,
   colonyWorkers,
   createUnit,
-  distance,
   isCoastal,
   isShip,
   isWater,
@@ -50,7 +50,7 @@ import { type NationId } from './rules/nations.js';
 import { difficultyOf, nationOf, nationSet, scenarioOf, term, Term, type ScenarioLike } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, MercenaryOffer, Player, Unit } from './types.js';
-import { removeUnit } from './unitindex.js';
+import { forEachUnitNear, removeUnit, setUnitOwner } from './unitindex.js';
 
 /** A seeded draw for this nation and purpose. */
 const draw = (s: GameState, nation: NationId, purpose: string) => pairRandom(s, nation, 'crown', `rebellion ${purpose}`);
@@ -277,10 +277,9 @@ export function interventionPower(s: GameState, nation: NationId): NationId | 'f
 /** Royal land units within two tiles of a colony: how threatened it is. */
 function threat(s: GameState, c: Colony): number {
   let n = 0;
-  for (const u of Object.values(s.units)) {
-    if (u.owner !== 'crown' || isShip(u) || u.loc.kind !== 'map') continue;
-    if (distance(u.loc.x, u.loc.y, c.x, c.y) <= 2) n++;
-  }
+  forEachUnitNear(s, c.x, c.y, 2, (u) => {
+    if (u.owner === 'crown' && !isShip(u)) n++;
+  });
   return n;
 }
 
@@ -359,6 +358,7 @@ export function runAllies(s: GameState, p: Player): void {
 }
 
 function allyTurn(s: GameState, p: Player, u: Unit): void {
+  const grid = gridOf(s);
   const pos = unitPosition(s, u)!;
   if (isShip(u)) {
     const prey = neighbours(s, pos.x, pos.y).flatMap((q) => unitsAt(s, q.x, q.y)).find((o) => o.owner === 'crown' && isShip(o));
@@ -378,7 +378,7 @@ function allyTurn(s: GameState, p: Player, u: Unit): void {
   const here = colonyAt(s, pos.x, pos.y);
   const goal = own
     .map((c) => ({ c, threat: threat(s, c) }))
-    .sort((a, b) => b.threat - a.threat || distance(a.c.x, a.c.y, pos.x, pos.y) - distance(b.c.x, b.c.y, pos.x, pos.y) || a.c.id.localeCompare(b.c.id))[0];
+    .sort((a, b) => b.threat - a.threat || grid.distance(a.c.x, a.c.y, pos.x, pos.y) - grid.distance(b.c.x, b.c.y, pos.x, pos.y) || a.c.id.localeCompare(b.c.id))[0];
   const stay = here && here.owner === p.id && (!goal || goal.threat === 0 || threat(s, here) >= goal.threat);
   if (stay || !goal) {
     if (here) u.state = 'fortified';
@@ -414,7 +414,7 @@ function defect(s: GameState, p: Player, c: Colony): void {
   c.takenFrom = p.id;
   c.build = null;
   for (const w of colonyWorkers(s, c)) {
-    w.owner = 'crown';
+    setUnitOwner(s, w, 'crown');
     delete w.teach;
   }
   track(p.id, 'rebellion:colony defected');
