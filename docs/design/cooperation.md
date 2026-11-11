@@ -178,7 +178,7 @@ Step 6 (section 8) found why and changed it.
 
 ## 8. Tuning (step 6, November 2026)
 
-Measured with the 0.10 base merged in (grid abstraction and round 3, both bit-identical: every game without an alliance or a company plays exactly as on the 0.10 base, and a 24-game Americas tournament with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1` ran clean). The tournaments are fast now (24 Americas games in about 80 s), so they ran in the cloud, with larger samples where 24 games could not tell the rates apart. Every run: `npm run tournament -- --play-on --events`.
+Measured with the 0.10 base merged in (grid abstraction and round 3, both bit-identical: every game without an alliance or a company plays exactly as on the 0.10 base, and a 24-game Americas tournament with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1` ran clean; after the tuning, so did the four games with a confederation below and 16 Caribbean games, 8 of them with companies). The tournaments are fast now (24 Americas games in about 80 s), so they ran in the cloud, with larger samples where 24 games could not tell the rates apart. Every run: `npm run tournament -- --play-on --events`.
 
 ### What was wrong
 
