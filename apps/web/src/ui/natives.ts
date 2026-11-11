@@ -9,6 +9,9 @@ import {
   landUseTreaty,
   leasedTiles,
   chiefAgainTurn,
+  defenceBenefits,
+  defencePartner,
+  defenceTreaty,
   exchangeTreaty,
   settlementTeaches,
   teachAgainTurn,
@@ -96,6 +99,19 @@ export function exchangeLine(app: App, nation: NationId, st: Settlement): HTMLEl
     `Cultural exchange with the ${TRIBES[st.tribe].name} since ${formatDate(t.start, calendarOf(s))}. ${teachingLine(s, nation, st)}${chiefText}`);
 }
 
+/**
+ * The mutual defence pact of a settlement's people (N7), in one paragraph: the nation's own pact,
+ * since when and what it does, or the nation the people is bound to instead. Null without one.
+ */
+export function defenceLine(app: App, nation: NationId, st: Settlement): HTMLElement | null {
+  const s = app.state;
+  const name = TRIBES[st.tribe].name;
+  const t = defenceTreaty(s, nation, st.tribe);
+  if (t) return h('p', { class: 'small', 'data-defence': t.id }, `Mutual defence pact with the ${name} since ${formatDate(t.start, calendarOf(s))}: ${defenceBenefits(s)}.`);
+  const other = defencePartner(s, st.tribe);
+  return other ? h('p', { class: 'small', 'data-defence': other }, `The ${name} have a mutual defence pact with ${nationOf(s, other).name}: an attack on them is war with ${nationOf(s, other).name}.`) : null;
+}
+
 /** The label of "Speak with the chief" for a scout: again under a cultural exchange, or when the chief has spoken already. */
 export function speakLabel(s: GameState, nation: NationId, st: Settlement): string {
   if (!st.visited.includes(nation)) return 'Speak with the chief';
@@ -151,6 +167,7 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
       standing ? h('p', { class: 'muted small' }, `The ${TRIBES[st.tribe].name}: ${standing.toLowerCase()}. No trade treaty yet (Foreign Affairs).`) : null,
       leaseLine(app, unit.owner, st.tribe),
       exchangeLine(app, unit.owner, st),
+      defenceLine(app, unit.owner, st),
       options.length ? null : h('p', { class: 'muted' }, 'You have nothing to sell, and they have nothing for sale.'));
     const choice: Deal | null = await choose<Deal>(`Trade with the ${settlementName(s, st)}`, text, [...options, { label: traded ? 'Done' : 'Leave', value: null as unknown as Deal }]);
     if (!choice) return traded;

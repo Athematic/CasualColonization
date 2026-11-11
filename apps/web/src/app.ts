@@ -66,7 +66,7 @@ import { REPORT_TABS, ReportsScreen } from './ui/reports.js';
 import { RoutesScreen } from './ui/routes.js';
 import { Sidebar } from './ui/sidebar.js';
 import { showTurnStart, sortNews } from './ui/turnstart.js';
-import { exchangeLine, inciteDialog, leaseLine, nativeTradeDialog, speakLabel } from './ui/natives.js';
+import { defenceLine, exchangeLine, inciteDialog, leaseLine, nativeTradeDialog, speakLabel } from './ui/natives.js';
 
 /**
  * Turns of movement a unit needs to walk a path: the rest of this turn's moves first (or a fresh
@@ -602,7 +602,9 @@ export class App {
     // A lease of the people's land (land use, N5) is shown with its rent, a cultural exchange (N7) with when it teaches again.
     const lease = leaseLine(this, this.viewer, st.tribe);
     const exchange = exchangeLine(this, this.viewer, st);
-    const text = lease || exchange ? h('div', null, h('p', null, `The people here are ${mood}. What will you do?`), lease, exchange) : `The people here are ${mood}. What will you do?`;
+    // A mutual defence pact (N7): the viewer's own, or the nation the people is bound to.
+    const defence = defenceLine(this, this.viewer, st);
+    const text = lease || exchange || defence ? h('div', null, h('p', null, `The people here are ${mood}. What will you do?`), lease, exchange, defence) : `The people here are ${mood}. What will you do?`;
     const choice = await choose(settlementName(this.state, st), text, [
       ...actions.map((a) => ({ label: labels[a], value: a, disabled: (a === 'learn' && !skill) || (a === 'mission' && !!st.mission) })),
       { label: 'Leave', value: null },

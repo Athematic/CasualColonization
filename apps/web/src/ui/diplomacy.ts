@@ -41,6 +41,7 @@ import {
   peopleTreatyOn,
   peopleTreatyProblem,
   landUseBenefits,
+  defenceBenefits,
   exchangeBenefits,
   leasedTiles,
   leaseTerms,
@@ -256,6 +257,11 @@ export class DiplomacyScreen implements Screen {
       const exchangeOn = treaties && peopleTreatyOn(s, 'exchange');
       const exchanging = inForce.some((x) => x.kind === 'exchange');
       const whyExchange = exchangeOn && trading && !exchanging ? peopleTreatyProblem(s, me.id, t.id, 'exchange') : null;
+      // A mutual defence pact (N7) is the top rung: on trade and land use or an exchange.
+      const defenceOn = treaties && peopleTreatyOn(s, 'defence');
+      const defending = inForce.some((x) => x.kind === 'defence');
+      const rung = !!leasing || exchanging;
+      const whyDefence = defenceOn && trading && rung && !defending ? peopleTreatyProblem(s, me.id, t.id, 'defence') : null;
       return h('tr', { 'data-people': t.id },
         h('td', null, h('span', { class: 'flag', style: `background:${TRIBES[t.id].color}` }), ' ', name),
         h('td', null, String(settlements.length)),
@@ -271,6 +277,9 @@ export class DiplomacyScreen implements Screen {
             : null,
           exchangeOn && trading && !exchanging && !war
             ? [' ', h('button', { class: 'btn tiny', 'data-action': 'propose-exchange', disabled: !!whyExchange || !app.isMyTurn(), title: whyExchange ?? `Offer the ${name} a cultural exchange: ${exchangeBenefits(s)}.`, 'aria-label': `Propose a cultural exchange to the ${name}`, onclick: () => app.dispatch({ type: 'proposePeopleTreaty', people: t.id, kind: 'exchange' }) }, 'Propose exchange')]
+            : null,
+          defenceOn && trading && rung && !defending && !war
+            ? [' ', h('button', { class: 'btn tiny', 'data-action': 'propose-defence', disabled: !!whyDefence || !app.isMyTurn(), title: whyDefence ?? `Offer the ${name} a mutual defence pact: ${defenceBenefits(s)}.`, 'aria-label': `Propose a mutual defence pact to the ${name}`, onclick: () => app.dispatch({ type: 'proposePeopleTreaty', people: t.id, kind: 'defence' }) }, 'Propose defence')]
             : null) : null,
         h('td', null, String(missions)),
         h('td', null, h('div', { class: 'row' }, [100, 500].map((gold) =>
@@ -287,7 +296,8 @@ export class DiplomacyScreen implements Screen {
       h('p', { class: 'muted small' }, 'Colonies near native land raise tension, especially as they grow. Trade, gifts and missions calm it; uneasy tribes demand tribute, angry ones raid and furious ones go to war.'),
       treaties ? h('p', { class: 'muted small' }, `After years of good relations${peopleTreatyRules(s).trade.volume.max > 0 ? ' and trade' : ''}, a people you have met (a scout’s visit, a mission or trade) may agree to a trade treaty, or offer one through a visiting brave: ${peopleTradeBenefits(s)}. Taking a partner’s land, attacking it or paying it to make war breaks faith: every treaty with that people ends, and it will not trust you again for many years.`) : null,
       treaties && peopleTreatyOn(s, 'land-use') ? h('p', { class: 'muted small' }, `With a trade treaty and more years of good relations, a people may lease you its land: ${landUseBenefits(s)}. The rent is paid each year; if you cannot pay, the lease lapses. You may still buy a leased tile; taking one breaks faith.`) : null,
-      treaties && peopleTreatyOn(s, 'exchange') ? h('p', { class: 'muted small' }, `With a trade treaty and more years of good relations, a people may agree to a cultural exchange: ${exchangeBenefits(s)}. It ends with the trade treaty.`) : null);
+      treaties && peopleTreatyOn(s, 'exchange') ? h('p', { class: 'muted small' }, `With a trade treaty and more years of good relations, a people may agree to a cultural exchange: ${exchangeBenefits(s)}. It ends with the trade treaty.`) : null,
+      treaties && peopleTreatyOn(s, 'defence') ? h('p', { class: 'muted small' }, `With a trade treaty and land use or a cultural exchange, after still more years of good relations, a people may make a mutual defence pact with you, and with no other nation while it holds: ${defenceBenefits(s)}. Its braves defend only; they do not join your own wars.`) : null);
   }
 
   /**
