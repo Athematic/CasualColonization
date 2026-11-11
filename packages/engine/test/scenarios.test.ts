@@ -75,8 +75,11 @@ describe('the Americas scenario is today’s tables', () => {
   });
 
   it('units and buildings: all of them, in catalogue order', () => {
-    expect(AMERICAS.units).toEqual(Object.keys(UNIT_TYPES));
-    expect(AMERICAS.buildings).toEqual(BUILDING_ORDER);
+    // Every European entry; a native people's own (Beta 3 step 2) come after them in the catalogue.
+    expect(AMERICAS.units).toEqual(Object.keys(UNIT_TYPES).slice(0, AMERICAS.units.length));
+    expect(AMERICAS.units).toEqual(Object.keys(UNIT_TYPES).filter((t) => !UNIT_TYPES[t as keyof typeof UNIT_TYPES].people));
+    expect(AMERICAS.buildings).toEqual(BUILDING_ORDER.slice(0, AMERICAS.buildings.length));
+    expect(AMERICAS.buildings).toEqual(BUILDING_ORDER.filter((b) => !BUILDINGS[b].people));
   });
 
   it('nations: all eight as alternative history (the default), the original four as real rivals', () => {
