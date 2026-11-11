@@ -165,7 +165,11 @@ export function placeOnMap(s: GameState, u: Unit, x: number, y: number): void {
 }
 
 export function moveUnit(s: GameState, unitId: string, dir: Direction): void {
-  const option = describeMove(s, unitId, dir);
+  moveAs(s, unitId, dir, describeMove(s, unitId, dir));
+}
+
+/** moveUnit with `option`, what describeMove has just said of the step, with nothing changed since. */
+function moveAs(s: GameState, unitId: string, dir: Direction, option: MoveOption): void {
   const u = s.units[unitId];
   if (option.kind !== 'blocked' && option.kind !== 'attack' && option.kind !== 'settlement') {
     track(u.owner, 'cmd:move');
@@ -855,7 +859,8 @@ export function continueOrders(s: GameState, u: Unit, hint?: PathHint): void {
       continue;
     }
     fresh = false;
-    moveUnit(s, u.id, dir);
+    // The step as described just now: moveUnit would only describe it again.
+    moveAs(s, u.id, dir, option);
     step++;
     if ((u.loc as Unit['loc']).kind !== 'map' || u.loc.x !== next.x || u.loc.y !== next.y) path = null;
   }
