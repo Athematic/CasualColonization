@@ -1,6 +1,6 @@
-import { createGame, deserialize, RIVER_DIRS, serialize, TERRAIN, type GameState } from '@cc/engine';
+import { createGame, deserialize, gridOf, RIVER_DIRS, serialize, TERRAIN, type GameState } from '@cc/engine';
 import { describe, expect, it } from 'vitest';
-import { hubOffset, RIVER_MEANDER, riverCourse, ROAD_MEANDER, roadDrawing, roadStrands, strandPoints, type Strand } from '../src/index.js';
+import { hubOffset, RIVER_MEANDER, riverCourse, ROAD_MEANDER, roadDrawing, roadMask, roadStrands, strandPoints, tileCentre, type Strand } from '../src/index.js';
 
 const game = createGame({ seed: 7, mapSize: 'medium', map: 'north-america', nations: ['england'], humans: ['england'] });
 
@@ -163,5 +163,82 @@ describe('roads on river tiles', () => {
     const dy = Math.floor(dry / s.map.width);
     expect(roadDrawing(s, dx, dy, 0b101).strands).toBe(roadStrands(s, dx, dy, 0b101));
     expect(roadDrawing(s, dx, dy, 0b101).bridge).toBeUndefined();
+  });
+});
+
+describe.each(['hex-test', 'hex-test-flat'])('meandering rivers and roads on hexes (%s)', (scenario) => {
+  const hex = createGame({ seed: 11, mapSize: 'medium', nations: ['england'], humans: ['england'], scenario });
+  const grid = gridOf(hex);
+  const tiles = riverTiles(hex);
+  /** The neighbour a strand runs to: its river bit in the grid's order. */
+  const towards = (x: number, y: number, dir: number) => {
+    const o = grid.neighbourOffsets(x, y);
+    return [x + o[2 * dir], y + o[2 * dir + 1]] as const;
+  };
+
+  it('runs every strand towards one of the six hex neighbours, one world unit away', () => {
+    expect(tiles.length).toBeGreaterThan(50);
+    for (const [x, y] of tiles)
+      for (const st of riverCourse(hex, x, y).strands) {
+        expect(st.dir).toBeLessThan(6);
+        expect(Math.hypot(st.dx, st.dy)).toBeCloseTo(1, 9);
+        const c = tileCentre(grid, x, y);
+        const [nx, ny] = towards(x, y, st.dir);
+        const n = tileCentre(grid, nx, ny);
+        close(st.dx, n.x - c.x);
+        close(st.dy, n.y - c.y);
+      }
+  });
+
+  it('joins strands of neighbouring tiles at the same point with the same direction, and ends mouths on the coastal edge', () => {
+    let joins = 0;
+    let mouths = 0;
+    for (const [x, y] of tiles) {
+      for (const st of riverCourse(hex, x, y).strands) {
+        if (st.mouth) {
+          mouths++;
+          close(st.ex, st.dx / 2);
+          close(st.ey, st.dy / 2);
+          continue;
+        }
+        const [nx, ny] = towards(x, y, st.dir);
+        const back = riverCourse(hex, nx, ny).strands.find((b) => b.dir === (st.dir + 3) % 6);
+        expect(back, `${x},${y} → ${nx},${ny}`).toBeDefined();
+        joins++;
+        close(st.ex, back!.ex + st.dx);
+        close(st.ey, back!.ey + st.dy);
+        const [ax, ay] = endTangent(st);
+        const [bx, by] = endTangent(back!);
+        close(ax, -bx);
+        close(ay, -by);
+      }
+    }
+    expect(joins).toBeGreaterThan(50);
+    expect(mouths).toBeGreaterThan(2);
+  });
+
+  it('builds road masks over the six neighbours, and joins roads end to end', () => {
+    const s = deserialize(serialize(hex));
+    const land = (x: number, y: number) => !TERRAIN[s.map.tiles[y * s.map.width + x].t].water;
+    // Roads along two crossing lines of land tiles, through a river tile.
+    const [cx, cy] = tiles[Math.floor(tiles.length / 2)];
+    const roads = [...grid.line(cx - 4, cy, cx + 4, cy), ...grid.line(cx, cy - 4, cx, cy + 4)].filter((p) => grid.inBounds(s.map, p.x, p.y) && land(p.x, p.y));
+    expect(roads.length).toBeGreaterThan(4);
+    for (const p of roads) s.map.tiles[p.y * s.map.width + p.x].r = true;
+    const isRoad = (x: number, y: number) => !!s.map.tiles[y * s.map.width + x].r;
+    let joins = 0;
+    for (const p of roads) {
+      const mask = roadMask(s, p.x, p.y, isRoad);
+      expect(mask >> 6).toBe(0);
+      for (const st of roadStrands(s, p.x, p.y, mask)) {
+        const [nx, ny] = towards(p.x, p.y, st.dir);
+        expect(isRoad(nx, ny)).toBe(true);
+        const back = roadStrands(s, nx, ny, roadMask(s, nx, ny, isRoad)).find((b) => b.dir === (st.dir + 3) % 6)!;
+        close(st.ex, back.ex + st.dx);
+        close(st.ey, back.ey + st.dy);
+        joins++;
+      }
+    }
+    expect(joins).toBeGreaterThan(4);
   });
 });
