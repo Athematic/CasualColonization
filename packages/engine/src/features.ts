@@ -3,8 +3,9 @@
  * which it leaves alone. The counts come from the engine's telemetry hooks (see telemetry.ts),
  * plus a few end-of-game measurements of the nation's position.
  */
+import { gridOf } from './grid.js';
 import { AI_LEVEL_INFO, type AiLevel } from './ai/profiles.js';
-import { colonyAt, distance, isShip } from './queries.js';
+import { colonyAt, isShip } from './queries.js';
 import { BUILDINGS, BUILDING_ORDER } from './rules/buildings.js';
 import { COLONY_BUILDS, PURCHASABLE, TRAINABLE, UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import type { GameState } from './types.js';
@@ -116,22 +117,19 @@ export const FEATURE_CATALOG: { id: string; kind: FeatureKind }[] = [
 
 /** End-of-game measurements of a nation's position, merged into its feature counts. */
 export function endStateFeatures(s: GameState, nation: string): FeatureCounts {
+  const grid = gridOf(s);
   const out: FeatureCounts = {};
   const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
   const w = s.map.width;
   const near = new Set<number>();
   for (const c of colonies) {
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const x = c.x + dx;
-        const y = c.y + dy;
-        if (x < 0 || y < 0 || x >= w || y >= s.map.height || colonyAt(s, x, y)) continue;
-        if (s.map.tiles[y * w + x].r) near.add(y * w + x);
-      }
+    for (const { x, y } of grid.tilesWithin(s.map, c.x, c.y, grid.workRadius)) {
+      if (colonyAt(s, x, y)) continue;
+      if (s.map.tiles[y * w + x].r) near.add(y * w + x);
     }
   }
   out['end:road tiles by colonies'] = near.size;
-  out['end:colonies linked by road'] = colonies.filter((c) => colonies.some((o) => o !== c && distance(o.x, o.y, c.x, c.y) <= 6 && roadLinked(s, c, o))).length;
+  out['end:colonies linked by road'] = colonies.filter((c) => colonies.some((o) => o !== c && grid.distance(o.x, o.y, c.x, c.y) <= 6 && roadLinked(s, c, o))).length;
   for (const u of Object.values(s.units)) {
     if (u.owner !== nation) continue;
     const def = UNIT_TYPES[u.type];
@@ -148,6 +146,7 @@ export function endStateFeatures(s: GameState, nation: string): FeatureCounts {
 
 /** Whether a continuous road (colony tiles count as road) joins two colonies. */
 function roadLinked(s: GameState, a: { x: number; y: number }, b: { x: number; y: number }): boolean {
+  const grid = gridOf(s);
   const w = s.map.width;
   const road = (x: number, y: number) => !!s.map.tiles[y * w + x]?.r;
   const seen = new Set([a.y * w + a.x]);
@@ -155,16 +154,11 @@ function roadLinked(s: GameState, a: { x: number; y: number }, b: { x: number; y
   while (queue.length) {
     const p = queue.shift()!;
     if (p.x === b.x && p.y === b.y) return true;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const x = p.x + dx;
-        const y = p.y + dy;
-        if (x < 0 || y < 0 || x >= w || y >= s.map.height) continue;
-        const i = y * w + x;
-        if (seen.has(i) || !road(x, y) || distance(x, y, a.x, a.y) > 8) continue;
-        seen.add(i);
-        queue.push({ x, y });
-      }
+    for (const n of grid.neighbours(s.map, p.x, p.y)) {
+      const i = n.y * w + n.x;
+      if (seen.has(i) || !road(n.x, n.y) || grid.distance(n.x, n.y, a.x, a.y) > 8) continue;
+      seen.add(i);
+      queue.push(n);
     }
   }
   return false;

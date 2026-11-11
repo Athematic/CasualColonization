@@ -7,6 +7,7 @@ import { UNIT_TYPES } from './rules/units.js';
 import { recentProduction } from './stats.js';
 import type { ScoreWeights } from './rules/score.js';
 import type { GameState, Player } from './types.js';
+import { ownedUnitsView } from './unitindex.js';
 
 /** The Americas end after the autumn turn of this year (other scenarios: their calendar's `end`). */
 export const LAST_YEAR = AMERICAS_CALENDAR.end.year;
@@ -47,9 +48,7 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreW
   let colonists = 0;
   let experts = 0;
   const workers = new Map<string, number>();
-  for (const id in s.units) {
-    const u = s.units[id];
-    if (u.owner !== p.id) continue;
+  for (const u of ownedUnitsView(s, p.id)) {
     const def = UNIT_TYPES[u.type];
     if (def.kind !== 'colonist') continue;
     colonists++;

@@ -8,7 +8,7 @@ import {
   createUnit,
   describeMove,
   deserialize,
-  distance,
+  SQUARE,
   foundColony,
   incitePrice,
   isCoastal,
@@ -28,6 +28,7 @@ import {
   type GameState,
   type NationId,
   type Settlement,
+  removeUnit,
 } from '../src/index.js';
 import { resolveRumour, tribalLandOwner } from '../src/rumours.js';
 import { buyFromNatives, maybeIncite } from '../src/ai/natives.js';
@@ -46,7 +47,7 @@ function colonyNear(s: GameState, nation: NationId = 'england'): { c: Colony; st
       for (let dx = -3; dx <= 3; dx++) {
         const x = st.x + dx;
         const y = st.y + dy;
-        const d = distance(x, y, st.x, st.y);
+        const d = SQUARE.distance(x, y, st.x, st.y);
         if (d < 2 || colonySiteProblem(s, x, y)) continue;
         const u = createUnit(s, nation, 'freeColonist', { kind: 'map', x, y });
         u.moves = 3;
@@ -350,7 +351,7 @@ describe('burial grounds', () => {
         const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', ...at });
         resolveRumour(s, u);
         if (s.tribes.some((t) => t.burial?.length)) n++;
-        delete s.units[u.id];
+        removeUnit(s, u.id);
       }
       return n;
     };
@@ -366,7 +367,7 @@ describe('burial grounds', () => {
     for (let i = 0; i < 500; i++) {
       const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', ...far! });
       resolveRumour(s, u);
-      delete s.units[u.id];
+      removeUnit(s, u.id);
     }
     expect(s.tribes.some((t) => t.burial?.length)).toBe(false);
   });
@@ -378,7 +379,7 @@ describe('burial grounds', () => {
     while (!tribeOf(s, st).burial?.length && guard++ < 5000) {
       const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', ...at });
       resolveRumour(s, u);
-      delete s.units[u.id];
+      removeUnit(s, u.id);
     }
     const tribe = tribeOf(s, st);
     expect(tribe.burial).toEqual(['england']);

@@ -1,3 +1,4 @@
+import { gridOf } from './grid.js';
 import { attack, declareWar, defencePower } from './combat.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
@@ -9,7 +10,6 @@ import {
   colonyAt,
   colonyWorkers,
   createUnit,
-  distance,
   isCoastal,
   isShip,
   isWater,
@@ -28,6 +28,7 @@ import { type NationId } from './rules/nations.js';
 import { checkVictory, finishNation } from './victory.js';
 import { crownSideOf } from './world.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
+import { removeUnit } from './unitindex.js';
 
 /** Share of all colonists, across every colony, who support independence. */
 export function rebelShare(s: GameState, nation: NationId): number {
@@ -97,7 +98,7 @@ export function declareIndependence(s: GameState, nation: NationId): string {
     if (u.owner !== nation) continue;
     const inEurope = u.loc.kind === 'europe' || (u.loc.kind === 'sailing' && u.loc.to === 'europe');
     const aboardInEurope = u.loc.kind === 'carrier' && s.units[u.loc.carrierId]?.loc.kind === 'europe';
-    if (inEurope || aboardInEurope) delete s.units[u.id];
+    if (inEurope || aboardInEurope) removeUnit(s, u.id);
   }
   // Veterans, and half the soldiers of committed colonies, form the Continental Army.
   let continentals = 0;
@@ -138,8 +139,9 @@ function colonyStrength(s: GameState, c: Colony): number {
 }
 
 function landingTiles(s: GameState, c: Colony): { x: number; y: number }[] {
+  const grid = gridOf(s);
   const near = neighbours(s, c.x, c.y);
-  const ring = near.flatMap((p) => neighbours(s, p.x, p.y)).filter((p) => distance(p.x, p.y, c.x, c.y) === 2);
+  const ring = near.flatMap((p) => neighbours(s, p.x, p.y)).filter((p) => grid.distance(p.x, p.y, c.x, c.y) === 2);
   const free = (list: { x: number; y: number }[]) => list.filter((p) => {
     const t = tileAt(s, p.x, p.y)!;
     if (isWater(t) || colonyAt(s, p.x, p.y) || settlementAt(s, p.x, p.y)) return false;
@@ -215,7 +217,7 @@ function checkOutcome(s: GameState, p: Player): void {
     p.independence = 'won';
     track(p.id, 'independence:won');
     endRebellion(s, p);
-    for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === p.id) delete s.units[u.id];
+    for (const u of Object.values(s.units)) if (u.owner === 'crown' && u.against === p.id) removeUnit(s, u.id);
     const text = term(s, 'gameOver.won', { nation: nationOf(s, p.id).name });
     message(s, text);
     noteHistory(s, 'independence', [p.id], text);
@@ -272,6 +274,7 @@ export function runCrown(s: GameState): void {
 }
 
 function crownUnit(s: GameState, u: Unit): void {
+  const grid = gridOf(s);
   const pos = unitPosition(s, u)!;
   const enemy = (o: { owner: NationId }) => o.owner === u.against;
   if (isShip(u)) {
@@ -281,8 +284,8 @@ function crownUnit(s: GameState, u: Unit): void {
   }
   const colonies = Object.values(s.colonies).filter(enemy);
   if (!colonies.length) return;
-  const target = colonies.sort((a, b) => distance(a.x, a.y, pos.x, pos.y) - distance(b.x, b.y, pos.x, pos.y))[0];
-  if (distance(target.x, target.y, pos.x, pos.y) === 1) {
+  const target = colonies.sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0];
+  if (grid.distance(target.x, target.y, pos.x, pos.y) === 1) {
     attack(s, u.id, { colonyId: target.id });
     return;
   }
@@ -300,5 +303,5 @@ function crownUnit(s: GameState, u: Unit): void {
   if (!approach) return;
   setDestination(s, u.id, approach.q);
   const now = unitPosition(s, u);
-  if (now && u.moves > 0 && distance(now.x, now.y, target.x, target.y) === 1) attack(s, u.id, { colonyId: target.id });
+  if (now && u.moves > 0 && grid.distance(now.x, now.y, target.x, target.y) === 1) attack(s, u.id, { colonyId: target.id });
 }

@@ -20,6 +20,8 @@ import {
   type Colony,
   type GameState,
   type RouteStop,
+  setUnitLoc,
+  removeUnit,
 } from '../src/index.js';
 
 function game(seed = 42, nations: ('england' | 'france')[] = ['england']): GameState {
@@ -49,7 +51,7 @@ function twoColonies(s: GameState): [Colony, Colony] {
           if (Math.max(Math.abs(dx), Math.abs(dy)) < 3 || colonySiteProblem(s, bx, by)) continue;
           const probe = createUnit(s, 'england', 'wagonTrain', { kind: 'map', x, y });
           const path = findPath(s, probe, bx, by);
-          delete s.units[probe.id];
+          removeUnit(s, probe.id);
           if (!path || path.length > 8) continue;
           const a = found(s, x, y, 'Port');
           return [a, found(s, bx, by, 'Inland')];
@@ -106,8 +108,8 @@ describe('trade routes', () => {
     const p = s.players[0];
     p.tax = 10;
     const ship = Object.values(s.units).find((u) => u.type === 'caravel')!;
-    for (const u of Object.values(s.units)) if (u.loc.kind === 'carrier') delete s.units[u.id];
-    ship.loc = { kind: 'map', x: port.x, y: port.y };
+    for (const u of Object.values(s.units)) if (u.loc.kind === 'carrier') removeUnit(s, u.id);
+    setUnitLoc(s, ship, { kind: 'map', x: port.x, y: port.y });
     ship.moves = 12;
     port.goods.sugar = 100;
     port.goods.tobacco = 30;
@@ -118,7 +120,7 @@ describe('trade routes', () => {
     expect(applyCommand(s, { type: 'assignRoute', unitId: ship.id, routeId }).ok).toBe(true);
     expect(ship.cargo).toEqual({ sugar: 100, tobacco: 30 });
     // Arriving in Europe: sold at today's prices less tax, then tools bought and the ship sent back.
-    ship.loc = { kind: 'europe' };
+    setUnitLoc(s, ship, { kind: 'europe' });
     const sugarPrice = p.market.sugar.price;
     const tobaccoPrice = p.market.tobacco.price;
     const toolsPrice = buyPrice(s, p, 'tools');
@@ -138,8 +140,8 @@ describe('trade routes', () => {
     const p = s.players[0];
     p.boycotts.furs = true;
     const ship = Object.values(s.units).find((u) => u.type === 'caravel')!;
-    for (const u of Object.values(s.units)) if (u.loc.kind === 'carrier') delete s.units[u.id];
-    ship.loc = { kind: 'europe' };
+    for (const u of Object.values(s.units)) if (u.loc.kind === 'carrier') removeUnit(s, u.id);
+    setUnitLoc(s, ship, { kind: 'europe' });
     ship.cargo = { furs: 100, sugar: 50 };
     const routeId = create(s, 'Home', [
       { at: 'europe', load: [], unload: [{ good: 'furs' }, { good: 'sugar' }] },
@@ -154,8 +156,8 @@ describe('trade routes', () => {
     const s = game();
     const [port] = twoColonies(s);
     const ship = Object.values(s.units).find((u) => u.type === 'caravel')!;
-    for (const u of Object.values(s.units)) if (u.loc.kind === 'carrier') delete s.units[u.id];
-    ship.loc = { kind: 'europe' };
+    for (const u of Object.values(s.units)) if (u.loc.kind === 'carrier') removeUnit(s, u.id);
+    setUnitLoc(s, ship, { kind: 'europe' });
     const colonist = createUnit(s, 'england', 'expertFarmer', { kind: 'europe' });
     const routeId = create(s, 'Ferry', [
       { at: 'europe', load: [], unload: [], passengers: true },
@@ -236,7 +238,7 @@ describe('trade routes', () => {
     const port = colonies.find((c) => isCoastal(s, c.x, c.y));
     expect(port).toBeTruthy();
     const ship = Object.values(s.units).find((u) => u.owner === 'england' && u.type === 'caravel')!;
-    for (const u of Object.values(s.units)) if (u.loc.kind === 'carrier' && u.loc.carrierId === ship.id) delete s.units[u.id];
+    for (const u of Object.values(s.units)) if (u.loc.kind === 'carrier' && u.loc.carrierId === ship.id) removeUnit(s, u.id);
     s.routes = { ...s.routes, rx: { id: 'rx', owner: 'england', name: 'Computer run', stops: [{ at: port!.id, load: [{ good: 'furs' }], unload: [] }, { at: 'europe', load: [], unload: [{ good: 'furs' }] }] } };
     ship.route = { id: 'rx', stop: 0 };
     handOver(s);

@@ -8,6 +8,7 @@
  * Every random decision here draws from `pairRandom` (a seeded stream per pair of nations and
  * purpose), never from `GameState.rng`, so these decisions shift no other random outcome.
  */
+import { gridOf } from '../grid.js';
 import { defencePower } from '../combat.js';
 import {
   answerTax,
@@ -21,8 +22,8 @@ import {
   sellPrice,
 } from '../europe.js';
 import { findPath } from '../movement.js';
-import { colonyReport } from '../production.js';
-import { cargoFree, colonyAt, distance, isCoastal, isShip, isWater, neighbours, player, tileAt, unitsAt } from '../queries.js';
+import { aiColonyReport } from './reports.js';
+import { cargoFree, colonyAt, isCoastal, isShip, isWater, neighbours, player, tileAt, unitsAt } from '../queries.js';
 import {
   atPeace,
   cancelFavoured,
@@ -46,6 +47,7 @@ import type { Colony, GameState, Player, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
 import { aiGoodsOf, aiTurn } from '../scenarios/index.js';
+import { ownedUnitsView } from '../unitindex.js';
 
 /** Goods the computer players export, and so weigh in tax decisions and port choice (the scenario's `ai.goods.export`). */
 export const exportGoods = (s: GameState): readonly GoodId[] => aiGoodsOf(s).export;
@@ -121,12 +123,13 @@ function ghost(p: Player, c: { x: number; y: number }): Unit {
 
 /** Steps a wagon train needs from `from` to a land tile next to `to`, or null when it cannot get there. */
 export function wagonSteps(s: GameState, p: Player, from: Colony, to: Colony): number | null {
+  const grid = gridOf(s);
   const g = ghost(p, from);
   let best: number | null = null;
   for (const n of neighbours(s, to.x, to.y)) {
     const t = tileAt(s, n.x, n.y);
     if (!t || isWater(t) || colonyAt(s, n.x, n.y)) continue;
-    if (distance(n.x, n.y, from.x, from.y) > WAGON_REACH) continue;
+    if (grid.distance(n.x, n.y, from.x, from.y) > WAGON_REACH) continue;
     const path = findPath(s, g, n.x, n.y);
     if (path && path.length <= WAGON_REACH && (best === null || path.length < best)) best = path.length;
   }
@@ -138,12 +141,13 @@ export function wagonSteps(s: GameState, p: Player, from: Colony, to: Colony): n
  * the coast (ships can trade) or joined by land a wagon train can cross.
  */
 export function tradeNeighbours(s: GameState, p: Player, other: NationId): boolean {
+  const grid = gridOf(s);
   const theirs = Object.values(s.colonies).filter((c) => c.owner === other);
   if (!theirs.length) return false;
   let checks = 0;
   for (const c of ownColonies(s, p)) {
     for (const f of theirs) {
-      if (distance(c.x, c.y, f.x, f.y) > TRADE_NEIGHBOUR_TILES) continue;
+      if (grid.distance(c.x, c.y, f.x, f.y) > TRADE_NEIGHBOUR_TILES) continue;
       if (isCoastal(s, c.x, c.y) && isCoastal(s, f.x, f.y)) return true;
       if (checks++ < 4 && wagonSteps(s, p, c, f) !== null) return true;
     }
@@ -158,10 +162,11 @@ export function tradeNeighbours(s: GameState, p: Player, other: NationId): boole
  * attack: one with a colony its spare army would beat, near its own colonies.
  */
 export function favouredPays(s: GameState, p: Player, prof: AiProfile, other: NationId, strength: number): boolean {
+  const grid = gridOf(s);
   if (prof.aggression < 0.5) return true;
   const own = ownColonies(s, p);
   return !Object.values(s.colonies).some(
-    (c) => c.owner === other && own.some((o) => distance(o.x, o.y, c.x, c.y) <= 10) && strength / (colonyDefence(s, c) + 1) >= (2.5 / prof.aggression) * 0.6,
+    (c) => c.owner === other && own.some((o) => grid.distance(o.x, o.y, c.x, c.y) <= 10) && strength / (colonyDefence(s, c) + 1) >= (2.5 / prof.aggression) * 0.6,
   );
 }
 
@@ -209,6 +214,7 @@ export interface WarTarget {
  * looked for further away.
  */
 export function bestWarTarget(s: GameState, p: Player, prof: AiProfile, strength: number, favoured = false): WarTarget | null {
+  const grid = gridOf(s);
   const colonies = ownColonies(s, p);
   const memory = p.aiMemory ?? {};
   let best: WarTarget | null = null;
@@ -221,7 +227,7 @@ export function bestWarTarget(s: GameState, p: Player, prof: AiProfile, strength
     const hostile = isHostile(s, p.id, c.owner);
     const aggression = hostile ? Math.max(prof.aggression, HOSTILE_AGGRESSION) : prof.aggression;
     if (aggression <= 0) continue;
-    const near = colonies.some((own) => distance(own.x, own.y, c.x, c.y) <= (hostile ? 14 : 10));
+    const near = colonies.some((own) => grid.distance(own.x, own.y, c.x, c.y) <= (hostile ? 14 : 10));
     if (!near) continue;
     const score = (strength / (colonyDefence(s, c) + 1)) * (hostile ? HOSTILITY_WEIGHT : 1);
     if (!best || score / (2.5 / aggression) > best.score / (2.5 / best.aggression)) best = { c, score, aggression, ready: score >= 2.5 / aggression };
@@ -269,7 +275,7 @@ export function exportShare(s: GameState, p: Player, good: GoodId): number {
   let total = 0;
   let mine = 0;
   for (const c of ownColonies(s, p)) {
-    const report = colonyReport(s, c);
+    const report = aiColonyReport(s, c);
     for (const g of exportGoods(s)) {
       const v = (c.goods[g] + Math.max(0, report.net[g]) * 8) * Math.max(1, sellPrice(p, g));
       total += v;
@@ -344,7 +350,7 @@ function maybePayArrears(s: GameState, p: Player, prof: AiProfile): void {
 /** Colonists a trip home would bring: those waiting on the docks, and recruits the treasury pays for (up to 3). */
 function colonistsForTrip(s: GameState, p: Player): number {
   let n = 0;
-  for (const u of Object.values(s.units)) if (u.owner === p.id && u.loc.kind === 'europe' && !isShip(u)) n++;
+  for (const u of ownedUnitsView(s, p.id)) if (u.loc.kind === 'europe' && !isShip(u)) n++;
   const price = recruitPrice(s, p);
   return n + Math.min(4, Math.floor(Math.max(0, p.gold - 300) / price));
 }

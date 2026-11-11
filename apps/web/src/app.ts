@@ -9,8 +9,7 @@ import {
   charterCost,
   colonyAt,
   describeMove,
-  DIRECTIONS,
-  distance,
+  gridOf,
   findPath,
   formatDate,
   Game,
@@ -52,6 +51,7 @@ import {
 import { computeVisibility, screenToTile, type Camera, type MapRenderer, type Point, type Scene } from '@cc/render-api';
 import { h } from './dom.js';
 import { saveAuto } from './save.js';
+import { JobCancelled, turnRunner, type Job, type JobResult, type Progress } from './turns/runner.js';
 import { activeStyle, onStyleAssetsChanged, onStyleChange } from './styles.js';
 import { ColonyScreen } from './ui/colony.js';
 import { openCheats } from './ui/cheats.js';
@@ -168,6 +168,16 @@ export class App {
   /** Milliseconds between turns while autoplaying. */
   speed = 400;
   private autoplayTimer = 0;
+  private autoplayGen = 0;
+  /**
+   * Computer turns are being played (in the engine worker): the map still draws and scrolls, but
+   * no commands are taken until the new state arrives.
+   */
+  busy = false;
+  /** What the running turn job last reported, for the progress banner. */
+  progress?: Progress & { label: string };
+  private progressEl: HTMLElement;
+  private destroyed = false;
   private pointers = new Map<number, { x: number; y: number }>();
   private drag: { x: number; y: number; cx: number; cy: number; moved: boolean; pinch?: number; zoom?: number } | null = null;
   private disposers: (() => void)[] = [];
@@ -183,7 +193,13 @@ export class App {
     this.mapWrap = h('div', { class: 'map-wrap' }, this.canvas);
     this.sidebar = new Sidebar(this);
     this.screenHost = h('div', { class: 'screen-host' });
+    this.progressEl = h('div', { class: 'turn-progress', role: 'status', 'aria-live': 'polite', hidden: true });
+    this.mapWrap.appendChild(this.progressEl);
     this.root = h('div', { class: 'game' }, this.mapWrap, this.sidebar.el, this.screenHost);
+    // While computer turns run, the page's state is about to be replaced: refuse commands from every
+    // screen (some dispatch to the game directly) until it has been.
+    const dispatch = game.dispatch.bind(game);
+    game.dispatch = (cmd) => (this.busy ? { ok: false, error: 'The computer players are moving. One moment.' } : dispatch(cmd));
     host.appendChild(this.root);
     this.renderer = activeStyle().createMapRenderer(this.canvas);
 
@@ -222,6 +238,9 @@ export class App {
   }
 
   destroy(): void {
+    this.destroyed = true;
+    // A turn job of this game is no longer wanted.
+    if (this.busy) turnRunner.cancel();
     clearTimeout(this.autoplayTimer);
     for (const d of this.disposers) d();
     this.renderer.dispose();
@@ -243,7 +262,7 @@ export class App {
   }
 
   isMyTurn(): boolean {
-    return !this.observer && this.game.current.id === this.viewer && this.game.current.human;
+    return !this.busy && !this.observer && this.game.current.id === this.viewer && this.game.current.human;
   }
 
   /** Whether the shown view knows this tile. */
@@ -264,17 +283,16 @@ export class App {
     this.requestRender();
   }
 
-  /** Plays whole rounds of computer turns. */
-  observeTurns(n: number): void {
+  /** Plays whole rounds of computer turns (in the engine worker). */
+  async observeTurns(n: number): Promise<void> {
+    if (this.busy || this.state.gameOver) return;
     const head = this.state.config.headStart;
-    for (let i = 0; i < n && !this.state.gameOver; i++) {
-      if (head && this.state.turn >= head.turn) break;
-      this.game.dispatch({ type: 'endTurn' });
-    }
+    const done = await this.runJob({ type: 'rounds', state: this.state, rounds: n, stopAt: head?.turn }, n > 1 ? `Playing ${n} turns` : '');
+    if (!done || this.destroyed) return;
     if (this.watch !== 'all') this.follow(this.watch);
     this.requestRender();
     if (head && this.state.turn >= head.turn && !this.state.gameOver) {
-      this.takeOver();
+      void this.takeOver();
       return;
     }
     if (this.state.gameOver) {
@@ -300,9 +318,12 @@ export class App {
   private followed?: string;
 
   /** Ends a head start: the player's nation leaves computer control. */
-  takeOver(): void {
+  async takeOver(): Promise<void> {
     if (!this.state.config.headStart) return;
     this.setAutoplay(false);
+    // Let a round in progress finish first: its state replaces the page's.
+    while (this.busy) await new Promise((r) => setTimeout(r, 20));
+    if (this.destroyed || !this.state.config.headStart) return;
     const nations = this.state.config.headStart.humans;
     handOver(this.state);
     this.observer = false;
@@ -325,10 +346,19 @@ export class App {
   setAutoplay(on: boolean): void {
     this.autoplay = on && !this.state.gameOver;
     clearTimeout(this.autoplayTimer);
-    const tick = () => {
-      if (!this.autoplay) return;
-      this.observeTurns(1);
-      if (this.autoplay) this.autoplayTimer = window.setTimeout(tick, this.speed);
+    // One chain of ticks: a tick of an earlier call (still waiting for its round) stops when it is in.
+    const gen = ++this.autoplayGen;
+    const tick = async () => {
+      if (!this.autoplay || gen !== this.autoplayGen) return;
+      // A round started by hand (+1, +10) is still being played: start when it is in.
+      if (this.busy) {
+        this.autoplayTimer = window.setTimeout(tick, 50);
+        return;
+      }
+      const started = performance.now();
+      await this.observeTurns(1);
+      // Each turn is shown for at least `speed` ms, counting the time it took to play.
+      if (this.autoplay && gen === this.autoplayGen) this.autoplayTimer = window.setTimeout(tick, Math.max(0, this.speed - (performance.now() - started)));
     };
     if (this.autoplay) this.autoplayTimer = window.setTimeout(tick, 0);
     this.requestRender();
@@ -382,7 +412,7 @@ export class App {
   private hoverIsFar(): boolean {
     const u = this.selectedUnit();
     const pos = u && unitPosition(this.state, u);
-    return !!pos && !!this.hover && distance(pos.x, pos.y, this.hover.x, this.hover.y) > 1;
+    return !!pos && !!this.hover && gridOf(this.state).distance(pos.x, pos.y, this.hover.x, this.hover.y) > 1;
   }
 
   private draw(): void {
@@ -680,7 +710,9 @@ export class App {
     const before = this.viewer;
     const mark = this.state.messages[this.state.messages.length - 1];
     if (mark) this.lastSeen.set(before, mark);
-    this.dispatch({ type: 'endTurn' }, true);
+    const done = await this.runJob({ type: 'endTurn', state: this.state }, 'Computer players moving');
+    if (!done || this.destroyed) return;
+    if (done.result && !done.result.ok) toast(done.result.error, 'error');
     const next = this.game.current;
     saveAuto(serialize(this.state));
     if (next.human && next.id !== before) {
@@ -693,6 +725,89 @@ export class App {
     this.requestRender();
     await this.showGameOver();
     await this.turnStart(this.newsSinceLastTurn());
+  }
+
+  /**
+   * Runs a turn job (turns/runner.ts) and puts the state it returns in place of the page's. While it
+   * runs the page keeps drawing the current state and refuses commands; after a moment a banner
+   * shows how far the computer players have got. Returns undefined if it failed or was cancelled.
+   */
+  private async runJob(job: Job, label: string): Promise<JobResult | undefined> {
+    const old = this.state;
+    const movers = job.type === 'endTurn' ? this.computerMovers() : 0;
+    this.busy = true;
+    this.progress = { turn: old.turn, label };
+    this.requestRender();
+    const show = window.setTimeout(() => this.showProgress(movers), 300);
+    try {
+      const done = await turnRunner.run(job, (p) => {
+        this.progress = { ...p, label };
+        if (!this.progressEl.hidden) this.showProgress(movers);
+      });
+      if (this.destroyed) return undefined;
+      this.adoptState(old, done);
+      return done;
+    } catch (err) {
+      if (!(err instanceof JobCancelled) && !this.destroyed) {
+        console.error(err);
+        toast('The computer players could not finish their turn.', 'error');
+      }
+      return undefined;
+    } finally {
+      clearTimeout(show);
+      this.busy = false;
+      this.progress = undefined;
+      this.progressEl.hidden = true;
+      if (!this.destroyed) this.requestRender();
+    }
+  }
+
+  /** Nations that move after the current one before a person is up again (for the progress count). */
+  private computerMovers(): number {
+    const ps = this.state.players;
+    let n = 0;
+    for (let i = 1; i <= ps.length; i++) {
+      const p = ps[(this.state.current + i) % ps.length];
+      if (p.human && !p.finished) break;
+      if (!p.finished) n++;
+    }
+    return n;
+  }
+
+  private showProgress(movers: number): void {
+    const p = this.progress;
+    if (!p || !this.busy) return;
+    const cal = calendarOf(this.state);
+    let text = `${p.label || 'Playing'}… ${formatDate(p.turn, cal)}`;
+    let pct: number | undefined;
+    // The first nation to finish is the person's own; then each computer player.
+    if (p.moved !== undefined && movers > 0) {
+      const done = Math.min(movers, Math.max(0, p.moved - 1));
+      text = `${p.label}… ${done} of ${movers} done`;
+      pct = (done / movers) * 100;
+    } else if (p.target) {
+      text += ` of ${formatDate(p.target, cal)}`;
+    }
+    this.progressEl.replaceChildren(h('span', { class: 'spinner', 'aria-hidden': 'true' }), h('span', null, text));
+    if (pct !== undefined) this.progressEl.append(h('span', { class: 'bar' }, h('span', { style: `width:${Math.round(pct)}%` })));
+    this.progressEl.hidden = false;
+  }
+
+  /**
+   * Puts a job's state in place of the page's. In the worker the state is a clone, so the markers
+   * that point into the old message log are moved to the same messages in the new one.
+   */
+  private adoptState(old: GameState, done: JobResult): void {
+    if (done.state !== old) {
+      const shift = done.dropped ?? 0;
+      for (const [nation, mark] of this.lastSeen) {
+        const at = old.messages.lastIndexOf(mark) - shift;
+        // A mark that has scrolled out of the log stays as it is: not found, the news falls back to the last round.
+        if (at >= 0 && done.state.messages[at]) this.lastSeen.set(nation, done.state.messages[at]);
+      }
+      this.game.state = done.state;
+    }
+    this.game.emit();
   }
 
   private handoff(nation: NationId): Promise<void> {
@@ -882,7 +997,7 @@ export class App {
     }
     const u = this.selectedUnit();
     const pos = u && unitPosition(s, u);
-    const adjacent = !!pos && distance(pos.x, pos.y, t.x, t.y) === 1;
+    const adjacent = !!pos && gridOf(s).distance(pos.x, pos.y, t.x, t.y) === 1;
     if (u && pos && this.roadToMode && this.isMyTurn()) {
       this.roadToMode = false;
       if (this.dispatch({ type: 'roadTo', unitId: u.id, x: t.x, y: t.y }, true)) this.afterUnitAction();
@@ -916,7 +1031,7 @@ export class App {
   }
 
   private dirTo(a: Point, b: Point): Direction {
-    return DIRECTIONS.find((d) => d.dx === Math.sign(b.x - a.x) && d.dy === Math.sign(b.y - a.y))!.id;
+    return gridOf(this.state).directionTowards(a.x, a.y, b.x, b.y)!;
   }
 
   private onKey(e: KeyboardEvent): void {

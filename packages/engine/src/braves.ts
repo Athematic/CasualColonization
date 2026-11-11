@@ -7,6 +7,7 @@
  * raises the tribe's tension. Everything is seeded and runs in a fixed order, so games stay
  * deterministic.
  */
+import { gridOf } from './grid.js';
 import { chooseDefender, defencePower, promote } from './combat.js';
 import { fail } from './errors.js';
 import { sellPrice } from './europe.js';
@@ -14,8 +15,6 @@ import { noteGoods } from './history.js';
 import { addTension, nativeOffer, tensionOf } from './natives.js';
 import {
   colonyWorkers,
-  DIRECTIONS,
-  distance,
   inBounds,
   isCoastal,
   isShip,
@@ -56,6 +55,7 @@ import { TERRAIN } from './rules/terrain.js';
 import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from './types.js';
 import { difficultyOf, goodsOf, nativeProduceOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
+import { removeUnit } from './unitindex.js';
 
 /** The kind of a settlement in its game's scenario (camp, village, city…), with its numbers. */
 export function settlementKind(s: GameState, st: Settlement): SettlementKindDef {
@@ -74,7 +74,13 @@ export function maxBraves(s: GameState, st: Settlement): number {
 /** The braves standing on a tile. */
 export function bravesAt(s: GameState, x: number, y: number): Brave[] {
   const out: Brave[] = [];
-  for (const b of Object.values(s.braves ?? {})) if (b.x === x && b.y === y) out.push(b);
+  const braves = s.braves;
+  if (!braves) return out;
+  // A plain loop visits them in Object.values order without building the array.
+  for (const id in braves) {
+    const b = braves[id];
+    if (b.x === x && b.y === y) out.push(b);
+  }
   return out;
 }
 
@@ -125,16 +131,15 @@ export function killBrave(s: GameState, b: Brave, killer?: NationId, atWar = fal
 export function settlementProduce(s: GameState, st: Settlement): Partial<Record<GoodId, number>> {
   const kind = settlementKind(s, st);
   const sums: Partial<Record<GoodId, number>> = {};
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const tile = tileAt(s, st.x + dx, st.y + dy);
-      if (!tile || tile.claim || TERRAIN[tile.t].water) continue;
-      const def = TERRAIN[tile.t];
-      const yields = tile.f && def.forest ? def.forest.yields : def.yields;
-      for (const g of nativeProduceOf(s)) {
-        const y = yields[g] ?? 0;
-        if (y > 0) sums[g] = (sums[g] ?? 0) + y * (kind.gather?.[g] ?? 1);
-      }
+  const land = gridOf(s).withinOffsets(st.x, st.y, 1);
+  for (let k = 0; k < land.length; k += 2) {
+    const tile = tileAt(s, st.x + land[k], st.y + land[k + 1]);
+    if (!tile || tile.claim || TERRAIN[tile.t].water) continue;
+    const def = TERRAIN[tile.t];
+    const yields = tile.f && def.forest ? def.forest.yields : def.yields;
+    for (const g of nativeProduceOf(s)) {
+      const y = yields[g] ?? 0;
+      if (y > 0) sums[g] = (sums[g] ?? 0) + y * (kind.gather?.[g] ?? 1);
     }
   }
   const out: Partial<Record<GoodId, number>> = {};
@@ -241,6 +246,7 @@ function equipAtHome(st: Settlement, b: Brave): void {
 }
 
 function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
+  const grid = gridOf(s);
   const st = s.settlements[b.home];
   if (!st) return;
   const home = b.x === st.x && b.y === st.y;
@@ -274,12 +280,12 @@ function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
     case 'attack': {
       if (task.kind === 'attack' && task.unitId) {
         const target = s.units[task.unitId];
-        if (!target || target.loc.kind !== 'map' || distance(target.loc.x, target.loc.y, st.x, st.y) > VISIT_RANGE) {
+        if (!target || target.loc.kind !== 'map' || grid.distance(target.loc.x, target.loc.y, st.x, st.y) > VISIT_RANGE) {
           delete b.task;
           return;
         }
-        if (distance(b.x, b.y, target.loc.x, target.loc.y) > 1) walk(s, b, target.loc.x, target.loc.y, points, index, false);
-        if (distance(b.x, b.y, target.loc.x, target.loc.y) === 1) {
+        if (grid.distance(b.x, b.y, target.loc.x, target.loc.y) > 1) walk(s, b, target.loc.x, target.loc.y, points, index, false);
+        if (grid.distance(b.x, b.y, target.loc.x, target.loc.y) === 1) {
           attackUnit(s, b, target);
           if (bravesOf(s)[b.id]) delete b.task;
         }
@@ -290,8 +296,8 @@ function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
         delete b.task;
         return;
       }
-      if (distance(b.x, b.y, c.x, c.y) > 1) walk(s, b, c.x, c.y, points, index, false);
-      if (distance(b.x, b.y, c.x, c.y) !== 1) return;
+      if (grid.distance(b.x, b.y, c.x, c.y) > 1) walk(s, b, c.x, c.y, points, index, false);
+      if (grid.distance(b.x, b.y, c.x, c.y) !== 1) return;
       if (task.kind === 'attack') {
         attackColony(s, b, c);
         if (bravesOf(s)[b.id]) delete b.task;
@@ -303,11 +309,12 @@ function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
 
 /** The nearest colony within reach of a settlement, if any. */
 function nearestColony(s: GameState, st: Settlement): Colony | undefined {
+  const grid = gridOf(s);
   let best: Colony | undefined;
   let bestD = Infinity;
   for (const c of Object.values(s.colonies)) {
     if (c.owner === 'crown') continue;
-    const d = distance(c.x, c.y, st.x, st.y);
+    const d = grid.distance(c.x, c.y, st.x, st.y);
     if (d <= VISIT_RANGE && d < bestD) {
       best = c;
       bestD = d;
@@ -318,6 +325,7 @@ function nearestColony(s: GameState, st: Settlement): Colony | undefined {
 
 /** An enemy unit in the open near the settlement, for a tribe at war. */
 function nearbyEnemy(s: GameState, st: Settlement, index: PhaseIndex): Unit | undefined {
+  const grid = gridOf(s);
   const tribe = tribeOf(s, st);
   const w = s.map.width;
   let best: Unit | undefined;
@@ -325,7 +333,7 @@ function nearbyEnemy(s: GameState, st: Settlement, index: PhaseIndex): Unit | un
   for (const [i, units] of index.units) {
     const x = i % w;
     const y = Math.floor(i / w);
-    const d = distance(x, y, st.x, st.y);
+    const d = grid.distance(x, y, st.x, st.y);
     if (d > 3 || d >= bestD || index.colonies.has(i)) continue;
     const u = units.find((o) => o.owner !== 'crown' && tribe.stance[o.owner] === 'war' && !hasSubmitted(s, st.tribe, o.owner));
     if (u) {
@@ -390,15 +398,17 @@ function stepCost(s: GameState, x: number, y: number): number {
  * step). Stops next to the target unless `onto` is set.
  */
 function walk(s: GameState, b: Brave, tx: number, ty: number, points: number, index: PhaseIndex, onto: boolean): void {
+  const grid = gridOf(s);
   let left = points;
   while (left > 0) {
-    const d = distance(b.x, b.y, tx, ty);
+    const d = grid.distance(b.x, b.y, tx, ty);
     if (d === 0 || (!onto && d === 1)) return;
     let best: { x: number; y: number; d: number } | undefined;
-    for (const dir of DIRECTIONS) {
-      const x = b.x + dir.dx;
-      const y = b.y + dir.dy;
-      const nd = distance(x, y, tx, ty);
+    const steps = grid.neighbourOffsets(b.x, b.y);
+    for (let k = 0; k < steps.length; k += 2) {
+      const x = b.x + steps[k];
+      const y = b.y + steps[k + 1];
+      const nd = grid.distance(x, y, tx, ty);
       if (nd >= d || (best && nd >= best.d)) continue;
       if (!open(s, b, x, y, index)) continue;
       best = { x, y, d: nd };
@@ -411,12 +421,16 @@ function walk(s: GameState, b: Brave, tx: number, ty: number, points: number, in
 }
 
 function wanderStep(s: GameState, b: Brave, st: Settlement, points: number, index: PhaseIndex): void {
+  const grid = gridOf(s);
   let left = points;
   let guard = 4;
   while (left > 0 && guard-- > 0) {
-    const options = DIRECTIONS.map((d) => ({ x: b.x + d.dx, y: b.y + d.dy })).filter(
-      (p) => distance(p.x, p.y, st.x, st.y) <= WANDER_RADIUS && open(s, b, p.x, p.y, index),
-    );
+    const steps = grid.neighbourOffsets(b.x, b.y);
+    const options: { x: number; y: number }[] = [];
+    for (let k = 0; k < steps.length; k += 2) {
+      const p = { x: b.x + steps[k], y: b.y + steps[k + 1] };
+      if (grid.distance(p.x, p.y, st.x, st.y) <= WANDER_RADIUS && open(s, b, p.x, p.y, index)) options.push(p);
+    }
     if (!options.length) return;
     const p = options[randInt(s, options.length)];
     b.x = p.x;
@@ -560,6 +574,7 @@ export function aiPaysTribute(s: GameState, b: Brave, c: Colony, d: Pick<NativeD
 
 /** Answers a demand (pay or refuse) or an offer (buy or decline). */
 export function resolveDemand(s: GameState, d: NativeDemand, accept: boolean): string {
+  const grid = gridOf(s);
   s.nativeDemands = (s.nativeDemands ?? []).filter((o) => o.id !== d.id);
   const b = bravesOf(s)[d.braveId];
   const st = s.settlements[d.settlementId];
@@ -603,7 +618,7 @@ export function resolveDemand(s: GameState, d: NativeDemand, accept: boolean): s
   track(d.nation, 'natives:tribute refused');
   const text = `${c.name} refuses the ${tribe} demand. The brave attacks!`;
   message(s, text, d.nation, c);
-  if (b && distance(b.x, b.y, c.x, c.y) === 1) attackColony(s, b, c);
+  if (b && grid.distance(b.x, b.y, c.x, c.y) === 1) attackColony(s, b, c);
   return text;
 }
 
@@ -668,7 +683,7 @@ function hurtArtillery(s: GameState, u: Unit): string {
     u.type = 'damagedArtillery';
     return `${name} is damaged`;
   }
-  delete s.units[u.id];
+  removeUnit(s, u.id);
   return `${name} is destroyed`;
 }
 
@@ -733,7 +748,7 @@ function pillage(s: GameState, b: Brave, c: Colony): void {
   }
   if (r >= 0.9 && workers.length > 1) {
     const victim = workers[workers.length - 1];
-    delete s.units[victim.id];
+    removeUnit(s, victim.id);
     track(c.owner, 'natives:colonist killed');
     message(s, `The ${tribe} raid ${c.name} and kill a ${unitName(victim)}.`, c.owner, c);
     return;
@@ -769,8 +784,8 @@ function attackUnit(s: GameState, b: Brave, target: Unit): void {
     return;
   }
   const name = unitName(defender);
-  for (const o of Object.values(s.units)) if (o.loc.kind === 'carrier' && o.loc.carrierId === defender.id) delete s.units[o.id];
-  delete s.units[defender.id];
+  for (const o of Object.values(s.units)) if (o.loc.kind === 'carrier' && o.loc.carrierId === defender.id) removeUnit(s, o.id);
+  removeUnit(s, defender.id);
   track(defender.owner, 'natives:unit killed');
   message(s, `The ${tribe} attack and kill your ${name}.`, defender.owner, at);
 }

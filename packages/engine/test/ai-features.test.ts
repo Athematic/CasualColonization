@@ -12,12 +12,13 @@ import {
   setFeatureSink,
   track,
   type GameState,
+  removeUnit,
 } from '../src/index.js';
 
 /** A one-nation computer game with two colonies four tiles apart on open, plowed plains. */
 function twoColonies(level: 'competent' | 'creative' = 'competent') {
   const s = createGame({ seed: 11, mapSize: 'small', nations: ['england'], humans: [], ai: { england: level } });
-  for (const u of Object.values(s.units)) delete s.units[u.id];
+  for (const u of Object.values(s.units)) removeUnit(s, u.id);
   const w = s.map.width;
   const y = Math.floor(s.map.height / 2);
   const x = Math.floor(w / 2) - 2;

@@ -18,7 +18,8 @@
     "build:single": "SINGLE_FILE=1 npm run build && node scripts/single-file.mjs apps/web/dist/casual-colonization.html",
     "tournament": "rolldown scripts/tournament.ts --file scripts/.tournament.mjs --format esm --platform node --log-level warn && node scripts/.tournament.mjs",
     "bench": "rolldown scripts/bench.ts --file scripts/.bench.mjs --format esm --platform node --log-level warn && node scripts/.bench.mjs",
-    "sprites:copy": "node scripts/copy-runtime.mjs"
+    "sprites:copy": "node scripts/copy-runtime.mjs",
+    "perf:gate": "node scripts/perf-gate.mjs"
   },
   "devDependencies": {
     "typescript": "5.9.3",

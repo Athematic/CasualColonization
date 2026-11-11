@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { expansionCheck } from '../src/ai/advanced.js';
 import { bestColonySite, keenSiteScore } from '../src/ai/common.js';
-import { AI_PROFILES, applyCommand, assignJob, createGame, createUnit, distance, foundColony, siteScore, type GameState } from '../src/index.js';
+import { AI_PROFILES, applyCommand, assignJob, createGame, createUnit, SQUARE, foundColony, siteScore, type GameState, removeUnit } from '../src/index.js';
 
 const ownedColonies = (s: GameState, nation: string) => Object.values(s.colonies).filter((c) => c.owner === nation);
 
 /** A one-nation computer game with a wide stretch of open, plowed plains in the middle and no natives. */
 function openPlains(level: 'competent' | 'creative' | 'combative' = 'competent') {
   const s = createGame({ seed: 11, mapSize: 'small', nations: ['england'], humans: [], ai: { england: level } });
-  for (const u of Object.values(s.units)) delete s.units[u.id];
+  for (const u of Object.values(s.units)) removeUnit(s, u.id);
   for (const st of Object.values(s.settlements)) delete s.settlements[st.id];
   const w = s.map.width;
   const cy = Math.floor(s.map.height / 2);
@@ -42,7 +42,7 @@ describe('computer colony spacing', () => {
     expect(keenSiteScore(s, cx + 3, cy)).toBeGreaterThan(keenSiteScore(s, cx + 2, cy));
     // Standing two tiles from the colony, the search walks one more tile rather than found there.
     const best = bestColonySite(s, cx + 2, cy, { radius: 5, score: (x, y) => keenSiteScore(s, x, y), perTile: 1.1, stay: true });
-    expect(distance(best.x, best.y, cx, cy)).toBeGreaterThanOrEqual(3);
+    expect(SQUARE.distance(best.x, best.y, cx, cy)).toBeGreaterThanOrEqual(3);
     // The rule itself is unchanged: two tiles is still allowed, one is not.
     expect(siteScore(s, cx + 2, cy)).toBeGreaterThan(0);
     expect(siteScore(s, cx + 1, cy)).toBe(-Infinity);
@@ -55,7 +55,7 @@ describe('computer colony spacing', () => {
     s.map.tiles[(cy - 3) * w + cx + 1] = { t: 'plains', p: true, b: true };
     expect(keenSiteScore(s, cx, cy - 3)).toBeGreaterThan(keenSiteScore(s, cx, cy + 3) + 4);
     const best = bestColonySite(s, cx, cy, { radius: 4, score: (x, y) => keenSiteScore(s, x, y), perTile: 1.1, stay: true });
-    expect(distance(best.x, best.y, cx + 1, cy - 3)).toBeLessThanOrEqual(1);
+    expect(SQUARE.distance(best.x, best.y, cx + 1, cy - 3)).toBeLessThanOrEqual(1);
   });
 
   it('a competent nation with small colonies does not found another', () => {
@@ -85,7 +85,7 @@ describe('computer colony spacing', () => {
     const colonies = ownedColonies(s, 'england');
     expect(colonies).toHaveLength(3);
     const fresh = colonies.find((c) => c.id !== a.id && c.id !== b.id)!;
-    expect(Math.min(distance(fresh.x, fresh.y, a.x, a.y), distance(fresh.x, fresh.y, b.x, b.y))).toBeGreaterThanOrEqual(3);
+    expect(Math.min(SQUARE.distance(fresh.x, fresh.y, a.x, a.y), SQUARE.distance(fresh.x, fresh.y, b.x, b.y))).toBeGreaterThanOrEqual(3);
   });
 
   it('waits a few turns between new colonies', () => {

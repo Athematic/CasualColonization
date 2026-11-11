@@ -40,7 +40,7 @@ function hash(x: number, y: number, salt: number): number {
  * neighbour in direction `dir`, in tile units from the tile's centre.
  */
 export interface Strand {
-  /** Direction index into RIVER_DIRS (the engine's DIRECTIONS order: n, ne, e, se, s, sw, w, nw). */
+  /** Direction index into RIVER_DIRS (the engine's square grid direction order: n, ne, e, se, s, sw, w, nw). */
   dir: number;
   dx: number;
   dy: number;

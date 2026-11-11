@@ -4,7 +4,7 @@
 // Prints the total time, a breakdown per phase of the turn pipeline (packages/engine/src/perf.ts)
 // and a hash of the final saved state, which must not change when the engine only gets faster.
 //
-// Usage: npm run bench -- [--seed 2024] [--year 1700] [--scenario id] [--quiet]
+// Usage: npm run bench -- [--seed 2024] [--year 1700] [--scenario id] [--keep-playing] [--quiet]
 //        npm run bench -- --verify [--write] [--scenario id]
 // npm test runs a shorter golden-hash test (packages/engine/test/golden.test.ts) in CI.
 // --verify plays 150 rounds on three more seeds and compares the state hashes with
@@ -12,10 +12,12 @@
 // --scenario plays the same games in another registered scenario (the first four nations of its
 // default set, its default map, its calendar); its hashes are stored under "<id>: ..." keys, so
 // the Americas' keys stay as they are. Without it the games are the Americas', as before.
+// A game that ends before its turn (the bench plays without play-on, so a won War of
+// Independence ends it, as in the game to 1750) says so, with the reason, after its final state.
 // For a CPU profile: node --cpu-prof scripts/.bench.mjs (after one `npm run bench`).
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { createGame, DEFAULT_SCENARIO, getScenario, handOver, headStartConfig, listScenarios, nationSet, newGameOptions, perfReport, playUntil, serialize, setPerf, turnOfYear as calendarTurn, type GameConfig, type GameState } from '../packages/engine/src/index.ts';
+import { createGame, DEFAULT_SCENARIO, getScenario, handOver, headStartConfig, listScenarios, nationSet, newGameOptions, perfReport, playUntil, registerScenario, serialize, setPerf, turnOfYear as calendarTurn, type GameConfig, type GameState } from '../packages/engine/src/index.ts';
 
 const args = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
@@ -24,8 +26,16 @@ const opt = (name: string, fallback: string) => {
 };
 
 const scenarioId = opt('scenario', DEFAULT_SCENARIO);
-const scenario = getScenario(scenarioId);
-if (!scenario) throw new Error(`Unknown scenario "${scenarioId}". Use ${listScenarios().map((sc) => sc.id).join(', ')}.`);
+const chosen = getScenario(scenarioId);
+if (!chosen) throw new Error(`Unknown scenario "${scenarioId}". Use ${listScenarios().map((sc) => sc.id).join(', ')}.`);
+// --keep-playing (timing only): the same scenario and rules, but the only way the game ends is the
+// calendar: a War of Independence is fought as usual, and when it is won or lost the game goes on
+// (the nation plays on, independent or not), so every timing game runs to its year with all of its
+// work. It plays other games than the recorded ones, so it can't be combined with --verify.
+const keepPlaying = args.includes('--keep-playing');
+if (keepPlaying && args.includes('--verify')) throw new Error('--keep-playing is for timing; --verify checks the recorded games.');
+if (keepPlaying) registerScenario({ ...chosen, id: `${chosen.id}-keep-playing`, name: `${chosen.name} (keep playing)`, hidden: true, victory: [{ id: 'time' }] });
+const scenario = keepPlaying ? getScenario(`${chosen.id}-keep-playing`)! : chosen;
 const americas = scenario.id === DEFAULT_SCENARIO;
 
 /** The first turn of a year in the scenario's calendar (packages/engine/src/scenarios/calendar.ts). */
@@ -56,6 +66,17 @@ const key = (k: string) => (americas ? k : `${scenario.id}: ${k}`);
 
 const hash = (s: GameState) => createHash('sha256').update(serialize(s)).digest('hex').slice(0, 16);
 
+/**
+ * Why a game stopped before the turn it was played to, or '' when it got there. The bench plays
+ * without play-on, so a game ends at its first victory (a won War of Independence, the last year).
+ */
+function endedEarly(s: GameState, turn: number): string {
+  const over = s.gameOver;
+  if (!over || s.turn > turn) return '';
+  const winner = over.winner ? ` (winner: ${over.winner})` : '';
+  return `Game over at turn ${over.turn}, before turn ${turn}${winner}: ${over.reason}`;
+}
+
 /** Plays a head start to the turn and hands over, as skipAhead in apps/web/src/main.ts does. */
 function headStart(seed: number, turn: number): GameState {
   const s = createGame(headStartConfig(webConfig(seed), turn));
@@ -75,13 +96,17 @@ if (args.includes('--verify')) {
   const hashes: Record<string, string> = {};
   for (const seed of VERIFY_SEEDS) {
     const t = performance.now();
-    hashes[key(`seed ${seed}, ${VERIFY_ROUNDS} rounds`)] = hash(headStart(seed, VERIFY_ROUNDS));
-    console.error(`  seed ${seed}: ${((performance.now() - t) / 1000).toFixed(1)}s`);
+    const s = headStart(seed, VERIFY_ROUNDS);
+    hashes[key(`seed ${seed}, ${VERIFY_ROUNDS} rounds`)] = hash(s);
+    const early = endedEarly(s, VERIFY_ROUNDS);
+    console.error(`  seed ${seed}: ${((performance.now() - t) / 1000).toFixed(1)}s${early ? ` (${early})` : ''}`);
   }
   const t = performance.now();
   // The benchmark game: to 1700 in the Americas, or the same share of another scenario's calendar.
-  hashes[key(`seed ${BENCH_SEED}, to ${BENCH_YEAR}`)] = hash(headStart(BENCH_SEED, turnOfYear(BENCH_YEAR)));
-  console.error(`  seed ${BENCH_SEED} to ${BENCH_YEAR}: ${((performance.now() - t) / 1000).toFixed(1)}s`);
+  const bench = headStart(BENCH_SEED, turnOfYear(BENCH_YEAR));
+  hashes[key(`seed ${BENCH_SEED}, to ${BENCH_YEAR}`)] = hash(bench);
+  const early = endedEarly(bench, turnOfYear(BENCH_YEAR));
+  console.error(`  seed ${BENCH_SEED} to ${BENCH_YEAR}: ${((performance.now() - t) / 1000).toFixed(1)}s${early ? ` (${early})` : ''}`);
   const stored = JSON.parse(readFileSync(HASH_FILE, 'utf8')) as Record<string, string>;
   if (args.includes('--write')) {
     // Other scenarios' hashes stay; this scenario's are replaced.
@@ -112,7 +137,10 @@ if (args.includes('--verify')) {
   const h = hash(s);
   const hashMs = performance.now() - t1;
   console.log(`Head start to ${year} (turn ${turn}), seed ${seed}${americas ? '' : `, ${scenario.name}`}: ${(total / 1000).toFixed(1)}s (new game ${created.toFixed(0)} ms)`);
-  console.log(`Final state: turn ${s.turn}, ${Object.keys(s.colonies).length} colonies, ${Object.keys(s.units).length} units, hash ${h} (${(serialize(s).length / 1e6).toFixed(1)} MB, hashed in ${hashMs.toFixed(0)} ms)\n`);
+  console.log(`Final state: turn ${s.turn}, ${Object.keys(s.colonies).length} colonies, ${Object.keys(s.units).length} units, hash ${h} (${(serialize(s).length / 1e6).toFixed(1)} MB, hashed in ${hashMs.toFixed(0)} ms)`);
+  const early = endedEarly(s, turn);
+  if (early) console.log(early);
+  console.log('');
   if (!args.includes('--quiet')) {
     console.log('Phase                                      seconds   share    calls   ms/call');
     for (const [name, p] of perfReport()) {

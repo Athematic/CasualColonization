@@ -79,7 +79,7 @@ export interface Tile {
   /** River: 1 minor, 2 major. A fixed map feature on land; absent means no river. See rivers.ts. */
   rv?: 1 | 2;
   /**
-   * Where the river runs: one bit per neighbour in `DIRECTIONS` order (n 1, ne 2, e 4, se 8, s 16,
+   * Where the river runs: one bit per neighbour in the square grid's direction order (n 1, ne 2, e 4, se 8, s 16,
    * sw 32, w 64, nw 128). A bit towards a water tile is the river's mouth.
    */
   rd?: number;
@@ -195,17 +195,20 @@ export interface MercenaryOffer {
   turn: number;
 }
 
+// Jobs and locations are read-only where units are indexed by them (unitindex.ts): a unit moves
+// only through setUnitLoc, which gives it a new location object. Only a port and the turns left at
+// sea, which no index uses, change in place.
 export type Job =
-  | { kind: 'tile'; x: number; y: number; good: GoodId }
-  | { kind: 'building'; building: BuildingKind };
+  | { readonly kind: 'tile'; readonly x: number; readonly y: number; readonly good: GoodId }
+  | { readonly kind: 'building'; readonly building: BuildingKind };
 
 export type UnitLocation =
-  | { kind: 'map'; x: number; y: number }
-  | { kind: 'colony'; colonyId: string; job: Job }
-  | { kind: 'carrier'; carrierId: string }
+  | { readonly kind: 'map'; readonly x: number; readonly y: number }
+  | { readonly kind: 'colony'; readonly colonyId: string; readonly job: Job }
+  | { readonly kind: 'carrier'; readonly carrierId: string }
   /** In a home port in Europe. `port` is a Favoured Nation partner whose port the ship visits; missing means the owner's own. */
-  | { kind: 'europe'; port?: NationId }
-  | { kind: 'sailing'; to: 'europe' | 'america'; turnsLeft: number; port?: NationId };
+  | { readonly kind: 'europe'; port?: NationId }
+  | { readonly kind: 'sailing'; readonly to: 'europe' | 'america'; turnsLeft: number; port?: NationId };
 
 export type UnitState = 'active' | 'fortified' | 'sentry';
 
@@ -213,12 +216,14 @@ export type ImprovementKind = 'plow' | 'road' | 'clear';
 
 export interface Unit {
   id: string;
-  owner: NationId;
+  /** Who owns the unit. Read-only: change it with setUnitOwner (unitindex.ts), which keeps the unit index up to date. */
+  readonly owner: NationId;
   type: UnitTypeId;
   role: RoleId;
   /** Tools carried by a pioneer. */
   tools: number;
-  loc: UnitLocation;
+  /** Where the unit is. Read-only: change it with setUnitLoc (unitindex.ts), which keeps the unit index up to date. */
+  readonly loc: UnitLocation;
   /** Move points left this turn (3 per move). */
   moves: number;
   state: UnitState;
@@ -289,8 +294,9 @@ export interface Colony {
   id: string;
   owner: NationId;
   name: string;
-  x: number;
-  y: number;
+  /** A colony never moves (colonies are indexed by tile in unitindex.ts). */
+  readonly x: number;
+  readonly y: number;
   goods: Record<GoodId, number>;
   buildings: Record<BuildingKind, number>;
   build: BuildTarget | null;
@@ -423,6 +429,20 @@ export interface Relation {
   proposal?: { kind: ProposalKind; from: NationId; turn: number };
 }
 
+/**
+ * The whole game, as saved. Invariant: a save and load (serialize, then deserialize) gives a state
+ * that plays exactly as this one, and saves to the same text. To keep it so, the state is a plain
+ * JSON tree:
+ * - no object or array appears twice in it (an object held in two places stays one object while
+ *   playing, but becomes two after a load, so changing one would no longer change the other):
+ *   store a copy, or an id, never an object the state already holds;
+ * - only JSON values: no Map, Set, Date, class instance, function, NaN, Infinity or -0;
+ * - `undefined` only where an absent key means the same (JSON drops it);
+ * - nothing decided by the order of a record's keys unless that order survives JSON (it does:
+ *   JSON.parse adds keys in the saved order, so integer-like keys are the only catch).
+ * Caches beside the state (unitindex.ts) are rebuilt from a loaded state in the same order.
+ * test/roundtrip.test.ts plays games with a save and load after every round and checks this.
+ */
 export interface GameState {
   version: 3;
   config: GameConfig;
@@ -433,8 +453,10 @@ export interface GameState {
   nextId: number;
   map: GameMap;
   players: Player[];
-  units: Record<string, Unit>;
-  colonies: Record<string, Colony>;
+  /** Read-only record: add and remove units with addUnit and removeUnit (unitindex.ts), which keep the unit index up to date. */
+  units: { readonly [id: string]: Unit };
+  /** Read-only record: add and remove colonies with addColony and removeColony (unitindex.ts). */
+  colonies: { readonly [id: string]: Colony };
   tribes: Tribe[];
   settlements: Record<string, Settlement>;
   messages: GameMessage[];

@@ -13,12 +13,13 @@ import {
   serialize,
   tileAt,
   type GameState,
+  removeUnit,
 } from '../src/index.js';
 
 /** A one-nation game, human, with open plains and a colony at the centre. */
 function setup(human = true) {
   const s = createGame({ seed: 11, mapSize: 'small', nations: ['england', 'france'], humans: human ? ['england'] : [], ai: { england: 'naive', france: 'naive' } });
-  for (const u of Object.values(s.units)) delete s.units[u.id];
+  for (const u of Object.values(s.units)) removeUnit(s, u.id);
   for (const st of Object.values(s.settlements)) delete s.settlements[st.id];
   const w = s.map.width;
   const cy = Math.floor(s.map.height / 2);

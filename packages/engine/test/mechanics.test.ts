@@ -2,8 +2,9 @@
  * The scenario's mechanics switches (docs/design/scenario-framework.md, step 5). For each switch a
  * test-only scenario turns it off, and the test checks the mechanic is gone for people (commands
  * refused, nothing happens) and for computer players (their profile drops the plan, and a whole
- * computer game with everything off never uses any of it). The Americas have everything on;
- * golden.test.ts checks they play as before.
+ * computer game with everything off never uses any of it, in mechanics-game.test.ts, a file of its
+ * own so it runs in parallel with these). The Americas have everything on; golden.test.ts checks
+ * they play as before.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -17,59 +18,29 @@ import {
   createUnit,
   DEMAND,
   describeMove,
-  DIRECTIONS,
+  gridOf,
   favouredProblem,
   foundColony,
   isWater,
   makeTradeAgreement,
   mechanicsOf,
-  playArenaGame,
   player,
   processCrown,
-  registerScenario,
   runCustomHouse,
   sellToMarket,
   settlementAt,
   tileAt,
   type Colony,
   type GameState,
-  type Mechanics,
   type NationId,
-  type Scenario,
 } from '../src/index.js';
 import { inScenario } from '../src/ai/index.js';
 import { creativeProfile } from '../src/ai/creative.js';
 import { buildingTies } from '../src/ai/logistics.js';
 import { AI_PROFILES } from '../src/ai/profiles.js';
+import './mechanics-variants.js';
 
-/** A copy of the Americas with some mechanics off (and no independence victory without independence). */
-function variant(id: string, off: Partial<Mechanics>): Scenario {
-  const mechanics = { ...AMERICAS.mechanics, ...off };
-  const scenario: Scenario = {
-    ...AMERICAS,
-    id,
-    name: id,
-    mechanics,
-    victory: mechanics.independence ? AMERICAS.victory : [{ id: 'time' }],
-  };
-  registerScenario(scenario);
-  return scenario;
-}
-
-variant('test-no-taxes', { taxes: false });
-variant('test-no-boycotts', { boycotts: false });
-variant('test-no-demands', { demands: false });
-variant('test-no-royal-wars', { royalWars: false });
-variant('test-no-ref', { ref: false });
-variant('test-no-independence', { independence: false });
-variant('test-no-favoured', { favoured: false });
-variant('test-no-charter', { charter: false });
-variant('test-no-custom-house', { customHouse: false });
-variant('test-no-missions', { missions: false });
-variant('test-all-off', {
-  taxes: false, boycotts: false, demands: false, royalWars: false, ref: false,
-  independence: false, favoured: false, charter: false, customHouse: false, missions: false,
-});
+// The test-only scenarios (test-no-taxes … test-all-off) are registered by mechanics-variants.ts.
 
 function game(scenario?: string, opts: { nations?: NationId[]; humans?: NationId[]; charter?: boolean } = {}): GameState {
   const nations = opts.nations ?? ['england', 'france'];
@@ -307,7 +278,7 @@ describe('missions', () => {
     const actions = (scenario?: string) => {
       const s = game(scenario);
       const st = Object.values(s.settlements)[0];
-      for (const d of DIRECTIONS) {
+      for (const d of gridOf(s).directions) {
         const x = st.x - d.dx;
         const y = st.y - d.dy;
         const t = tileAt(s, x, y);
@@ -330,26 +301,4 @@ describe('missions', () => {
     expect(Object.values(off.s.settlements).some((st) => st.mission)).toBe(false);
     for (const prof of Object.values(AI_PROFILES)) expect(inScenario(off.s, prof).missions).toBe(false);
   });
-});
-
-describe('computer players with every mechanic off', () => {
-  it('play a game without using any of them', () => {
-    const line = (['competent', 'combative', 'creative', 'naive'] as const).map((level, i) => ({ nation: (['england', 'france', 'spain', 'netherlands'] as NationId[])[i], level }));
-    const { state: s } = playArenaGame(11, line, 220, 'small', undefined, false, undefined, false, false, true, { scenario: 'test-all-off' });
-    expect(s.turn).toBeGreaterThanOrEqual(220);
-    expect(Object.keys(s.colonies).length).toBeGreaterThan(4);
-    for (const p of s.players) {
-      expect(p.tax, p.id).toBe(0);
-      expect(p.pendingTax).toBeNull();
-      expect(Object.keys(p.boycotts)).toEqual([]);
-      expect(p.pendingDemand).toBeUndefined();
-      expect(p.royal?.added ?? 0).toBe(0);
-      expect(p.royal?.lastWar).toBeUndefined();
-      expect(p.independence).toBe('none');
-    }
-    expect(Object.values(s.relations).some((r) => r.favoured)).toBe(false);
-    expect(Object.values(s.settlements).some((st) => st.mission)).toBe(false);
-    expect(Object.values(s.colonies).some((c) => c.buildings.customHouse > 0)).toBe(false);
-    expect(Object.values(s.units).some((u) => u.role === 'missionary')).toBe(false);
-  }, 60_000);
 });

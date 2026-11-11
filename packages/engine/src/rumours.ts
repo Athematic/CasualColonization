@@ -1,4 +1,5 @@
-import { createUnit, distance, message, player, reveal, tileAt, unitPosition } from './queries.js';
+import { gridOf } from './grid.js';
+import { createUnit, message, player, reveal, tileAt, unitPosition } from './queries.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { randInt, weightedPick } from './rng.js';
@@ -9,16 +10,18 @@ import { difficultyOf, nationOf, rumoursOf, term } from './scenarios/index.js';
 import { TRIBES } from './rules/nations.js';
 import { BURIAL_RADIUS } from './rules/natives.js';
 import type { GameState, Settlement, Unit } from './types.js';
+import { removeUnit } from './unitindex.js';
 
 type Outcome = RumourOutcome;
 
 /** The settlement whose tribal land a tile is (within BURIAL_RADIUS, not bought or taken), if any. */
 export function tribalLandOwner(s: GameState, x: number, y: number): Settlement | undefined {
+  const grid = gridOf(s);
   if (tileAt(s, x, y)?.claim) return undefined;
   let best: Settlement | undefined;
   for (const st of Object.values(s.settlements)) {
-    const d = distance(st.x, st.y, x, y);
-    if (d <= BURIAL_RADIUS && (!best || d < distance(best.x, best.y, x, y))) best = st;
+    const d = grid.distance(st.x, st.y, x, y);
+    if (d <= BURIAL_RADIUS && (!best || d < grid.distance(best.x, best.y, x, y))) best = st;
   }
   return best;
 }
@@ -92,7 +95,7 @@ export function resolveRumour(s: GameState, u: Unit): void {
       noteHistory(s, 'treasure', [u.owner], term(s, 'rumour.fountain.history'), { secret: true, at: pos });
       break;
     case 'lost':
-      delete s.units[u.id];
+      removeUnit(s, u.id);
       message(s, term(s, 'rumour.lost'), u.owner, pos);
       break;
     case 'burial': {

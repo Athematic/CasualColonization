@@ -4,13 +4,15 @@
  * the Crown has built up when deciding on independence. The rules are in crown.ts; the numbers
  * here are tuned with tournaments (docs/AI_FEATURE_AUDIT.md, "The Crown").
  */
+import { gridOf } from '../grid.js';
 import { defencePower } from '../combat.js';
 import { answerDemand, demandPenalty, REF_ON_REFUSAL } from '../crown.js';
 import { WAVE } from '../independence.js';
-import { colonyReport, sonsOfLiberty, TORY_COLONY_BELOW } from '../production.js';
+import { sonsOfLiberty, TORY_COLONY_BELOW } from '../production.js';
+import { aiColonyReport } from './reports.js';
 import { answerMercenaries, INTERVENTION, interventionBells, interventionForce, mercenaryCompany, TORY_LANDING } from '../rebellion.js';
 import { proposePeace, WAR_WEARINESS } from '../diplomacy.js';
-import { colonyWorkers, distance, isCoastal, isShip, unitsAt } from '../queries.js';
+import { colonyWorkers, isCoastal, isShip, unitsAt } from '../queries.js';
 import { STOCKADE_DEFENCE } from '../rules/buildings.js';
 import { ROLES, UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
@@ -89,9 +91,10 @@ export function colonyDefences(s: GameState, p: Player): ColonyDefence[] {
  * colonies, a colony that would be a Tory colony after the declaration (Sons of Liberty below
  * TORY_COLONY_BELOW) counting for less: landings there bring TORY_LANDING troops instead of WAVE
  * (rebellion.ts). Compared with the Royal Expeditionary Force's attack power (`refPower`).
+ * `defences` are the nation's `colonyDefences`, when the caller has them.
  */
-export function rebelPower(s: GameState, p: Player): number {
-  return colonyDefences(s, p).reduce((n, d) => n + d.power * (sonsOfLiberty(s, d.colony) < TORY_COLONY_BELOW ? WAVE / TORY_LANDING : 1), 0);
+export function rebelPower(s: GameState, p: Player, defences = colonyDefences(s, p)): number {
+  return defences.reduce((n, d) => n + d.power * (sonsOfLiberty(s, d.colony) < TORY_COLONY_BELOW ? WAVE / TORY_LANDING : 1), 0);
 }
 
 /**
@@ -111,11 +114,11 @@ export const WEAK_BELOW = 0.5;
  * Colonies with less than WEAK_BELOW of `powerNeeded`. Muskets, horses and spare troops go there
  * first, and a declaration waits while a third of the colonies are weak: the war is lost once half
  * are taken (independence.ts). `mercenaries` (their defence, as `supportParts`) join the weakest
- * coastal colony at the declaration (rebellion.ts, weakestColony).
+ * coastal colony at the declaration (rebellion.ts, weakestColony). `defences` are the nation's
+ * `colonyDefences`, when the caller has them; the mercenaries are added to them.
  */
-export function weakColonies(s: GameState, p: Player, mercenaries = 0): Colony[] {
+export function weakColonies(s: GameState, p: Player, mercenaries = 0, defences = colonyDefences(s, p)): Colony[] {
   const need = powerNeeded(s, p) * WEAK_BELOW;
-  const defences = colonyDefences(s, p);
   if (mercenaries > 0) {
     const coastal = defences.filter((d) => isCoastal(s, d.colony.x, d.colony.y));
     const landing = (coastal.length ? coastal : defences).reduce<ColonyDefence | null>((a, d) => (!a || d.power < a.power ? d : a), null);
@@ -138,9 +141,9 @@ export function armyForIndependence(s: GameState, p: Player, plan: { armyPerColo
   return Math.min(MAX_GARRISON, Math.max(plan.armyPerColony, Math.ceil(units / colonies)));
 }
 
-/** Whether the defence, with `support`, is still short of `ratio` times the Royal Expeditionary Force. */
-export function defenceShort(s: GameState, p: Player, ratio: number, support = 0): boolean {
-  return rebelPower(s, p) + support < refPower(p) * ratio;
+/** Whether the defence, with `support`, is still short of `ratio` times the Royal Expeditionary Force. `power` is the nation's `rebelPower`, when the caller has it. */
+export function defenceShort(s: GameState, p: Player, ratio: number, support = 0, power = rebelPower(s, p)): boolean {
+  return power + support < refPower(p) * ratio;
 }
 
 /**
@@ -184,7 +187,7 @@ export function supportParts(s: GameState, p: Player): { mercenaries: number; in
   if (p.independence !== 'none') return { mercenaries: 0, intervention: 0 };
   const company = mercenaryCompany(s, p.id);
   const mercenaries = company ? supportPower(company) : 0;
-  const bells = ownColonies(s, p).reduce((n, c) => n + colonyReport(s, c).produced.bells, 0);
+  const bells = ownColonies(s, p).reduce((n, c) => n + aiColonyReport(s, c).produced.bells, 0);
   const turns = bells > 0 ? Math.max(INTERVENTION.minTurns, Math.ceil(interventionBells(s, p) / bells)) : Infinity;
   return { mercenaries, intervention: turns <= INTERVENTION_HORIZON ? supportPower(interventionForce(p)) * INTERVENTION_TRUST : 0 };
 }
@@ -197,9 +200,9 @@ export function supportParts(s: GameState, p: Player): { mercenaries: number; in
  */
 export const HOLD_ALONE = 1;
 
-/** Whether the nation's own defence and the mercenaries can hold until the intervention comes (HOLD_ALONE). */
-export function holdsAlone(s: GameState, p: Player, mercenaries = supportParts(s, p).mercenaries): boolean {
-  return rebelPower(s, p) + mercenaries >= refPower(p) * HOLD_ALONE;
+/** Whether the nation's own defence and the mercenaries can hold until the intervention comes (HOLD_ALONE). `power` is the nation's `rebelPower`, when the caller has it. */
+export function holdsAlone(s: GameState, p: Player, mercenaries = supportParts(s, p).mercenaries, power = rebelPower(s, p)): boolean {
+  return power + mercenaries >= refPower(p) * HOLD_ALONE;
 }
 
 /**
@@ -248,6 +251,7 @@ export function crownAffairs(s: GameState, p: Player, prof: AiProfile | null, pl
  * (WAR_WEARINESS turns), unless it already has a war target there.
  */
 function royalWarTurn(s: GameState, p: Player, prof: AiProfile, strength: number): void {
+  const grid = gridOf(s);
   const enemy = p.royal?.warOn;
   if (!enemy || p.stance[enemy] !== 'war' || (p.royal?.lastWar ?? -1) < (p.warSince[enemy] ?? Infinity)) return;
   const memory = (p.aiMemory = p.aiMemory ?? {});
@@ -256,7 +260,7 @@ function royalWarTurn(s: GameState, p: Player, prof: AiProfile, strength: number
   if (prof.aggression >= 0.5) {
     const ours = ownColonies(s, p);
     const prey = Object.values(s.colonies)
-      .filter((c) => c.owner === enemy && ours.some((o) => distance(o.x, o.y, c.x, c.y) <= 10))
+      .filter((c) => c.owner === enemy && ours.some((o) => grid.distance(o.x, o.y, c.x, c.y) <= 10))
       .map((c) => ({ c, score: strength / (unitsAt(s, c.x, c.y).filter((u) => u.owner === enemy && !isShip(u)).reduce((n, u) => n + defencePower(s, u), 0) + 1) }))
       .sort((a, b) => b.score - a.score)[0];
     if (prey && prey.score >= 2.5 / prof.aggression) {
@@ -265,4 +269,20 @@ function royalWarTurn(s: GameState, p: Player, prof: AiProfile, strength: number
     }
   }
   if (s.turn - (p.warSince[enemy] ?? s.turn) >= WAR_WEARINESS) proposePeace(s, p.id, enemy);
+}
+
+/**
+ * One colony's power in `colonyDefences`, worked out alone (the same sum): for a caller that needs
+ * only a few colonies, such as a soldier weighing its own colony against those nearby.
+ */
+export function rebelColonyDefence(s: GameState, p: Player, c: Colony): number {
+  const committed = sonsOfLiberty(s, c) >= COMMITTED;
+  const armed = unitsAt(s, c.x, c.y).filter((u) => u.owner === p.id && !isShip(u) && isArmed(u) && !u.ally);
+  let power = armed.reduce((n, u) => n + rebelDefence(c, committed, u), 0);
+  const muskets = Math.floor(c.goods.muskets / 50);
+  const dragoons = armed.filter((u) => u.role === 'dragoon');
+  const horses = dragoons.length ? Math.floor(c.goods.horses / 50) : 0;
+  power += muskets * rebelDefence(c, committed);
+  if (horses) power += horses * rebelDefence(c, committed, dragoons[0]);
+  return power;
 }

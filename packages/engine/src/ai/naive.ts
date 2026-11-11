@@ -1,9 +1,10 @@
+import { gridOf } from '../grid.js';
 import { assignJob, bestJob, canBuild, charterCost, foundColony, jobOptions, setBuild } from '../colony.js';
 import { aiPeace } from '../diplomacy.js';
 import { boardInEurope, recruit, recruitPrice, sailToAmerica, sellGoods } from '../europe.js';
-import { canImprove, findPath, setDestination, startImprovement } from '../movement.js';
-import { colonyReport } from '../production.js';
-import { cargoFree, cargoRoomFor, colonyAt, colonyWorkers, distance, isCoastal, isShip, isWater, tileAt, unitsAboard, warehouseCapacity } from '../queries.js';
+import { canImprove, goTo, setDestination, startImprovement } from '../movement.js';
+import { aiColonyReport } from './reports.js';
+import { cargoFree, cargoRoomFor, colonyAt, colonyWorkers, isCoastal, isShip, isWater, tileAt, unitsAboard, warehouseCapacity } from '../queries.js';
 import type { BuildingKind } from '../rules/buildings.js';
 import type { GoodId } from '../rules/goods.js';
 import { UNIT_TYPES } from '../rules/units.js';
@@ -11,6 +12,7 @@ import type { Colony, GameState, Player, Unit } from '../types.js';
 import { aiFight, boardRescue, disembarkAll, fetchStranded, guardColony, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
 import { crownAffairs } from './royal.js';
 import { aiGoodsOf, goodsOf } from '../scenarios/index.js';
+import { indexedUnitsOf, ownedUnitsView } from '../unitindex.js';
 
 const BUILD_PREFERENCE: BuildingKind[] = ['docks', 'stockade', 'warehouse', 'carpenter', 'printingPress', 'church', 'schoolhouse', 'customHouse', 'armory'];
 
@@ -19,7 +21,7 @@ export function runNaive(s: GameState, p: Player): void {
   aiPeace(s, p.id);
   // The King's demands are paid whenever the treasury can (ai/royal.ts).
   crownAffairs(s, p, null);
-  const units = Object.values(s.units).filter((u) => u.owner === p.id);
+  const units = indexedUnitsOf(s, p.id);
   for (const u of units) {
     if (!s.units[u.id] || u.owner !== p.id || u.ally) continue;
     safely(() => aiUnit(s, p, u));
@@ -45,6 +47,7 @@ function aiUnit(s: GameState, p: Player, u: Unit): void {
 }
 
 function aiColonist(s: GameState, p: Player, u: Unit): void {
+  const grid = gridOf(s);
   if (u.loc.kind !== 'map') return;
   // Stranded before the first colony (ai/common.ts): board the ship that came for them.
   if (boardRescue(s, p, u)) return;
@@ -53,7 +56,7 @@ function aiColonist(s: GameState, p: Player, u: Unit): void {
   if (u.role === 'soldier' || u.role === 'dragoon') {
     // Keep one guard per colony; extra soldiers settle down.
     const guarded = ownColonies(s, p).filter((c) =>
-      Object.values(s.units).some((o) => o.owner === p.id && o.id !== u.id && o.loc.kind === 'map' && o.loc.x === c.x && o.loc.y === c.y && (o.role === 'soldier' || o.role === 'dragoon')),
+      ownedUnitsView(s, p.id).some((o) => o.id !== u.id && o.loc.kind === 'map' && o.loc.x === c.x && o.loc.y === c.y && (o.role === 'soldier' || o.role === 'dragoon')),
     );
     if (ownColonies(s, p).length === 0 || guarded.length < ownColonies(s, p).length) return guardColony(s, p, u);
   }
@@ -73,30 +76,27 @@ function aiColonist(s: GameState, p: Player, u: Unit): void {
   if (expand) {
     const radius = here ? 7 : 4;
     let best = { x, y, score: siteScore(s, x, y) };
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (!tileAt(s, nx, ny)) continue;
-        const score = siteScore(s, nx, ny) - distance(x, y, nx, ny) * 1.2;
-        if (score > best.score) best = { x: nx, y: ny, score };
-      }
+    const within = grid.withinOffsets(x, y, radius);
+    for (let k = 0; k < within.length; k += 2) {
+      const nx = x + within[k];
+      const ny = y + within[k + 1];
+      if (!tileAt(s, nx, ny)) continue;
+      const score = siteScore(s, nx, ny) - grid.distance(x, y, nx, ny) * 1.2;
+      if (score > best.score) best = { x: nx, y: ny, score };
     }
     if (best.score > 15) {
       if (best.x === x && best.y === y) {
         foundColony(s, u.id);
         return;
       }
-      if (findPath(s, u, best.x, best.y)) {
-        setDestination(s, u.id, { x: best.x, y: best.y });
+      if (goTo(s, u, best.x, best.y)) {
         if (u.loc.kind === 'map' && u.loc.x === best.x && u.loc.y === best.y && u.moves > 0) foundColony(s, u.id);
         return;
       }
     }
   }
   const target = nearestColony(s, p, x, y);
-  if (target && findPath(s, u, target.x, target.y)) {
-    setDestination(s, u.id, { x: target.x, y: target.y });
+  if (target && goTo(s, u, target.x, target.y)) {
     const now = u.loc.kind === 'map' ? colonyAt(s, u.loc.x, u.loc.y) : undefined;
     if (now && now.id === target.id) assignJob(s, u.id, target.id);
   } else if (siteScore(s, x, y) > 0 && u.moves > 0) {
@@ -124,8 +124,7 @@ function aiPioneer(s: GameState, p: Player, u: Unit): boolean {
       }
       continue;
     }
-    if (findPath(s, u, t.x, t.y)) {
-      setDestination(s, u.id, { x: t.x, y: t.y });
+    if (goTo(s, u, t.x, t.y)) {
       if (u.loc.x === t.x && u.loc.y === t.y && canImprove(s, u, kind) === null) startImprovement(s, u.id, kind);
       return true;
     }
@@ -160,7 +159,7 @@ function aiShip(s: GameState, p: Player, ship: Unit): void {
     }
   }
   const loaded = Object.values(ship.cargo ?? {}).some((n) => (n ?? 0) > 0);
-  const docks = Object.values(s.units).some((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u));
+  const docks = ownedUnitsView(s, p.id).some((u) => u.loc.kind === 'europe' && !isShip(u));
   if (loaded || docks || p.gold >= recruitPrice(s, p) + 200 || !here) {
     if (!ship.dest) setDestination(s, ship.id, { europe: true });
     return;
@@ -172,16 +171,16 @@ function aiShip(s: GameState, p: Player, ship: Unit): void {
     .map((c) => ({ c, n: Math.max(...aiGoodsOf(s).export.map((g) => c.goods[g] - (warehouseCapacity(c) - 30))) }))
     .filter((r) => r.n >= 0)
     .sort((a, b) => b.n - a.n)[0];
-  if (rotting && findPath(s, ship, rotting.c.x, rotting.c.y)) setDestination(s, ship.id, { x: rotting.c.x, y: rotting.c.y });
+  if (rotting) goTo(s, ship, rotting.c.x, rotting.c.y);
 }
 
 function aiEurope(s: GameState, p: Player): void {
-  const ships = Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && isShip(u) && !u.route);
+  const ships = ownedUnitsView(s, p.id).filter((u) => u.loc.kind === 'europe' && isShip(u) && !u.route);
   for (const ship of ships) {
     for (const g of goodsOf(s)) if ((ship.cargo?.[g] ?? 0) > 0) sellGoods(s, ship.id, g, ship.cargo![g]!);
-    const totalUnits = Object.values(s.units).filter((u) => u.owner === p.id).length;
+    const totalUnits = indexedUnitsOf(s, p.id).length;
     while (cargoFree(s, ship) > 0 && p.gold >= recruitPrice(s, p) + 300 && totalUnits < 60) {
-      const docksCount = Object.values(s.units).filter((u) => u.owner === p.id && u.loc.kind === 'europe' && !isShip(u)).length;
+      const docksCount = ownedUnitsView(s, p.id).filter((u) => u.loc.kind === 'europe' && !isShip(u)).length;
       if (docksCount >= cargoFree(s, ship)) break;
       safely(() => {
         const slot = p.recruitPool.findIndex((t) => t !== 'pettyCriminal');
@@ -189,8 +188,8 @@ function aiEurope(s: GameState, p: Player): void {
       });
       break;
     }
-    for (const u of Object.values(s.units)) {
-      if (u.owner === p.id && u.loc.kind === 'europe' && !isShip(u) && cargoFree(s, ship) > 0) boardInEurope(s, u.id, ship.id);
+    for (const u of indexedUnitsOf(s, p.id)) {
+      if (u.loc.kind === 'europe' && !isShip(u) && cargoFree(s, ship) > 0) boardInEurope(s, u.id, ship.id);
     }
     sailToAmerica(s, ship.id);
   }
@@ -203,7 +202,7 @@ function aiColony(s: GameState, c: Colony): void {
   }
   // Move workers onto food until the colony stops starving.
   for (const worker of colonyWorkers(s, c)) {
-    if (colonyReport(s, c).net.food >= 0) break;
+    if (aiColonyReport(s, c).net.food >= 0) break;
     if (worker.loc.kind === 'colony' && worker.loc.job.kind === 'tile' && worker.loc.job.good === 'food') continue;
     const food = jobOptions(s, c, worker)
       .filter((o) => o.job.kind === 'tile' && o.job.good === 'food')

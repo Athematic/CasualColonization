@@ -5,27 +5,10 @@ import { FOREST_DEFENCE, TERRAIN, type TerrainDef } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeDef } from './rules/units.js';
 import type { Colony, GameState, Player, Settlement, Tile, Unit, UnitLocation } from './types.js';
 import type { UnitTypeId } from './rules/units.js';
+import { gridOf } from './grid.js';
 import { goodsOf } from './scenarios/index.js';
 import { modifiers } from './scenarios/modifiers.js';
-
-export const DIRECTIONS = [
-  { id: 'n', dx: 0, dy: -1 },
-  { id: 'ne', dx: 1, dy: -1 },
-  { id: 'e', dx: 1, dy: 0 },
-  { id: 'se', dx: 1, dy: 1 },
-  { id: 's', dx: 0, dy: 1 },
-  { id: 'sw', dx: -1, dy: 1 },
-  { id: 'w', dx: -1, dy: 0 },
-  { id: 'nw', dx: -1, dy: -1 },
-] as const;
-
-export type Direction = (typeof DIRECTIONS)[number]['id'];
-
-export function dirOffset(dir: Direction): { dx: number; dy: number } {
-  const d = DIRECTIONS.find((d) => d.id === dir);
-  if (!d) throw new Error(`Unknown direction ${dir}`);
-  return d;
-}
+import { addUnit, indexedColonyAt, indexedColonyPopulation, indexedColonyWorkers, indexedTileWorker, indexedUnitsAboard, indexedUnitsAt } from './unitindex.js';
 
 export function inBounds(s: GameState, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < s.map.width && y < s.map.height;
@@ -58,22 +41,20 @@ export function tileDefence(tile: Tile): number {
   return tile.f ? FOREST_DEFENCE : TERRAIN[tile.t].defence;
 }
 
-export function distance(ax: number, ay: number, bx: number, by: number): number {
-  return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+/** The tile's neighbours on the map, in the grid's direction order (grid.ts). */
+export function neighbours(s: GameState, x: number, y: number): { x: number; y: number }[] {
+  return gridOf(s).neighbours(s.map, x, y);
 }
 
-export function neighbours(s: GameState, x: number, y: number): { x: number; y: number }[] {
-  const out: { x: number; y: number }[] = [];
-  for (const d of DIRECTIONS) {
-    const nx = x + d.dx;
-    const ny = y + d.dy;
-    if (inBounds(s, nx, ny)) out.push({ x: nx, y: ny });
-  }
-  return out;
+/** The work area on the map of a colony on this tile, its own tile left out (grid.ts). */
+export function workArea(s: GameState, x: number, y: number): { x: number; y: number }[] {
+  return gridOf(s).workArea(s.map, x, y);
 }
 
 export function isCoastal(s: GameState, x: number, y: number): boolean {
-  return neighbours(s, x, y).some((p) => isWater(tileAt(s, p.x, p.y)));
+  const near = gridOf(s).neighbourOffsets(x, y);
+  for (let k = 0; k < near.length; k += 2) if (isWater(tileAt(s, x + near[k], y + near[k + 1]))) return true;
+  return false;
 }
 
 export function player(s: GameState, id: NationId): Player {
@@ -134,24 +115,17 @@ export function unitPosition(s: GameState, u: Unit): { x: number; y: number } | 
   }
 }
 
-// The lookups below are hot paths for the computer players: plain loops visit the records in the
-// same order as Object.values would, without building an array of every unit first.
+// The lookups below are hot paths for the computer players. Units and colonies are looked up in
+// indexes (unitindex.ts) that return what a scan of the records would, in the same order (the
+// order Object.values gives); settlements are few and scanned with a plain loop.
 
+/** Units on a map tile, in record order. */
 export function unitsAt(s: GameState, x: number, y: number): Unit[] {
-  const out: Unit[] = [];
-  for (const id in s.units) {
-    const u = s.units[id];
-    if (u.loc.kind === 'map' && u.loc.x === x && u.loc.y === y) out.push(u);
-  }
-  return out;
+  return indexedUnitsAt(s, x, y);
 }
 
 export function colonyAt(s: GameState, x: number, y: number): Colony | undefined {
-  for (const id in s.colonies) {
-    const c = s.colonies[id];
-    if (c.x === x && c.y === y) return c;
-  }
-  return undefined;
+  return indexedColonyAt(s, x, y);
 }
 
 export function settlementAt(s: GameState, x: number, y: number): Settlement | undefined {
@@ -163,26 +137,15 @@ export function settlementAt(s: GameState, x: number, y: number): Settlement | u
 }
 
 export function unitsAboard(s: GameState, carrier: Unit): Unit[] {
-  const out: Unit[] = [];
-  for (const id in s.units) {
-    const u = s.units[id];
-    if (u.loc.kind === 'carrier' && u.loc.carrierId === carrier.id) out.push(u);
-  }
-  return out;
+  return indexedUnitsAboard(s, carrier.id);
 }
 
 export function colonyWorkers(s: GameState, colony: Colony): Unit[] {
-  // Hot path for the AI: a plain loop avoids building a full array of every unit.
-  const out: Unit[] = [];
-  for (const id in s.units) {
-    const u = s.units[id];
-    if (u.loc.kind === 'colony' && u.loc.colonyId === colony.id) out.push(u);
-  }
-  return out;
+  return indexedColonyWorkers(s, colony.id);
 }
 
 export function colonyPopulation(s: GameState, colony: Colony): number {
-  return colonyWorkers(s, colony).length;
+  return indexedColonyPopulation(s, colony.id);
 }
 
 export function cargoUsed(s: GameState, carrier: Unit): number {
@@ -225,26 +188,22 @@ export function sightRadius(u: Unit, s: GameState): number {
 
 export function reveal(s: GameState, nation: NationId, x: number, y: number, radius: number): void {
   const p = player(s, nation);
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (inBounds(s, nx, ny)) p.explored[ny * s.map.width + nx] = 1;
-    }
+  const within = gridOf(s).withinOffsets(x, y, radius);
+  for (let k = 0; k < within.length; k += 2) {
+    const nx = x + within[k];
+    const ny = y + within[k + 1];
+    if (inBounds(s, nx, ny)) p.explored[ny * s.map.width + nx] = 1;
   }
 }
 
 /** True if the tile is worked by any colony's colonist. */
 export function tileWorkedBy(s: GameState, x: number, y: number): Unit | undefined {
-  for (const id in s.units) {
-    const u = s.units[id];
-    if (u.loc.kind === 'colony' && u.loc.job.kind === 'tile' && u.loc.job.x === x && u.loc.job.y === y) return u;
-  }
-  return undefined;
+  return indexedTileWorker(s, x, y);
 }
 
 export function colonyOwningTile(s: GameState, x: number, y: number): Colony | undefined {
-  return Object.values(s.colonies).find((c) => distance(c.x, c.y, x, y) <= 1);
+  const grid = gridOf(s);
+  return Object.values(s.colonies).find((c) => grid.distance(c.x, c.y, x, y) <= grid.workRadius);
 }
 
 export function buildingWorkers(s: GameState, colony: Colony, kind: keyof typeof BUILDINGS): Unit[] {
@@ -252,7 +211,9 @@ export function buildingWorkers(s: GameState, colony: Colony, kind: keyof typeof
 }
 
 export function message(s: GameState, text: string, to?: NationId, at?: { x: number; y: number }): void {
-  s.messages.push({ turn: s.turn, to, text, at });
+  // Only the tile, copied: callers pass colonies, settlements and players' entries, and keeping
+  // the object itself would share it with the state (see GameState).
+  s.messages.push({ turn: s.turn, to, text, at: at && { x: at.x, y: at.y } });
   if (s.messages.length > 400) s.messages.splice(0, s.messages.length - 400);
 }
 
@@ -262,7 +223,7 @@ export function newId(s: GameState, prefix: string): string {
 
 export function createUnit(s: GameState, owner: NationId, type: UnitTypeId, loc: UnitLocation): Unit {
   const u: Unit = { id: newId(s, 'u'), owner, type, role: 'none', tools: 0, loc, moves: 0, state: 'active' };
-  s.units[u.id] = u;
+  addUnit(s, u);
   return u;
 }
 
