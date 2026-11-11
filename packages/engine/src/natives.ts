@@ -109,11 +109,12 @@ export function learnSkill(s: GameState, unitId: string, settlementId: string): 
   if (u.type === 'pettyCriminal' && !modifiers(s, u.owner, 'nativesTeach').some((m) => m.units.includes(u.type))) fail('The natives will not teach a petty criminal.');
   const skill = settlementTeaches(s, st, u.owner);
   if (!skill) fail('This settlement has nothing more to teach.');
-  if (!st.skill) track(u.owner, 'natives:renewed teaching');
+  const renewed = !st.skill;
+  if (renewed) track(u.owner, 'natives:renewed teaching');
   u.type = skill;
   u.moves = 0;
   st.skill = null;
-  noteTaught(s, st);
+  noteTaught(s, st, renewed);
   track(u.owner, 'cmd:learn');
   const text = `Your colonist has lived among the ${TRIBES[st.tribe].name} and become a ${UNIT_TYPES[skill].name}.`;
   message(s, text, u.owner, st);

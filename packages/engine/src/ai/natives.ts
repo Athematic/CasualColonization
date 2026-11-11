@@ -7,8 +7,9 @@ import { gridOf } from '../grid.js';
 import { nativeUnitPrice, settlementForSale } from '../braves.js';
 import { sellPrice } from '../europe.js';
 import { buyFromSettlement, incitePrice, inciteTribe, peopleRelationOf, tensionOf } from '../natives.js';
-import { defencePartner, hasDefence, hasExchange, hasLandUse, hasPeopleTrade, leasableTiles, leaseRent, peopleRefusal, peopleTreatyOn, peopleTreatyProblem, proposePeopleTreaty, settlementTeaches } from '../peopletreaties.js';
+import { defencePartner, hasDefence, hasExchange, hasLandUse, hasPeopleTrade, leasableTiles, leaseRent, leaseTerms, peopleRefusal, peopleTreatyOn, peopleTreatyProblem, proposePeopleTreaty, settlementTeaches } from '../peopletreaties.js';
 import { cooperationOf, LEVEL_COOPERATION } from '../alliances.js';
+import { bound, treatyPeoples } from '../treaties.js';
 import { peoplePairRandom } from '../relations.js';
 import type { TribeId } from '../rules/nations.js';
 import { cargoRoomFor, colonyWorkers, isCoastal } from '../queries.js';
@@ -120,10 +121,35 @@ export function peopleAffairs(s: GameState, p: Player, prof?: AiProfile): void {
   }
 }
 
-/** Gold a computer nation keeps beyond a few years' rent before it leases land (N5). */
-export const LEASE_RESERVE = 300;
+/**
+ * Gold a computer nation keeps beyond a few years' rent before it leases land (N5). Step 6 raised it
+ * from 300 (and the years from 3): poorer nations' leases lapsed, as their gold ran out.
+ */
+export const LEASE_RESERVE = 1000;
 /** Years of rent a computer nation wants in hand, beyond LEASE_RESERVE, before it leases land. */
-export const LEASE_YEARS_IN_HAND = 3;
+export const LEASE_YEARS_IN_HAND = 5;
+
+/** Years of rent due on its leases that a computer nation keeps back from its spending (step 6). */
+export const RENT_RESERVE_YEARS = 1;
+
+/**
+ * The gold a computer nation keeps back for its leases (step 6): RENT_RESERVE_YEARS of the rent
+ * the next rent day asks (the rate set in each lease, for the people's land beside its colonies
+ * now). Without it a third of computer leases lapsed: nothing kept the rent from being spent.
+ * 0 without a lease.
+ */
+export function rentReserve(s: GameState, p: Player): number {
+  const list = s.treaties;
+  if (!list || !peopleTreatyOn(s, 'land-use')) return 0;
+  let due = 0;
+  for (const t of list) {
+    if (t.end || t.kind !== 'land-use' || !bound(t, p.id)) continue;
+    const terms = leaseTerms(t);
+    if (!terms) continue;
+    for (const people of treatyPeoples(t)) due += terms.rent * leasableTiles(s, p.id, people).length;
+  }
+  return Math.round(due * RENT_RESERVE_YEARS);
+}
 
 /**
  * Proposes land use (a lease, N5, N11) to a trade partner whose land lies beside the nation's

@@ -232,6 +232,12 @@ export interface ArenaEntry {
    * (empty when it qualified), whether or not the game ended that way.
    */
   prosperityFails?: ProsperityCondition[];
+  /**
+   * With `prosperityFails`: how the nation stood at the end, in numbers: peoples met, those it was
+   * at war with or had a war with within the rule's years, its partner peoples and the partners the
+   * treaties condition needs.
+   */
+  prosperityCounts?: { met: number; unpeaceful: number; partners: number; needed: number };
   /** Feature uses, when the arena counts them. */
   features?: FeatureCounts;
   /** Relations and trade with the other Europeans (arena games always count them). */
@@ -330,7 +336,10 @@ export function playArenaGame(
   // Judged on the scores the game ended with (the round's next turn has begun since), as the victory was.
   const finals = rule ? (s.gameOver?.scores ?? finalScores(s)) : undefined;
   const entries = line.map((l) => {
-    const fails = rule ? { prosperityFails: prosperityStanding(s, l.nation, finals!, prosperityParams(rule.params)).fails } : {};
+    const standingThen = rule ? prosperityStanding(s, l.nation, finals!, prosperityParams(rule.params)) : undefined;
+    const fails = standingThen
+      ? { prosperityFails: standingThen.fails, prosperityCounts: { met: standingThen.met.length, unpeaceful: standingThen.notAtPeace.length, partners: standingThen.partners.length, needed: standingThen.needed } }
+      : {};
     const e = { ...standing(s, seed, l.nation, l.level), relations: endRelations(s, l.nation, tallies.get(l.nation)), ...fails, ...(events ? { events: eventTallies.get(l.nation) ?? {} } : {}) };
     return features ? { ...e, features: { ...counts.get(l.nation), ...endStateFeatures(s, l.nation) } } : e;
   });
@@ -555,6 +564,29 @@ export function prosperityLine(entries: ArenaEntry[]): string {
   const alone = conditions.map((c) => `${c} ${judged.filter((e) => e.prosperityFails!.length === 1 && e.prosperityFails![0] === c).length}`).join(', ');
   const qualified = judged.filter((e) => !e.prosperityFails!.length).length;
   return `Prosperity: ${won.length} of ${games} games won by prosperity${winners ? ` (${winners})` : ''}; at the end ${qualified} of ${judged.length} nations qualified; failing each condition: ${failing}; failing only that one: ${alone}. `;
+}
+
+/**
+ * A Markdown table of the `prosperity` victory per level (only where the scenario plays for it):
+ * nations, wins by prosperity and nations qualifying at the end, how many failed each condition and
+ * failed it alone, and on average the peoples met, those not at peace (at war, or a war within the
+ * rule's years), the partner peoples held and the partners needed.
+ */
+export function formatProsperity(entries: ArenaEntry[]): string {
+  const judged = entries.filter((e) => e.prosperityFails);
+  if (!judged.length) return '';
+  const conditions: ProsperityCondition[] = ['peace', 'burned', 'treaties', 'score'];
+  const head = `| Level | Nations | Won | Qualified | ${conditions.map((c) => `Failing ${c}`).join(' | ')} | ${conditions.map((c) => `only ${c}`).join(' | ')} | Peoples met | not at peace | partners | needed |`;
+  const rule = `| --- | ${Array(3 + conditions.length * 2 + 4).fill('---:').join(' | ')} |`;
+  const avg = (rows: ArenaEntry[], f: (e: ArenaEntry) => number) => String(Math.round((rows.reduce((n, e) => n + f(e), 0) / rows.length) * 10) / 10);
+  const rows = [...new Set(judged.map((e) => e.level))].map((level) => {
+    const all = judged.filter((e) => e.level === level);
+    const fail = conditions.map((c) => all.filter((e) => e.prosperityFails!.includes(c)).length);
+    const only = conditions.map((c) => all.filter((e) => e.prosperityFails!.length === 1 && e.prosperityFails![0] === c).length);
+    const counts = (k: 'met' | 'unpeaceful' | 'partners' | 'needed') => avg(all, (e) => e.prosperityCounts?.[k] ?? 0);
+    return `| ${level[0].toUpperCase()}${level.slice(1)} | ${all.length} | ${all.filter((e) => e.prosperity).length} | ${all.filter((e) => !e.prosperityFails!.length).length} | ${fail.join(' | ')} | ${only.join(' | ')} | ${counts('met')} | ${counts('unpeaceful')} | ${counts('partners')} | ${counts('needed')} |`;
+  });
+  return [head, rule, ...rows].join('\n');
 }
 
 /**

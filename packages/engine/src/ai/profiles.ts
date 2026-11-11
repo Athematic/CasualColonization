@@ -45,6 +45,11 @@ export interface AiProfile {
   schools: boolean;
   gifts: boolean;
   /**
+   * With `gifts`: the tension of the worst settlement near its colonies above which the nation
+   * gives a people gold (`GIFTS_ABOVE` when absent). Creative, the peoples' main partner, gives sooner.
+   */
+  giftsAbove?: number;
+  /**
    * When to declare independence: not before `minTurn`, with at least `minShare` percent rebels,
    * at least `armyPerColony` armed units per colony, and a defence of at least `ratio` times the
    * Royal Expeditionary Force built up by then (ai/royal.ts). With `arm` the nation also arms for
@@ -113,7 +118,8 @@ export const AI_PROFILES: Record<Exclude<AiLevel, 'naive'>, AiProfile> = {
     // Grabs land sooner and faster than the others, but still not with one-man colonies.
     expansion: { minPopulation: 2.5, everyTurns: 4, undefended: 2, graceTurns: 20, settlers: 2 },
   },
-  creative: { ...competent, adaptive: true },
+  // Creative, the peoples' main partner (native-partners.md N11), calms a people sooner (step 6).
+  creative: { ...competent, adaptive: true, giftsAbove: 300 },
 };
 
 /**

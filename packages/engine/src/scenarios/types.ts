@@ -256,6 +256,11 @@ export interface PeopleExchangeRules {
   years: YearsAround;
   /** Years after a settlement last taught before it teaches a partner again (from its people's skills), drawn per settlement and teaching. */
   teachYears: YearsAround;
+  /**
+   * Times each settlement teaches again under exchanges, at most, after its first skill (tuned in
+   * step 6: without a cap an exchange brought about ten free experts in an Americas game).
+   */
+  renewals: number;
   /** Years after a partner's scout last spoke with a chief before the chief welcomes the partner's scouts again. */
   speakYears: number;
   /** What the people's settlements gather for sale while they have a cultural exchange with anyone, against the usual (1.25: 25% more). */

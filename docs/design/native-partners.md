@@ -1,6 +1,6 @@
 # Design note: Native peoples as partners (Beta 2)
 
-Status: **decided** (11 November 2026); **step 0 built** (section 8); **step 1 built** (section 9); **step 2 built** (section 10); **step 3 built** (section 11); **step 4 built** (section 12); **step 5 built** (section 14). Simon agreed to every recommendation N1–N14 and to the five fixes of today's native rules in step 0 (section 5). He added one direction for N1: native peoples are to become a **nation type of their own** later (section 4, after the table), so the people party must be built to grow into that. Builds on Beta 1, [cooperation.md](cooperation.md) (built), and reuses its shapes: the `Treaty` record, scenario data and mechanics switches for every new rule, computer behaviour per level at seeded chances with targets a scenario can change, and `gameOver.winners`. The 0.9 scenario framework ([scenario-framework.md](scenario-framework.md), [SCENARIOS.md](../SCENARIOS.md)) applies throughout. Australia ([australia.md](australia.md)) is the scenario that will lean on this most, so the shapes chosen here must serve it later.
+Status: **built** (11 November 2026): decided as recommended, then steps 0–6 built: step 0 (section 8), step 1 (section 9), step 2 (section 10), step 3 (section 11), step 4 (section 12), Simon's decisions on braves (section 13), step 5 (section 14) and the tuning of step 6 (section 15). Simon agreed to every recommendation N1–N14 and to the five fixes of today's native rules in step 0 (section 5). He added one direction for N1: native peoples are to become a **nation type of their own** later (section 4, after the table), so the people party must be built to grow into that. Builds on Beta 1, [cooperation.md](cooperation.md) (built), and reuses its shapes: the `Treaty` record, scenario data and mechanics switches for every new rule, computer behaviour per level at seeded chances with targets a scenario can change, and `gameOver.winners`. The 0.9 scenario framework ([scenario-framework.md](scenario-framework.md), [SCENARIOS.md](../SCENARIOS.md)) applies throughout. Australia ([australia.md](australia.md)) is the scenario that will lean on this most, so the shapes chosen here must serve it later.
 
 ## 1. Goal
 
@@ -430,10 +430,13 @@ Mutual defence, with the switch on:
 
 ### To do in step 6
 
-- Renewed teaching's strength: about ten free experts per exchange per Americas game (Simon, section 11).
+All done or decided (section 15):
+- ~~Renewed teaching's strength: about ten free experts per exchange per Americas game (Simon, section 11).~~ Done: a settlement teaches again at most twice.
 - ~~Combative and the ladder (choice 1).~~ Decided: Combative makes no defence pacts (section 13).
 - ~~Braves' walking round colonies (choice 6).~~ Done: braves' paths and defence speed (section 13).
-- The `prosperity` rates (section 14): the Caribbean's (15 of 16 games, always naming the top scorer), and the Americas' (5 of 96, a little above one in 20–30, but every win Competent's: Creative, the main partner in N11, never qualified; the treaties condition fails most, so computer nations seeking treaties with more of the peoples they meet is the lever, not loosening the rule).
+- ~~The `prosperity` rates (section 14).~~ The Caribbean's stay as they are (Simon: prosperity ends most Caribbean games, accepted); the Americas' were measured again, and Creative's people behaviour tuned (section 15).
+- ~~A rent reserve for computer nations (section 10, choice 3).~~ Done.
+- ~~Computer trade routes to partner settlements (section 9, choice 8).~~ Done.
 
 ## 13. Braves' paths and defence speed (Simon's decisions, 11 November 2026)
 
@@ -575,3 +578,107 @@ The prosperity victory, and how close the nations came at the end (every nation 
 - **The Caribbean:** prosperity ends 15 of 16 games, and in every one the best score is among the winners: with three peoples, few wars and treaties with most peoples met, the rule there names the top scorer, adds a co-winner in 5 games, and took 1 of Combative's 2 time wins. On the base before braves' paths, stricter `params` hardly moved it (16 games each: `scoreShare` 0.95, 14 of 16; `treatyShare` 1, 14; both, 13). N12 sets no Caribbean target; step 6 should decide whether the Caribbean keeps `prosperity` and on what terms (for example treaties beyond trade, or a share of all the scenario's peoples rather than of those met).
 - **Score:** the weight adds about 6–7 points to Creative and Competent in the Americas and 10–12 in the Caribbean, 1 or less to Combative and Naive.
 - The 24-game Americas run with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1` ran clean, every game line and the summary the same as without the checks. A Playwright smoke of the built web game with Google Fonts blocked (a new game in the Americas and in the Caribbean, the person's nation given contact and a trade treaty with two peoples and the best score, the turn set one round before the end, the last turn ended so the engine decides) had no page errors; the game-over screen read "… In peace and partnership with the Iroquois and the Cherokee, England wins by prosperity." and "England (you) wins, with the Iroquois and the Cherokee." (the Caribbean: Courland with the Arawak and the Kalinago), the breakdown showed "Treaties with native peoples", and the New game screen listed the victory.
+
+## 15. Tuning (step 6, November 2026)
+
+Built on branch `beta2/step6`, from the base with braves following rivers (section 13). Every run: `npm run tournament -- --turns 609 --play-on --events --features` with 96 games, on seeds 1000 and 2000 (the Americas, the four levels, and every nation Creative with `--levels creative,creative,creative,creative`), and the Caribbean `--scenario caribbean --games 16 --turns 202 --events --features`. "Before Beta 2" is the commit before step 0 (`81cffdc`, the end of Beta 1), played with its own tournament on the same seeds. A run of 96 games has a standard error of about 30 points on Combative's average, 20 on Competent's and Creative's and 10 on Naive's; since each tuning changes nearly every game, a level must move by more than that before it means anything.
+
+### What was wrong
+
+- **Renewed teaching was strong:** 12.6 colonists taught again per exchange in an Americas game (10 a game), 31 in one game with a single exchange, 25 a game with every nation Creative.
+- **A third of computer leases lapsed or more** (37% and 42% on the two seeds): nothing kept the rent from being spent, and poor nations leased.
+- **Computer nations ran no trade routes to partner settlements** (section 9, choice 8).
+- **Land use and defence a little above N12** (land use in 66% of the games, defence in 32%).
+- **Creative hardly ever won by prosperity:** 0 of 192 games before the tuning, Competent 7.
+- **Confederations in all-Creative games had doubled** against Beta 1 (15 of 192 against 7, C11: one in 30–50): Creative nations are stronger with the peoples and ally more.
+
+### What changed
+
+Five commits marked `[outcomes]`, each with the bench and golden hashes re-recorded where they changed (the last changed none), and one tournament commit:
+1. **A settlement teaches again at most twice** under exchanges (`exchange.renewals`, engine 2; `Settlement.renewed` counts the renewals, written only when one happens). Renewed teaching stays at 25 ± 5 years (Simon). The benefits read "… teaches your colonists again 25 years or so after it last taught (up to twice) …"; a settlement that has taught again as often as an exchange allows says so in its dialog.
+2. **Computer nations keep their rent, and lease only with gold to spare:** a computer nation's reserve rises by a year of the rent its leases will ask on the next rent day (`rentReserve` in `ai/natives.ts`, added to the profile's reserve in `ai/index.ts`), and it asks for a lease only with five years' rent and 1,000 gold in hand (was three years and 300). The reserve alone took the lapsed share from 43% to 37% of leases: probed, the leases that still lapsed were poor nations' (gold dripping away over 15 turns) or nations at war for independence. The stricter condition keeps poor nations from leasing, and brings land use down to about half the games.
+3. **Computer wagon trains run routes to partner settlements** (`ai/logistics.ts`): an empty wagon train that would trade with the natives on its own goes on a route instead, between the nation's colony within 8 tiles that has goods to spare (50 above what it keeps) and a partner's settlement within 8 tiles of it that pays at least 40 gold for 100 of them; it sells there and, with 1,000 gold in hand and Europe open, buys the goods that fetch 1.4 times their price at home, unloaded at home for the ship routes. The route review keeps the route while the treaty holds and the trade still pays. Per nation and game, Creative makes 3.8 such routes and 20 sales on them, Competent 2.3 and 17, Combative 0.6 and 3.3.
+4. **Creative keeps its peoples' goodwill:** it gives a people gold once the worst of its settlements near Creative's colonies passes 300 tension (profile `giftsAbove`; the other levels keep 450, `GIFTS_ABOVE`), and pays a trade partner people's tribute up to 400 gold, or goods worth it at home (`PARTNER_TRIBUTE`), instead of weighing the fight.
+5. **Confederations as rare as in Beta 1:** `COOPERATION.confederation` 0.6 → 0.3 and `confederationReadiness` 0.65 → 0.8 (all-Creative, seed 2000: 11 → 4 confederations; each knob alone gave 8 and 7).
+6. **Tournament:** a table of the `prosperity` conditions per level at the end (`formatProsperity`, `ArenaEntry.prosperityCounts`: peoples met, not at peace, partners held and needed). No game changes.
+
+### Measurements
+
+Each commit, the Americas, 96 games, seed 1000. Scores are Combative / Competent / Creative / Naive; the other columns count games, but "lapsed" (leases lapsed of leases made) and "taught again" (colonists per exchange):
+
+| After | Scores | Lease | lapsed | Exchange | taught again | Defence | Breach | Prosperity | Alliance | Concord | Confed. |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Before step 6 | 623.3 / 519.9 / 455.8 / 264.2 | 69 | 54 of 147 | 48 | 12.6 | 31 | 37 | 2 | 27 | 3 | 0 |
+| 1. Renewals capped | 616.4 / 505.1 / 441.8 / 263.9 | 69 | 63 of 145 | 48 | 4.7 | 31 | 37 | 3 | 26 | 4 | 0 |
+| (the rent reserve alone) | 665.2 / 504.6 / 457.0 / 265.8 | 69 | 48 of 131 | 48 | 4.8 | 30 | 29 | 3 | 30 | 6 | 0 |
+| 2. Rent kept, leases with gold to spare | 654.6 / 504.5 / 444.5 / 266.8 | 54 | 26 of 80 | 50 | 4.7 | 27 | 31 | 3 | 26 | 5 | 1 |
+| 3. Settlement routes | 670.1 / 500.6 / 441.5 / 269.0 | 51 | 15 of 67 | 44 | 4.8 | 20 | 39 | 2 | 29 | 8 | 1 |
+| 4. Creative's goodwill | 642.0 / 494.0 / 471.5 / 263.2 | 56 | 27 of 81 | 52 | 4.8 | 27 | 37 | 6 | 26 | 4 | 2 |
+| 5. Confederations (final) | 643.6 / 494.1 / 467.2 / 263.2 | 56 | 26 of 81 | 52 | 4.8 | 27 | 37 | 6 | 26 | 4 | 1 |
+
+**Against N12** (the Americas, the four levels, 192 games: seeds 1000 and 2000, 96 each), before step 6 → after:
+
+| Target (N12) | Before | After |
+| --- | --- | --- |
+| A trade treaty with a people in almost every game; Creative and Competent with 1–3 peoples | 189 of 192 | 191 of 192 (Creative makes 3.0 treaties of all kinds a game, Competent 2.8; each holds treaties with about one people at the end) |
+| Land use in about half | 127 (66%) | 95 (49%) |
+| Exchange in about half | 102 (53%) | 105 (55%) |
+| Defence in about 1 game in 4 | 61 (1 in 3.1) | 53 (1 in 3.6) |
+| A breach in about 1 game in 3, mostly Combative | 70 (1 in 2.7) | 68 (1 in 2.8); Combative breaks faith 0.5 times a game, the others never |
+| `prosperity` once in 20–30 | 7 (1 in 27; Competent 7) | 9 (1 in 21; Competent 7, Creative 2) |
+| Colonists taught again per exchange (Simon: about ten, to be tuned) | 12.6 | 4.8 |
+| Leases lapsed (section 10: a third) | 105 of 269 (39%), 0.55 a game | 48 of 143 (34%), 0.25 a game |
+
+**Against C11** (Beta 1's rates must stay), games with each, 192 games per row (seeds 1000 and 2000):
+
+| Run | Alliance | Concord | Company | Confederation |
+| --- | ---: | ---: | ---: | ---: |
+| Four levels, before Beta 2 | 54 (1 in 3.6) | 13 (1 in 15) | 18 (1 in 11) | 3 |
+| Four levels, before step 6 | 57 (1 in 3.4) | 8 (1 in 24) | 27 (1 in 7) | 1 |
+| Four levels, after | 49 (1 in 3.9) | 11 (1 in 17) | 27 (1 in 7) | 3 |
+| All Creative, before Beta 2 | 47 (1 in 4.1) | 4 | 19 (1 in 10) | 7 (1 in 27) |
+| All Creative, after | 62 (1 in 3.1) | 1 | 29 (1 in 7) | 7 (1 in 27) |
+
+All Creative before step 6 was measured on seed 2000 only: alliances 38, concord 1, companies 12, confederations 11 of 96. Alliances, concord and companies stay within the noise of Beta 1's own measurements (cooperation.md section 8: an alliance in about one game in three, concord one in 12, a company one in 8); confederations in all-Creative games are back at Beta 1's one in 27.
+
+**Level strength,** average score (wins), the four levels, 96 games per seed:
+
+| Run | Combative | Competent | Creative | Naive |
+| --- | ---: | ---: | ---: | ---: |
+| Before Beta 2, seed 1000 | 674.4 (59) | 491.9 (29) | 446.3 (13) | 255.9 (1) |
+| Before Beta 2, seed 2000 | 647.3 (55) | 457.1 (29) | 404.0 (16) | 240.6 (3) |
+| Before step 6, seed 1000 | 623.3 (48) | 519.9 (28) | 455.8 (21) | 264.2 (2) |
+| Before step 6, seed 2000 | 672.0 (58) | 502.0 (27) | 434.1 (16) | 249.9 (0) |
+| After, seed 1000 | 643.6 (54) | 494.1 (25) | 467.2 (20) | 263.2 (1) |
+| After, seed 2000 | 675.4 (60) | 485.5 (23) | 432.3 (18) | 248.6 (2) |
+| **Before Beta 2, both seeds** | **660.9 (114)** | **474.5 (58)** | **425.2 (29)** | **248.3 (4)** |
+| **After, both seeds** | **659.5 (114)** | **489.8 (48)** | **449.8 (38)** | **255.9 (3)** |
+
+No level is weaker than before Beta 2: Combative is where it was (−1, with a standard error of the difference of about 30) and still wins 114 of 192 games; Competent +15, Creative +25 and Naive +8, each within about one and a half standard errors. In all-Creative games Creative averages 450 (before Beta 2: 420).
+
+**Prosperity per level** at the end (every nation judged, whatever ended the game), 192 nations of each level, after the tuning:
+
+| Level | Won | Failing peace | burned | treaties | score | Only treaties | Only score | Peoples met | not at peace | partners | needed |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Competent | 7 | 153 | 0 | 178 | 126 | 10 | 3 | 6.1 | 1.6 | 1.0 | 3.3 |
+| Creative | 2 | 139 | 0 | 175 | 129 | 12 | 11 | 6.0 | 1.4 | 1.1 | 3.3 |
+| Combative | 0 | 189 | 37 | 190 | 56 | 0 | 0 | 6.1 | 3.3 | 0.4 | 3.3 |
+| Naive | 0 | 182 | 0 | 185 | 187 | 0 | 2 | 2.9 | 2.2 | 0.2 | 1.7 |
+
+- **Creative fails no condition that Competent passes.** Before its own tuning (seed 1000, after the settlement routes) the two failed peace (79 and 79 of 96) and treaties (89 and 89) alike, and Creative failed score more (68 against 56). Its gifts and paid tribute took its failures down (peace 79 → 70, treaties 89 → 84 on seed 1000; peoples going to war with it 2.1 → 1.7 a game, tribute refused 3.6 → 1.1) and its score up; its wins stay rare (one per 96 games on each seed), and its near misses are now on score alone (11 of 192, against Competent's 3). What keeps Creative from prosperity is its score against Combative's (0.8 of the best is usually above 520; Creative averages 450), not its people behaviour. The victory itself was not touched, and the rate stays inside N12 (1 in 21).
+- **The treaties condition** is the one nearly every nation fails: it meets about six peoples and needs treaties with three, but holds treaties with about one at the end (a people ends its treaties when one of its settlements turns angry, and many near growing colonies do). Treaties with peoples far from its colonies would need trade with them first (the volume threshold), which computer nations do not seek out.
+- **The Caribbean** (16 games, seed 1000), before → after: Combative / Competent / Creative / Naive 93.6 / 120.7 / 138.0 / 64.0 → 94.9 / 114.9 / 139.6 / 63.6; prosperity in 15 → 15 of 16 (left as it is: Simon's decision); a trade treaty in 16 → 16 games, leases 13 → 9, exchanges 8 → 8, defence pacts 9 → 7 (N12 asks the Caribbean for more trade and defence than the Americas: 100% and 44% against 99% and 28%); colonists taught again 2.6 → 2.7 a game (its exchanges come late and seldom renew twice).
+- The 24-game Americas run (seed 1000) with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1`, on the final code, ran clean, every game line and the summary the same as without the checks, and its games the same as the first 24 of the 96-game run.
+- `npm run bench -- --verify` and `--verify --scenario caribbean` are "same" against the hashes re-recorded in the commits above; `npx tsc -b` is clean and `npm test` passes (790 tests, 1 skipped). A Playwright smoke of the built web game with Google Fonts blocked (a head start to 1700 in the Americas and in the Caribbean, Foreign Affairs opened) had no page errors; in the Americas the Native peoples card listed the peoples met with their standing ("Thinks well of you") and Propose buttons, in the Caribbean it said the person's nation had met no people yet (the computer nations held three trade treaties).
+
+### For Simon: choices made while tuning
+
+1. **Renewed teaching is capped per settlement, at two renewals** (`exchange.renewals`), not per partner or per exchange: a settlement teaches its first skill and then at most two more, a generation apart, so an exchange brings about five free experts in an Americas game instead of twelve. A cap per settlement is the simplest to show (the settlement dialog says when it has taught all it will) and keeps a large people worth more than a small one. A cap of 1 would give about two or three a game; `Infinity` restores step 3.
+2. **Two partners of one people share the renewals,** as they share the date (step 3, choice 2): whichever learns first uses one up.
+3. **The rent reserve is one year of the coming rent, and leasing needs five years' rent and 1,000 gold.** Counted per lease made, a third still lapse (34%), but half as many a game (0.25 against 0.55): the rest belong to nations whose gold runs out, or that are at war for independence, and a bigger reserve would not save them.
+4. **Computer settlement routes replace a wagon train's own trading only where a partner's settlement pays;** wagon trains still trade on their own with other peoples, and ships do not call at settlements (a ship route carries its goods to Europe).
+5. **Creative's goodwill is a computer-player rule** (gifts from 300 tension, a partner's tribute up to 400 gold paid), not scenario data; the other levels and persons are unchanged.
+6. **Creative's prosperity** was tuned only through its people behaviour, as asked. It now wins sometimes (2 of 192 games, Competent 7); the gap left is score, which a lower `scoreShare` would close, but that would loosen the victory for everyone. Left for you.
+7. **Confederations were brought back with Beta 1's own knobs** (`confederation` 0.3, `confederationReadiness` 0.8), the cheapest way back to C11. The cause is that Creative nations are stronger and ally more with Beta 2 (all-Creative games with an alliance 47 → 62 of 192); the alliance rate itself was left as it is, since C11 sets no target for all-Creative alliances.
+8. **Land use stays a chance per review** (`proposeLandUse`), unlike the exchange and the pact: the stricter gold condition alone brought it to about half the games.
+9. **`landRadius` stays 1 in the Americas** (N6): nothing in the tournaments argued for more land.

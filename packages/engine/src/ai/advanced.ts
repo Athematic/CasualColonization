@@ -1485,6 +1485,9 @@ function defendedAgainst(s: GameState, p: Player, people: TribeId): boolean {
   return partner !== undefined && partner !== p.id && p.stance[partner] !== 'war';
 }
 
+/** Tension of a people's worst settlement near the nation's colonies above which a computer nation gives it gold (profile `giftsAbove`). */
+export const GIFTS_ABOVE = 450;
+
 function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
   const grid = gridOf(s);
   const colonies = ownColonies(s, p);
@@ -1494,7 +1497,7 @@ function diplomacy(s: GameState, p: Player, prof: AiProfile): void {
       const near = Object.values(s.settlements).filter((st) => st.tribe === t.id && colonies.some((c) => grid.distance(c.x, c.y, st.x, st.y) <= 6));
       if (!near.length) continue;
       const worst = Math.max(...near.map((st) => tensionOf(st, p.id)));
-      if ((worst > 450 || t.stance[p.id] === 'war') && p.gold > prof.reserve + 200) {
+      if ((worst > (prof.giftsAbove ?? GIFTS_ABOVE) || t.stance[p.id] === 'war') && p.gold > prof.reserve + 200) {
         giftToTribe(s, p.id, t.id, Math.min(300, p.gold - prof.reserve));
       }
     }

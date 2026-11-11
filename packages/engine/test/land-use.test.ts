@@ -56,6 +56,7 @@ import {
   PEOPLE_TREATY_RULES,
   LEVEL_COOPERATION,
 } from '../src/index.js';
+import { RENT_RESERVE_YEARS, rentReserve } from '../src/ai/natives.js';
 import { colonyList } from '../src/unitindex.js';
 
 /** The Americas with trade treaties and land use switched on, and peoples that always say yes when free to (hidden, for these tests). */
@@ -379,6 +380,15 @@ describe('computer players and the switch', () => {
     expect(LEVEL_COOPERATION.competent.land).toBeGreaterThan(0);
     expect(LEVEL_COOPERATION.combative.land).toBe(0);
     expect(LEVEL_COOPERATION.naive.land).toBe(0);
+  });
+
+  it('keep a year of rent back from their spending (step 6), none without a lease', () => {
+    const { s, st, tiles } = leased();
+    const england = player(s, 'england');
+    expect(rentReserve(s, player(s, 'france'))).toBe(0);
+    const terms = leaseTerms(landUseTreaty(s, 'england', st.tribe)!)!;
+    expect(rentReserve(s, england)).toBe(terms.rent * leasableTiles(s, 'england', st.tribe).length * RENT_RESERVE_YEARS);
+    expect(rentReserve(s, england)).toBeGreaterThanOrEqual(terms.rent * tiles.length);
   });
 
   it('lease land in computer games and work it, and the save stays a plain JSON tree', () => {
