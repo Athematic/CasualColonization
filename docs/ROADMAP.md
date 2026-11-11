@@ -65,7 +65,7 @@ Not in it: hex maps and Vinland with the Norse (Beta 4), and Australia, which fo
 
 ## Beta 4: Hex maps
 
-Status: `idea, agreed in outline` (Simon, 11 November 2026). A scenario can be played on hexagons. Builds the hex steps listed under Later (step 1, the grid abstraction, was done in 0.10) and proves them on Vinland, with the Norse, built here on Beta 3's North-east map (Beta 3 plays that map on squares, without the Norse). The Americas and the Caribbean stay square. Gets its own design note first. About XL.
+Status: `design` (Simon agreed the outline on 11 November 2026). Design: [design/hex-maps.md](design/hex-maps.md) (draft, decisions open; Simon decided H1, H3, H6 and H7 on 11 November 2026: the scenario chooses pointy-top rows or flat-top columns; rivers and roads run through tile centres; movement keys as in other games on hexes; a colony's work area may grow to two rings, gated by scenario data, today's single ring the default). A scenario can be played on hexagons. Builds the hex steps listed under Later (step 1, the grid abstraction, was done in 0.10) and proves them on Vinland, with the Norse, built here on Beta 3's North-east map (Beta 3 plays that map on squares, without the Norse). The Americas and the Caribbean stay square. Gets its own design note first. About XL.
 
 Simon's decisions on the outline:
 - **Vinland is hex-only** in Beta 4; its square version is dropped.
@@ -77,13 +77,13 @@ Simon's decisions on the outline:
 | Step | What | Size | Prio |
 | --- | --- | --- | --- |
 | 0 | Design note and decisions | S | P1 |
-| 1 | Hexagon rules and a hidden test scenario: 6 directions, a work area of 6, movement keys | M | P1 |
+| 1 | Hexagon rules and a hidden test scenario: 6 directions in either orientation, a work area of 6 that a scenario may grow to 18 (two rings), movement keys | M–L | P1 |
 | 2 | Rivers and roads on hexes (core: today's river masks are square-only): 6-direction masks, river and road movement for units, the path search and braves, conversion of stored river masks | M | P1 |
-| 3 | The schematic style on hexes, with rivers and roads along hex edges; a hex scenario playable | M | P1 |
+| 3 | The schematic style on hexes, with rivers and roads through tile centres; a hex scenario playable | M | P1 |
 | 4 | Vinland on hexes: Beta 3's North-east map as offset hexagon rows with a review pass; the Norse (a `norse` nation from Greenland that leaves unless thriving, the Thing as its council; T17 in [design/native-nations.md](design/native-nations.md)); computer players retuned with tournaments; the Mac speed gate on a hex scenario | L | P1 |
 | 5 | Placeholder sprite pack and missing-ids check; the sprite style on hexes | M | P2 |
 | 6 | Ligne claire on hexes | L | P2 |
-| 7 | Railroads along hex edges (optional; they don't exist yet) | M | P3 |
+| 7 | Railroads on hexes, through tile centres like roads (optional; they don't exist yet) | M | P3 |
 
 Not in Beta 4: converting the Americas and the Caribbean (later, one scenario at a time, each with tournaments), the interface redesign, locally generated terrain sprites.
 
@@ -116,8 +116,8 @@ The Australia map (geography preview with the current rules; ships arrive from t
 - A map editor in the game.
 - Hex maps as a scenario option (Simon's idea, November 2026; planned as Beta 4, see above): a scenario chooses square or hexagon tiles; the Americas stay square. Not a rewrite: most rules go through one grid definition, so the work is mostly in drawing and balance. Roughly XL in all, comparable to 0.9:
   1. Grid as an engine abstraction, squares unchanged (M; done in 0.10, see [SHIPPED.md](SHIPPED.md#010-faster-turns-done)).
-  2. Hexagon rules and a test scenario on hexes: 6 directions, a colony works 6 tiles instead of 8, no diagonal shortcuts, 6 movement keys (M).
-  3. The schematic style draws hexagons (clicking, camera, terrain, coasts, rivers and roads along hex edges), so a hex scenario is playable (M).
+  2. Hexagon rules and a test scenario on hexes: 6 directions, a colony works 6 tiles instead of 8 (a scenario may grow it to two rings), no diagonal shortcuts, 6 movement keys (M).
+  3. The schematic style draws hexagons (clicking, camera, terrain, coasts, rivers and roads through tile centres), so a hex scenario is playable (M).
   4. Computer players retuned on hexagons, with tournaments (M).
   5. The sprite style on hexagons; terrain sprites regenerated as hexagons (unit, colony and building sprites carry over). Waits for cheaper image generation (L).
   6. Ligne claire on hexagons, or it stays square-only (L).
