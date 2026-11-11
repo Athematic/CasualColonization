@@ -18,6 +18,11 @@ import {
   landPrice,
   nationOf,
   nativeLandOwner,
+  nativeLandClosedTo,
+  leasableTiles,
+  leaseRent,
+  peopleTreatyOn,
+  peopleTreatyProblem,
   PRODUCT_NAMES,
   ROLES,
   SCHOOL_TEACHERS,
@@ -169,11 +174,14 @@ export class ColonyScreen implements Screen {
       const other = !worker && Object.values(s.units).some((u) => u.loc.kind === 'colony' && u.loc.job.kind === 'tile' && u.loc.job.x === x && u.loc.job.y === y);
       const settlement = Object.values(s.settlements).some((st) => st.x === x && st.y === y);
       const native = nativeLandOwner(s, x, y);
+      // Land leased to the colony's nation (land use, N5) is worked like its own, and stays the people's.
+      const leased = !!native && tile.use === colony.owner;
       const job = worker?.loc.kind === 'colony' ? (worker.loc.job as Extract<Job, { kind: 'tile' }>) : undefined;
       cells.push(h('button', {
-        class: `cell${worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}${native ? ' native' : ''}`,
+        class: `cell${worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}${leased ? ' leased' : native ? ' native' : ''}`,
         style,
-        title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : native ? ` (land of the ${TRIBES[native.tribe].name})` : ''}`,
+        'data-leased': leased ? 'true' : undefined,
+        title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : leased ? ` (land of the ${TRIBES[native!.tribe].name}, leased to you)` : native ? ` (land of the ${TRIBES[native.tribe].name})` : ''}`,
         onclick: () => this.clickTile(colony, x, y, worker),
       },
       worker ? icon({ kind: 'unit', type: worker.type, role: 'none', color: nationOf(this.app.state, worker.owner).color }, 40, unitName(worker)) : null,
@@ -208,7 +216,8 @@ export class ColonyScreen implements Screen {
       return;
     }
     if (sel && UNIT_TYPES[sel.type].kind === 'colonist') {
-      const native = nativeLandOwner(s, x, y);
+      // Native land not leased to the colony's nation must be bought, taken or leased first.
+      const native = nativeLandClosedTo(s, colony.owner, x, y);
       if (native) {
         void this.settleLand(colony, sel, x, y);
         return;
@@ -222,20 +231,29 @@ export class ColonyScreen implements Screen {
     this.app.requestRender();
   }
 
-  /** Native land must be bought or taken before a colonist can work it. */
+  /**
+   * Native land must be bought or taken before a colonist can work it, or, where the scenario has
+   * land use (N5), leased from its people with the rest of their land beside your colonies.
+   */
   private async settleLand(colony: Colony, u: Unit, x: number, y: number): Promise<void> {
     const s = this.app.state;
     const owner = nativeLandOwner(s, x, y)!;
     const tribe = TRIBES[owner.tribe].name;
     const price = landPrice(s, this.app.viewer, x, y);
-    const choice = await choose(`Land of the ${tribe}`, `The ${tribe} claim this land.${price ? ` They will sell it for ${price} gold.` : ' Thanks to Peter Minuit, they ask nothing for it.'} Taking it by force will anger them.`, [
+    const leasing = peopleTreatyOn(s, 'land-use');
+    const whyLease = leasing ? peopleTreatyProblem(s, this.app.viewer, owner.tribe, 'land-use') : null;
+    const rent = leasing && !whyLease ? leaseRent(s, this.app.viewer, leasableTiles(s, this.app.viewer, owner.tribe)) : 0;
+    const choice = await choose(`Land of the ${tribe}`, `The ${tribe} claim this land.${price ? ` They will sell it for ${price} gold.` : ' Thanks to Peter Minuit, they ask nothing for it.'} Taking it by force will anger them.${leasing ? ' A lease lets your colonies work their land beside them for a yearly rent, and the land stays theirs.' : ''}`, [
       { label: price ? `Buy for ${price} gold` : 'Accept the land', value: 'buy' as const, primary: true, disabled: price > this.app.me.gold },
+      ...(leasing ? [{ label: rent ? `Lease their land beside your colonies (${rent} gold a tile a year)` : 'Lease their land beside your colonies', value: 'lease' as const, disabled: !!whyLease || !this.app.isMyTurn(), hint: whyLease ?? undefined }] : []),
       { label: 'Take it', value: 'take' as const },
       { label: 'Leave it', value: null },
     ]);
     if (!choice) return;
-    const ok = this.app.dispatch({ type: choice === 'buy' ? 'buyLand' : 'takeLand', x, y });
-    if (!ok) return;
+    const ok = choice === 'lease'
+      ? this.app.dispatch({ type: 'proposePeopleTreaty', people: owner.tribe, kind: 'land-use' })
+      : this.app.dispatch({ type: choice === 'buy' ? 'buyLand' : 'takeLand', x, y });
+    if (!ok || nativeLandClosedTo(this.app.state, colony.owner, x, y)) return;
     const good = this.bestGood(colony, u, x, y);
     if (good) this.dispatch({ type: 'assignJob', unitId: u.id, colonyId: colony.id, job: { kind: 'tile', x, y, good } });
   }
