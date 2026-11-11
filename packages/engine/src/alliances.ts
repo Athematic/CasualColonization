@@ -62,8 +62,8 @@ export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace
  * Each level's share of COOPERATION's chances: Creative seeks alliances out, Naive never proposes.
  * `together`: the level's share of `confederationReadiness`'s smaller margin when declaring
  * independence with an ally; only Creative, which seizes the chance, takes it (the others answer
- * by their usual readiness: in tournaments, Competent and Combative pairs otherwise declared
- * together in one game in seven, and lost half of those wars).
+ * by their usual readiness: with the smaller margin for every level, four-level tournaments had a
+ * confederation in 7 of 48 games, mostly Competent with Combative, and four of the seven wars were lost).
  */
 export const LEVEL_COOPERATION: Record<AiLevel, { propose: number; accept: number; together: number }> = {
   naive: { propose: 0, accept: 0.5, together: 0 },

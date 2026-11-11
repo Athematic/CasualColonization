@@ -1,6 +1,6 @@
 # Design note: Cooperation between Europeans (Beta 1)
 
-Status: **agreed in outline** (November 2026); steps 0–5 built (sections 6 and 7); step 6, the tuning on the Mac, is still to do. Simon decided all of C1–C11 on 10 November 2026: as recommended, except C9 (the clean-up happens now) and C11 (lower targets). This note builds on [favoured-nation.md](favoured-nation.md), the first step towards cooperation, and on the 0.9 scenario framework ([scenario-framework.md](scenario-framework.md)): every new rule here is scenario data or a mechanics switch from the start. Beta 2, native peoples as partners, gets its own note but should reuse the shapes chosen here (question C9).
+Status: **built** (November 2026): steps 0–5 (sections 6 and 7) and step 6, the tuning (section 8). Some choices made while building it are provisional and listed for Simon in section 9. Simon decided all of C1–C11 on 10 November 2026: as recommended, except C9 (the clean-up happens now) and C11 (lower targets). This note builds on [favoured-nation.md](favoured-nation.md), the first step towards cooperation, and on the 0.9 scenario framework ([scenario-framework.md](scenario-framework.md)): every new rule here is scenario data or a mechanics switch from the start. Beta 2, native peoples as partners, gets its own note but should reuse the shapes chosen here (question C9).
 
 ## 1. Goal
 
@@ -88,7 +88,7 @@ Each step keeps the existing games identical where the new switches are off (gol
 | 3 | Chartered companies: `kind: 'company'` players, shares, dividends, company AI, founding by shareholders | L | done |
 | 4 | Joint expeditions (small) and shared bells | S–M | done |
 | 5 | Confederation: declaring independence together | M | done |
-| 6 | Tuning with tournaments on the Mac (alliances, companies, `concord` share), docs | M | |
+| 6 | Tuning with tournaments (alliances, companies, `concord` share), docs | M | done (section 8) |
 
 Total: about **XL**, like 0.9.
 
@@ -149,7 +149,7 @@ Built on the 0.10 base (merged first, with its save/load rule: the state is a pl
 ### Confederation (step 5, C7)
 
 - Two allies declare independence on the same turn (`proposeConfederation`, a treaty of kind `confederation`). Each faces its own Royal Expeditionary Force, but the war is one: won once every member's royal troops are beaten, lost once the members together hold half their colonies or fewer; the same outcome for all, and a won war makes all of them the winners.
-- A computer ally answers by its usual readiness for independence (`readyToDeclare`, the checks of its own declaration), registered from the computer players as a judge (`setConfederationJudge`), so the engine does not import them. Computer nations propose only when ready themselves and an ally can declare too, at `ai.cooperation.confederation` (0.3) per review.
+- A computer ally answers by its usual readiness for independence (`readyToDeclare`, the checks of its own declaration), registered from the computer players as a judge (`setConfederationJudge`), so the engine does not import them. Computer nations propose only when ready themselves and an ally can declare too, at `ai.cooperation.confederation` (0.3, 0.6 since step 6) per review. Step 6 added waiting for an ally and a smaller margin for Creative (section 8).
 - `mechanics.confederation`: on in the Americas; the Caribbean has no independence.
 
 ### Alliances, revisited
@@ -173,4 +173,71 @@ Tournaments with play-on and events (`npm run tournament -- --play-on --events`)
 - Joint expeditions: none. Computer alliances form late (after 18 years of peace on top of Favoured Nation), when hardly any Lost City Rumours are left; people can use them from the start.
 - Confederation: none in 48 Americas games. It needs an alliance and both allies ready to declare on the same review; with every nation Creative no alliance formed at all (Creative pairs rarely reach Favoured Nation, 0.5 per nation and game). So it is rarer than C11's 1 in 30–50 games; raising `ai.cooperation.confederation` cannot help where there are no alliances, and the Mac tuning (step 6) should look at it together with the alliance rates.
 - Every all-Creative independence war in those games was fought alone, as before: the switch changes nothing until allies are ready together.
+
+Step 6 (section 8) found why and changed it.
+
+## 8. Tuning (step 6, November 2026)
+
+Measured with the 0.10 base merged in (grid abstraction and round 3, both bit-identical: every game without an alliance or a company plays exactly as on the 0.10 base, and a 24-game Americas tournament with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1` ran clean). The tournaments are fast now (24 Americas games in about 80 s), so they ran in the cloud, with larger samples where 24 games could not tell the rates apart. Every run: `npm run tournament -- --play-on --events`.
+
+### What was wrong
+
+- **No alliance between Creative nations.** In all-Creative games most pairs had a trade agreement and a century or more of peace, but almost never the active trade routes between them that Favoured Nation needs (2–4), nor the trade at each other's colonies an alliance needs (250–750 gold): Creative nations hardly trade with each other's colonies, so the ladder stopped at the trade agreement. (Over 96 all-Creative games, 8 had an alliance; the 24 of step 5 had none.)
+- **No confederation, ever.** A computer nation declares independence alone on the first turn it is ready, so declaring together needed both allies to become ready on the same review. Traced in all-Creative games: the second ally was usually short of its margin over its own Royal Expeditionary Force, or of the defence it wants to hold until the intervention comes.
+- **Companies paid almost nothing.** A company's computer player spent its treasury down to its profile's 300 gold, below the dividend reserve (800, the Caribbean 400), so there was rarely gold above the reserve to pay out (3 gold a game in the Caribbean). And Caribbean nations rarely held the 1,800 gold the computer wanted before founding one (capital and half again, plus its reserve), so companies came at turns 117–179 of 202.
+
+### What changed
+
+- **Old friends** (`AllianceRules.longPeace`, engine default 150 ± 30 years, hidden, drawn per pair): two nations with a trade agreement and that many years of unbroken peace may ally without Favoured Nation and without the trade volume. Computer players propose on this path only at `Cooperation.proposeLongPeace` (0.001 per review, times the level's share), the usual way stays at `proposeAlliance`. The first such pairs ally in the late 1600s. The Caribbean's century never reaches it. People see the button once they have a trade agreement; the refusal reads "You must be each other's Favoured Nation first, or keep the peace much longer."
+- **Declaring together** (`ai/foreign.ts`, `declareWithAlly`): a computer nation ready to declare first declares together with an ally that is ready to declare with it; otherwise, at `Cooperation.confederation` (0.3 → 0.6) times its level's share, drawn once, it waits up to 20 turns (`ALLY_WAIT_TURNS`) for an ally that has taken up an independence plan.
+- **Readiness together** (`Cooperation.confederationReadiness`, 0.65): a Creative nation answering a confederation, or checked as the ally while the other waits, wants that share of its usual margin over its Royal Expeditionary Force and of the defence to hold until the intervention (`LEVEL_COOPERATION.together`: Creative 1, the others 0). The other levels answer by their usual readiness: with the smaller margin for every level, four-level Americas games had a confederation in 7 of 48 (mostly Competent with Combative), and four of those seven wars were lost. A proposer must still be ready to declare alone.
+- **Companies keep a treasury**: a company's computer player keeps 1.5 times the dividend reserve before it spends (`COMPANY_KEEP` in `ai/index.ts`).
+- **Founding and buying margins are scenario data**: `Cooperation.foundMargin` (0.5 of the capital) and `sharesMargin` (1,500 gold), the old values. The Caribbean uses 0 and 500, so its nations found companies once they have the capital and their reserve.
+- The tournament's line per game names a confederation's members.
+
+### Measurements (step 6)
+
+Before (steps 0–5 with the 0.10 base merged) → after. Alliance, concord, company and confederation columns count games.
+
+| Run | Alliance in | Concord | Confederation | Company in | Dividends a game |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Americas, 24 × 609 turns, the four levels, seed 1000 | 5 → 8 of 24 | 1 → 2 | 0 → 0 | 3 → 3 | 114 → 176 |
+| Americas, 48 games, seed 1000 | 13 → 18 of 48 | 3 → 4 | 0 → 1 | 6 → 6 | 228 → 618 |
+| Americas, every nation Creative, 24 games, seed 2000 | 0 → 5 of 24 | 0 → 0 | 0 → 0 | 1 → 1 | 16 → 216 |
+| Americas, every nation Creative, 96 games, seed 2000 | 8 → 26 of 96 | 2 → 3 | 0 → 3 | 11 → 11 | 97 → 457 |
+| Caribbean, 16 × 202 turns, the four levels, seed 1000 | 7 → 6 of 16 | 1 → 2 | (no independence) | 4 → 8 | 3 → 318 |
+| Caribbean, 32 games | 12 → 11 of 32 | 3 → 4 | | 10 → 19 | 14 → 483 |
+
+Average scores per level, before → after:
+
+| Run | Combative | Competent | Creative | Naive |
+| --- | ---: | ---: | ---: | ---: |
+| Americas, 24 games | 717.4 → 723.1 | 483.5 → 499.8 | 471.1 → 471.5 | 242.0 → 243.0 |
+| Americas, 48 games | 692.0 → 694.0 | 456.1 → 472.3 | 442.0 → 441.4 | 256.5 → 255.4 |
+| Americas, all Creative, 96 games | | | 410.1 → 407.3 | |
+| Caribbean, 16 games | 93.6 → 97.0 | 104.8 → 104.7 | 121.4 → 122.1 | 60.1 → 61.3 |
+
+- **Against C11:** an alliance in about one Americas game in three (8 of 24, 18 of 48: a little above one in four); concord in 2 of 24 and 4 of 48 (about one in 12, above the target of one in 30–40, as before the tuning: 3 of 48); a company in one game in eight (unchanged); a confederation in 3 of 96 all-Creative games (one in 32, within the target of one in 30–50) and 1 of 48 four-level games.
+- **No level is clearly weaker.** Creative's average in all-Creative games moved by less than its noise (about 8 points over 96 games); a game that changes at all changes by about 200 points either way, so 24 games say little about a level's average.
+- **Companies:** in the Caribbean a company is now a sound investment. One founded at turn 34 paid its founder 1,762 gold in dividends on its 1,000 and was worth 20 points at the end; late ones (after turn 150) paid back 200–430 gold and 5–8 points (at 400 gold a point, the capital is worth 2.5). In the Americas, companies still come late (the founding chance and the companies' years are unchanged, to keep them in about one game in ten), and pay more in gold and a little less in score, because they grow more slowly while keeping a treasury.
+- **Joint expeditions:** still none between computer players; alliances form after most Lost City Rumours are found.
+- **Concord** stays at 0.65 of the total score: it is already above C11's rate in the Americas, and the alliance rate is a little above too, so raising it to 0.7 is the obvious next step if Simon wants fewer shared wins. Left for him to decide (section 9).
+
+## 9. For Simon: provisional decisions to confirm
+
+Choices made while building Beta 1 that the decisions C1–C11 did not settle. Each is easy to change.
+
+1. **Alliances can have more than two members** (one alliance per nation; a member invites a nation that belongs to none).
+2. **An alliance holds at most half of the nations taking part** (at least two), so it is a bloc, not the whole table.
+3. **Concord needs a nation outside the alliance**, and is checked only **at the end year** (the calendar's end), not earlier.
+4. **Concord's share** stays at 0.65; the tournaments give a shared win in about one Americas game in 12, more than C11's one in 30–40. 0.7 would bring it closer.
+5. **An alliance survives independence:** a nation that has won its independence keeps its allies, and can still make an alliance.
+6. **Allies garrison and trade in each other's colonies but don't work in them** (C1 left it open).
+7. **Favoured Nation with an ally ends only by leaving the alliance**, not on its own.
+8. **Companies are named by the scenario** (`nations.companies`), not created freely; ids, names and colours stay stable.
+9. **Shares can't be sold**, only bought (new shares, at the company's worth per share).
+10. **Companies can't join alliances**, make agreements or go to war; nobody makes war on them.
+11. **Old friends** (new in step 6): a trade agreement and 150 ± 30 years of peace open an alliance without Favoured Nation; computer players rarely take that way. It is how alliances form between Creative nations, which hardly trade with each other's colonies.
+12. **Declaring together** (new in step 6): a computer nation ready for independence may wait up to 20 turns for an ally with an independence plan, and a Creative ally declares together with a smaller margin over its own Royal Expeditionary Force (0.65 of its usual one). The other levels answer by their usual readiness, as C11 says.
+13. **A company's computer player keeps 1.5 times the dividend reserve** before it spends, so that it pays dividends rather than growing as fast as it can.
 

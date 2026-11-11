@@ -137,7 +137,7 @@ Builds on 0.4.
 
 Each beta gets design notes first.
 
-Beta 1, cooperation between Europeans: design in [design/cooperation.md](design/cooperation.md) (C1–C11 decided by Simon, November 2026).
+Beta 1, cooperation between Europeans: design in [design/cooperation.md](design/cooperation.md) (C1–C11 decided by Simon, November 2026). Built: steps 0–6; the choices left to confirm are in its section 9.
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
@@ -147,7 +147,7 @@ Beta 1, cooperation between Europeans: design in [design/cooperation.md](design/
 | Step 3: chartered companies (`kind: 'company'` players, shares, dividends, company AI) | L | P1 | done: named by the scenario (`nations.companies`), neutral, scores counted for shareholders; on in the Americas and the Caribbean (cheaper and more common there) |
 | Step 4: joint expeditions and shared bells | S–M | P2 | done: a tenth of each ally's bells helps the others' Congress; a scout funded half each, gold shared |
 | Step 5: confederation, declaring independence together | M | P2 | done: one war for both, won or lost together; computer allies answer by their readiness; on in the Americas |
-| Step 6: tuning with tournaments on the Mac (alliances, companies, concord's share, the Caribbean's cooperation), docs | M | P1 | idea |
+| Step 6: tuning with tournaments (alliances, companies, concord's share, the Caribbean's cooperation), docs | M | P1 | done (`[outcomes]`): old friends ally after a long peace (`alliances.longPeace`), allies wait to declare together, companies keep a treasury and pay dividends, Caribbean companies come earlier. Americas 24 games: alliance in 8, concord 2, company 3; all-Creative 96 games: alliance in 26, confederation 3; Caribbean 16: company in 8, 318 gold of dividends a game. Provisional decisions for Simon in the design note, section 9 |
 
 ## Scenarios (content)
 
