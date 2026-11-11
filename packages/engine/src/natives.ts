@@ -6,7 +6,7 @@ import { perfEnd, perfStart } from './perf.js';
 import { hasSubmitted, nativeUnitPrice, processBraves, settlementKind } from './braves.js';
 import { addOf, modifiers, mulOf } from './scenarios/modifiers.js';
 import { noteGoods, noteHistory } from './history.js';
-import { cargoRoomFor, colonyWorkers, createUnit, message, player, reveal, tileAt, unitName, unitPosition } from './queries.js';
+import { cargoRoomFor, colonyPopulation, createUnit, message, player, reveal, tileAt, unitName, unitPosition } from './queries.js';
 import { random, randInt } from './rng.js';
 import { noteTrade } from './stats.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
@@ -318,14 +318,23 @@ export function processNatives(s: GameState): void {
   const grid = gridOf(s);
   const nations = s.players.filter((p) => p.id !== 'crown').map((p) => p.id);
   const rules = new Map(s.players.map((p) => [p.id, difficultyOf(s, p)]));
+  // Nearby colonies press on native land, more so as they grow: 3 and one per two colonists for
+  // each colony within 3 tiles. Nothing below founds, moves, gives away or repeoples a colony (a
+  // convert joins on the map), so each colony's pressure is worked out once; the sums are of whole
+  // numbers, so their order does not matter.
+  const colonies = Object.values(s.colonies);
+  const weight = colonies.map((c) => 3 + Math.floor(colonyPopulation(s, c) / 2));
+  const pressureOn = new Map<string, number>();
   for (const st of Object.values(s.settlements)) {
     st.gold += st.capital ? 6 : 3;
     const tribe = tribeOf(s, st);
+    pressureOn.clear();
+    for (let i = 0; i < colonies.length; i++) {
+      const c = colonies[i];
+      if (grid.distance(c.x, c.y, st.x, st.y) <= 3) pressureOn.set(c.owner, (pressureOn.get(c.owner) ?? 0) + weight[i]);
+    }
     for (const nation of nations) {
-      // Nearby colonies press on native land, more so as they grow.
-      const pressure = Object.values(s.colonies)
-        .filter((c) => c.owner === nation && grid.distance(c.x, c.y, st.x, st.y) <= 3)
-        .reduce((sum, c) => sum + 3 + Math.floor(colonyWorkers(s, c).length / 2), 0);
+      const pressure = pressureOn.get(nation) ?? 0;
       const mission = st.mission === nation;
       const r = rules.get(nation)!;
       addTension(st, nation, Math.round(pressure * r.nativeTension) - 4 - (mission ? 5 : 0));
