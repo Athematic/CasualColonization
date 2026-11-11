@@ -75,9 +75,6 @@ function plannedSelect(label: string, release: string, choices: string[], note?:
 
 /** Rule options from the roadmap, shown as disabled switches. */
 const PLANNED_OPTIONS: { label: string; release: string; note: string }[] = [
-  { label: 'Alliances', release: 'Beta 1', note: 'Allied nations defend each other, open their colonies to each other and share sight. Leaving an alliance has a price.' },
-  { label: 'Chartered companies', release: 'Beta 1', note: 'Several nations buy shares in a company that founds and runs its own colonies and pays dividends.' },
-  { label: 'Winning together', release: 'Beta 1', note: 'An alliance that together holds enough of the score at the end can win together.' },
   { label: 'Native peoples as partners', release: 'Beta 2', note: 'Trade agreements, shared land and mutual defence with the native peoples.' },
   { label: 'Hexagon maps', release: 'Later', note: 'A scenario can choose hexagon tiles instead of squares.' },
 ];
@@ -232,6 +229,11 @@ export function newGameScreen(
       'a market and prices for every home port',
       'native braves on the map',
       scenario.mechanics.ref ? 'a royal army that grows during the game' : null,
+      // Beta 1 (docs/design/cooperation.md), where the scenario has them.
+      scenario.mechanics.alliances ? 'alliances (defence, open colonies, shared sight and bells, joint expeditions)' : null,
+      scenario.mechanics.companies && scenario.nations.companies?.length ? 'chartered companies' : null,
+      scenario.victory.some((v) => v.id === 'concord') ? 'winning together as an alliance' : null,
+      scenario.mechanics.confederation && scenario.mechanics.independence ? 'declaring independence together' : null,
     ].filter((x): x is string => !!x);
     const scenarios = playableScenarios();
     /** The scenario with the chosen rivals, for the nations' entries in that set. */
