@@ -178,6 +178,8 @@ export const AMERICAS: Scenario = {
     alliances: true,
     companies: true,
     confederation: true,
+    // Treaties with native peoples (peopletreaties.ts, Beta 2): the trade treaty so far.
+    peopleTreaties: ['people-trade'],
   },
   // Winning the War of Independence ends the game; otherwise it ends after autumn 1850, won by an
   // alliance holding most of the score together, or else by the highest score.

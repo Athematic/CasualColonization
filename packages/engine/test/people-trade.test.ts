@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AMERICAS,
+  CARIBBEAN,
   addTreaty,
   aiAcceptsPeopleOffer,
   allTreaties,
@@ -62,6 +63,12 @@ import {
 
 /** The Americas with trade treaties with peoples switched on (hidden, for these tests). */
 const TREATIES: Scenario = { ...AMERICAS, id: 'test-people-trade', name: 'test-people-trade', hidden: true, mechanics: { ...AMERICAS.mechanics, peopleTreaties: ['people-trade'] } };
+// The Americas switch them on themselves.
+it('are on in the Americas and the Caribbean', () => {
+  expect(AMERICAS.mechanics.peopleTreaties).toEqual(['people-trade']);
+  expect(CARIBBEAN.mechanics.peopleTreaties).toEqual(['people-trade']);
+  expect(CARIBBEAN.peopleTreaties?.trade?.volume).toEqual({ min: 0, max: 0 });
+});
 registerScenario(TREATIES);
 
 /** The same, with every people open and a scenario's own numbers. */
@@ -73,6 +80,10 @@ const OPEN: Scenario = {
   peopleTreaties: { accept: 1, trade: { sell: 1.5 }, temperaments: { open: { accept: 1 } } },
 };
 registerScenario(OPEN);
+
+/** The Americas without treaties with peoples, to check the switch. */
+const OFF: Scenario = { ...AMERICAS, id: 'test-people-trade-off', name: 'test-people-trade-off', hidden: true, mechanics: { ...AMERICAS.mechanics, peopleTreaties: undefined } };
+registerScenario(OFF);
 
 function game(scenario: string | undefined = TREATIES.id, humans: NationId[] = ['england', 'france'], seed = 42): GameState {
   return createGame({ seed, mapSize: 'small', nations: ['england', 'france'], humans, ...(scenario ? { scenario } : {}) });
@@ -131,7 +142,7 @@ describe('unlocking a trade treaty (N3)', () => {
     establishMission(s, m.id, other.id);
     expect(peopleRelationOf(s, 'france', other.tribe)).toBeDefined();
     // Without the switch, contact writes nothing (save texts of other games stay as they were).
-    const off = game('americas');
+    const off = game(OFF.id);
     const st2 = firstSettlement(off);
     const scout2 = createUnit(off, 'england', 'seasonedScout', { kind: 'map', ...landBeside(off, st2.x, st2.y) });
     scout2.role = 'scout';
@@ -177,7 +188,7 @@ describe('unlocking a trade treaty (N3)', () => {
     expect(peopleTreatyProblem(s, 'england', st.tribe)).toMatch(/submitted/);
     delete tribe.submitted;
     expect(peopleTreatyProblem(s, 'england', st.tribe, 'land-use')).toMatch(/no land use/);
-    const off = game('americas');
+    const off = game(OFF.id);
     expect(peopleTreatyProblem(off, 'england', firstSettlement(off).tribe)).toMatch(/no treaties with native peoples/);
     expect(applyCommand(off, { type: 'proposePeopleTreaty', people: firstSettlement(off).tribe }).ok).toBe(false);
   });
@@ -513,7 +524,7 @@ describe('computer players and the switch', () => {
   });
 
   it('is off in a scenario without the switch: no record on contact, no treaty, no offer', () => {
-    const s = game('americas', []);
+    const s = game(OFF.id, []);
     for (let i = 0; i < 60; i++) applyCommand(s, { type: 'endTurn' });
     expect(allTreaties(s).some((t) => t.kind === 'people-trade')).toBe(false);
     expect((s.nativeDemands ?? []).some((d) => d.kind === 'treaty')).toBe(false);
