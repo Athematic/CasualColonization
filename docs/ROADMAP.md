@@ -46,19 +46,24 @@ Beta 2, native peoples as partners: design in [design/native-partners.md](design
 
 ## Beta 3: Native nations
 
-Status: `design`. Native peoples become a nation type of their own: playable by a person or the computer, with their own units, buildings and council members, and no Home Port. A new way to play: start as a native people around the year 1000, meet the Norse briefly, and face the Europeans from 1492. Builds on Beta 2, whose people treaty party was built to grow into this. Design: [design/native-nations.md](design/native-nations.md) (decisions T1–T22 open for Simon). About XL, larger than Beta 2.
+Status: `design`, decisions mostly made; T10 (economy and growth) and T14 (victory) open, "needs more thought" (Simon, 11 November 2026). Native peoples become a nation type of their own: playable by a person or the computer, with their own units, buildings and council members, and no Home Port. A new way to play: start as a native people in the year 1000 and face the Europeans from 1492, one turn a year to 1850 (about 850 turns), with head starts for a shorter game. Builds on Beta 2, whose people treaty party was built to grow into this. Design: [design/native-nations.md](design/native-nations.md). About XL, larger than Beta 2.
+
+Simon's decisions (11 November 2026): all as recommended except these.
+- One turn a year from 1000 to 1850; a shorter game is a head start (T16). No multi-year turns.
+- The Norse are not in it: "keep that powder dry for the Vinland scenario" (T17). Vinland, with the Norse, is built in Beta 4 on hexes.
+- No save compatibility (T21). The Americas and the Caribbean stay bit-identical (golden and bench hashes) as a testing aid.
+- To confirm: the 1000–1850 game is played on the new North-east map on squares, which Beta 4 turns into hexes for Vinland (T19).
 
 Folded in from elsewhere on this roadmap:
 - Specialised councils per scenario (from Scenarios), built as a general council system per nation type and scenario; Australia's Legislative Council and Vinland's Thing use it later.
 - Native peoples' knowledge of the land (from Later): the braves' defence movement bonus becomes a trait of the nation type, lost on tilled fields and railroads.
-- Vinland, around 1000 (from Scenarios), as the scenario: one map seen from either side, the Norse around 1000 and the Europeans from 1492.
 - The framework's lifeway: only today's fixed-settlement lifeways; Australia's seasonal lifeway later.
 
-Not in it: hex maps (Beta 4) and Australia, which follows Beta 4 on hexes.
+Not in it: hex maps and Vinland with the Norse (Beta 4), and Australia, which follows Beta 4 on hexes.
 
 ## Beta 4: Hex maps
 
-Status: `idea, agreed in outline` (Simon, 11 November 2026). A scenario can be played on hexagons. Builds the hex steps listed under Later (step 1, the grid abstraction, was done in 0.10) and proves them on Vinland, which Beta 3 builds. The Americas and the Caribbean stay square. Gets its own design note first. About XL.
+Status: `idea, agreed in outline` (Simon, 11 November 2026). A scenario can be played on hexagons. Builds the hex steps listed under Later (step 1, the grid abstraction, was done in 0.10) and proves them on Vinland, with the Norse, built here on Beta 3's North-east map (Beta 3 plays that map on squares, without the Norse). The Americas and the Caribbean stay square. Gets its own design note first. About XL.
 
 Simon's decisions on the outline:
 - **Vinland is hex-only** in Beta 4; its square version is dropped.
@@ -73,7 +78,7 @@ Simon's decisions on the outline:
 | 1 | Hexagon rules and a hidden test scenario: 6 directions, a work area of 6, movement keys | M | P1 |
 | 2 | Rivers and roads on hexes (core: today's river masks are square-only): 6-direction masks, river and road movement for units, the path search and braves, conversion of stored river masks | M | P1 |
 | 3 | The schematic style on hexes, with rivers and roads along hex edges; a hex scenario playable | M | P1 |
-| 4 | Vinland on hexes: its map as offset hexagon rows with a review pass; computer players retuned with tournaments; the Mac speed gate on a hex scenario | M–L | P1 |
+| 4 | Vinland on hexes: Beta 3's North-east map as offset hexagon rows with a review pass; the Norse (a `norse` nation from Greenland that leaves unless thriving, the Thing as its council; T17 in [design/native-nations.md](design/native-nations.md)); computer players retuned with tournaments; the Mac speed gate on a hex scenario | L | P1 |
 | 5 | Placeholder sprite pack and missing-ids check; the sprite style on hexes | M | P2 |
 | 6 | Ligne claire on hexes | L | P2 |
 | 7 | Railroads along hex edges (optional; they don't exist yet) | M | P3 |
@@ -90,7 +95,8 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
 | --- | --- | --- | --- |
 | Convict transport mechanic (Australia; late game for British colonies in the Americas) | M | P2 | idea, agreed |
 | Australia, 1788–1901: map, Aboriginal nations and Country, wool, wheat, gold and whaling, convict colonists, the long sea route, drought, Federation | XL | P1 | idea |
-| Vinland, around 1000: Norse survival from Greenland with scarce resources and a fragile supply line | L | P3 | moved to Beta 3 (the Vinland scenario of [design/native-nations.md](design/native-nations.md)) |
+| Vinland, around 1000: Norse survival from Greenland with scarce resources and a fragile supply line | L | P3 | moved to Beta 4, built on hexes with the Norse (Vinland is hex-only; the Norse wait for it, T17 in [design/native-nations.md](design/native-nations.md)) |
+| Before the year 1000: native peoples as full nations before any European arrives, which would rebuild many mechanics. A potential scenario, not part of the core game | XL? | P3 | idea; Simon, 11 November 2026 |
 | Specialised councils per scenario: each scenario has its own Founding Fathers counterpart (Australia: Legislative Council and Federation figures; Vinland: the Thing, with saga figures), with effects suited to the scenario and portraits in the same cameo prompt style (see design/scenarios.md, Specialised councils) | M | P1 | moved to Beta 3 (the general council system, T8 in [design/native-nations.md](design/native-nations.md)); the councils' members come with each scenario |
 
 The Australia map (geography preview with the current rules; ships arrive from the west) is done, see [SHIPPED.md](SHIPPED.md#scenarios-content).
