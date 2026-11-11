@@ -19,6 +19,8 @@ import {
   describeTreaty,
   colonyWorkers,
   describeForce,
+  councilText,
+  CouncilText,
   FATHERS,
   favouredProblem,
   hasTradeAgreement,
@@ -95,15 +97,17 @@ export class DiplomacyScreen implements Screen {
     const natives = this.nativesCard();
 
     const cost = nextFatherCost(s, me);
+    // The viewer's own council: the Congress, or a people's council naming its own product (native-nations.md T8).
+    const product = councilText(app.state, me.id, 'product') === 'bells' ? 'liberty bells' : councilText(app.state, me.id, 'product');
     const congress = h('div', { class: 'card' },
-      h('h3', null, `${Term(app.state, 'council')}`),
+      h('h3', null, CouncilText(app.state, me.id, 'council')),
       h('p', null, me.currentFather
-        ? `Next: ${FATHERS[me.currentFather].name}, ${me.fatherBells}/${cost} liberty bells.`
-        : `${me.fatherBells}/${cost} liberty bells collected. No candidate chosen yet.`),
+        ? `Next: ${FATHERS[me.currentFather].name}, ${me.fatherBells}/${cost} ${product}.`
+        : `${me.fatherBells}/${cost} ${product} collected. No candidate chosen yet.`),
       h('button', { class: 'btn small', onclick: () => void app.chooseFather() }, me.currentFather ? 'Change candidate' : 'Choose candidate'),
       me.fathers.length
         ? h('ul', { class: 'fathers' }, me.fathers.map((id) => h('li', null, h('strong', null, FATHERS[id].name), ` (${FATHERS[id].category}): ${FATHERS[id].effect}`)))
-        : h('p', { class: 'muted small' }, `No ${term(app.state, 'members')} have joined yet.`));
+        : h('p', { class: 'muted small' }, `No ${councilText(app.state, me.id, 'members')} have joined yet.`));
 
     const share = rebelShare(s, me.id);
     const blocked = canDeclareIndependence(s, me.id);

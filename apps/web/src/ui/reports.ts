@@ -2,6 +2,10 @@ import {
   calendarOf,
   coloniesOverview,
   congressOverview,
+  councilOf,
+  councilText,
+  CouncilText,
+  systemsOfId,
   FATHERS,
   formatDate,
   GOOD_DEFS,
@@ -490,23 +494,28 @@ function congressTab(ctx: ReportContext): Child[] {
   const p = player(s, nation);
   const cur = c.current ? FATHERS[c.current] : null;
   const mine = nation === app.viewer && app.isMyTurn();
+  // The player's own council: the Congress, or a people's council with its own words (native-nations.md T8).
+  const word = (key: 'councilShort' | 'member' | 'members' | 'product') => councilText(s, nation, key);
+  const Word = (key: 'members' | 'product') => CouncilText(s, nation, key);
+  const congress = systemsOfId(nation).congress;
+  const seats = (councilOf(s, nation)?.members ?? []).filter((id) => !FATHERS[id].peoples || FATHERS[id].peoples!.includes(nation)).length;
   return [
     h('div', { class: 'report-stats' },
-      stat('Bells per turn', c.bellsPerTurn),
-      stat('Bells rung', c.bells.toLocaleString()),
-      stat('Rebels', `${c.rebels}%`, p.independence === 'none' ? (c.rebels >= 50 ? 'enough to declare independence' : '50% needed to declare') : p.independence === 'declared' ? `at war with ${term(app.state, 'crown')}` : p.independence),
-      stat(`${Term(app.state, 'members')}`, `${c.fathers.length}/25`)),
-    h('p', null, h('button', { class: 'btn', onclick: () => app.openCongress() }, `Open the ${term(app.state, 'councilShort')} hall`)),
-    card(`Next ${term(app.state, 'member')}`,
+      stat(`${Word('product')} per turn`, c.bellsPerTurn),
+      stat(congress ? 'Bells rung' : `${Word('product')} given`, c.bells.toLocaleString()),
+      congress ? stat('Rebels', `${c.rebels}%`, p.independence === 'none' ? (c.rebels >= 50 ? 'enough to declare independence' : '50% needed to declare') : p.independence === 'declared' ? `at war with ${term(app.state, 'crown')}` : p.independence) : null,
+      stat(`${Word('members')}`, `${c.fathers.length}/${seats}`)),
+    h('p', null, h('button', { class: 'btn', onclick: () => app.openCongress() }, `Open the ${word('councilShort')} hall`)),
+    card(`Next ${word('member')}`,
       cur
         ? h('div', null,
             h('div', { class: 'congress-sought' },
               icon({ kind: 'father', id: c.current!, category: cur.category }, 96, cur.name),
               h('p', null, h('strong', null, cur.name), h('span', { class: 'muted small' }, ` (${cur.category})`), ` — ${cur.effect}`)),
-            bar(c.fatherBells, c.fatherCost, `Bells towards the next ${term(app.state, 'member')}`),
-            h('p', { class: 'small' }, `${c.fatherBells} of ${c.fatherCost} bells · ${c.turnsToFather ? `joins in about ${turns(c.turnsToFather)}` : 'no bells are being rung'}`))
-        : h('p', null, `No candidate chosen (${c.fatherBells} bells collected). `, mine ? h('button', { class: 'btn small', onclick: () => { app.closeScreen(); void app.chooseFather(); } }, 'Choose one') : null)),
-    card('Sons of Liberty by colony', c.colonies.length
+            bar(c.fatherBells, c.fatherCost, `${Word('product')} towards the next ${word('member')}`),
+            h('p', { class: 'small' }, `${c.fatherBells} of ${c.fatherCost} ${word('product')} · ${c.turnsToFather ? `joins in about ${turns(c.turnsToFather)}` : congress ? 'no bells are being rung' : `no ${word('product')} is being given`}`))
+        : h('p', null, `No candidate chosen (${c.fatherBells} ${word('product')} collected). `, mine ? h('button', { class: 'btn small', onclick: () => { app.closeScreen(); void app.chooseFather(); } }, 'Choose one') : null)),
+    !congress ? null : card('Sons of Liberty by colony', c.colonies.length
       ? sortableTable('congress', [
           { key: 'name', label: 'Colony', sort: (r) => r.colony.name, cell: (r) => h('button', { class: 'link', onclick: () => app.openColony(r.colony.id) }, r.colony.name) },
           { key: 'pop', label: 'Pop', num: true, sort: (r) => r.population, cell: (r) => String(r.population) },
@@ -517,11 +526,11 @@ function congressTab(ctx: ReportContext): Child[] {
           { key: 'bells', label: 'Bells', num: true, sort: (r) => r.bells, cell: (r) => String(r.bells) },
         ], c.colonies, ctx.rerender)
       : empty('No colonies.')),
-    card(`Members of the ${term(app.state, 'councilShort')}`, c.fathers.length
+    card(`Members of the ${word('councilShort')}`, c.fathers.length
       ? h('ul', { class: 'report-fathers' }, c.fathers.map((id) => h('li', null,
           icon({ kind: 'father', id, category: FATHERS[id].category }, 48, FATHERS[id].name),
           h('div', null, h('strong', null, FATHERS[id].name), h('span', { class: 'muted small' }, ` ${FATHERS[id].category}`), h('div', { class: 'small' }, FATHERS[id].effect)))))
-      : empty(`No ${term(app.state, 'members')} have joined yet.`)),
+      : empty(`No ${word('members')} have joined yet.`)),
   ];
 }
 

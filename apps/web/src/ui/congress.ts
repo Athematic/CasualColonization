@@ -1,13 +1,15 @@
-import { calendarOf, congressOverview, FATHERS, formatDate, nationOf, scenarioOf, term, Term, type FatherId, type PlayerId } from '@cc/engine';
+import { calendarOf, congressOverview, councilOf, councilText, CouncilText, FATHERS, formatDate, nationOf, scenarioOf, systemsOfId, type FatherId, type PlayerId } from '@cc/engine';
 import { CONGRESS_HALL_ASPECT, hallPaintOrder, hallSpotBox, layoutCongressHall } from '@cc/render-api';
 import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
 import { activeStyle, drawHallBackdrop, icon } from '../styles.js';
 
 /**
- * The Continental Congress hall: the nation's Founding Fathers standing together in a great hall, in the order they
- * joined (front row first, then the raised rows behind), with an empty seat for the father being sought. The hall is
- * a 3:2 picture at least HALL_MIN_WIDTH wide, which scrolls sideways inside its frame on a phone.
+ * The council hall: the player's own council (native-nations.md T8: the Continental Congress for a nation, a
+ * people's council for a playing people), its members standing together in the order they joined (front row first,
+ * then the raised rows behind), with an empty seat for the member being sought. The hall is a 3:2 picture at least
+ * HALL_MIN_WIDTH wide, which scrolls sideways inside its frame on a phone. A people's council has no picture of its
+ * own yet: a plain council house, and its members are emblems, never invented likenesses (T9).
  */
 
 const HALL_MIN_WIDTH = 720;
@@ -26,11 +28,11 @@ export class CongressScreen implements Screen {
 
   constructor(private app: App) {
     this.stage = h('div', { class: 'hall-stage' });
-    this.frame = h('div', { class: 'hall-frame', tabindex: 0, role: 'group', 'aria-label': `${Term(app.state, 'council')} hall` }, this.stage);
+    this.frame = h('div', { class: 'hall-frame', tabindex: 0, role: 'group', 'aria-label': `${CouncilText(app.state, this.nation(), 'council')} hall` }, this.stage);
     this.head = h('div', null);
     this.caption = h('div', { class: 'hall-caption' });
     this.tip = h('div', { class: 'hall-tip', role: 'status', hidden: true });
-    this.el = h('section', { class: 'screen congress-screen', role: 'dialog', 'aria-label': `${Term(app.state, 'council')}` }, this.head, this.frame, this.caption);
+    this.el = h('section', { class: 'screen congress-screen', role: 'dialog', 'aria-label': `${CouncilText(app.state, this.nation(), 'council')}` }, this.head, this.frame, this.caption);
     this.ro = new ResizeObserver(() => {
       const w = Math.max(HALL_MIN_WIDTH, Math.floor(this.frame.clientWidth));
       if (this.frame.clientWidth && w !== this.width) {
@@ -75,6 +77,12 @@ export class CongressScreen implements Screen {
     const W = this.width || HALL_MIN_WIDTH;
     const H = Math.round(W / CONGRESS_HALL_ASPECT);
     const p = app.state.players.find((q) => q.id === nation)!;
+    const council = councilOf(app.state, nation);
+    // The Congress's words are the scenario's terms; a people's council names its own.
+    const word = (key: 'council' | 'councilShort' | 'member' | 'members' | 'product') => councilText(app.state, nation, key);
+    const congress = systemsOfId(nation).congress;
+    // Seats: the council's members this player may have (a named person sits only in his or her own people's council).
+    const seats = (council?.members ?? []).filter((id) => !FATHERS[id].peoples || FATHERS[id].peoples!.includes(nation)).length;
     this.drawnKey = `${this.width}|${app.state.turn}|${c.fathers.length}|${c.current ?? ''}|${c.fatherBells}|${nation}|${activeStyle().id}`;
 
     // The stage: the backdrop, then the figures from the back row to the front.
@@ -84,10 +92,10 @@ export class CongressScreen implements Screen {
     const canvas = h('canvas', { class: 'hall-bg', 'aria-hidden': 'true' });
     canvas.style.width = `${W}px`;
     canvas.style.height = `${H}px`;
-    drawHallBackdrop(canvas, W, H, scenarioOf(app.state).art?.councilHall);
+    drawHallBackdrop(canvas, W, H, council?.hall ?? scenarioOf(app.state).art?.councilHall, !congress);
     this.stage.append(canvas);
 
-    const seeking = c.fathers.length < 25;
+    const seeking = c.fathers.length < seats;
     const spots = layoutCongressHall(c.fathers.length + (seeking ? 1 : 0));
     for (const spot of hallPaintOrder(spots)) {
       const box = hallSpotBox(spot, W, H);
@@ -114,7 +122,7 @@ export class CongressScreen implements Screen {
       } else {
         const cur = c.current ? FATHERS[c.current] : null;
         const pct = c.fatherCost > 0 ? Math.min(100, Math.round((c.fatherBells / c.fatherCost) * 100)) : 0;
-        const seat = h('div', { class: 'hall-seat', style: hit, title: cur ? `${cur.name} is expected: ${c.fatherBells} of ${c.fatherCost} bells` : `Seat waiting for the next ${term(app.state, 'member')}` },
+        const seat = h('div', { class: 'hall-seat', style: hit, title: cur ? `${cur.name} ${cur.plural ? 'are' : 'is'} expected: ${c.fatherBells} of ${c.fatherCost} ${word('product')}` : `Seat waiting for the next ${word('member')}` },
           h('span', { class: 'hall-seat-label' }, 'Seat waiting'),
           h('span', { class: 'hall-seat-bar' }, h('span', { style: `width:${pct}%` })),
           h('span', { class: 'hall-seat-bells' }, `${c.fatherBells}/${c.fatherCost}`));
@@ -134,22 +142,26 @@ export class CongressScreen implements Screen {
     clear(this.head);
     this.head.append(
       h('header', { class: 'screen-head' },
-        h('h2', null, `${Term(app.state, 'council')}`),
+        h('h2', null, CouncilText(app.state, nation, 'council')),
         h('span', { class: 'muted' }, `${nationOf(app.state, nation).name} · ${formatDate(app.state.turn, calendarOf(app.state))}`),
-        h('button', { class: 'btn close', onclick: () => app.closeScreen(), 'aria-label': `Close the ${term(app.state, 'councilShort')} hall` }, 'Close')));
+        h('button', { class: 'btn close', onclick: () => app.closeScreen(), 'aria-label': `Close the ${word('councilShort')} hall` }, 'Close')));
     clear(this.caption);
     this.caption.append(
       h('div', { class: 'hall-stats' },
-        h('span', null, h('strong', null, `${c.fathers.length}/25`), ` ${term(app.state, 'members')}`),
-        h('span', null, h('strong', null, c.bells.toLocaleString()), ` bells (${c.bellsPerTurn} per turn)`),
-        h('span', null, h('strong', null, `${c.rebels}%`), p.independence === 'none' ? ' rebels (50% to declare)' : ' rebels'),
+        h('span', null, h('strong', null, `${c.fathers.length}/${seats}`), ` ${word('members')}`),
+        h('span', null, h('strong', null, c.bells.toLocaleString()), ` ${word('product')} (${c.bellsPerTurn} per turn)`),
+        congress ? h('span', null, h('strong', null, `${c.rebels}%`), p.independence === 'none' ? ' rebels (50% to declare)' : ' rebels') : null,
         h('span', { class: 'hall-next' },
           cur
-            ? [h('strong', null, 'Next: '), `${cur.name} (${cur.category}) · ${c.fatherBells}/${c.fatherCost} bells${c.turnsToFather ? `, about ${c.turnsToFather} turn${c.turnsToFather === 1 ? '' : 's'}` : ''}`]
+            ? [h('strong', null, 'Next: '), `${cur.name} (${cur.category}) · ${c.fatherBells}/${c.fatherCost} ${word('product')}${c.turnsToFather ? `, about ${c.turnsToFather} turn${c.turnsToFather === 1 ? '' : 's'}` : ''}`]
             : seeking
-              ? [h('strong', null, 'Next: '), `no ${term(app.state, 'member')} chosen `, mine ? h('button', { class: 'btn small', onclick: () => { app.closeScreen(); void app.chooseFather(); } }, 'Choose one') : null]
-              : [h('strong', null, `The ${term(app.state, 'councilShort')} is complete.`)])),
-      h('p', { class: 'muted small' }, c.fathers.length ? 'Fathers stand in the order they joined, front row first. Hover or tap one to read about him. Press K or Escape to close the hall.' : `No ${term(app.state, 'member')} has joined yet; the first takes the empty seat.`),
+              ? [h('strong', null, 'Next: '), `no ${word('member')} chosen `, mine ? h('button', { class: 'btn small', onclick: () => { app.closeScreen(); void app.chooseFather(); } }, 'Choose one') : null]
+              : [h('strong', null, `The ${word('councilShort')} is complete.`)])),
+      h('p', { class: 'muted small' }, c.fathers.length
+        ? congress
+          ? 'Fathers stand in the order they joined, front row first. Hover or tap one to read about him. Press K or Escape to close the hall.'
+          : `${CouncilText(app.state, nation, 'members')} stand in the order they joined, front row first, each shown by an emblem. Hover or tap one to read about it. Press K or Escape to close the hall.`
+        : `No ${word('member')} has joined yet; the first takes the empty seat.`),
     );
   }
 
@@ -168,6 +180,7 @@ export class CongressScreen implements Screen {
       h('strong', null, def.name),
       h('span', { class: 'muted small' }, ` ${def.category}`),
       h('div', { class: 'small' }, def.effect),
+      ...(def.source ? [h('div', { class: 'small muted' }, `Source: ${def.source}`)] : []),
       h('div', { class: 'small muted' }, joined !== undefined ? `Joined in ${formatDate(joined, calendarOf(this.app.state))}` : 'Joined: date not recorded'));
     tip.hidden = false;
     // Above the figure's head when there is room, else below its feet; kept inside the stage.

@@ -1,4 +1,4 @@
-import { aBrave, peopleTradeBenefits, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, TRIBES, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { councilText, CouncilText, aBrave, peopleTradeBenefits, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, TRIBES, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import { icon } from '../styles.js';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -205,18 +205,20 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
     });
   }
   const offer = Object.values(me.fatherOffer) as FatherId[];
+  // The Congress's bells are liberty bells; a people's council names its own product (counsel).
+  const productWords = (id: typeof me.id) => (councilText(app.state, id, 'product') === 'bells' ? 'liberty bells' : councilText(app.state, id, 'product'));
   if (offer.length && (opts.father || (!me.currentFather && (me.fatherBells > 0 || me.fathers.length > 0)))) {
     list.push({
       id: 'father',
       required: false,
       render: (done) =>
         h('div', { class: 'decision-body' },
-          h('p', null, `Choose the next ${term(app.state, 'member')} to join ${term(app.state, 'councilShort')}. ${me.fatherBells}/${nextFatherCost(app.state, me)} liberty bells collected.${me.currentFather ? ` ${term(app.state, 'councilShort')} currently works towards ${FATHERS[me.currentFather].name}.` : ''} You can also decide later.`),
+          h('p', null, `Choose the next ${councilText(app.state, me.id, 'member')} to join ${councilText(app.state, me.id, 'councilShort')}. ${me.fatherBells}/${nextFatherCost(app.state, me)} ${productWords(me.id)} collected.${me.currentFather ? ` ${councilText(app.state, me.id, 'councilShort')} currently works towards ${FATHERS[me.currentFather].name}.` : ''} You can also decide later.`),
           h('div', { class: 'decision-actions father-choices' },
             offer.map((id) =>
               h('button', {
                 class: id === me.currentFather ? 'btn father primary' : 'btn father',
-                onclick: () => app.dispatch({ type: 'chooseFather', father: id }, true) && done(`${Term(app.state, 'councilShort')} will work towards ${FATHERS[id].name}.`),
+                onclick: () => app.dispatch({ type: 'chooseFather', father: id }, true) && done(`${CouncilText(app.state, me.id, 'councilShort')} will work towards ${FATHERS[id].name}.`),
               },
               icon({ kind: 'father', id, category: FATHERS[id].category, variant: 'figure' }, 160, FATHERS[id].name),
               h('span', { class: 'father-text' },

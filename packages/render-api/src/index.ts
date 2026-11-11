@@ -7,6 +7,7 @@
  */
 import {
   colonyWorkers,
+  FATHERS,
   inBounds,
   isShip,
   nationOf,
@@ -377,14 +378,28 @@ export * from './meander.js';
 export * from './congress.js';
 import { FATHER_FEET } from './congress.js';
 
-/** Cameo colours of the Founding Father categories (also the sprite portraits' backgrounds). */
+/**
+ * Cameo colours of the council categories (also the sprite portraits' backgrounds): the Congress's
+ * five and a people's council's (rules/councils.ts). Read with `fatherColor`, which has a fallback
+ * for a category a scenario adds.
+ */
 export const FATHER_COLORS: Record<FatherCategory, string> = {
   trade: '#c8955a',
   exploration: '#8ed0ec',
   military: '#93ad5e',
   political: '#b9b2a6',
   religious: '#3a6fb0',
+  household: '#d9b26f',
+  land: '#9cb86a',
+  knowledge: '#b7a3cf',
+  defence: '#c98a6b',
+  peace: '#9fcfc4',
 };
+
+/** A category's colour (a neutral grey for a category without one). */
+export function fatherColor(category: FatherCategory): string {
+  return FATHER_COLORS[category] ?? '#b9b2a6';
+}
 
 /** Initials of a father's name from his id: `bartolomeDeLasCasas` -> `BC`, `laSalle` -> `LS`, `pocahontas` -> `P`. */
 export function fatherInitials(id: FatherId): string {
@@ -395,10 +410,82 @@ export function fatherInitials(id: FatherId): string {
 }
 
 /**
+ * A council member shown without a likeness (native-nations.md T9: no invented faces): a plain
+ * roundel in the category colour with a double ring and the member's initials. No symbol, no figure.
+ */
+export function drawCouncilEmblem(ctx: CanvasRenderingContext2D, id: FatherId, category: FatherCategory, size: number, ink: string, font: string): void {
+  const c = size / 2;
+  const r = size * 0.44;
+  const lw = Math.max(1.2, size * 0.035);
+  ctx.save();
+  ctx.fillStyle = fatherColor(category);
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = lw;
+  ctx.beginPath();
+  ctx.arc(c, c, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.lineWidth = Math.max(1, lw * 0.6);
+  ctx.beginPath();
+  ctx.arc(c, c, r * 0.8, 0, Math.PI * 2);
+  ctx.stroke();
+  emblemInitials(ctx, id, c, c, size * 0.3, font);
+  ctx.restore();
+}
+
+/**
+ * The standing counterpart of `drawCouncilEmblem` for the council hall: a plain upright tablet in
+ * the category colour with the initials, its foot at FATHER_FEET of the height, in place of a figure.
+ */
+export function drawCouncilEmblemStanding(ctx: CanvasRenderingContext2D, id: FatherId, category: FatherCategory, size: number, ink: string, font: string): void {
+  const cx = size / 2;
+  const feet = FATHER_FEET * size;
+  const w = size * 0.3;
+  const top = feet - size * 0.62;
+  const lw = Math.max(1, size * 0.012);
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = lw;
+  ctx.fillStyle = 'rgba(0,0,0,0.16)';
+  ctx.beginPath();
+  ctx.ellipse(cx, feet, w * 0.7, size * 0.02, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = fatherColor(category);
+  ctx.beginPath();
+  ctx.moveTo(cx - w / 2, feet);
+  ctx.lineTo(cx - w / 2, top + w / 2);
+  ctx.arc(cx, top + w / 2, w / 2, Math.PI, 0);
+  ctx.lineTo(cx + w / 2, feet);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, top + w * 0.95, w * 0.36, 0, Math.PI * 2);
+  ctx.stroke();
+  emblemInitials(ctx, id, cx, top + w * 0.95, w * 0.3, font);
+  ctx.restore();
+}
+
+function emblemInitials(ctx: CanvasRenderingContext2D, id: FatherId, x: number, y: number, px: number, font: string): void {
+  const text = fatherInitials(id);
+  ctx.font = `700 ${Math.round(text.length > 1 ? px : px * 1.25)}px ${font}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(2, px * 0.2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.strokeText(text, x, y + px * 0.06);
+  ctx.fillStyle = '#1b1b1b';
+  ctx.fillText(text, x, y + px * 0.06);
+}
+
+/**
  * A simple procedural father portrait: an oval cameo in the category colour with a bust silhouette
  * and the initials, in the given heading font. Styles use it as their fallback.
  */
 export function drawFatherCameo(ctx: CanvasRenderingContext2D, id: FatherId, category: FatherCategory, size: number, ink: string, font: string): void {
+  if (FATHERS[id]?.portrait === 'emblem') return drawCouncilEmblem(ctx, id, category, size, ink, font);
   const cx = size / 2;
   const cy = size / 2;
   const rx = size * 0.4;
@@ -407,7 +494,7 @@ export function drawFatherCameo(ctx: CanvasRenderingContext2D, id: FatherId, cat
   ctx.save();
   ctx.beginPath();
   ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-  ctx.fillStyle = FATHER_COLORS[category];
+  ctx.fillStyle = fatherColor(category);
   ctx.fill();
   ctx.clip();
   ctx.fillStyle = 'rgba(0,0,0,0.16)';
@@ -441,13 +528,14 @@ export function drawFatherCameo(ctx: CanvasRenderingContext2D, id: FatherId, cat
  * stand at FATHER_FEET of the height.
  */
 export function drawFatherFigure(ctx: CanvasRenderingContext2D, id: FatherId, category: FatherCategory, size: number, ink: string, font: string): void {
+  if (FATHERS[id]?.portrait === 'emblem') return drawCouncilEmblemStanding(ctx, id, category, size, ink, font);
   const cx = size / 2;
   const h = size;
   const u = h / 100; // 1% of the figure image
   const feet = FATHER_FEET * h;
   const top = feet - 0.8 * h; // adults stand about 80% of the image
   const lw = Math.max(1, h * 0.012);
-  const coat = FATHER_COLORS[category];
+  const coat = fatherColor(category);
   // A little variety of build and hair by id, so a row of fathers does not look cloned.
   let sum = 0;
   for (const ch of id) sum = (sum * 31 + ch.charCodeAt(0)) % 9973;

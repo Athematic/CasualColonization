@@ -1,4 +1,4 @@
-import { drawCongressHallBackdrop, FATHER_FIGURE_ASPECT, getStyle, listStyles, registerStyle, type IconRequest, type StylePlugin } from '@cc/render-api';
+import { drawCongressHallBackdrop, drawCouncilHouseBackdrop, FATHER_FIGURE_ASPECT, getStyle, listStyles, registerStyle, type IconRequest, type StylePlugin } from '@cc/render-api';
 import ligneClaire from '@cc/style-ligne-claire';
 import ligneClairePainted from '@cc/style-sprites/packs/ligne-claire-painted';
 import schematic from '@cc/style-schematic';
@@ -120,12 +120,14 @@ export function icon(req: IconRequest, size = 40, title?: string): HTMLImageElem
  * Paints the council hall backdrop into a canvas of width x height CSS px: the scenario's hall
  * (`sprite`, Scenario.art.councilHall), else the style's, else a procedural hall.
  */
-export function drawHallBackdrop(canvas: HTMLCanvasElement, width: number, height: number, sprite?: string): void {
+export function drawHallBackdrop(canvas: HTMLCanvasElement, width: number, height: number, sprite?: string, plain = false): void {
   const dpr = Math.min(3, window.devicePixelRatio || 1);
   canvas.width = Math.round(width * dpr);
   canvas.height = Math.round(height * dpr);
   const ctx = canvas.getContext('2d')!;
   ctx.scale(dpr, dpr);
+  // A council with no picture of its own (a people's council house) gets a plain hall, never the Congress's.
+  if (plain) return drawCouncilHouseBackdrop(ctx, width, height, active.theme['--ink']);
   if (active.drawBackdrop?.(ctx, 'congress-hall', width, height, sprite)) return;
   drawCongressHallBackdrop(ctx, width, height, active.theme['--ink']);
 }
