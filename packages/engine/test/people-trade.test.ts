@@ -60,6 +60,7 @@ import {
   PEOPLE_TREATY_RULES,
   LEVEL_COOPERATION,
 } from '../src/index.js';
+import { manageLogistics } from '../src/ai/logistics.js';
 
 /** The Americas with trade treaties with peoples switched on (hidden, for these tests). */
 const TREATIES: Scenario = { ...AMERICAS, id: 'test-people-trade', name: 'test-people-trade', hidden: true, mechanics: { ...AMERICAS.mechanics, peopleTreaties: ['people-trade'] } };
@@ -411,6 +412,47 @@ describe('effects of a trade treaty (N4)', () => {
     expect(bought).toBe(true);
     expect(sold).toBe(true);
     expect(peopleRelationOf(s, 'england', st.tribe)!.volume).toBeGreaterThan(0);
+  });
+
+  it('computer nations put an idle wagon train on a route to a partner\'s settlement that pays for their spare goods (step 6)', () => {
+    const s = createGame({ seed: 42, mapSize: 'small', nations: ['england', 'france'], humans: ['france'], ai: { england: 'creative' }, scenario: TREATIES.id });
+    const grid = gridOf(s);
+    let found: { st: Settlement; c: { id: string; x: number; y: number } } | undefined;
+    for (const st of Object.values(s.settlements)) {
+      for (let i = 0; i < s.map.tiles.length && !found; i++) {
+        const x = i % s.map.width;
+        const y = Math.floor(i / s.map.width);
+        const d = grid.distance(x, y, st.x, st.y);
+        if (d < 2 || d > 4 || colonySiteProblem(s, x, y)) continue;
+        const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', x, y });
+        u.moves = 3;
+        found = { st, c: foundColony(s, u.id, 'Route') };
+      }
+      if (found) break;
+    }
+    const { st, c } = found!;
+    const colony = s.colonies[c.id];
+    for (const g of ['furs', 'sugar', 'tobacco', 'cotton', 'cloth', 'coats', 'rum', 'cigars'] as const) colony.goods[g] = 150;
+    st.gold = 10_000;
+    const wagon = () => {
+      const w = createUnit(s, 'england', 'wagonTrain', { kind: 'map', x: c.x, y: c.y });
+      w.moves = 3;
+      return w;
+    };
+    // Without a treaty the wagon train trades on its own.
+    const first = wagon();
+    manageLogistics(s, player(s, 'england'));
+    expect(first.route).toBeUndefined();
+    makePeopleTreaty(s, 'england', st.tribe);
+    for (const o of settlementsOf(s, st)) o.tension.england = 0;
+    const w = wagon();
+    manageLogistics(s, player(s, 'england'));
+    const routed = [first, w].find((u) => u.route);
+    expect(routed).toBeDefined();
+    const route = s.routes![routed!.route!.id];
+    expect(route.stops.map((o) => o.at)).toEqual([c.id, st.id]);
+    expect(route.stops[1].unload.length).toBeGreaterThan(0);
+    expect(route.name).toMatch(/^Route to the /);
   });
 });
 
