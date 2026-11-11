@@ -529,6 +529,12 @@ export interface StoredMapEntry {
    * by id) gives back in a year without wearing. A region not listed has `landHealth.renewal`.
    */
   renewal?: Record<string, number>;
+  /**
+   * Where a nation's ships arrive on this map, by nation: a water tile [x, y] (native-nations.md
+   * T18, Beta 3 step 8: the North-east's nations each where their expeditions came). A nation not
+   * listed takes the map's spacing along its arrival edge, as before.
+   */
+  entries?: Partial<Record<NationId, [number, number]>>;
 }
 
 /** Where a people lives on a stored map: an inclusive tile rectangle and the number of settlements in it. */

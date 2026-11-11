@@ -156,6 +156,22 @@ const N = {
   },
 } satisfies Partial<Record<NationId, NationEntry>>;
 
+/**
+ * Where each nation's ships arrive (T18), on the Atlantic high seas off the coasts its fleets made
+ * for: Portugal's off the Avalon, where the fishing fleets came to the Grand Banks; France's and
+ * Spain's at the Atlantic mouth of the Strait of Belle Isle, Cartier's way into the Gulf and the
+ * Basque whalers' grounds; England's off the Gulf of Maine, between Nova Scotia and New England
+ * (Cabot's own landfall of 1497 was further north, on Newfoundland or Cape Breton: it is debated);
+ * the Netherlands' off New York Bay and the Hudson. Tiles of the map (maps/north-east.ts).
+ */
+const ENTRIES: Partial<Record<NationId, [number, number]>> = {
+  england: [40, 64],
+  portugal: [80, 44],
+  france: [62, 47],
+  spain: [73, 22],
+  netherlands: [31, 72],
+};
+
 /** The order the nations arrived in. Both sets are the same five: no alternative history here yet. */
 const REAL: NationEntry[] = [N.england, N.portugal, N.france, N.spain, N.netherlands];
 
@@ -233,7 +249,7 @@ export const NORTH_EAST: Scenario = {
   hidden: true,
   calendar: NORTH_EAST_CALENDAR,
   map: {
-    stored: [{ id: 'north-east', peoples: NORTH_EAST_PEOPLES, renewal: NORTH_EAST_RENEWAL }],
+    stored: [{ id: 'north-east', peoples: NORTH_EAST_PEOPLES, renewal: NORTH_EAST_RENEWAL, entries: ENTRIES }],
     default: 'north-east',
     extras: { bonus: 0.05, coastalBonus: 0.07, rumours: 0.02, noRumours: [] },
     // Settlements two tiles apart (about 55 km at this scale): the peoples of the Great Lakes and

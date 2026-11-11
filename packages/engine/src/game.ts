@@ -11,7 +11,7 @@ import { createWorld } from './world.js';
 import { initRelations } from './relations.js';
 import { initCrown } from './crown.js';
 import { entryPoints } from './mapgen.js';
-import { checkSavedScenario, checkScenarioConfig, difficultyOf, goodsOf, nationOf, peoplesOf, portMarketOf, term } from './scenarios/index.js';
+import { checkSavedScenario, checkScenarioConfig, difficultyOf, goodsOf, nationOf, peoplesOf, portMarketOf, scenarioOf, term } from './scenarios/index.js';
 import { modifiers } from './scenarios/modifiers.js';
 import { systemsOf, systemsOfId } from './playerkind.js';
 import { addPeoplePlayer } from './peopleplayer.js';
@@ -57,6 +57,12 @@ export function createGame(config: GameConfig): GameState {
     relations: {},
   };
   const entries = entryPoints(s.map, config.nations.length, world.entryRows, world.entrySide);
+  // A scenario may give a nation its own entry point on a stored map (StoredMapEntry.entries).
+  const own = config.map ? scenarioOf(s).map.stored.find((e) => e.id === config.map)?.entries : undefined;
+  if (own) config.nations.forEach((nation, i) => {
+    const at = own[nation];
+    if (at) entries[i] = { x: at[0], y: at[1] };
+  });
   const heading = world.entrySide === 'west' ? 'east' : 'west';
   // Nations that arrive later (NationEntry.arrives, native-nations.md T18) wait with their entry
   // points (arrivals.ts) and have no relations yet; the others enter now, in the order chosen.
