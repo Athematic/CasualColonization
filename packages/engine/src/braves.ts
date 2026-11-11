@@ -35,7 +35,7 @@ import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { isCompanyIdent, TRIBES, type NationId } from './rules/nations.js';
 import { braveCombat } from './rules/natives.js';
-import { TERRAIN } from './rules/terrain.js';
+import { FOREST_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './rules/terrain.js';
 import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from './types.js';
 import { difficultyOf, goodsOf, nativeProduceOf, nativeRulesOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
@@ -167,14 +167,14 @@ export function nativeUnitPrice(s: GameState, st: Settlement, good: GoodId, nati
 // ---------------------------------------------------------------------------
 // The native phase
 
-interface PhaseIndex {
+export interface PhaseIndex {
   /** Tiles with a colony, and with European units on land. */
   colonies: Map<number, Colony>;
   units: Map<number, Unit[]>;
   settlements: Set<number>;
 }
 
-function buildIndex(s: GameState): PhaseIndex {
+export function buildIndex(s: GameState): PhaseIndex {
   const w = s.map.width;
   const colonies = new Map<number, Colony>();
   for (const c of colonyList(s)) colonies.set(c.y * w + c.x, c);
@@ -275,7 +275,7 @@ function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
           delete b.task;
           return;
         }
-        if (grid.distance(b.x, b.y, target.loc.x, target.loc.y) > 1) walk(s, b, target.loc.x, target.loc.y, points, index, false);
+        if (grid.distance(b.x, b.y, target.loc.x, target.loc.y) > 1) walkTo(s, b, target.loc.x, target.loc.y, points, index);
         if (grid.distance(b.x, b.y, target.loc.x, target.loc.y) === 1) {
           // A brave defending a partner's colony under a mutual defence pact (N7).
           if (task.defend) track(task.defend, 'natives:defence fight');
@@ -289,7 +289,7 @@ function actBrave(s: GameState, b: Brave, index: PhaseIndex): void {
         delete b.task;
         return;
       }
-      if (grid.distance(b.x, b.y, c.x, c.y) > 1) walk(s, b, c.x, c.y, points, index, false);
+      if (grid.distance(b.x, b.y, c.x, c.y) > 1) walkTo(s, b, c.x, c.y, points, index);
       if (grid.distance(b.x, b.y, c.x, c.y) !== 1) return;
       if (task.kind === 'attack') {
         attackColony(s, b, c);
@@ -394,37 +394,164 @@ function open(s: GameState, b: Brave, x: number, y: number, index: PhaseIndex): 
   return true;
 }
 
-function stepCost(s: GameState, x: number, y: number): number {
+/**
+ * Move points a brave spends stepping onto a tile: a road costs ROAD_MOVE_COST, a forest
+ * FOREST_MOVE_COST, other land its terrain's cost (braves do not follow rivers or need a road on the
+ * tile they leave, as before).
+ */
+export function braveStepCost(s: GameState, x: number, y: number): number {
   const tile = tileAt(s, x, y)!;
-  if (tile.r) return 1;
-  return tile.f ? 6 : TERRAIN[tile.t].moveCost;
+  return tile.r ? ROAD_MOVE_COST : tile.f ? FOREST_MOVE_COST : TERRAIN[tile.t].moveCost;
+}
+
+/** How far beyond its settlement's visiting range a brave's route may stray. */
+const ROUTE_MARGIN = 3;
+
+// Search buffers for braveRoute, reused between searches like findPath's (movement.ts): a tile's
+// cost and previous tile count only when its stamp is the current search's.
+let routeSize = 0;
+let routeCost = new Float64Array(0);
+let routePrev = new Int32Array(0);
+let routeSeen = new Uint32Array(0);
+let routeDone = new Uint32Array(0);
+let routeGen = 0;
+let routeKey = new Float64Array(256);
+let routeTile = new Int32Array(256);
+const SEQ = 4294967296;
+
+/**
+ * The cheapest route in move points (braveStepCost) for a brave to a tile, or to a tile next to it
+ * unless `onto`, over the tiles it may enter (`open`), within its settlement's visiting range and
+ * ROUTE_MARGIN tiles more (or a tile further than where the brave stands). Returns the steps after
+ * the brave's own tile, empty when it is already there, or null when there is no route. A* with a
+ * binary heap ordered by estimate, then by insertion (as findPath), so it is deterministic.
+ */
+export function braveRoute(s: GameState, b: Brave, tx: number, ty: number, onto: boolean, index: PhaseIndex): { x: number; y: number }[] | null {
+  const grid = gridOf(s);
+  const goalD = onto ? 0 : 1;
+  if (grid.distance(b.x, b.y, tx, ty) === goalD) return [];
+  const st = s.settlements[b.home];
+  const w = s.map.width;
+  const h = s.map.height;
+  const cx0 = st ? st.x : b.x;
+  const cy0 = st ? st.y : b.y;
+  const reach = Math.max(nativeRulesOf(s).visitRange + ROUTE_MARGIN, grid.distance(b.x, b.y, cx0, cy0) + 1);
+  const size = w * h;
+  if (size !== routeSize || routeGen >= 0xfffffff0) {
+    routeSize = size;
+    routeCost = new Float64Array(size);
+    routePrev = new Int32Array(size);
+    routeSeen = new Uint32Array(size);
+    routeDone = new Uint32Array(size);
+    routeGen = 0;
+  }
+  const gen = ++routeGen;
+  const cost = routeCost;
+  const prev = routePrev;
+  const seen = routeSeen;
+  const done = routeDone;
+  const startIdx = b.y * w + b.x;
+  seen[startIdx] = gen;
+  cost[startIdx] = 0;
+  prev[startIdx] = -1;
+  let keys = routeKey;
+  let tiles = routeTile;
+  keys[0] = 0;
+  tiles[0] = startIdx;
+  let heap = 1;
+  let seq = 1;
+  let goal = -1;
+  while (heap > 0) {
+    const idx = tiles[0];
+    heap--;
+    if (heap > 0) {
+      const k = keys[heap];
+      const t = tiles[heap];
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1;
+        if (l >= heap) break;
+        const r = l + 1;
+        const m = r < heap && keys[r] < keys[l] ? r : l;
+        if (keys[m] >= k) break;
+        keys[i] = keys[m];
+        tiles[i] = tiles[m];
+        i = m;
+      }
+      keys[i] = k;
+      tiles[i] = t;
+    }
+    if (done[idx] === gen) continue;
+    done[idx] = gen;
+    const cx = idx % w;
+    const cy = (idx - cx) / w;
+    if (idx !== startIdx && grid.distance(cx, cy, tx, ty) === goalD) {
+      goal = idx;
+      break;
+    }
+    const near = grid.neighbourOffsets(cx, cy);
+    for (let d = 0; d < near.length; d += 2) {
+      const nx = cx + near[d];
+      const ny = cy + near[d + 1];
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const nIdx = ny * w + nx;
+      if (done[nIdx] === gen) continue;
+      if (grid.distance(nx, ny, cx0, cy0) > reach) continue;
+      const c = cost[idx] + braveStepCost(s, nx, ny);
+      if (seen[nIdx] === gen && c >= cost[nIdx]) continue;
+      if (!open(s, b, nx, ny, index)) continue;
+      seen[nIdx] = gen;
+      cost[nIdx] = c;
+      prev[nIdx] = idx;
+      if (heap === keys.length) {
+        const k2 = new Float64Array(heap * 2);
+        k2.set(keys);
+        const t2 = new Int32Array(heap * 2);
+        t2.set(tiles);
+        keys = routeKey = k2;
+        tiles = routeTile = t2;
+      }
+      // Every step costs at least ROAD_MOVE_COST (1), so the tiles left to go never overestimate.
+      const key = (c + Math.max(0, grid.distance(nx, ny, tx, ty) - goalD) * ROAD_MOVE_COST) * SEQ + seq++;
+      let i = heap++;
+      while (i > 0) {
+        const parent = (i - 1) >> 1;
+        if (keys[parent] <= key) break;
+        keys[i] = keys[parent];
+        tiles[i] = tiles[parent];
+        i = parent;
+      }
+      keys[i] = key;
+      tiles[i] = nIdx;
+    }
+  }
+  if (goal < 0) return null;
+  const path: { x: number; y: number }[] = [];
+  for (let cur = goal; cur !== startIdx; cur = prev[cur]) path.push({ x: cur % w, y: (cur - (cur % w)) / w });
+  return path.reverse();
 }
 
 /**
- * Walks greedily towards a tile, as far as the move points allow (a brave can always make one
- * step). Stops next to the target unless `onto` is set.
+ * Walks a brave along its route (braveRoute) towards a tile, as far as the move points allow (a
+ * brave can always make one step), stopping next to the target unless `onto` is set. One search a
+ * round: nothing the brave may not enter moves while it walks. Returns false when there is no route.
  */
-function walk(s: GameState, b: Brave, tx: number, ty: number, points: number, index: PhaseIndex, onto: boolean): void {
-  const grid = gridOf(s);
+function walk(s: GameState, b: Brave, tx: number, ty: number, points: number, index: PhaseIndex, onto: boolean): boolean {
+  const route = braveRoute(s, b, tx, ty, onto, index);
+  if (!route) return false;
   let left = points;
-  while (left > 0) {
-    const d = grid.distance(b.x, b.y, tx, ty);
-    if (d === 0 || (!onto && d === 1)) return;
-    let best: { x: number; y: number; d: number } | undefined;
-    const steps = grid.neighbourOffsets(b.x, b.y);
-    for (let k = 0; k < steps.length; k += 2) {
-      const x = b.x + steps[k];
-      const y = b.y + steps[k + 1];
-      const nd = grid.distance(x, y, tx, ty);
-      if (nd >= d || (best && nd >= best.d)) continue;
-      if (!open(s, b, x, y, index)) continue;
-      best = { x, y, d: nd };
-    }
-    if (!best) return;
-    b.x = best.x;
-    b.y = best.y;
-    left -= stepCost(s, best.x, best.y);
+  for (const step of route) {
+    if (left <= 0) break;
+    b.x = step.x;
+    b.y = step.y;
+    left -= braveStepCost(s, step.x, step.y);
   }
+  return true;
+}
+
+/** Walks a brave towards a target of its task; without a route there, it gives the task up and goes home. */
+function walkTo(s: GameState, b: Brave, tx: number, ty: number, points: number, index: PhaseIndex): void {
+  if (!walk(s, b, tx, ty, points, index, false)) delete b.task;
 }
 
 function wanderStep(s: GameState, b: Brave, st: Settlement, points: number, index: PhaseIndex): void {
@@ -443,7 +570,7 @@ function wanderStep(s: GameState, b: Brave, st: Settlement, points: number, inde
     const p = options[randInt(s, options.length)];
     b.x = p.x;
     b.y = p.y;
-    left -= stepCost(s, p.x, p.y);
+    left -= braveStepCost(s, p.x, p.y);
   }
 }
 
