@@ -2,7 +2,7 @@
  * Computer-only games for measuring AI levels against each other. Games are seeded and the
  * engine is deterministic, so a tournament always gives the same result for the same options.
  */
-import { AI_LEVEL_INFO, type AiLevel } from './ai/profiles.js';
+import { AI_LEVEL_INFO, AI_LEVELS, type AiLevel } from './ai/profiles.js';
 import { isCheated } from './cheats.js';
 import { applyCommand } from './commands.js';
 import { endStateFeatures, type FeatureCounts } from './features.js';
@@ -708,6 +708,15 @@ export function formatPeoples(entries: ArenaEntry[]): string {
     return `| ${id} | ${list.length} | ${list.filter((p) => p.towns > 0).length} | ${f1(avg(list.map((p) => p.towns)))} | ${f1(avg(list.map((p) => p.start)))} → ${f1(avg(list.map((p) => p.population)))} | ${f1(avg(list.map((p) => p.members)))} | ${Math.round(avg(list.map((p) => p.score)))} | ${wins.join(' | ')} |`;
   });
   const table = [`| People | Games | Survived | Towns | People (start → end) | Council | Score | ${kinds.join(' | ')} |`, `| --- |${' ---: |'.repeat(6 + kinds.length)}`, ...rows].join('\n');
+  // The same by the computer level the peoples played at, with what the profiles change.
+  const levels = AI_LEVELS.filter((l) => played.some((one) => one.peoples.some((p) => p.level === l)));
+  const levelRows = levels.map((level) => {
+    const list = played.flatMap((one) => one.peoples.filter((p) => p.level === level));
+    const wins = kinds.map((k) => list.filter((p) => p.way === k).length);
+    const pct = (xs: number[]) => `${Math.round(100 * avg(xs))}%`;
+    return `| ${AI_LEVEL_INFO[level].name} | ${list.length} | ${list.filter((p) => p.towns > 0).length} | ${f1(avg(list.map((p) => p.population)))} | ${Math.round(avg(list.map((p) => p.score)))} | ${f1(avg(list.map((p) => p.treaties ?? 0)))} | ${list.filter((p) => p.league !== undefined).length} | ${pct(list.map((p) => p.kept ?? 0))} | ${Math.round(avg(list.map((p) => p.health ?? 100)))} | ${Math.round(avg(list.map((p) => p.gold ?? 0)))} | ${wins.join(' | ')} |`;
+  });
+  const levelTable = [`| Level | Peoples | Survived | People | Score | Treaties | In a league | Homeland kept | Land health | Gold | ${kinds.join(' | ')} |`, `| --- |${' ---: |'.repeat(9 + kinds.length)}`, ...levelRows].join('\n');
   const n = played.length;
   const wayGames = new Map<string, number>();
   for (const one of played) for (const w of new Set(Object.values(one.ways))) if (w) wayGames.set(w, (wayGames.get(w) ?? 0) + 1);
@@ -733,6 +742,8 @@ export function formatPeoples(entries: ArenaEntry[]): string {
     `Playing peoples: ${total} played in ${n} games, ${survived} still in the game at the end (${Math.round((100 * survived) / Math.max(1, total))}%).`,
     '',
     table,
+    '',
+    levelTable,
     '',
     `Winners' ways per game (games in which someone won that way): ${ways}. Military victory: ${military} of ${n} games (${f1((100 * military) / n)} in 100).`,
     `Continuity failed at the end on: ${tally('continuityFails')}. A good life failed on: ${tally('goodLifeFails')}.`,
