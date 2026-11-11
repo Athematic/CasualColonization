@@ -11,6 +11,7 @@ import { random, randInt } from './rng.js';
 import { noteTrade } from './stats.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import { NATIVE_RULES, type TensionThresholds } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
@@ -174,8 +175,18 @@ export function tensionOf(st: Settlement, nation: NationId): number {
   return st.tension[nation] ?? 0;
 }
 
-export function tensionLabel(t: number): string {
-  return t < 200 ? 'content' : t < 400 ? 'uneasy' : t < 700 ? 'angry' : 'furious';
+/**
+ * A settlement's mood towards a nation in a word, at the thresholds its braves and its people act
+ * on (fix b; pass the game's `nativeRulesOf(s).tension`): content (gifts and trade visits), wary,
+ * uneasy (demands for tribute), angry (attacks) and furious (war, unless the people submitted).
+ */
+export function tensionLabel(t: number, tension: TensionThresholds = NATIVE_RULES.tension): string {
+  return t >= tension.war ? 'furious' : t >= tension.angry ? 'angry' : t >= tension.uneasy ? 'uneasy' : t >= tension.content ? 'wary' : 'content';
+}
+
+/** How the interface colours a mood: good while no demands come, a warning while they do, bad once braves attack. */
+export function tensionSeverity(t: number, tension: TensionThresholds = NATIVE_RULES.tension): 'good' | 'warn' | 'bad' {
+  return t >= tension.angry ? 'bad' : t >= tension.uneasy ? 'warn' : 'good';
 }
 
 export function addTension(st: Settlement, nation: NationId, amount: number): void {
@@ -243,7 +254,7 @@ export function takeLand(s: GameState, nation: NationId, x: number, y: number): 
   addTension(st, nation, Math.round(250 * anger));
   track(nation, 'cmd:takeLand');
   for (const other of Object.values(s.settlements)) if (other.tribe === st.tribe && other.id !== st.id) addTension(other, nation, Math.round(60 * anger));
-  const text = `You take the land. The ${TRIBES[st.tribe].name} are ${tensionLabel(tensionOf(st, nation))}.`;
+  const text = `You take the land. The ${TRIBES[st.tribe].name} are ${tensionLabel(tensionOf(st, nation), nativeRulesOf(s).tension)}.`;
   message(s, text, nation, st);
   return text;
 }

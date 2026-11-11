@@ -31,6 +31,7 @@ import {
   serialize,
   settlementAt,
   settlementName,
+  nativeRulesOf,
   tensionLabel,
   term,
   tileAt,
@@ -594,7 +595,7 @@ export class App {
       incite: `Incite the natives against a rival (${incitePrice(this.state, st)} gold)`,
       attack: 'Attack the settlement',
     } as const;
-    const mood = tensionLabel(st.tension[this.viewer] ?? 0);
+    const mood = tensionLabel(st.tension[this.viewer] ?? 0, nativeRulesOf(this.state).tension);
     const choice = await choose(settlementName(this.state, st), `The people here are ${mood}. What will you do?`, [
       ...actions.map((a) => ({ label: labels[a], value: a, disabled: (a === 'learn' && !st.skill) || (a === 'mission' && !!st.mission) })),
       { label: 'Leave', value: null },

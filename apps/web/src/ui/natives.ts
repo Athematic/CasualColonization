@@ -10,6 +10,7 @@ import {
   peopleOf,
   settlementForSale,
   settlementName,
+  nativeRulesOf,
   tensionLabel,
   TRIBES,
   type GoodId,
@@ -59,7 +60,7 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
         hint: visit?.bought ? 'You have already bought here this turn.' : gold < price ? `You have ${gold} gold.` : undefined,
       });
     }
-    const mood = tensionLabel(st.tension[unit.owner] ?? 0);
+    const mood = tensionLabel(st.tension[unit.owner] ?? 0, nativeRulesOf(s).tension);
     const text = h('div', null,
       h('p', null, `The people here are ${mood}. They pay ${st.gold} gold at most, and want ${peopleOf(s, st.tribe).wants.map((g) => GOOD_DEFS[g].name.toLowerCase()).join(', ')}.`),
       options.length ? null : h('p', { class: 'muted' }, 'You have nothing to sell, and they have nothing for sale.'));

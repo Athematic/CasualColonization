@@ -21,7 +21,7 @@ import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { ledgerFor } from './history.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
-import { goodsOf, peopleOf, term } from './scenarios/index.js';
+import { goodsOf, nativeRulesOf, peopleOf, term } from './scenarios/index.js';
 
 // ---- Colonies ----
 
@@ -369,7 +369,7 @@ export function nativesOverview(s: GameState, nation: NationId): TribeOverview[]
         settlement: st,
         name: settlementName(s, st),
         tension: t,
-        mood: tensionLabel(t),
+        mood: tensionLabel(t, nativeRulesOf(s).tension),
         skill: visited ? st.skill : undefined,
         wants: visited ? (own ?? peopleOf(s, st.tribe).wants) : undefined,
         mission: st.mission,

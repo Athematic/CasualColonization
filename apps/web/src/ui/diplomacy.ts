@@ -33,7 +33,9 @@ import {
   relation,
   relationsMood,
   routesBetween,
+  nativeRulesOf,
   tensionLabel,
+  tensionSeverity,
   term,
   Term,
   tradeProblem,
@@ -85,23 +87,25 @@ export class DiplomacyScreen implements Screen {
         return { t, settlements, met, tension, missions };
       })
       .filter((r) => r.met);
+    const thresholds = nativeRulesOf(s).tension;
     const natives = h('div', { class: 'card' },
       h('h3', null, 'Native peoples'),
       tribes.length ? h('table', { class: 'table' },
         h('tr', null, h('th', null, 'Tribe'), h('th', null, 'Settlements'), h('th', null, 'Mood'), h('th', null, 'Missions'), h('th', null, 'Gift')),
+        // Words and colours at the thresholds the braves act on (demands, raids, war).
         tribes.map(({ t, settlements, tension, missions }) => {
           const war = t.stance[me.id] === 'war';
-          const mood = war ? 'at war' : tensionLabel(tension);
+          const mood = war ? 'at war' : tensionLabel(tension, thresholds);
           return h('tr', null,
             h('td', null, h('span', { class: 'flag', style: `background:${TRIBES[t.id].color}` }), ' ', TRIBES[t.id].name),
             h('td', null, String(settlements.length)),
-            h('td', null, h('span', { class: `pill ${war || tension >= 700 ? 'bad' : tension >= 400 ? 'warn' : 'good'}` }, mood)),
+            h('td', null, h('span', { class: `pill ${war ? 'bad' : tensionSeverity(tension, thresholds)}` }, mood)),
             h('td', null, String(missions)),
             h('td', null, h('div', { class: 'row' }, [100, 500].map((gold) =>
               h('button', { class: 'btn tiny', disabled: me.gold < gold, onclick: () => this.gift(t.id, gold) }, String(gold))))));
         }))
         : h('p', { class: 'muted small' }, 'You have not met any native peoples yet.'),
-      h('p', { class: 'muted small' }, 'Colonies near native land raise tension, especially as they grow. Trade, gifts and missions calm it; furious tribes raid.'));
+      h('p', { class: 'muted small' }, 'Colonies near native land raise tension, especially as they grow. Trade, gifts and missions calm it; uneasy tribes demand tribute, angry ones raid and furious ones go to war.'));
 
     const cost = nextFatherCost(s, me);
     const congress = h('div', { class: 'card' },

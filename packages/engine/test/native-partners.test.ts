@@ -29,6 +29,9 @@ import {
   processNatives,
   registerScenario,
   removeUnit,
+  takeLand,
+  tensionLabel,
+  tensionSeverity,
   tileAt,
   type Scenario,
   type Settlement,
@@ -290,5 +293,39 @@ describe("France's teaching as a modifier (fix d)", () => {
     expect(UNIT_TYPES[s.units[french.u.id].type].skill).toBeGreaterThan(0);
     const english = criminal(s, 'england');
     expect(() => learnSkill(s, english.u.id, english.st.id)).toThrow(/will not teach a petty criminal/);
+  });
+});
+
+describe('mood labels at the real thresholds (fix b)', () => {
+  it('change word where the braves change what they do', () => {
+    const { content, uneasy, angry, war } = NATIVE_RULES.tension;
+    expect(tensionLabel(0)).toBe('content');
+    expect(tensionLabel(content - 1)).toBe('content');
+    expect(tensionLabel(content)).toBe('wary');
+    expect(tensionLabel(uneasy - 1)).toBe('wary');
+    // Demands for tribute from 300.
+    expect(tensionLabel(uneasy)).toBe('uneasy');
+    expect(tensionLabel(angry - 1)).toBe('uneasy');
+    // Attacks from 600.
+    expect(tensionLabel(angry)).toBe('angry');
+    expect(tensionLabel(war - 1)).toBe('angry');
+    // War from 800.
+    expect(tensionLabel(war)).toBe('furious');
+    expect([tensionSeverity(uneasy - 1), tensionSeverity(uneasy), tensionSeverity(angry)]).toEqual(['good', 'warn', 'bad']);
+  });
+
+  it('follow a scenario\'s thresholds', () => {
+    const tension = nativeRulesIn(RULES_SCENARIO).tension;
+    expect(tensionLabel(550)).toBe('uneasy');
+    expect(tensionLabel(550, tension)).toBe('furious');
+  });
+
+  it('name the mood in the land-taking message', () => {
+    const s = game();
+    const st = Object.values(s.settlements)[0];
+    const at = landBeside(s, st.x, st.y);
+    st.tension.england = 200;
+    // Conquistador: 250 more, so 450: braves demand tribute but do not yet attack.
+    expect(takeLand(s, 'england', at.x, at.y)).toMatch(/are uneasy\.$/);
   });
 });
