@@ -6,6 +6,9 @@ import {
   peopleTradeBenefits,
   peopleTradeTreaty,
   peopleTreatiesOn,
+  landUseTreaty,
+  leasedTiles,
+  leaseTerms,
   GOOD_DEFS,
   goodsOf,
   incitePrice,
@@ -21,6 +24,7 @@ import {
   TRIBES,
   type GoodId,
   type NationId,
+  type TribeId,
   type Unit,
 } from '@cc/engine';
 import type { App } from '../app.js';
@@ -28,6 +32,21 @@ import { h } from '../dom.js';
 import { choose, type Choice } from './dialogs.js';
 
 type Deal = { kind: 'sell' | 'buy'; good: GoodId };
+
+/**
+ * The nation's lease of a people's land (land use, N5), in one paragraph: since when, the tiles
+ * beside its colonies, the rent set when it was made and when the next is due. Null without one.
+ */
+export function leaseLine(app: App, nation: NationId, people: TribeId): HTMLElement | null {
+  const s = app.state;
+  const t = landUseTreaty(s, nation, people);
+  const terms = t && leaseTerms(t);
+  if (!t || !terms) return null;
+  const cal = calendarOf(s);
+  const n = leasedTiles(s, nation, people).length;
+  return h('p', { class: 'small', 'data-lease': t.id },
+    `Land use with the ${TRIBES[people].name} since ${formatDate(t.start, cal)}: your colonies work ${n} ${n === 1 ? 'tile' : 'tiles'} of their land for ${terms.rent} gold a tile a year (${terms.rent * n} gold, next due ${formatDate(terms.due, cal)}). The land stays theirs.`);
+}
 
 /**
  * Trading with a native settlement: a wagon train or ship next to it may sell one kind of cargo
@@ -74,6 +93,7 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
       h('p', null, `The people here are ${mood}. They pay ${st.gold} gold at most, and want ${peopleOf(s, st.tribe).wants.map((g) => GOOD_DEFS[g].name.toLowerCase()).join(', ')}.`),
       treaty ? h('p', { class: 'small', 'data-treaty': treaty.id }, `Trade treaty with the ${TRIBES[st.tribe].name} since ${formatDate(treaty.start, calendarOf(s))}: ${peopleTradeBenefits(s)}.`) : null,
       standing ? h('p', { class: 'muted small' }, `The ${TRIBES[st.tribe].name}: ${standing.toLowerCase()}. No trade treaty yet (Foreign Affairs).`) : null,
+      leaseLine(app, unit.owner, st.tribe),
       options.length ? null : h('p', { class: 'muted' }, 'You have nothing to sell, and they have nothing for sale.'));
     const choice: Deal | null = await choose<Deal>(`Trade with the ${settlementName(s, st)}`, text, [...options, { label: traded ? 'Done' : 'Leave', value: null as unknown as Deal }]);
     if (!choice) return traded;

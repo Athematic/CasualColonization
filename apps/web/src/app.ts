@@ -65,7 +65,7 @@ import { REPORT_TABS, ReportsScreen } from './ui/reports.js';
 import { RoutesScreen } from './ui/routes.js';
 import { Sidebar } from './ui/sidebar.js';
 import { showTurnStart, sortNews } from './ui/turnstart.js';
-import { inciteDialog, nativeTradeDialog } from './ui/natives.js';
+import { inciteDialog, leaseLine, nativeTradeDialog } from './ui/natives.js';
 
 /**
  * Turns of movement a unit needs to walk a path: the rest of this turn's moves first (or a fresh
@@ -596,7 +596,10 @@ export class App {
       attack: 'Attack the settlement',
     } as const;
     const mood = tensionLabel(st.tension[this.viewer] ?? 0, nativeRulesOf(this.state).tension);
-    const choice = await choose(settlementName(this.state, st), `The people here are ${mood}. What will you do?`, [
+    // A lease of the people's land (land use, N5) is shown with its rent.
+    const lease = leaseLine(this, this.viewer, st.tribe);
+    const text = lease ? h('div', null, h('p', null, `The people here are ${mood}. What will you do?`), lease) : `The people here are ${mood}. What will you do?`;
+    const choice = await choose(settlementName(this.state, st), text, [
       ...actions.map((a) => ({ label: labels[a], value: a, disabled: (a === 'learn' && !st.skill) || (a === 'mission' && !!st.mission) })),
       { label: 'Leave', value: null },
     ]);

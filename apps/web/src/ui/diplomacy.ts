@@ -38,7 +38,11 @@ import {
   peopleStanding,
   peopleTradeBenefits,
   peopleTreatiesOn,
+  peopleTreatyOn,
   peopleTreatyProblem,
+  landUseBenefits,
+  leasedTiles,
+  leaseTerms,
   peopleTreatyRules,
   tensionLabel,
   tensionSeverity,
@@ -240,16 +244,26 @@ export class DiplomacyScreen implements Screen {
       const mood = war ? 'at war' : tensionLabel(tension, thresholds);
       const why = treaties ? peopleTreatyProblem(s, me.id, t.id) : null;
       const name = TRIBES[t.id].name;
+      // Land use (a lease, N5) is the next rung once trade is agreed.
+      const landOn = treaties && peopleTreatyOn(s, 'land-use');
+      const trading = inForce.some((x) => x.kind === 'people-trade');
+      const leasing = inForce.find((x) => x.kind === 'land-use');
+      const whyLand = landOn && trading && !leasing ? peopleTreatyProblem(s, me.id, t.id, 'land-use') : null;
+      const lease = leasing && leaseTerms(leasing);
+      const leaseText = lease ? `Land use (${leasedTiles(s, me.id, t.id).length} tiles, ${lease.rent} gold a tile a year)` : null;
       return h('tr', { 'data-people': t.id },
         h('td', null, h('span', { class: 'flag', style: `background:${TRIBES[t.id].color}` }), ' ', name),
         h('td', null, String(settlements.length)),
         h('td', null, h('span', { class: `pill ${war ? 'bad' : tensionSeverity(tension, thresholds)}` }, mood)),
         treaties ? h('td', { class: 'small' }, peopleStanding(s, me.id, t.id)) : null,
         treaties ? h('td', { class: 'small' },
-          inForce.length ? inForce.map((x) => treatyName(x)).join(', ') : null,
+          inForce.length ? inForce.map((x) => (x === leasing && leaseText ? leaseText : treatyName(x))).join(', ') : null,
           !inForce.length && contact && !war
             ? h('button', { class: 'btn tiny', 'data-action': 'propose-people-trade', disabled: !!why || !app.isMyTurn(), title: why ?? `Offer the ${name} a trade treaty: ${peopleTradeBenefits(s)}.`, 'aria-label': `Propose a trade treaty to the ${name}`, onclick: () => app.dispatch({ type: 'proposePeopleTreaty', people: t.id }) }, 'Propose')
-            : !inForce.length ? '—' : null) : null,
+            : !inForce.length ? '—' : null,
+          landOn && trading && !leasing && !war
+            ? [' ', h('button', { class: 'btn tiny', 'data-action': 'propose-land-use', disabled: !!whyLand || !app.isMyTurn(), title: whyLand ?? `Ask the ${name} to lease you their land beside your colonies: ${landUseBenefits(s)}.`, 'aria-label': `Propose land use to the ${name}`, onclick: () => app.dispatch({ type: 'proposePeopleTreaty', people: t.id, kind: 'land-use' }) }, 'Lease land')]
+            : null) : null,
         h('td', null, String(missions)),
         h('td', null, h('div', { class: 'row' }, [100, 500].map((gold) =>
           h('button', { class: 'btn tiny', disabled: me.gold < gold, onclick: () => this.gift(t.id, gold) }, String(gold))))));
@@ -263,7 +277,8 @@ export class DiplomacyScreen implements Screen {
       folded.length ? h('details', null, h('summary', { class: 'small' }, `Seen, not yet met (${folded.length})`), h('div', { class: 'table-scroll' }, h('table', { class: 'table' }, head(), folded.map(row)))) : null,
       !rows.length ? h('p', { class: 'muted small' }, 'You have not met any native peoples yet.') : null,
       h('p', { class: 'muted small' }, 'Colonies near native land raise tension, especially as they grow. Trade, gifts and missions calm it; uneasy tribes demand tribute, angry ones raid and furious ones go to war.'),
-      treaties ? h('p', { class: 'muted small' }, `After years of good relations${peopleTreatyRules(s).trade.volume.max > 0 ? ' and trade' : ''}, a people you have met (a scout’s visit, a mission or trade) may agree to a trade treaty, or offer one through a visiting brave: ${peopleTradeBenefits(s)}. Taking a partner’s land, attacking it or paying it to make war breaks faith: every treaty with that people ends, and it will not trust you again for many years.`) : null);
+      treaties ? h('p', { class: 'muted small' }, `After years of good relations${peopleTreatyRules(s).trade.volume.max > 0 ? ' and trade' : ''}, a people you have met (a scout’s visit, a mission or trade) may agree to a trade treaty, or offer one through a visiting brave: ${peopleTradeBenefits(s)}. Taking a partner’s land, attacking it or paying it to make war breaks faith: every treaty with that people ends, and it will not trust you again for many years.`) : null,
+      treaties && peopleTreatyOn(s, 'land-use') ? h('p', { class: 'muted small' }, `With a trade treaty and more years of good relations, a people may lease you its land: ${landUseBenefits(s)}. The rent is paid each year; if you cannot pay, the lease lapses. You may still buy a leased tile; taking one breaks faith.`) : null);
   }
 
   /**
