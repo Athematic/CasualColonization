@@ -207,6 +207,10 @@ export interface Cooperation {
   foundCompany: number;
   /** Chance per review that a nation with gold to spare buys shares in a company. */
   buyShares: number;
+  /** Gold a computer nation wants beyond a company's capital and its own reserve before it founds one, as a share of the capital (0.5). */
+  foundMargin: number;
+  /** Gold a computer nation wants beyond the price of five shares and its own reserve before it buys them (1,500). */
+  sharesMargin: number;
   /** Chance per review that a nation with allies and gold to spare proposes a joint expedition. */
   jointExpedition: number;
   /** Chance per review that a nation ready for independence proposes to an ally that is ready too to declare together. */

@@ -56,7 +56,7 @@ export const ALLIANCE_RULES: AllianceRules = {
  * computer-only tournaments to give an alliance in about one game in four and a concord victory
  * about once in 30–40 games (docs/design/cooperation.md, C11).
  */
-export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace: 0.001, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1, jointExpedition: 0.05, confederation: 0.6, confederationReadiness: 0.65 };
+export const COOPERATION: Cooperation = { proposeAlliance: 0.5, proposeLongPeace: 0.001, acceptAlliance: 0.8, joinWar: 0.8, foundCompany: 0.03, buyShares: 0.1, foundMargin: 0.5, sharesMargin: 1500, jointExpedition: 0.05, confederation: 0.6, confederationReadiness: 0.65 };
 
 /**
  * Each level's share of COOPERATION's chances: Creative seeks alliances out, Naive never proposes.

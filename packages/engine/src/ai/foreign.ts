@@ -304,8 +304,8 @@ export const LEVEL_COMPANIES: Record<AiLevel, number> = { naive: 0, competent: 0
 
 /**
  * Chartered companies (companies.ts): a nation with gold to spare founds a company it may charter
- * (half as much again as the capital, plus its reserve), or buys five shares in one that exists (their
- * price, plus its reserve and 1,500 more), each at a seeded chance per review: the scenario's
+ * (the capital and `foundMargin` of it again, plus its reserve), or buys five shares in one that
+ * exists (their price, plus its reserve and `sharesMargin` more), each at a seeded chance per review: the scenario's
  * `foundCompany` and `buyShares` times the level's share. Not before the turn it would start wars,
  * nor once it has declared independence.
  */
@@ -316,13 +316,13 @@ function companyAffairs(s: GameState, p: Player, prof: AiProfile): void {
   if (!share) return;
   for (const entry of companyCharters(s)) {
     const capital = companyRules(s).capital;
-    if (foundProblem(s, p.id, entry.id) || p.gold < capital * 1.5 + prof.reserve) continue;
+    if (foundProblem(s, p.id, entry.id) || p.gold < capital * (1 + coop.foundMargin) + prof.reserve) continue;
     if (pairRandom(s, p.id, entry.id, `found ${s.turn}`) >= coop.foundCompany * share) continue;
     foundCompany(s, p.id, entry.id);
     return;
   }
   for (const co of companies(s)) {
-    if (p.gold < sharePrice(s, co) * 5 + prof.reserve + 1500 || sharesProblem(s, p.id, co.id, 5)) continue;
+    if (p.gold < sharePrice(s, co) * 5 + prof.reserve + coop.sharesMargin || sharesProblem(s, p.id, co.id, 5)) continue;
     if (pairRandom(s, p.id, co.id, `shares ${s.turn}`) >= coop.buyShares * share) continue;
     buyShares(s, p.id, co.id, 5);
     return;

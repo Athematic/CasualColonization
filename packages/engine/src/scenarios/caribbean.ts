@@ -337,7 +337,7 @@ export const CARIBBEAN: Scenario = {
     pace: 0.35,
     // Settlers sail to other islands when theirs is full.
     islands: true,
-    cooperation: { proposeAlliance: 0.03, foundCompany: 0.12, buyShares: 0.25 },
+    cooperation: { proposeAlliance: 0.03, foundCompany: 0.12, buyShares: 0.25, foundMargin: 0, sharesMargin: 500 },
     goods: {
       trade: ['silver', 'sugar', 'tobacco', 'cotton', 'ore', 'rum', 'cigars', 'cloth', 'horses'],
       export: ['sugar', 'tobacco', 'cotton', 'ore', 'silver', 'rum', 'cigars', 'cloth'],
