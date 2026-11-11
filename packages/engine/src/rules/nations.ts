@@ -233,7 +233,7 @@ export const TRIBES: Record<TribeId, PeopleDef> = {
   /**
    * The Algonquin of the Ottawa valley (Anishinaabeg, as they call themselves with their Ojibwe and
    * Odawa kin): hunters and traders who held the river route to the interior; the Kichesipirini of
-   * Morrison Island took tolls from those who passed.
+   * Allumette Island, on the Ottawa, took tolls from those who passed.
    */
   algonquin: { id: 'algonquin', name: 'Algonquin', color: '#4f7a5a', lifeway: 'nomadic', skills: ['expertFurTrapper', 'masterFurTrader', 'seasonedScout'], wants: ['tools', 'tradeGoods', 'muskets'] },
   /**

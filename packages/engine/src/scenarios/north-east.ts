@@ -129,7 +129,8 @@ const N = {
     // The Basque whaling fleets sailed in numbers each year.
     bonus: { text: 'Whaling fleets: a second caravel waits in the home port from the start.', modifiers: [{ hook: 'startingDocks', units: ['caravel'] }] },
     colonyNames: [
-      // The Basque whaling harbours of the Strait of Belle Isle, and Placentia's Basque name.
+      // The Basque whaling harbours of the Strait of Belle Isle as the Basque records name them (Red Bay
+      // was Butus), and Placentia's Basque name: from Barkham's work, to be checked (note, section 13).
       'Butus', 'Plazentzia', 'Gradun', 'Puerto Nuevo', 'Puerto de los Hornos',
       // In the style of the Basque whaling ports of Gipuzkoa and Bizkaia.
       'Donostia Berria', 'Pasaia Berria', 'Orio', 'Getaria', 'Zumaia', 'Mutriku', 'Deba', 'Hondarribia', 'Lekeitio', 'Bermeo',
@@ -205,21 +206,21 @@ const PLAYABLE: PlayablePeople[] = [
     name: 'the Wendat',
     adjective: 'Wendat',
     // Wendat towns of the 1620s–1640s, as the Jesuits recorded them.
-    townNames: ['Ossossané', 'Teanaostaiaé', 'Taenhatentaron', 'Cahiagué', 'Ihonatiria', 'Scanonaenrat', 'Contarea', 'Taenhatentaron', 'Arontaen'],
+    townNames: ['Ossossané', 'Teanaostaiaé', 'Taenhatentaron', 'Cahiagué', 'Ihonatiria', 'Scanonaenrat', 'Contarea', 'Toanché', 'Arontaen'],
   },
   {
     id: 'mikmaq',
     name: "the Mi'kmaq",
     adjective: "Mi'kmaw",
-    // Places of Mi'kma'ki by their Mi'kmaw names, kept today (Halifax, the Shubenacadie, Antigonish, Pictou, Richibucto, Restigouche).
-    townNames: ['Kjipuktuk', 'Sipekne’katik', 'Nalkitkoniash', 'Piktuk', 'Elsipogtog', 'Listuguj', 'Esgenoôpetitj', 'Unama’ki', 'Epekwitk', 'Wagmatcook', 'Eskasoni'],
+    // Places of Mi'kma'ki by their Mi'kmaw names, used today (Halifax, the Shubenacadie, Pictou, Richibucto, Restigouche, Burnt Church, Cape Breton, Prince Edward Island).
+    townNames: ['Kjipuktuk', "Sipekne'katik", 'Piktuk', 'Elsipogtog', 'Listuguj', 'Esgenoôpetitj', "Unama'ki", 'Epekwitk', 'Wagmatcook', 'Eskasoni'],
   },
   {
     id: 'innu',
     name: 'the Innu',
     adjective: 'Innu',
-    // Innu places of Nitassinan by their Innu names (Tadoussac, Sept-Îles, Mingan, Natashquan, Sheshatshiu, Mashteuiatsh).
-    townNames: ['Totouskak', 'Uashat', 'Ekuanitshit', 'Nutashkuan', 'Sheshatshiu', 'Mashteuiatsh', 'Pessamit', 'Unamen Shipu', 'Pakua Shipi', 'Matimekush'],
+    // Innu communities of Nitassinan by their Innu names (Sept-Îles, Mingan, Natashquan, Sheshatshiu, Mashteuiatsh, Betsiamites, La Romaine, Saint-Augustin, Schefferville, Natuashish).
+    townNames: ['Uashat', 'Ekuanitshit', 'Nutashkuan', 'Sheshatshiu', 'Mashteuiatsh', 'Pessamit', 'Unamen Shipu', 'Pakua Shipi', 'Matimekush', 'Natuashish'],
   },
 ];
 
