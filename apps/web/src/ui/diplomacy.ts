@@ -40,6 +40,7 @@ import {
   tradeTies,
   treatyName,
   TRIBES,
+  withPeople,
   type NationId,
   type Player,
   type TribeId,
@@ -224,8 +225,9 @@ export class DiplomacyScreen implements Screen {
   }
 
   /**
-   * Treaties: those in force between any European nations (they are public), yours first, then
-   * your past ones, most recent first.
+   * Treaties: those in force between any European nations, or between a nation and a native
+   * people (they are public), yours first, then your past ones, most recent first. A party is
+   * named by `describeTreaty` ("France and the Kalinago").
    */
   private treatyCard(): HTMLElement | null {
     const s = this.app.state;
@@ -241,7 +243,7 @@ export class DiplomacyScreen implements Screen {
     return h('div', { class: 'card treaties' },
       h('h3', null, 'Treaties'),
       mine.length ? h('ul', { class: 'treaty-list' }, mine.map(item)) : h('p', { class: 'muted small' }, 'You have no treaties in force.'),
-      others.length ? h('details', null, h('summary', { class: 'small' }, `Between other nations (${others.length})`), h('ul', { class: 'treaty-list' }, others.map(item))) : null,
+      others.length ? h('details', null, h('summary', { class: 'small' }, `${others.some(withPeople) ? 'Between others' : 'Between other nations'} (${others.length})`), h('ul', { class: 'treaty-list' }, others.map(item))) : null,
       past.length ? h('details', null, h('summary', { class: 'small' }, `Your past treaties (${past.length})`), h('ul', { class: 'treaty-list muted' }, past.map(item))) : null);
   }
 

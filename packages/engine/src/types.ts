@@ -450,11 +450,18 @@ export interface Relation {
 }
 
 /**
- * The kinds of treaty between European nations (docs/design/cooperation.md, C9): a trade
- * agreement, Favoured Nation status and, from Beta 1, an alliance. Beta 2's treaties with native
- * peoples are meant to reuse the record.
+ * The kinds of treaty: between European nations (docs/design/cooperation.md, C9) a trade
+ * agreement, Favoured Nation status, an alliance and a confederation; between one nation and one
+ * native people (docs/design/native-partners.md, N1) the `PeopleTreatyKind`s. A kind says what is
+ * agreed, not who agrees, so code that reads European kinds (`'trade'`) never meets a people.
  */
-export type TreatyKind = 'trade' | 'favoured' | 'alliance' | 'confederation';
+export type TreatyKind = 'trade' | 'favoured' | 'alliance' | 'confederation' | PeopleTreatyKind;
+
+/**
+ * Treaties between a nation and a native people (Beta 2, N1–N7): a trade treaty, land use,
+ * cultural exchange and mutual defence. Step 0 only names them; none is made yet.
+ */
+export type PeopleTreatyKind = 'people-trade' | 'land-use' | 'exchange' | 'defence';
 
 /** How a treaty ended. */
 export interface TreatyEnd {
@@ -469,10 +476,12 @@ export interface TreatyEnd {
 }
 
 /**
- * A party to a treaty. Only European nations for now; the shape leaves room for other kinds of
- * party later (Beta 2's native peoples) without changing the record.
+ * A party to a treaty: a European nation, or a native people (Beta 2, native-partners.md N1), by
+ * the people's one id (`TribeId`), the id it would keep as a nation of its own later. Read parties
+ * through the helpers in treaties.ts (`partyIsNation`, `partyIsPeople`, `treatyNations`,
+ * `treatyPeoples`), never by assuming that every party is a player.
  */
-export type TreatyParty = { kind: 'nation'; id: NationId };
+export type TreatyParty = { kind: 'nation'; id: NationId } | { kind: 'people'; id: TribeId };
 
 /**
  * A treaty (treaties.ts). Treaties are kept after they end, with `end` set, so the diplomacy

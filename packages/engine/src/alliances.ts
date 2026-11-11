@@ -27,7 +27,7 @@ import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, scenarioOf, tu
 import type { AllianceRules, Cooperation, YearsAround } from './scenarios/types.js';
 import type { AiLevel } from './ai/profiles.js';
 import { track } from './telemetry.js';
-import { addTreaty, bound, endTreaty, treatyNations } from './treaties.js';
+import { addTreaty, bound, endTreaty, nationParty, sameParty, treatyNations } from './treaties.js';
 import type { AllianceTerms, GameState, Treaty, Unit } from './types.js';
 import { removeUnit, setUnitLoc } from './unitindex.js';
 import type { GoodId } from './rules/goods.js';
@@ -251,7 +251,7 @@ export function aiAcceptsAlliance(s: GameState, ai: NationId, from: NationId): b
 export function makeAlliance(s: GameState, a: NationId, b: NationId): string {
   const existing = allianceOf(s, a) ?? allianceOf(s, b);
   const newcomer = existing ? (bound(existing, a) ? b : a) : b;
-  if (existing) existing.parties.push({ kind: 'nation', id: newcomer });
+  if (existing) existing.parties.push(nationParty(newcomer));
   else addTreaty(s, 'alliance', [relation(s, a, b).a, relation(s, a, b).b], { ...ALLIANCE_TERMS });
   const t = allianceOf(s, a)!;
   shareExplored(s, treatyNations(t));
@@ -289,8 +289,9 @@ export function leaveAlliance(s: GameState, by: NationId, war?: NationId): strin
   if (!war) track(by, 'cmd:leaveAlliance');
   track(by, 'diplomacy:alliance left');
   const former = treatyNations(t).filter((n) => n !== by);
-  t.parties = t.parties.filter((p) => !(p.kind === 'nation' && p.id === by));
-  (t.left = t.left ?? []).push({ party: { kind: 'nation', id: by }, turn: s.turn });
+  const leaver = nationParty(by);
+  t.parties = t.parties.filter((p) => !sameParty(p, leaver));
+  (t.left = t.left ?? []).push({ party: leaver, turn: s.turn });
   if (t.parties.length < 2) endTreaty(s, t, war ? 'war' : 'left', by);
   const rules = allianceRules(s);
   for (const o of former) {
