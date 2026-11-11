@@ -18,7 +18,7 @@ import { calendarOf, formatDate } from './scenarios/index.js';
 import { checkVictory } from './victory.js';
 import { recordStats } from './stats.js';
 import type { GameState, Player, Unit } from './types.js';
-import { indexedUnitsOf } from './unitindex.js';
+import { indexedUnitsOf, colonyList } from './unitindex.js';
 
 /** Resets a player's units and carries out standing orders at the start of their turn. */
 export function beginPlayerTurn(s: GameState, p: Player): void {
@@ -84,7 +84,7 @@ function finishPlayerTurn(s: GameState, p: Player): void {
   if (p.finished) return;
   track(p.id, 'cmd:endTurn');
   let t = perfStart();
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner === p.id) processColony(s, c);
   }
   perfEnd('end of turn: colony production', t);

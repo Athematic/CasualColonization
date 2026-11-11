@@ -23,7 +23,7 @@ import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
 import { difficultyOf, goodsOf, mechanicsOf, nationOf, nativeProduceOf, peopleOf } from './scenarios/index.js';
-import { removeUnit } from './unitindex.js';
+import { removeUnit, colonyList } from './unitindex.js';
 
 /**
  * The settlement next to a unit, checked for a visit. A wagon train or ship trading there may
@@ -292,7 +292,7 @@ export function establishMission(s: GameState, unitId: string, settlementId: str
 function nearestColony(s: GameState, nation: NationId, x: number, y: number, within: number) {
   const grid = gridOf(s);
   let best: Colony | undefined;
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner !== nation) continue;
     const d = grid.distance(c.x, c.y, x, y);
     if (d <= within && (!best || d < grid.distance(best.x, best.y, x, y))) best = c;
@@ -322,7 +322,7 @@ export function processNatives(s: GameState): void {
   // each colony within 3 tiles. Nothing below founds, moves, gives away or repeoples a colony (a
   // convert joins on the map), so each colony's pressure is worked out once; the sums are of whole
   // numbers, so their order does not matter.
-  const colonies = Object.values(s.colonies);
+  const colonies = colonyList(s);
   const weight = colonies.map((c) => 3 + Math.floor(colonyPopulation(s, c) / 2));
   const pressureOn = new Map<string, number>();
   for (const st of Object.values(s.settlements)) {

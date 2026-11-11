@@ -315,6 +315,8 @@ interface ColonyIndex {
   byTile: Map<number, Colony>;
   /** The last colony in key order on each tile (two share a tile only in tests), as path searches kept it. */
   lastByTile: Map<number, Colony>;
+  /** Every colony in key order, as Object.values gives them (much faster to walk than the record). */
+  list: Colony[];
 }
 
 const colonyIndexes = new WeakMap<Colonies, ColonyIndex>();
@@ -322,10 +324,11 @@ const colonyIndexes = new WeakMap<Colonies, ColonyIndex>();
 function colonyIndex(s: GameState): ColonyIndex | undefined {
   let ix = colonyIndexes.get(s.colonies);
   if (ix && ix.width === s.map.width && ix.height === s.map.height) return ix;
-  ix = { width: s.map.width, height: s.map.height, byTile: new Map(), lastByTile: new Map() };
+  ix = { width: s.map.width, height: s.map.height, byTile: new Map(), lastByTile: new Map(), list: [] };
   for (const id in s.colonies) {
     if (INDEX_LIKE.test(id)) return undefined;
     const c = s.colonies[id];
+    ix.list.push(c);
     const k = colonyTileKey(ix, c.x, c.y);
     // The first colony in key order wins, as in the scan.
     if (k >= 0 && !ix.byTile.has(k)) ix.byTile.set(k, c);
@@ -370,6 +373,20 @@ export function colonyTiles(s: GameState): ReadonlyMap<number, Colony> {
     if (c.x >= 0 && c.y >= 0 && c.x < w && c.y < s.map.height) out.set(c.y * w + c.x, c);
   }
   if (ix && (ix.lastByTile.size !== out.size || [...out].some(([k, c]) => ix.lastByTile.get(k) !== c))) throw new Error('Stale colony index for colonyTiles');
+  return out;
+}
+
+/**
+ * Every colony, in key order: what Object.values(s.colonies) returns, without walking the record
+ * (a record that colonies have left is slow to walk). Shared with the index: read it, never change
+ * it. Founding or losing a colony gives the index a new list, so a list in hand stays as it was,
+ * as Object.values' copy would; a colony's owner and the rest are read from the colony.
+ */
+export function colonyList(s: GameState): readonly Colony[] {
+  const ix = colonyIndex(s);
+  if (ix && !checks) return ix.list;
+  const out = Object.values(s.colonies);
+  if (ix && (ix.list.length !== out.length || out.some((c, i) => ix.list[i] !== c))) throw new Error('Stale colony index for colonyList');
   return out;
 }
 

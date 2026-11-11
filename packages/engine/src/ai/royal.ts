@@ -18,6 +18,7 @@ import { ROLES, UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState, Player, Unit } from '../types.js';
 import { ownColonies, safely } from './common.js';
 import type { AiProfile } from './profiles.js';
+import { colonyList } from '../unitindex.js';
 
 /** A demand at most this share of the treasury is cheap: paid whatever refusing would cost. */
 export const CHEAP_DEMAND = 0.15;
@@ -262,7 +263,7 @@ function royalWarTurn(s: GameState, p: Player, prof: AiProfile, strength: number
   if (target && target.owner === enemy) return;
   if (prof.aggression >= 0.5) {
     const ours = ownColonies(s, p);
-    const prey = Object.values(s.colonies)
+    const prey = colonyList(s)
       .filter((c) => c.owner === enemy && ours.some((o) => grid.distance(o.x, o.y, c.x, c.y) <= 10))
       .map((c) => ({ c, score: strength / (unitsAt(s, c.x, c.y).filter((u) => u.owner === enemy && !isShip(u)).reduce((n, u) => n + defencePower(s, u), 0) + 1) }))
       .sort((a, b) => b.score - a.score)[0];

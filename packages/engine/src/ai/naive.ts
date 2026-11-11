@@ -12,7 +12,7 @@ import type { Colony, GameState, Player, Unit } from '../types.js';
 import { aiFight, boardRescue, disembarkAll, fetchStranded, guardColony, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
 import { crownAffairs } from './royal.js';
 import { aiGoodsOf, goodsOf } from '../scenarios/index.js';
-import { indexedUnitsOf, ownedUnitsView } from '../unitindex.js';
+import { indexedUnitsOf, ownedUnitsView, colonyList } from '../unitindex.js';
 
 const BUILD_PREFERENCE: BuildingKind[] = ['docks', 'stockade', 'warehouse', 'carpenter', 'printingPress', 'church', 'schoolhouse', 'customHouse', 'armory'];
 
@@ -27,7 +27,7 @@ export function runNaive(s: GameState, p: Player): void {
     safely(() => aiUnit(s, p, u));
   }
   safely(() => aiEurope(s, p));
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner === p.id) safely(() => aiColony(s, c));
   }
 }

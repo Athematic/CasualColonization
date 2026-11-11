@@ -11,6 +11,7 @@ import { ROLES, UNIT_TYPES } from './rules/units.js';
 import { score } from './score.js';
 import type { GameState, StatsHistory } from './types.js';
 import { goodsOf } from './scenarios/index.js';
+import { colonyList } from './unitindex.js';
 
 /** What each snapshot holds, in order. Per-turn values are rates; the rest are levels. */
 export const STAT_KEYS = [
@@ -152,7 +153,7 @@ export function statsSnapshot(s: GameState, nation: NationId, c: StatsCensus = c
   let colonies = 0;
   let population = 0;
   let rebels = 0;
-  for (const col of Object.values(s.colonies)) {
+  for (const col of colonyList(s)) {
     if (col.owner !== nation) continue;
     const n = c.pop.get(col.id) ?? 0;
     colonies++;

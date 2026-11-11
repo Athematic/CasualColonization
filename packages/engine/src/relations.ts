@@ -20,6 +20,7 @@ import { track } from './telemetry.js';
 import { addTreaty, endTreaty, treatyBetween } from './treaties.js';
 import { aiAcceptsAlliance, aiAcceptsExpedition, allianceProblem, expeditionProblem, isAllied, leaveAlliance, makeAlliance, makeExpedition } from './alliances.js';
 import type { GameState, ProposalKind, Relation, RouteCargo, Unit } from './types.js';
+import { colonyList } from './unitindex.js';
 
 /** Years of peace needed for Favoured Nation: 10, plus or minus up to 2. */
 export const PEACE_YEARS = { base: 10, spread: 2 };
@@ -516,7 +517,7 @@ function sendShipsHome(s: GameState, a: NationId, b: NationId): void {
  */
 function seizeGoods(s: GameState, by: NationId, from: NationId): string {
   const grid = gridOf(s);
-  const colonies = Object.values(s.colonies).filter((c) => c.owner === by);
+  const colonies = colonyList(s).filter((c) => c.owner === by);
   if (!colonies.length) return '';
   let total = 0;
   for (const u of Object.values(s.units)) {

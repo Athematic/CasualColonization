@@ -9,6 +9,7 @@ import { colonyAt, isShip } from './queries.js';
 import { BUILDINGS, BUILDING_ORDER } from './rules/buildings.js';
 import { COLONY_BUILDS, PURCHASABLE, TRAINABLE, UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import type { GameState } from './types.js';
+import { colonyList } from './unitindex.js';
 
 export type FeatureCounts = Record<string, number>;
 
@@ -119,7 +120,7 @@ export const FEATURE_CATALOG: { id: string; kind: FeatureKind }[] = [
 export function endStateFeatures(s: GameState, nation: string): FeatureCounts {
   const grid = gridOf(s);
   const out: FeatureCounts = {};
-  const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
+  const colonies = colonyList(s).filter((c) => c.owner === nation);
   const w = s.map.width;
   const near = new Set<number>();
   for (const c of colonies) {

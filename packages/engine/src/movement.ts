@@ -28,7 +28,7 @@ import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
 import type { TribeId } from './rules/nations.js';
 import type { Colony, GameState, ImprovementKind, Player, Unit } from './types.js';
 import { mechanicsOf, term } from './scenarios/index.js';
-import { colonyTiles, setUnitLoc, unitTiles } from './unitindex.js';
+import { colonyTiles, setUnitLoc, unitTiles, colonyList } from './unitindex.js';
 import { alliesOf, colonyOpenTo, isAllied } from './alliances.js';
 
 export type MoveOption =
@@ -803,7 +803,7 @@ export function advanceWork(s: GameState, u: Unit): void {
   if (kind === 'clear') {
     delete tile.f;
     const grid = gridOf(s);
-    const colony = Object.values(s.colonies).find((c) => c.owner === u.owner && grid.distance(c.x, c.y, at.x, at.y) <= grid.workRadius);
+    const colony = colonyList(s).find((c) => c.owner === u.owner && grid.distance(c.x, c.y, at.x, at.y) <= grid.workRadius);
     if (colony) {
       colony.goods.lumber += 20;
       message(s, `Clearing the forest brought 20 lumber to ${colony.name}.`, u.owner, colony);

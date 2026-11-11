@@ -55,7 +55,7 @@ import { TERRAIN } from './rules/terrain.js';
 import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from './types.js';
 import { difficultyOf, goodsOf, nativeProduceOf, peopleOf, settlementKindOf } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
-import { removeUnit } from './unitindex.js';
+import { removeUnit, colonyList } from './unitindex.js';
 
 /** The kind of a settlement in its game's scenario (camp, village, city…), with its numbers. */
 export function settlementKind(s: GameState, st: Settlement): SettlementKindDef {
@@ -187,7 +187,7 @@ interface PhaseIndex {
 function buildIndex(s: GameState): PhaseIndex {
   const w = s.map.width;
   const colonies = new Map<number, Colony>();
-  for (const c of Object.values(s.colonies)) colonies.set(c.y * w + c.x, c);
+  for (const c of colonyList(s)) colonies.set(c.y * w + c.x, c);
   const units = new Map<number, Unit[]>();
   for (const u of Object.values(s.units)) {
     if (u.loc.kind !== 'map' || isShip(u)) continue;
@@ -312,7 +312,7 @@ function nearestColony(s: GameState, st: Settlement): Colony | undefined {
   const grid = gridOf(s);
   let best: Colony | undefined;
   let bestD = Infinity;
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner === 'crown') continue;
     const d = grid.distance(c.x, c.y, st.x, st.y);
     if (d <= VISIT_RANGE && d < bestD) {

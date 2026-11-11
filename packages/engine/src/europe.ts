@@ -22,7 +22,7 @@ import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import { PIONEER_MAX_TOOLS, PURCHASABLE, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
 import type { GameState, MarketEntry, Player, Unit, UnitLocation } from './types.js';
 import { difficultyOf, goodsOf, mechanicsOf, nationOf, portMarketOf, term, Term, unitsOf, type ScenarioLike } from './scenarios/index.js';
-import { setUnitLoc, removeUnit } from './unitindex.js';
+import { setUnitLoc, removeUnit, colonyList } from './unitindex.js';
 
 export const SAIL_TURNS = 3;
 
@@ -196,7 +196,7 @@ export function answerTax(s: GameState, nation: Player['id'], accept: boolean): 
   }
   p.boycotts[pending.good] = true;
   const name = GOOD_DEFS[pending.good].name.toLowerCase();
-  const colony = Object.values(s.colonies)
+  const colony = colonyList(s)
     .filter((c) => c.owner === nation)
     .sort((a, b) => b.goods[pending.good] - a.goods[pending.good])[0];
   let text = `You refuse the tax. ${GOOD_DEFS[pending.good].name} is now boycotted in ${term(s, 'homeland')}.`;

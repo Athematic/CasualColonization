@@ -22,6 +22,7 @@ import { ROLES, UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { ledgerFor } from './history.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
 import { goodsOf, peopleOf, term } from './scenarios/index.js';
+import { colonyList } from './unitindex.js';
 
 // ---- Colonies ----
 
@@ -115,7 +116,7 @@ export function colonyOverview(s: GameState, colony: Colony): ColonyOverview {
 
 /** Every colony of a nation, with its overview, in founding order. */
 export function coloniesOverview(s: GameState, nation: NationId): ColonyOverview[] {
-  return Object.values(s.colonies)
+  return colonyList(s)
     .filter((c) => c.owner === nation)
     .sort((a, b) => a.founded - b.founded || a.id.localeCompare(b.id))
     .map((c) => colonyOverview(s, c));
@@ -145,7 +146,7 @@ export function tradeOverview(s: GameState, nation: NationId): TradeRow[] {
   const p = player(s, nation);
   const ports = [p, ...favouredPartners(s, nation).map((n) => player(s, n))];
   const ledger = ledgerFor(s, nation);
-  const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
+  const colonies = colonyList(s).filter((c) => c.owner === nation);
   return goodsOf(s).map((g) => ({
     good: g,
     prices: ports.map((q) => ({ port: q.id, sell: sellPrice(q, g), buy: buyPrice(s, q, g), tax: q.tax })),
@@ -279,7 +280,7 @@ export interface ReligionOverview {
 
 export function religionOverview(s: GameState, nation: NationId): ReligionOverview {
   const p = player(s, nation);
-  const colonies = Object.values(s.colonies)
+  const colonies = colonyList(s)
     .filter((c) => c.owner === nation)
     .map((c) => ({ colony: c, crosses: colonyReport(s, c).produced.crosses }))
     .filter((r) => r.crosses > 0)
@@ -347,7 +348,7 @@ export interface TribeOverview {
 export function nativesOverview(s: GameState, nation: NationId): TribeOverview[] {
   const grid = gridOf(s);
   const known = knownSettlementList(s, nation);
-  const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
+  const colonies = colonyList(s).filter((c) => c.owner === nation);
   const out: TribeOverview[] = [];
   for (const tribe of s.tribes) {
     const mine = known.filter((st) => st.tribe === tribe.id);
@@ -408,7 +409,7 @@ export interface CongressOverview {
 
 export function congressOverview(s: GameState, nation: NationId): CongressOverview {
   const p = player(s, nation);
-  const colonies = Object.values(s.colonies)
+  const colonies = colonyList(s)
     .filter((c) => c.owner === nation)
     .map((c) => {
       const pop = colonyWorkers(s, c).length;

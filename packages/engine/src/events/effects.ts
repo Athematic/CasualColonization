@@ -13,6 +13,7 @@ import { UNIT_TYPES } from '../rules/units.js';
 import type { Colony, GameState } from '../types.js';
 import type { Effect, EventVars, EventsState, GoodRef, Num } from './types.js';
 import { difficultyOf, goodsOf, portMarketOf } from '../scenarios/index.js';
+import { colonyList } from '../unitindex.js';
 
 /** What a point of tax is worth to a nation over the rest of a game, in gold (measured against 30-turn outcomes in docs/design/events.md). */
 export const TAX_POINT_VALUE = 150;
@@ -169,7 +170,7 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
       for (const c of ownColonies(s, p.id)) if (colonyWorkers(s, c).length >= e.minColonists && c.buildings.stockade === 0) c.buildings.stockade = 1;
       return;
     case 'revealColonies':
-      for (const c of Object.values(s.colonies)) reveal(s, p.id, c.x, c.y, e.radius);
+      for (const c of colonyList(s)) reveal(s, p.id, c.x, c.y, e.radius);
       return;
     case 'liberty':
       // 200 bells make one colonist a Son of Liberty (production.ts, sonsOfLiberty).
@@ -240,7 +241,7 @@ export function valueEffects(s: GameState, effects: Effect[], v: EventVars): num
         break;
       }
       case 'production': {
-        const cols = e.scope === 'nation' ? Object.values(s.colonies).filter((c) => c.owner === v.nation) : colony ? [colony] : [];
+        const cols = e.scope === 'nation' ? colonyList(s).filter((c) => c.owner === v.nation) : colony ? [colony] : [];
         for (const c of cols) total += (productionValue(s, c, e.products) * e.pct * e.turns) / 100;
         break;
       }
@@ -250,7 +251,7 @@ export function valueEffects(s: GameState, effects: Effect[], v: EventVars): num
       case 'price': {
         const g = goodOf(e.good, v);
         if (!g) break;
-        const stock = Object.values(s.colonies).reduce((n, c) => (c.owner === v.nation ? n + c.goods[g] : n), 0);
+        const stock = colonyList(s).reduce((n, c) => (c.owner === v.nation ? n + c.goods[g] : n), 0);
         const change = e.delta ?? (p.market[g].price * (e.pct ?? 0)) / 100;
         total += stock * change * 0.5;
         break;
@@ -316,7 +317,7 @@ export function damageableBuilding(colony: Colony): BuildingKind | undefined {
 }
 
 function ownColonies(s: GameState, nation: string): Colony[] {
-  return Object.values(s.colonies).filter((c) => c.owner === nation);
+  return colonyList(s).filter((c) => c.owner === nation);
 }
 
 /** Colonists working in a colony. */

@@ -9,13 +9,14 @@ import type { GoodId } from '../rules/goods.js';
 import type { NationId } from '../rules/nations.js';
 import type { Colony, GameState } from '../types.js';
 import type { EventVars, TargetSelector } from './types.js';
+import { colonyList } from '../unitindex.js';
 
 function pickOne<T>(items: T[], r: () => number): T | undefined {
   return items.length ? items[Math.floor(r() * items.length)] : undefined;
 }
 
 export function coloniesOf(s: GameState, nation: NationId): Colony[] {
-  return Object.values(s.colonies).filter((c) => c.owner === nation);
+  return colonyList(s).filter((c) => c.owner === nation);
 }
 
 /** The nation itself, while it is loyal to the Crown (Europe still trades with it). */

@@ -21,7 +21,7 @@ import { UNIT_TYPES } from './rules/units.js';
 import { track } from './telemetry.js';
 import type { GameState, RouteCargo, RouteStop, TradeRoute, Unit } from './types.js';
 import { goodsOf, nationOf, term, Term } from './scenarios/index.js';
-import { indexedUnitsOf, setUnitLoc } from './unitindex.js';
+import { indexedUnitsOf, setUnitLoc, colonyList } from './unitindex.js';
 
 export const EUROPE_STOP = 'europe';
 export const MAX_ROUTE_STOPS = 12;
@@ -67,7 +67,7 @@ export function isForeignStop(s: GameState, stop: RouteStop, owner: NationId): b
 
 /** Colonies of other nations a nation's routes may stop at: those of its trade partners. */
 export function foreignStopColonies(s: GameState, nation: NationId) {
-  return Object.values(s.colonies).filter((c) => c.owner !== nation && c.owner !== 'crown' && hasTradeAgreement(s, nation, c.owner) && atPeace(s, nation, c.owner));
+  return colonyList(s).filter((c) => c.owner !== nation && c.owner !== 'crown' && hasTradeAgreement(s, nation, c.owner) && atPeace(s, nation, c.owner));
 }
 
 /** Ships and wagon trains can follow routes. */

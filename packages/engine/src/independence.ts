@@ -30,13 +30,13 @@ import { crownSideOf } from './world.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
 import { concludeConfederation, confederationOf } from './confederation.js';
 import { treatyNations } from './treaties.js';
-import { removeUnit } from './unitindex.js';
+import { removeUnit, colonyList } from './unitindex.js';
 
 /** Share of all colonists, across every colony, who support independence. */
 export function rebelShare(s: GameState, nation: NationId): number {
   let pop = 0;
   let rebels = 0;
-  for (const c of Object.values(s.colonies)) {
+  for (const c of colonyList(s)) {
     if (c.owner !== nation) continue;
     const n = colonyWorkers(s, c).length;
     pop += n;
@@ -52,7 +52,7 @@ export function canDeclareIndependence(s: GameState, nation: NationId): string |
   const p = player(s, nation);
   if (p.kind === 'company') return 'A chartered company has no Crown to break with.';
   if (p.independence !== 'none') return 'Independence has already been declared.';
-  if (!Object.values(s.colonies).some((c) => c.owner === nation)) return 'You have no colonies.';
+  if (!colonyList(s).some((c) => c.owner === nation)) return 'You have no colonies.';
   const share = rebelShare(s, nation);
   if (share < DECLARE_AT) return `Only ${share}% of colonists support independence; ${DECLARE_AT}% are needed.`;
   return null;
@@ -75,7 +75,7 @@ export function declareIndependence(s: GameState, nation: NationId): string {
   const reason = canDeclareIndependence(s, nation);
   if (reason) fail(reason);
   const p = player(s, nation);
-  const colonies = Object.values(s.colonies).filter((c) => c.owner === nation);
+  const colonies = colonyList(s).filter((c) => c.owner === nation);
   p.independence = 'declared';
   track(nation, 'cmd:declareIndependence');
   p.tax = 0;
@@ -166,10 +166,10 @@ function landWave(s: GameState, p: Player): void {
   const ref = p.ref;
   if (ref.regulars + ref.dragoons + ref.artillery + ref.menOfWar === 0) return;
   const weight = (c: Colony) => colonyStrength(s, c) * (isToryColony(s, c) ? 0.5 : 1);
-  const targets = Object.values(s.colonies)
+  const targets = colonyList(s)
     .filter((c) => c.owner === p.id && isCoastal(s, c.x, c.y))
     .sort((a, b) => weight(a) - weight(b));
-  const all = targets.length ? targets : Object.values(s.colonies).filter((c) => c.owner === p.id);
+  const all = targets.length ? targets : colonyList(s).filter((c) => c.owner === p.id);
   for (const target of all) {
     const tiles = landingTiles(s, target);
     if (!tiles.length) continue;
@@ -224,8 +224,8 @@ function checkConfederationOutcome(s: GameState, members: Player[]): void {
   let outcome: 'won' | 'lost' | null = null;
   if (members.every(beaten)) outcome = 'won';
   else {
-    const held = Object.values(s.colonies).filter((c) => ids.has(c.owner)).length;
-    const lost = Object.values(s.colonies).filter((c) => c.owner === 'crown' && c.takenFrom && ids.has(c.takenFrom)).length;
+    const held = colonyList(s).filter((c) => ids.has(c.owner)).length;
+    const lost = colonyList(s).filter((c) => c.owner === 'crown' && c.takenFrom && ids.has(c.takenFrom)).length;
     const had = members.reduce((n, m) => n + (m.coloniesAtDeclaration ?? 1), 0);
     if (lost > 0 && held <= Math.floor(had / 2)) outcome = 'lost';
   }
@@ -266,8 +266,8 @@ function checkOutcome(s: GameState, p: Player): void {
     warEnded(s, p, 'won', text);
     return;
   }
-  const held = Object.values(s.colonies).filter((c) => c.owner === p.id).length;
-  const lost = Object.values(s.colonies).filter((c) => c.owner === 'crown' && c.takenFrom === p.id).length;
+  const held = colonyList(s).filter((c) => c.owner === p.id).length;
+  const lost = colonyList(s).filter((c) => c.owner === 'crown' && c.takenFrom === p.id).length;
   if (lost > 0 && held <= Math.floor((p.coloniesAtDeclaration ?? 1) / 2)) {
     p.independence = 'lost';
     track(p.id, 'independence:lost');
@@ -324,7 +324,7 @@ function crownUnit(s: GameState, u: Unit): void {
     if (prey && u.moves > 0) attack(s, u.id, { unitId: prey.id });
     return;
   }
-  const colonies = Object.values(s.colonies).filter(enemy);
+  const colonies = colonyList(s).filter(enemy);
   if (!colonies.length) return;
   const target = colonies.sort((a, b) => grid.distance(a.x, a.y, pos.x, pos.y) - grid.distance(b.x, b.y, pos.x, pos.y))[0];
   if (grid.distance(target.x, target.y, pos.x, pos.y) === 1) {
