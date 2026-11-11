@@ -69,6 +69,8 @@ const QUICK: Scenario = {
   id: 'test-exchange-quick',
   name: 'test-exchange-quick',
   peopleTreaties: { exchange: { years: { base: 2, spread: 1 }, teachYears: { base: 6, spread: 1 } } },
+  // Every Creative and Competent nation seeks an exchange with each trade partner.
+  ai: { ...EXCHANGE.ai, cooperation: { ...EXCHANGE.ai.cooperation, proposeExchange: 1 / LEVEL_COOPERATION.competent.exchange } },
 };
 registerScenario(QUICK);
 

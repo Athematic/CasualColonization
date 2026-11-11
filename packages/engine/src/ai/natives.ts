@@ -99,6 +99,7 @@ export function peopleAffairs(s: GameState, p: Player, prof?: AiProfile): void {
   const chance = cooperationOf(s).proposePeopleTrade * LEVEL_COOPERATION[p.ai ?? 'naive'].people;
   if (chance <= 0) return;
   const combative = p.ai === 'combative';
+  let learner = !prof?.learnFromNatives;
   for (const t of s.tribes) {
     const people: TribeId = t.id;
     const rel = peopleRelationOf(s, p.id, people);
@@ -106,7 +107,7 @@ export function peopleAffairs(s: GameState, p: Player, prof?: AiProfile): void {
     if (hasPeopleTrade(s, p.id, people)) {
       leaseLand(s, p, people);
       seekExchange(s, p, people);
-      if (prof?.learnFromNatives) sendLearner(s, p, people);
+      if (!learner) learner = sendLearner(s, p, people);
       continue;
     }
     if (combative && rel.volume < COMBATIVE_TREATY_VOLUME) continue;
@@ -140,16 +141,31 @@ function leaseLand(s: GameState, p: Player, people: TribeId): void {
 }
 
 /**
- * Proposes a cultural exchange (N7, N11) to a trade partner: Creative seeks it, Competent at a share
- * (`LEVEL_COOPERATION.exchange`), Combative and Naive never propose, at the scenario's
- * `proposeExchange` times the level's share, drawn from the pair's own stream.
+ * Proposes a cultural exchange (N7, N11) to a trade partner with a settlement within LEARNER_RANGE
+ * of one of the nation's colonies (where its colonists could learn): Creative seeks it, Competent at
+ * a share (`LEVEL_COOPERATION.exchange`), Combative and Naive never propose. Whether it seeks one
+ * with a people is drawn once per pair from the pair's own stream, at the scenario's
+ * `proposeExchange` times the level's share; a nation that does proposes on each review until the
+ * people agrees.
  */
 function seekExchange(s: GameState, p: Player, people: TribeId): void {
   if (!peopleTreatyOn(s, 'exchange') || hasExchange(s, p.id, people)) return;
   const chance = cooperationOf(s).proposeExchange * LEVEL_COOPERATION[p.ai ?? 'naive'].exchange;
   if (chance <= 0) return;
   if (peopleTreatyProblem(s, p.id, people, 'exchange') || peopleRefusal(s, p.id, people)) return;
-  if (peoplePairRandom(s, p.id, people, `${p.id} propose exchange ${s.turn}`) >= chance) return;
+  const grid = gridOf(s);
+  const colonies = ownColonies(s, p);
+  let near = false;
+  for (const id in s.settlements) {
+    const st = s.settlements[id];
+    if (st.tribe === people && colonies.some((c) => grid.distance(c.x, c.y, st.x, st.y) <= LEARNER_RANGE)) {
+      near = true;
+      break;
+    }
+  }
+  if (!near) return;
+  // Whether the nation wants an exchange with this people at all is drawn once per pair, not per review.
+  if (peoplePairRandom(s, p.id, people, `${p.id} seeks exchange`) >= chance) return;
   safely(() => proposePeopleTreaty(s, p.id, people, 'exchange'));
 }
 
@@ -162,11 +178,11 @@ const LEARNER_KEEP = 3;
  * Under a cultural exchange (N7), a settlement of the partner people that teaches again within
  * LEARNER_RANGE of one of the nation's colonies is sent a colonist: the least skilled free one (no
  * criminal, convert or teacher) of the nearest colony with more than LEARNER_KEEP colonists, one a
- * review. The colonist then walks there and learns as any colonist on the map does (advanced.ts
- * colonistTurn), and joins a colony afterwards.
+ * review for the whole nation. The colonist then walks there and learns as any colonist on the map
+ * does (advanced.ts colonistTurn), and joins a colony afterwards. Returns whether one was sent.
  */
-function sendLearner(s: GameState, p: Player, people: TribeId): void {
-  if (!peopleTreatyOn(s, 'exchange') || !hasExchange(s, p.id, people)) return;
+function sendLearner(s: GameState, p: Player, people: TribeId): boolean {
+  if (!peopleTreatyOn(s, 'exchange') || !hasExchange(s, p.id, people)) return false;
   const grid = gridOf(s);
   const colonies = ownColonies(s, p);
   for (const id in s.settlements) {
@@ -182,7 +198,12 @@ function sendLearner(s: GameState, p: Player, people: TribeId): void {
       .filter((w) => UNIT_TYPES[w.type].skill <= 0 && w.type !== 'pettyCriminal' && w.type !== 'nativeConvert' && !w.teach)
       .sort((a, b) => UNIT_TYPES[a.type].skill - UNIT_TYPES[b.type].skill || (a.id < b.id ? -1 : 1))[0];
     if (!learner) continue;
-    safely(() => leaveColony(s, learner.id));
-    return;
+    let sent = false;
+    safely(() => {
+      leaveColony(s, learner.id);
+      sent = true;
+    });
+    return sent;
   }
+  return false;
 }
