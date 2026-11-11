@@ -187,7 +187,9 @@ With `mechanics.companies` on, `Scenario.nations.companies` lists the companies 
 - `extras`: the chance per tile of bonus resources, coastal bonus resources and Lost City Rumours, and the terrains without rumours.
 - `settlements`: terrains without settlements (`avoid`) and the least `spacing` in tiles.
 - `crown`: `'entry'` (the Crown's forces sail in from the map's arrival edge) or a fixed edge.
-- `grid`: the shape of the tiles, see [The map grid](#the-map-grid). Optional; squares when absent.
+- `grid`: the shape of the tiles, `'square'` or `'hex'`, see [The map grid](#the-map-grid). Optional; squares when absent.
+- `hex`: on hexes, `{ orientation: 'pointy' | 'flat' }`. Read only when `grid` is `'hex'`; pointy-top when absent.
+- `workArea`: the rings of tiles a colony works and what opens each, see [The colony work area](#the-colony-work-area). Optional; the first ring only when absent.
 
 Settlement kinds are rows of `SETTLEMENT_KINDS` (`rules/natives.ts`): `camp`, `village` and `city`, each with its size, braves, respawn time, production rate and cap, incite and land prices, treasure and `landRadius`. A people has a `lifeway` (`nomadic`, `agricultural` or `urban`), and `Scenario.peoples.settlements` gives each lifeway the row it lives in. Every people in play needs its lifeway there. A scenario may write a row of its own.
 
@@ -249,9 +251,27 @@ The Americas and the Caribbean switch on all four kinds. The Caribbean needs no 
 
 ## The map grid
 
-`Scenario.map.grid` names the grid the scenario's maps use. `'square'` is the only grid so far, and a scenario that leaves `grid` out plays on squares, so no scenario needs to set it yet. Hexagons are planned as a later option (see "Hex maps as a scenario option" in [ROADMAP.md](ROADMAP.md)).
+`Scenario.map.grid` names the grid the scenario's maps use: `'square'` (the default when `grid` is left out; the Americas and the Caribbean) or `'hex'` (Beta 4, [design/hex-maps.md](design/hex-maps.md)). A hex scenario chooses its orientation with `map.hex.orientation`:
 
-The grid (`packages/engine/src/grid.ts`) is the one place that knows which tiles are next to which: the directions a unit can move in, the distance between two tiles, the tiles within a distance, and a colony's work area. Engine code asks the game's grid, `gridOf(s)` (or `gridIn(scenario)` while a map is being made), instead of looping over a square of tiles itself (`test/grid.test.ts` checks the square grid against the loops it replaced, orders included). The map stays a rectangle of rows (`y * width + x`) on every grid, so bounds checks and whole-map passes do not go through the grid. Rivers' direction masks, the movement keys and the colony screen's 3 × 3 layout are square-only for now.
+- `'pointy'` (the default): pointy-top hexes in offset rows, odd rows shifted half a tile east. Six directions `ne, e, se, sw, w, nw`; a stored map's text line is a straight row of hexes.
+- `'flat'`: flat-top hexes in offset columns, odd columns shifted half a tile south. Six directions `n, ne, se, s, sw, nw`.
+
+Positions stay `{ x, y }` columns and rows on every grid, and the map stays a rectangle of rows (`y * width + x`), so bounds checks, whole-map passes, the unit index and saves do not change. On hexes distance, rings, lines and directions are worked out through cube coordinates inside `grid.ts`; nothing else sees them.
+
+The grid (`packages/engine/src/grid.ts`) is the one place that knows which tiles are next to which: the directions a unit can move in (`step` throws for a direction the grid lacks), the distance between two tiles, the tiles within a distance and in a ring, straight lines (`line`, `directionTowards`), a direction's index (`directionIndex`, the bit order of river masks), and a colony's first work ring. Engine code asks the game's grid, `gridOf(s)` (or `gridIn(scenario)` while a map is being made), instead of looping over a square of tiles itself (`test/grid.test.ts` checks the square grid against the loops it replaced, orders included, and the hex grids' properties in both orientations). Directions and the first ring go clockwise from the north; tiles within a distance and rings go row by row.
+
+On hexes: generated maps sample their noise at the hex centres, generated rivers run through tile centres with six-bit masks, river and road movement and the river defence follow the grid, and the movement keys are those of the grid's six directions (the numpad without the two missing ones). Still square-only (Beta 4 steps 2 and 3): stored maps and their rivers (`parseRivers`, `RIVER_DIRS`), and all drawing (the render API, the styles, the minimap and the colony screen). A hex scenario can be played by computer players, in tests, tournaments and the bench, but not yet drawn. The hidden scenarios `hex-test` (pointy) and `hex-test-flat` are the Americas' rules on a generated hex map with two work rings (the second from five colonists).
+
+## The colony work area
+
+`Scenario.map.workArea` (`{ rings: WorkRing[] }`) says how far a colony's work area may reach and what opens each ring ([design/hex-maps.md](design/hex-maps.md) H7). Left out, a colony works the first ring only: the eight tiles around it on squares, six on hexes; the Americas and the Caribbean set nothing. At most two rings (`MAX_WORK_RINGS`; the conformance test checks it); the second adds twelve tiles on hexes, sixteen on squares. Each `WorkRing` may give a gate:
+
+- `size`: the colony has at least this many colonists, inside and out;
+- `building`: the colony has this building (one the scenario has).
+
+Both must hold when both are given; a ring with neither is always open; the first ring is always open. A ring opens as soon as its gate holds, so a colonist can take a tile in it straight away. When it closes again (the colony shrinks, or loses the building), the colonists working it take the best job left before the colony next produces, with a message.
+
+The engine (`packages/engine/src/workarea.ts`) answers two questions: "this colony now" (`colonyWorkArea`, `openRings`, `inColonyWorkArea`: its jobs, the colony report and the computer players' job search, leasing land, buying land) and "the most any colony can reach" (`workReach`, `reachArea`, `reachOffsets`: lease pressure, the computer players' site scores and shared tiles). Site scores count the second ring at half weight (`OUTER_RING_VALUE`). Tiles come as the first ring in direction order, then the second ring row by row.
 
 ## Events
 
