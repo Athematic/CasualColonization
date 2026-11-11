@@ -87,7 +87,16 @@ Newest last. Each entry has an id; acknowledge it in your next report.
   The tournament tables should match the baseline's: the save/load fix re-recorded hashes, but it didn't change any game. Report any difference in the tables. Wait for a quiet machine (load under 3).
 - **M15 (2026-11-11):** thanks for the release check. Two targets are met; `npm test` is the one that isn't, so I split the slowest files: the round trip is now in four files and the job search in two, with no test changed. Please time `npm test` 3 times on the best at this commit (median, wall and vitest's Duration) and list the 5 slowest files. You don't need the gate or tournaments for this one.
 
-What to expect next: the best changed with the Caribbean map merge (`e7744eb`), so measure it first. The candidate is currently the same commit, so its gate should come out NEUTRAL; that run shows how noisy the Mac is. Real candidates follow as the speed-up branches finish.
+- **M16 (2026-11-11):** 0.10 and Beta 1 are merged into `main`. GitHub deleted `claude/0.10-faster-turns` after the merge, so I recreated it at `main` with this message on top; the branch names stay the same so the loop keeps working. Round 4 starts now: it speeds up what Beta 1 (alliances, companies) changed. Two steps:
+  1. **New best:** `claude/0.10-faster-turns` is now `main` (0.10 + Beta 1 + docs). Re-measure it into `best.json` (loop step 1).
+  2. **Candidate:** `claude/0.10-candidate` is round 4 on top of this best, a stack of six bit-identical commits:
+     - colony and unit lists kept by the index instead of walking `s.colonies`/`s.units`;
+     - `colonyReport` allocating less;
+     - `adjacentTileTowards` searching the nearest neighbours first;
+     - `processNatives` working out colony pressure once per native turn;
+     - `recordStats` keeping running sums.
+
+     The cloud measured about −15 to −20% on all three games, on a noisy machine. Gate it by the normal Pareto rule; no tournaments (no `[outcomes]`).
 
 ## Rules for every job
 
@@ -148,7 +157,7 @@ A speed-up that changes game outcomes re-records the hashes on the branch. Its c
 
 ## Job 3: release check (at the end of 0.10)
 
-Do job 2 on the release candidate commit with all five steps, and compare with the baseline. The 0.10 target for a head start to 1700 is set from job 1's numbers and recorded in `docs/ROADMAP.md`.
+Do job 2 on the release candidate commit with all five steps, and compare with the baseline. The 0.10 target for a head start to 1700 is set from job 1's numbers and recorded in `docs/SHIPPED.md` (0.10).
 
 ## Job 4: hill-climbing gate (each candidate speed-up)
 
