@@ -280,44 +280,54 @@ export function buildMapIndex(s: GameState): MapIndex {
 interface PathIndex {
   /** The colony on each tile (its owner read live). */
   colonies: ReadonlyMap<number, Colony>;
-  settlements: Set<number>;
   /** Units standing on each tile. */
   units: ReadonlyMap<number, readonly Unit[]>;
-  /** Tribes whose braves stand on each tile. */
+  /**
+   * Tribes whose braves stand on each tile, of the tribes at war with the searching unit's owner
+   * (the only braves that block it); empty when none is at war with it.
+   */
   braves: Map<number, TribeId[]>;
-  /** Tiles with any of the above have `occupied[i] === gen`, tiles with a colony `colony[i] === gen`, so empty tiles skip the lookups. */
+  /**
+   * Tiles with any of the above or a settlement have `occupied[i] === gen`, tiles with a colony
+   * `colony[i] === gen`, tiles with a settlement `settlement[i] === gen`, so empty tiles skip the lookups.
+   */
   occupied: Uint32Array;
   colony: Uint32Array;
+  settlement: Uint32Array;
   gen: number;
 }
 
 // Stamps for PathIndex, reused between searches as the search buffers are.
 let occupiedStamp = new Uint32Array(0);
 let colonyStamp = new Uint32Array(0);
+let settlementStamp = new Uint32Array(0);
 let stampGen = 0;
 
-function pathIndex(s: GameState): PathIndex {
+/** The occupants a search for a unit needs; `war` is the tribes at war with its owner (searchContext). */
+function pathIndex(s: GameState, war: ReadonlySet<TribeId>): PathIndex {
   const w = s.map.width;
   const size = w * s.map.height;
   if (occupiedStamp.length !== size || stampGen >= 0xfffffff0) {
     occupiedStamp = new Uint32Array(size);
     colonyStamp = new Uint32Array(size);
+    settlementStamp = new Uint32Array(size);
     stampGen = 0;
   }
   const gen = ++stampGen;
   const occupied = occupiedStamp;
-  const settlements = new Set<number>();
   for (const id in s.settlements) {
     const st = s.settlements[id];
     const i = st.y * w + st.x;
-    settlements.add(i);
+    settlementStamp[i] = gen;
     occupied[i] = gen;
   }
+  // Only braves of a tribe at war with the unit's owner block it, so the others are left out.
   const braves = new Map<number, TribeId[]>();
   const all = s.braves;
-  if (all) {
+  if (all && war.size) {
     for (const id in all) {
       const b = all[id];
+      if (!war.has(b.tribe)) continue;
       const i = b.y * w + b.x;
       const list = braves.get(i);
       if (list) list.push(b.tribe);
@@ -332,7 +342,7 @@ function pathIndex(s: GameState): PathIndex {
   }
   const units = unitTiles(s);
   for (const i of units.keys()) occupied[i] = gen;
-  return { colonies, settlements, units, braves, occupied, colony: colonyStamp, gen };
+  return { colonies, units, braves, occupied, colony: colonyStamp, settlement: settlementStamp, gen };
 }
 
 function passable(s: GameState, ctx: SearchContext, x: number, y: number, isGoal: boolean, index: PathIndex): boolean {
@@ -375,7 +385,7 @@ function passableAt(s: GameState, ctx: SearchContext, i: number, isGoal: boolean
     // An ally's colony is open, as one's own.
     if (colonyOwner && ctx.allies?.has(colonyOwner)) colonyOwner = ctx.owner;
     if (colonyOwner && colonyOwner !== ctx.owner) return false;
-    if (index.settlements.has(i)) return false;
+    if (index.settlement[i] === index.gen) return false;
     // Any other nation's unit on the tile blocks it, but an ally's.
     const here = index.units.get(i);
     if (here) for (const v of here) if (v.owner !== ctx.owner && !ctx.allies?.has(v.owner)) return false;
@@ -601,8 +611,8 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
   const start = unitPosition(s, u);
   if (!start) return null;
   if (start.x === tx && start.y === ty) return [];
-  const index = pathIndex(s);
   const ctx = searchContext(s, u);
+  const index = pathIndex(s, ctx.war);
   if (!passable(s, ctx, tx, ty, true, index)) return null;
   const w = s.map.width;
   const h = s.map.height;
@@ -713,8 +723,8 @@ export function nearestHighSeas(s: GameState, ship: Unit): { x: number; y: numbe
   const start = unitPosition(s, ship);
   if (!start) return null;
   const w = s.map.width;
-  const index = pathIndex(s);
   const ctx = searchContext(s, ship);
+  const index = pathIndex(s, ctx.war);
   const seen = new Set([start.y * w + start.x]);
   const queue = [start];
   while (queue.length) {
