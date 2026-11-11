@@ -36,4 +36,11 @@ describe('colony job search', () => {
     expect(setJobSearchChecks(true) - before).toBeGreaterThan(5000);
     expect(Object.keys(s.colonies).length).toBeGreaterThan(10);
   }, 120_000);
+
+  it('chooses as the plain search does (Caribbean, 120 turns)', () => {
+    const before = setJobSearchChecks(true);
+    const s = createGame(headStartConfig(config(22, 'caribbean'), 120));
+    expect(() => playUntil(s, 120)).not.toThrow();
+    expect(setJobSearchChecks(true) - before).toBeGreaterThan(1000);
+  }, 120_000);
 });
