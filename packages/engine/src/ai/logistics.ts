@@ -706,14 +706,32 @@ function nativeTrade(s: GameState, p: Player, wagon: Unit): void {
   if (fullest) goTo(s, wagon, fullest.c.x, fullest.c.y);
 }
 
+/**
+ * The tile beside a settlement with the shortest route (in steps) for the unit, the first in ring
+ * order among equals; null when it can reach none. The tiles are searched nearest first: a route is
+ * never shorter than the distance, so the search stops once no tile left can beat or tie the best
+ * (a tie only wins for a tile earlier in ring order), and the answer is the same as searching all.
+ */
 function besideSettlement(s: GameState, u: Unit, x: number, y: number): { x: number; y: number } | null {
-  let best: { x: number; y: number; len: number } | null = null;
-  const beside = gridOf(s).ringOffsets(x, y, 1);
+  const grid = gridOf(s);
+  const pos = unitPosition(s, u);
+  const beside = grid.ringOffsets(x, y, 1);
+  const candidates: { x: number; y: number; order: number; dist: number }[] = [];
   for (let k = 0; k < beside.length; k += 2) {
     const nx = x + beside[k];
     const ny = y + beside[k + 1];
-    const path = findPath(s, u, nx, ny);
-    if (path && (!best || path.length < best.len)) best = { x: nx, y: ny, len: path.length };
+    candidates.push({ x: nx, y: ny, order: k, dist: pos ? grid.distance(pos.x, pos.y, nx, ny) : 0 });
+  }
+  candidates.sort((a, b) => a.dist - b.dist || a.order - b.order);
+  let best: { x: number; y: number; len: number } | null = null;
+  let bestOrder = -1;
+  for (const c of candidates) {
+    if (best && (c.dist > best.len || (c.dist === best.len && c.order > bestOrder))) break;
+    const path = findPath(s, u, c.x, c.y);
+    if (path && (!best || path.length < best.len || (path.length === best.len && c.order < bestOrder))) {
+      best = { x: c.x, y: c.y, len: path.length };
+      bestOrder = c.order;
+    }
   }
   return best;
 }

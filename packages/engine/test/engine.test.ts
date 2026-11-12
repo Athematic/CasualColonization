@@ -154,6 +154,41 @@ describe('orders', () => {
     expect(path).not.toBeNull();
     expect(path!.length).toBe(3);
   });
+
+  it('finds no land route to another island, and finds one once land joins them', () => {
+    // Two islands in a patch of ocean, three tiles of water between them: one tile, and two tiles
+    // (so that the goal has land beside it and the search is not ruled out before it starts).
+    const s = game();
+    s.players[0].explored.fill(1);
+    const cx = Math.floor(s.map.width / 2);
+    const cy = Math.floor(s.map.height / 2);
+    const R = 4;
+    for (const id of Object.keys(s.settlements)) if (Math.abs(s.settlements[id].x - cx) <= R + 1 && Math.abs(s.settlements[id].y - cy) <= R + 1) delete s.settlements[id];
+    for (const u of Object.values(s.units)) if (u.loc.kind === 'map' && Math.abs(u.loc.x - cx) <= R + 1 && Math.abs(u.loc.y - cy) <= R + 1) removeUnit(s, u.id);
+    const set = (x: number, y: number, t: 'ocean' | 'plains') => {
+      const tile = tileAt(s, x, y)!;
+      tile.t = t;
+      for (const k of ['f', 'r', 'rv', 'rd', 'lcr', 'claim', 'use', 'p', 'b'] as const) delete tile[k];
+    };
+    for (let y = cy - R; y <= cy + R; y++) for (let x = cx - R; x <= cx + R; x++) set(x, y, 'ocean');
+    set(cx - 2, cy, 'plains');
+    set(cx + 2, cy, 'plains');
+    set(cx + 3, cy, 'plains');
+    const u = createUnit(s, 'england', 'freeColonist', { kind: 'map', x: cx - 2, y: cy });
+    expect(findPath(s, u, cx + 2, cy)).toBeNull();
+    // Terrain changed in place after a search: the land joining them is found.
+    set(cx - 1, cy, 'plains');
+    set(cx, cy, 'plains');
+    set(cx + 1, cy, 'plains');
+    expect(findPath(s, u, cx + 2, cy)).toEqual([
+      { x: cx - 1, y: cy },
+      { x: cx, y: cy },
+      { x: cx + 1, y: cy },
+      { x: cx + 2, y: cy },
+    ]);
+    set(cx, cy, 'ocean');
+    expect(findPath(s, u, cx + 2, cy)).toBeNull();
+  });
 });
 
 describe('simulation', () => {
