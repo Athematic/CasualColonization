@@ -10,9 +10,9 @@
  * members, the arrivals, the events, the words) is drafted for Simon's review, with its sources in
  * the note (section 13). The numbers are a first tuning; computer players are step 9.
  *
- * Registered hidden until the New game screen can offer a people (step 10): every European nation
- * arrives after 1000, so a game needs a playing people at its start (arrivals.ts), which the screen
- * cannot choose yet.
+ * Registered hidden until its drafted history is reviewed: the New game screen offers its peoples
+ * since step 10 (every European nation arrives after 1000, so a game needs a playing people at its
+ * start, arrivals.ts), and the web game opens it with `?scenario=north-east`.
  *
  * Imports only the leaf rule tables, like the Americas and the Caribbean, so any engine module can
  * import the registry.
@@ -246,7 +246,7 @@ export const NORTH_EAST: Scenario = {
   name: 'The North-east, 1000–1850',
   description:
     "The peoples of the North-east as nations: the Haudenosaunee, the Wendat, the Mi'kmaq and the Innu among their neighbours, from the year 1000, with the Europeans arriving one by one from 1497.",
-  // Until the New game screen can offer a people (step 10).
+  // Until its drafted history is reviewed (native-nations.md section 15); `?scenario=north-east` opens it.
   hidden: true,
   calendar: NORTH_EAST_CALENDAR,
   map: {
