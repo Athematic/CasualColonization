@@ -24,7 +24,7 @@ For the agent continuing Beta 4 on Simon's machine (12 November 2026). Until now
 
 1. **Merge main into the branch.** Main now has speed round 5 (PR #23). Merge with a merge commit; don't rebase a pushed branch.
 2. **Merge Beta 3.** Step 4 depends on Beta 3's councils (step 3), arrivals (step 6) and the North-east map (step 8). All of these are on `claude/beta3-native-nations`, which a cloud session is still changing:
-   - **The data model is being restructured.** The per-type selections (`Scenario.units`, `buildings` and `nationTypes.people`) are moving into one shape for every nation type, and the old fields will be removed.
+   - **The data model is restructured (landed).** `Scenario.units` and `Scenario.buildings` are gone. Every nation type's selection now lives in `Scenario.nationTypes: { european: { units, buildings, council }, people?: { …, knowsLand? } }`. When you merge, move `hex-test`'s `units` and `buildings` into `nationTypes.european` and add `council: 'congress'`.
    - **Step 10 follow-ups:** town names from the scenario, the North-east made visible in the menu, map sharing between peoples, and a Trade tab for a people.
    - **Research:** it moves to `docs/research/north-east-peoples.md`.
 
