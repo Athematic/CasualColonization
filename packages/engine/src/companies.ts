@@ -55,10 +55,6 @@ export function isCompany(p: Player | undefined): boolean {
   return !!p && playerKind(p) === 'company';
 }
 
-/** Whether the nation id names a company taking part in the game. */
-export function isCompanyId(s: GameState, id: PlayerId): boolean {
-  return isCompany(s.players.find((p) => p.id === id));
-}
 
 /** A European nation: neither the Crown nor a company (nor a playing people). */
 export function isNation(p: Player): boolean {
