@@ -57,23 +57,12 @@ export interface Scenario {
   /** Goods in play; the order is the order of keys in markets and warehouses. */
   goods: readonly GoodId[];
   /**
-   * Unit types in play, in catalogue order. Only units on this list are offered in Europe, built
-   * in colonies or arrive as immigrants; the engine's named slots (treasure, the REF's units, the
-   * starting ship) are expected to be on it.
+   * What each nation type uses from the global catalogues (native-nations.md T6, T7, T8): its unit
+   * types, its buildings and its council. `european` is the European nations' selection (companies
+   * and the Crown use it too); `people` is a playing people's, left out where the engine's
+   * `PEOPLE_SELECTION` serves (scenarios/index.ts `nationTypeOf`).
    */
-  units: readonly UnitTypeId[];
-  /**
-   * Buildings in play, in catalogue order (the order production runs in: tools are made before
-   * the armory uses them). Colonies only have these.
-   */
-  buildings: readonly BuildingKind[];
-  /**
-   * Selections per nation type (native-nations.md T6, T7): the unit types and buildings a playing
-   * people uses, from the same global catalogues. `units` and `buildings` above are the European
-   * nations' selection. Missing means the engine's placeholder selection (`nationTypeOf`).
-   * `european.council` names the European nations' council (missing: `congress`).
-   */
-  nationTypes?: { european?: { council?: CouncilId }; people?: NationTypeSelection };
+  nationTypes: NationTypes;
   /**
    * A playing people's stores and gardens (native-nations.md T10; rules/peoples.ts), merged over
    * the engine's PEOPLE_ECONOMY. Absent fields keep the engine's values.
@@ -81,9 +70,8 @@ export interface Scenario {
   peopleEconomy?: Partial<PeopleEconomy>;
   /**
    * The scenario's councils, keyed by id (native-nations.md T8): the Americas' Continental Congress
-   * is `congress`. Each nation type names its council (`nationTypes`; missing: `congress` for the
-   * European nations, `people` for a playing people). A people's council the scenario does not
-   * define is the engine's `PEOPLE_COUNCIL` (rules/councils.ts).
+   * is `congress`. Each nation type names its council (`nationTypes`). A people's council the
+   * scenario does not define is the engine's `PEOPLE_COUNCIL` (rules/councils.ts).
    */
   councils: Record<CouncilId, Council>;
   /** What the computer players need to know about the scenario's content. */
@@ -764,18 +752,43 @@ export interface PlayerEntry extends NationIdentity {
 /** A council's id in `Scenario.councils`. */
 export type CouncilId = string;
 
-/** What one nation type uses from the global catalogues (native-nations.md T6, T7). */
+/**
+ * The nation types (native-nations.md T1, T6): `european` for European nations, chartered companies
+ * and the Crown; `people` for a playing people.
+ */
+export type NationType = 'european' | 'people';
+
+/** Each nation type's selection from the global catalogues (`Scenario.nationTypes`). */
+export interface NationTypes {
+  european: NationTypeSelection;
+  /** Missing: the engine's `PEOPLE_SELECTION` (the catalogue's people's entries, the `people` council). */
+  people?: PeopleSelection;
+}
+
+/** What one nation type uses from the global catalogues (native-nations.md T6, T7, T8). */
 export interface NationTypeSelection {
-  /** Its council in `Scenario.councils` (T8). Missing: `people`. */
-  council?: CouncilId;
-  /** Unit types, in catalogue order: what its towns build and what its braves become. */
-  units: readonly UnitTypeId[];
-  /** Buildings, in catalogue order: what its towns have and build. */
-  buildings: readonly BuildingKind[];
   /**
-   * Knowledge of the land (native-nations.md T13), read for the people's nation type only: its land
-   * units move at most at river cost on its own and unclaimed land, except on plowed tiles
-   * (movement.ts, `knowsLand`). Missing means on; false switches it off for the scenario.
+   * Unit types in play for the type, in catalogue order. For the European nations only these are
+   * offered in Europe, built in colonies or arrive as immigrants, and the engine's named slots
+   * (treasure, the REF's units, the starting ship) are expected among them. For a playing people:
+   * what its towns build and its braves become; the first is the unit its towns grow by.
+   */
+  units: readonly UnitTypeId[];
+  /**
+   * Buildings in play for the type, in catalogue order (the order production runs in: tools are
+   * made before the armory uses them). Its colonies or towns have only these.
+   */
+  buildings: readonly BuildingKind[];
+  /** Its council in `Scenario.councils` (T8); an id the scenario does not define is the engine's (`ENGINE_COUNCILS`). */
+  council: CouncilId;
+}
+
+/** A playing people's selection: what it uses from the catalogues, and its traits. */
+export interface PeopleSelection extends NationTypeSelection {
+  /**
+   * Knowledge of the land (native-nations.md T13): its land units move at most at river cost on its
+   * own and unclaimed land, except on plowed tiles (movement.ts, `knowsLand`). Missing means on;
+   * false switches it off for the scenario.
    */
   knowsLand?: boolean;
 }

@@ -148,8 +148,8 @@ export const AMERICAS: Scenario = {
     settlements: { nomadic: SETTLEMENT_KINDS.camp, agricultural: SETTLEMENT_KINDS.village, urban: SETTLEMENT_KINDS.city },
   },
   goods: [...GOODS],
-  units: [...EUROPEAN_UNIT_TYPES],
-  buildings: [...EUROPEAN_BUILDINGS],
+  // No people plays in the Americas (native-nations.md T4), so only the European nations' selection.
+  nationTypes: { european: { units: [...EUROPEAN_UNIT_TYPES], buildings: [...EUROPEAN_BUILDINGS], council: 'congress' } },
   // The Continental Congress (rules/councils.ts), the European nations' council.
   councils: { congress: congress(AMERICAS_FATHERS) },
   events: 'americas',

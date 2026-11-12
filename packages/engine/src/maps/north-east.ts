@@ -309,7 +309,7 @@ export function northEastTile(lon: number, lat: number): { x: number; y: number 
 }
 
 /**
- * Where the North-east scenario's peoples live on this map (native-nations.md T20; section 13 has
+ * Where the North-east scenario's peoples live on this map (native-nations.md T20; docs/research/north-east-peoples.md has
  * the sources). Regions are [x0, y0, x1, y1] in tiles (inclusive), drawn from the homelands the
  * sources give for the 16th and early 17th centuries, the earliest that written sources describe;
  * the scenario spaces settlements 2 tiles apart. `from` and `until` are the years a people comes to

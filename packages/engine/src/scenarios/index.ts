@@ -22,7 +22,7 @@ import { CARIBBEAN } from './caribbean.js';
 import { NORTH_EAST } from './north-east.js';
 import { turnOfYear, yearOf, type Calendar } from './calendar.js';
 import { AMERICAS_TEXT, capitalise, fillTemplate, type TermKey } from './terms.js';
-import type { Council, CouncilId, CouncilTextKey, Mechanics, NationEntry, NationTypeSelection, PlayerEntry, PlayablePeople, Rivals, RumourEntry, Scenario, ScenarioAi } from './types.js';
+import type { Council, CouncilId, CouncilTextKey, Mechanics, NationEntry, NationType, NationTypeSelection, PeopleSelection, PlayerEntry, PlayablePeople, Rivals, RumourEntry, Scenario, ScenarioAi } from './types.js';
 
 export * from './types.js';
 export * from './calendar.js';
@@ -142,14 +142,21 @@ export function playablePeoples(scenario: Scenario): readonly PlayablePeople[] {
 }
 
 /**
- * The catalogue selections of a nation type (native-nations.md T6, T7): the scenario's `units` and
- * `buildings` for European nations (companies and the Crown use them too), its
- * `nationTypes.people` for a playing people, or the engine's placeholder selection.
+ * The catalogue selection of a nation type (native-nations.md T6, T7, T8): the scenario's
+ * `nationTypes.european` for European nations (companies and the Crown use it too), its
+ * `nationTypes.people` for a playing people, or the engine's `PEOPLE_SELECTION`.
  */
-export function nationTypeOf(s: HasScenario, type: 'european' | 'people'): NationTypeSelection {
-  const scenario = scenarioOf(s);
-  if (type === 'european') return scenario;
-  return scenario.nationTypes?.people ?? PEOPLE_SELECTION;
+export function nationTypeIn(scenario: Scenario, type: 'people'): PeopleSelection;
+export function nationTypeIn(scenario: Scenario, type: NationType): NationTypeSelection;
+export function nationTypeIn(scenario: Scenario, type: NationType): NationTypeSelection {
+  return type === 'european' ? scenario.nationTypes.european : (scenario.nationTypes.people ?? PEOPLE_SELECTION);
+}
+
+/** A game's catalogue selection for a nation type (`nationTypeIn`). */
+export function nationTypeOf(s: HasScenario, type: 'people'): PeopleSelection;
+export function nationTypeOf(s: HasScenario, type: NationType): NationTypeSelection;
+export function nationTypeOf(s: HasScenario, type: NationType): NationTypeSelection {
+  return nationTypeIn(scenarioOf(s), type);
 }
 
 /**
@@ -165,9 +172,10 @@ export function bornType(s: HasScenario, owner: PlayerId): UnitTypeId {
  * units and buildings of the catalogue (native-nations.md T6, T7; Beta 3 step 2). `units[0]` is the
  * unit a town is peopled and grows with (the townsperson).
  */
-export const PEOPLE_SELECTION: NationTypeSelection = {
+export const PEOPLE_SELECTION: PeopleSelection = {
   units: [...PEOPLE_UNIT_TYPES],
   buildings: [...PEOPLE_BUILDINGS],
+  council: 'people',
 };
 
 const ECONOMIES = new WeakMap<Scenario, PeopleEconomy>();
@@ -301,11 +309,12 @@ export function nativeRulesOf(s: HasScenario): NativeRules {
   return nativeRulesIn(scenarioOf(s));
 }
 
-/** Buildings in play, in production order. */
+/**
+ * Buildings in play, in production order: the owner's nation type's (T7), a playing people's own;
+ * with no owner, the European nations'.
+ */
 export function buildingsOf(s: HasScenario, owner?: PlayerId): readonly BuildingKind[] {
-  // A playing people's towns have its own selection (T7); everyone else the scenario's.
-  if (owner !== undefined && kindOfId(owner) === 'people') return nationTypeOf(s, 'people').buildings;
-  return scenarioOf(s).buildings;
+  return nationTypeOf(s, owner !== undefined && kindOfId(owner) === 'people' ? 'people' : 'european').buildings;
 }
 
 /**
@@ -315,20 +324,16 @@ export function buildingsOf(s: HasScenario, owner?: PlayerId): readonly Building
  */
 export function newColonyBuildings(s: HasScenario, owner: PlayerId): Record<BuildingKind, number> {
   const own = buildingsOf(s, owner);
+  const european = nationTypeOf(s, 'european').buildings;
   const out: Partial<Record<BuildingKind, number>> = {};
-  if (own !== scenarioOf(s).buildings) for (const k of scenarioOf(s).buildings) out[k] = 0;
+  if (own !== european) for (const k of european) out[k] = 0;
   for (const k of own) out[k] = BUILDINGS[k].initialLevel;
   return out as Record<BuildingKind, number>;
 }
 
-/**
- * The id of a nation type's council (native-nations.md T8): `nationTypes.european.council` or the
- * people's selection's `council`; missing, `congress` and `people`.
- */
-export function councilIdOf(x: ScenarioLike, type: 'european' | 'people'): CouncilId {
-  const scenario = asScenario(x);
-  if (type === 'european') return scenario.nationTypes?.european?.council ?? 'congress';
-  return (scenario.nationTypes?.people ?? PEOPLE_SELECTION).council ?? 'people';
+/** The id of a nation type's council (native-nations.md T8): its selection's `council`. */
+export function councilIdOf(x: ScenarioLike, type: NationType): CouncilId {
+  return nationTypeIn(asScenario(x), type).council;
 }
 
 /** A council by id: the scenario's, else the engine's (a people's council, rules/councils.ts). */
@@ -417,7 +422,7 @@ export function unitsOf(s: HasScenario, owner?: PlayerId): UnitSelection {
   }
   let sel = UNIT_SELECTIONS.get(scenario);
   if (!sel) {
-    const units = new Set(scenario.units);
+    const units = new Set(nationTypeIn(scenario, 'european').units);
     sel = {
       units,
       trainable: TRAINABLE.filter((t) => units.has(t)),

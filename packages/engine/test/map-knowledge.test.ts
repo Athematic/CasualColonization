@@ -51,7 +51,7 @@ const GAME: Scenario = {
       { id: 'cherokee', name: 'the Cherokee', adjective: 'Cherokee', townNames: ['Chota', 'Tellico', 'Echota'] },
     ],
   },
-  nationTypes: { people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS] } },
+  nationTypes: { ...AMERICAS.nationTypes, people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS], council: 'people' } },
   mechanics: { ...AMERICAS.mechanics, mapKnowledge: { seen: true, share: { homeland: 3, every: 10 }, range: 8 } },
 };
 registerScenario(GAME);

@@ -66,8 +66,8 @@ describe('the Caribbean scenario', () => {
 
   it('has no furs: no furs or coats, no fur trader, no fur experts', () => {
     for (const g of ['furs', 'coats'] as const) expect(CARIBBEAN.goods).not.toContain(g);
-    expect(CARIBBEAN.buildings).not.toContain('furTrader');
-    for (const u of ['expertFurTrapper', 'masterFurTrader'] as const) expect(CARIBBEAN.units).not.toContain(u);
+    expect(CARIBBEAN.nationTypes.european.buildings).not.toContain('furTrader');
+    for (const u of ['expertFurTrapper', 'masterFurTrader'] as const) expect(CARIBBEAN.nationTypes.european.units).not.toContain(u);
     const s = game();
     for (const t of CARIBBEAN.peoples.ids) for (const g of peopleOf(s, t).wants) expect(CARIBBEAN.goods).toContain(g);
     // The Tupi's coats become cloth here; the catalogue keeps the Americas' wants.

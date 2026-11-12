@@ -11,7 +11,7 @@
  * the first check, so their games are unchanged.
  *
  * Nothing here names a cause: the sources do not agree on why the Dorset or the St. Lawrence
- * Iroquoians are no longer found (section 13 of the note), and the game does not pretend to know.
+ * Iroquoians are no longer found (docs/research/north-east-peoples.md, section 1), and the game does not pretend to know.
  */
 import { gridOf } from './grid.js';
 import { storedMapEntry } from './maps/index.js';

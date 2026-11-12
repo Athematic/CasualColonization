@@ -21,11 +21,6 @@ export type CompanyId = 'hudsonsBay' | 'westIndia' | 'mississippi' | 'darien' | 
 /** Every company id, for the rules that need no game at hand (relations, native tension). */
 export const COMPANY_IDS: ReadonlySet<PlayerId> = new Set<CompanyId>(['hudsonsBay', 'westIndia', 'mississippi', 'darien', 'courlandCompany']);
 
-/** Whether a nation id names a chartered company (companies.ts `isCompanyId` asks the game instead). */
-export function isCompanyIdent(id: NationId): id is CompanyId {
-  return COMPANY_IDS.has(id);
-}
-
 /**
  * Every nation id but the Crown, in a fixed order that never changes: game codes store a nation as
  * its index here (seedphrase.ts). The Americas' eight come first, as NATION_ORDER.
@@ -198,7 +193,8 @@ export const TRIBES: Record<TribeId, PeopleDef> = {
    */
   kalinago: { id: 'kalinago', name: 'Kalinago', color: '#a64b2a', lifeway: 'agricultural', skills: ['expertFisherman', 'masterCottonPlanter', 'masterTobaccoPlanter', 'seasonedScout'], wants: ['tools', 'muskets', 'tradeGoods'] },
   // The North-east, 1000–1850 (native-nations.md T20; the research, its sources and what is drafted
-  // for Simon's review are in section 13 of the note). Not in the Americas' or the Caribbean's sets.
+  // for Simon's review are in docs/research/north-east-peoples.md). Not in the Americas' or the
+  // Caribbean's sets.
   // Lifeways are today's fixed-settlement ones: the seasonal round many of these peoples lived
   // (Australia's `seasonal` lifeway, later) is drawn as camps. Skills are what a European colonist
   // may learn among them; wants are what they sought in trade (iron tools, kettles and cloth, later
