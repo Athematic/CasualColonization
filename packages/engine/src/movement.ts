@@ -58,7 +58,9 @@ export function moveCost(s: GameState, u: Unit, fx: number, fy: number, tx: numb
   const w = s.map.width;
   const hasColony = (x: number, y: number) => (index ? index.colonies.has(y * w + x) : !!colonyAt(s, x, y));
   const cost = landStepCost(s, from, to, fx, fy, tx, ty, from.r || hasColony(fx, fy), to.r || hasColony(tx, ty));
-  return knowsLand(s, u.owner) ? knowingStepCost(cost, to, u.owner) : cost;
+  if (!knowsLand(s, u.owner)) return cost;
+  const seen = landSeen(s, u.owner);
+  return knowingStepCost(cost, to, u.owner, !seen || seen[ty * w + tx] === 1);
 }
 
 /**
@@ -73,12 +75,24 @@ export function knowsLand(s: GameState, owner: PlayerId): boolean {
 
 /**
  * Whether a unit of `owner` that knows the land (`knowsLand`) moves onto this tile as along a river:
- * the owner's own claimed land or land nobody claims, unless it is plowed. Another player's land
+ * the owner's own claimed land or land nobody claims (`seen`: where the scenario asks it, only land
+ * the people has explored, `landSeen`), unless it is plowed. Another player's land
  * (a nation's colonies' claims, another people's towns' land) is not known.
  * Railroads, once they exist, end the knowledge too: check them here beside `p`.
  */
-export function knownLand(tile: Tile, owner: PlayerId): boolean {
-  return !tile.p && (tile.claim === undefined || tile.claim === owner);
+export function knownLand(tile: Tile, owner: PlayerId, seen = true): boolean {
+  return !tile.p && (tile.claim === owner || (tile.claim === undefined && seen));
+}
+
+/**
+ * Where a people that knows the land has been (Beta 3 step 10b, `mechanics.mapKnowledge.seen`): its
+ * `explored` map, so land nobody claims is known only once seen, or null where the scenario does not
+ * ask it (every tile of unclaimed land is known, as in step 5).
+ */
+export function landSeen(s: GameState, owner: PlayerId): ArrayLike<number> | null {
+  const rules = mechanicsOf(s).mapKnowledge;
+  if (!rules || !rules.seen) return null;
+  return s.players.find((p) => p.id === owner)?.explored ?? null;
 }
 
 /**
@@ -86,8 +100,8 @@ export function knownLand(tile: Tile, owner: PlayerId): boolean {
  * land (`knownLand`, judged by the tile entered, as terrain is), so a road or a river, never dearer,
  * still wins. `moveCost` and the path search (`stepCost`) both use it.
  */
-export function knowingStepCost(cost: number, to: Tile, owner: PlayerId): number {
-  return cost > RIVER_MOVE_COST && knownLand(to, owner) ? RIVER_MOVE_COST : cost;
+export function knowingStepCost(cost: number, to: Tile, owner: PlayerId, seen = true): number {
+  return cost > RIVER_MOVE_COST && knownLand(to, owner, seen) ? RIVER_MOVE_COST : cost;
 }
 
 /**
@@ -384,6 +398,8 @@ interface SearchContext {
   allies: Set<string> | null;
   /** Whether the owner's land units know the land (`knowsLand`, T13), so steps cost as `moveCost` says. */
   knowsLand: boolean;
+  /** Where the owner has been, when unclaimed land is known only once seen (`landSeen`); null otherwise. */
+  seen: ArrayLike<number> | null;
 }
 
 function searchContext(s: GameState, u: Unit): SearchContext {
@@ -396,7 +412,7 @@ function searchContext(s: GameState, u: Unit): SearchContext {
     if (t.stance[u.owner] === 'war') war.add(t.id);
   }
   const allies = s.treaties ? alliesOf(s, u.owner).filter((a) => colonyOpenTo(s, a, u.owner)) : [];
-  return { owner: u.owner, ship: isShip(u), player: s.players.find((p) => p.id === u.owner), war, allies: allies.length ? new Set(allies) : null, knowsLand: knowsLand(s, u.owner) };
+  return { owner: u.owner, ship: isShip(u), player: s.players.find((p) => p.id === u.owner), war, allies: allies.length ? new Set(allies) : null, knowsLand: knowsLand(s, u.owner), seen: landSeen(s, u.owner) };
 }
 
 /** Whether the unit can stand on the tile with map index `i` (on the map) while pathing. */
@@ -431,7 +447,7 @@ function stepCost(s: GameState, ctx: SearchContext, fi: number, ti: number, fx: 
   const from = s.map.tiles[fi];
   const to = s.map.tiles[ti];
   const cost = landStepCost(s, from, to, fx, fy, tx, ty, from.r || index.colony[fi] === index.gen, to.r || index.colony[ti] === index.gen);
-  return ctx.knowsLand ? knowingStepCost(cost, to, ctx.owner) : cost;
+  return ctx.knowsLand ? knowingStepCost(cost, to, ctx.owner, !ctx.seen || ctx.seen[ti] === 1) : cost;
 }
 
 /**

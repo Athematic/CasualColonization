@@ -177,6 +177,16 @@ export interface PeopleProfile {
   claims: number;
   /** What its towns build when nothing is set, in order (the first it can). */
   plan: BuildingKind[];
+  /**
+   * Shares its maps with the peoples it meets (peoplemaps.ts, Beta 3 step 10b, where the scenario's
+   * `mechanics.mapKnowledge.share` has it): every profile but Combative.
+   */
+  shareMaps: boolean;
+  /**
+   * Times the scenario's `mechanics.mapKnowledge.range`: how far from its towns its runners explore
+   * (ai/people.ts `explore`). Creative goes farthest to meet partners, Naive keeps near home.
+   */
+  explore: number;
 }
 
 const competentPeople: PeopleProfile = {
@@ -195,6 +205,8 @@ const competentPeople: PeopleProfile = {
   margin: 1.2,
   claims: 1,
   plan: ['storagePits', 'longhouse', 'palisade', 'canoeLanding', 'workshop', 'dryingRacks'],
+  shareMaps: true,
+  explore: 1,
 };
 
 export const PEOPLE_PROFILES: Record<AiLevel, PeopleProfile> = {
@@ -212,6 +224,7 @@ export const PEOPLE_PROFILES: Record<AiLevel, PeopleProfile> = {
     peaceAfter: 12,
     claims: 0,
     plan: ['longhouse', 'storagePits', 'workshop', 'canoeLanding', 'dryingRacks', 'palisade'],
+    explore: 0.5,
   },
   competent: competentPeople,
   // Defends hard and raids rivals: walls first, muskets and horses, a smaller store, slow to make peace.
@@ -230,6 +243,8 @@ export const PEOPLE_PROFILES: Record<AiLevel, PeopleProfile> = {
     margin: 0.9,
     claims: 2,
     plan: ['palisade', 'storagePits', 'longhouse', 'workshop', 'canoeLanding', 'dryingRacks'],
+    shareMaps: false,
+    explore: 0.75,
   },
   // Trades and makes treaties: every kind with the nations, pacts and a league with the peoples.
   creative: {
@@ -242,6 +257,7 @@ export const PEOPLE_PROFILES: Record<AiLevel, PeopleProfile> = {
     barter: 2,
     peaceAfter: 5,
     plan: ['storagePits', 'longhouse', 'canoeLanding', 'workshop', 'dryingRacks', 'palisade'],
+    explore: 1.5,
   },
 };
 

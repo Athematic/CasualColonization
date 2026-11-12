@@ -51,7 +51,7 @@ import { peoplePairRandom } from './relations.js';
 import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { cooperationOf, LEVEL_COOPERATION } from './alliances.js';
-import { calendarOf, nationOf, peopleOf, scenarioOf, settlementKindIn, turnAfterYears, yearValue } from './scenarios/index.js';
+import { calendarOf, mechanicsOf, nationOf, peopleOf, scenarioOf, settlementKindIn, turnAfterYears, yearValue } from './scenarios/index.js';
 import type { YearsAround } from './scenarios/types.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, nationParty, peopleParty } from './treaties.js';
@@ -60,6 +60,7 @@ import { colonyList, setUnitLoc } from './unitindex.js';
 import { gridOf } from './grid.js';
 import { computerLeague, leagueWar, processLeagues } from './peopleleague.js';
 import { peopleProfileOf, type PeopleProfile } from './ai/profiles.js';
+import { shareMaps } from './peoplemaps.js';
 
 // ---------------------------------------------------------------------------
 // Who is who
@@ -689,6 +690,8 @@ function pairEnds(s: GameState, t: Treaty, why: 'lapsed' | 'cancelled' | 'war'):
 export function processPeopleDiplomacy(s: GameState): void {
   if (!peopleTreatiesOn(s)) return;
   noteContacts(s);
+  // Peoples that have met share their maps (Beta 3 step 10b), where the scenario has it.
+  if (mechanicsOf(s).mapKnowledge) shareMaps(s);
   for (const t of s.treaties ?? []) {
     if (t.end || !(t.kind in KIND_NAME) || !withPlayingPeople(s, t)) continue;
     const [a, b] = [t.parties[0].id, t.parties[1].id];

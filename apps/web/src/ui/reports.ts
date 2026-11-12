@@ -32,6 +32,7 @@ import {
   term,
   Term,
   tradeOverview,
+  peopleTradeOverview,
   TRIBES,
   UNIT_TYPES,
   warSupport,
@@ -279,6 +280,60 @@ function tradeTab(ctx: ReportContext): Child[] {
       h('p', { class: 'muted small' }, `Prices are sell / buy per unit before tax. ${partners.length ? 'Favoured Nation ports are shown at their own prices; green means they pay more than home. ' : ''}Sales are counted from the moment this report was added; games saved before start counting when loaded.`),
       // Each home port has its own character (rules/ports.ts): what it pays more for, what is cheap there.
       [nation, ...partners].map((port) => h('p', { class: 'muted small port-character' }, portSummary(port, goodsOf(app.state)) + '.'))),
+  ];
+}
+
+// ---- 2b. A people's trade (native-nations.md section 16) ----
+
+/**
+ * A playing people's Trade report (Beta 3 step 10b, T10): what it sold to the Europeans and bought
+ * from them, with the gold, what it bartered with other peoples, and the prices at the colonies it
+ * knows of, nearest first. Its gold comes only from this trade.
+ */
+function peopleTradeTab(ctx: ReportContext): Child[] {
+  const { app, nation } = ctx;
+  const s = app.state;
+  const o = peopleTradeOverview(s, nation);
+  const rows = o.rows.filter((r) => r.sold.total || r.bought.total || r.given || r.taken || r.stored);
+  type Row = (typeof rows)[number];
+  const n = (v: number) => (v ? v.toLocaleString() : '');
+  const cols: Column<Row>[] = [
+    { key: 'good', label: 'Good', sort: (r) => GOOD_DEFS[r.good].name, cell: (r) => h('span', { class: 'report-good' }, goodIcon(r.good), GOOD_DEFS[r.good].name) },
+    { key: 'stored', label: 'In the towns', title: 'Units in all your towns now', num: true, sort: (r) => r.stored, cell: (r) => n(r.stored) },
+    { key: 'sold', label: 'Sold', title: 'Units sold to European nations this game', num: true, sort: (r) => r.sold.total, cell: (r) => n(r.sold.total) },
+    { key: 'soldGold', label: 'Gold in', title: 'Gold the sales brought this game', num: true, sort: (r) => r.sold.gold, cell: (r) => n(r.sold.gold) },
+    { key: 'bought', label: 'Bought', title: 'Units bought from European nations this game', num: true, sort: (r) => r.bought.total, cell: (r) => n(r.bought.total) },
+    { key: 'boughtGold', label: 'Gold out', title: 'Gold paid for them this game', num: true, sort: (r) => r.bought.gold, cell: (r) => n(r.bought.gold) },
+    { key: 'last', label: 'Last turn', title: 'Units sold / bought last turn', num: true, sort: (r) => r.sold.last + r.bought.last, cell: (r) => (r.sold.last || r.bought.last ? `${r.sold.last} / ${r.bought.last}` : '') },
+    { key: 'given', label: 'Bartered away', title: 'Units given in barter with other peoples this game', num: true, sort: (r) => r.given, cell: (r) => n(r.given) },
+    { key: 'taken', label: 'Bartered for', title: 'Units taken in barter with other peoples this game', num: true, sort: (r) => r.taken, cell: (r) => n(r.taken) },
+  ];
+  const furs = o.rows.find((r) => r.good === 'furs');
+  const goldIn = o.rows.reduce((t, r) => t + r.sold.gold, 0);
+  const goldOut = o.rows.reduce((t, r) => t + r.bought.gold, 0);
+  const priceCell = (e: { good: GoodId; price: number }, wanted = false) =>
+    h('span', { class: `report-chip${wanted ? ' good-text' : ''}`, title: `${GOOD_DEFS[e.good].name}${wanted ? ' (wanted: you pay more)' : ''}` }, goodIcon(e.good, 18), String(e.price));
+  return [
+    h('div', { class: 'report-stats' },
+      stat('Gold', o.gold.toLocaleString(), 'only from trade with the Europeans'),
+      stat('Furs sold', (furs?.sold.total ?? 0).toLocaleString(), furs?.sold.gold ? `for ${furs.sold.gold.toLocaleString()} gold` : 'none yet'),
+      stat('Gold from sales', goldIn.toLocaleString(), `spent ${goldOut.toLocaleString()} on goods`),
+      stat('Wanted most', o.wants.length ? GOOD_DEFS[o.wants[0]].name : '—', o.wants.length > 1 ? `then ${o.wants.slice(1).map((g) => GOOD_DEFS[g].name.toLowerCase()).join(', ')}` : undefined)),
+    card('Trade this game',
+      rows.length ? sortableTable('people-trade', cols, rows, ctx.rerender) : empty('Nothing sold, bought or bartered yet.'),
+      h('p', { class: 'muted small' }, 'A carrier beside a European colony or wagon train sells and buys there; barter with other peoples trades goods for goods. Your computer people also trades on its own once a year.')),
+    card('Prices at the colonies you know',
+      o.nations.length
+        ? scroll(h('table', { class: 'table report-table' },
+            h('thead', null, h('tr', null, h('th', null, 'Nation'), h('th', null, 'Nearest colony'), h('th', { class: 'num' }, 'Tiles'), h('th', null, 'They pay you'), h('th', null, 'You pay them'))),
+            h('tbody', null, o.nations.map((e) => h('tr', { class: e.atWar ? 'boycott' : undefined },
+              h('td', null, flag(s, e.nation), ' ', nationOf(s, e.nation).name, e.treaty ? h('span', { class: 'pill good', title: 'A trade treaty: you get its prices when you come to trade' }, 'treaty') : null, e.atWar ? h('span', { class: 'pill bad' }, 'war') : null),
+              h('td', null, where(app, e.colony.name, e.colony)),
+              h('td', { class: 'num' }, String(e.distance), e.nearby ? h('span', { class: 'muted small', title: 'Within a trade visit’s reach of one of your towns' }, ' near') : null),
+              h('td', null, e.sell.map((x) => priceCell(x))),
+              h('td', null, e.buy.map((x) => priceCell(x, o.wants.includes(x.good)))))))))
+        : empty('You know of no European colony yet.'),
+      h('p', { class: 'muted small' }, 'Gold a unit, when your people come to trade. A trade treaty gives better prices both ways; you pay more for the goods you want most.')),
   ];
 }
 
@@ -600,7 +655,8 @@ function historyTab(ctx: ReportContext): Child[] {
 
 export const REPORT_TABS: ReportTab[] = [
   { id: 'colonies', name: 'Colonies', title: 'Colonial advisor', render: coloniesTab, people: { name: 'Towns', title: 'The towns' } },
-  { id: 'trade', name: 'Trade', title: 'Trade advisor', render: tradeTab, shown: notPeople },
+  // A people's own Trade report: its sales, purchases and barter, and the prices nearby (step 10b).
+  { id: 'trade', name: 'Trade', title: 'Trade advisor', render: (ctx) => (notPeople(ctx.app.state, ctx.nation) ? tradeTab(ctx) : peopleTradeTab(ctx)), people: { name: 'Trade', title: 'Trade with the Europeans and the peoples' } },
   { id: 'military', name: 'Military', title: 'Military advisor', render: militaryTab },
   { id: 'naval', name: 'Naval', title: 'Naval advisor', render: navalTab },
   { id: 'religion', name: 'Religion', title: 'Religious advisor', render: religionTab, shown: notPeople },

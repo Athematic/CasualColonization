@@ -319,6 +319,11 @@ export const NORTH_EAST: Scenario = {
     // colony and town was struck about every 25 years, and the Europeans' small colonies, among
     // settlements everywhere, lost more colonists to it than they gained.
     epidemics: { chance: 1 / 75, years: 3, loss: 1, reach: 8 },
+    // Knowledge of the land (Beta 3 step 10b, native-nations.md section 16): a people moves swiftly on
+    // unclaimed land it has seen, peoples that meet share their maps (a people nobody plays its land
+    // within 3 tiles of its settlements, again every 50 years), and computer peoples' runners explore
+    // up to 12 tiles from their towns (times their profile's reach).
+    mapKnowledge: { seen: true, share: { homeland: 3, every: 50 }, range: 12 },
   },
   // Both sides judged at the end year, in the decided order (T14). The peoples' peaceful ways are
   // tuned so that a people wins in about 1 game in 5 (T15; Beta 3 step 9, native-nations.md section

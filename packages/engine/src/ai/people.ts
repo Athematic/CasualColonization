@@ -22,6 +22,9 @@
  * - **Claims** up to its profile's `claims` tiles of unclaimed land next to its own (T5).
  * - **Raids** (Combative): war on a European nation with a colony close to its towns, when it has
  *   warriors to spare and has been at peace for a generation.
+ * - **Explores** (Beta 3 step 10b, where the scenario has `mechanics.mapKnowledge`): its runners go
+ *   to the edge of what it knows within its profile's reach of its towns; what they see is land it
+ *   then knows (T13), and the peoples they meet share their maps (peoplemaps.ts).
  * Its towns' builds and reserve follow the profile too (peopleeconomy.ts `planTownBuild`,
  * `storeYearsOf`); births, elders' teaching and iron tools are the economy's own rules.
  */
@@ -31,7 +34,7 @@ import { attack, defencePower, offencePower } from '../combat.js';
 import { proposePeace, startWar } from '../diplomacy.js';
 import { gridOf } from '../grid.js';
 import { regionHealth, regionOf, regionRenewal, turnsInYear } from '../land.js';
-import { goTo } from '../movement.js';
+import { goTo, setDestination } from '../movement.js';
 import { claimLand } from '../peopleeconomy.js';
 import { pairTreaties, peopleProposals } from '../peoplediplomacy.js';
 import { computerBarter, computerTradeVisits } from '../peopletrade.js';
@@ -39,7 +42,7 @@ import { kindOfId, systemsOfId } from '../playerkind.js';
 import { colonyAt, colonyWorkers, isShip, isWater, neighbours, tileAt } from '../queries.js';
 import { wayOf } from '../rules/peoples.js';
 import { UNIT_TYPES } from '../rules/units.js';
-import { calendarOf, peopleEconomyOf, yearOf, yearValue } from '../scenarios/index.js';
+import { calendarOf, mechanicsOf, peopleEconomyOf, yearOf, yearValue } from '../scenarios/index.js';
 import type { Colony, GameState, Job, Player, Unit } from '../types.js';
 import { colonyList, ownedUnitsView, unitList } from '../unitindex.js';
 import { safely } from './common.js';
@@ -61,6 +64,7 @@ export function runPeopleAi(s: GameState, p: Player): void {
   peopleProposals(s, p, prof);
   armWarriors(s, p, prof);
   defend(s, p, prof);
+  explore(s, p, prof);
 }
 
 // ---------------------------------------------------------------------------
@@ -280,5 +284,88 @@ function claimAround(s: GameState, p: Player, prof: PeopleProfile): void {
         left--;
       });
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Exploring (Beta 3 step 10b)
+
+/**
+ * Its runners on the map with no orders go to the nearest land tile it has seen beside land it has
+ * not, within `mechanics.mapKnowledge.range` times its profile's `explore` tiles of one of its towns,
+ * nearest by steps over the land it has seen (a breadth-first search, so an edge across water or
+ * behind another's colony is never tried); with nothing left within reach, they go home. Runners
+ * already on their way keep going (turn.ts).
+ */
+function explore(s: GameState, p: Player, prof: PeopleProfile): void {
+  const rules = mechanicsOf(s).mapKnowledge;
+  if (!rules || !rules.range) return;
+  const reach = Math.round(rules.range * prof.explore);
+  if (reach <= 0) return;
+  const towns = colonyList(s).filter((c) => c.owner === p.id);
+  if (!towns.length) return;
+  // A runner at home looks again every fifth turn: there is seldom anything new to find.
+  const atHome = (u: Unit) => u.loc.kind === 'map' && colonyAt(s, u.loc.x, u.loc.y)?.owner === p.id;
+  const runners = ownedUnitsView(s, p.id).filter((u) => u.type === 'runner' && u.loc.kind === 'map' && !u.dest && u.moves > 0 && (s.turn % 5 === 0 || !atHome(u)));
+  if (!runners.length) return;
+  const grid = gridOf(s);
+  const w = s.map.width;
+  const h = s.map.height;
+  // The land within reach of its towns that it has seen, but settlements and others' colonies: 1 where a runner may go.
+  const area = new Uint8Array(w * h);
+  for (const town of towns) {
+    for (let y = Math.max(0, town.y - reach); y <= Math.min(h - 1, town.y + reach); y++) {
+      for (let x = Math.max(0, town.x - reach); x <= Math.min(w - 1, town.x + reach); x++) {
+        if (grid.distance(town.x, town.y, x, y) <= reach) area[y * w + x] = 1;
+      }
+    }
+  }
+  for (const k in s.settlements) area[s.settlements[k].y * w + s.settlements[k].x] = 0;
+  const seen = (i: number) => p.explored[i] === 1;
+  const open = (i: number) => {
+    if (!area[i] || !seen(i) || isWater(s.map.tiles[i])) return false;
+    const x = i % w;
+    const c = colonyAt(s, x, (i - x) / w);
+    return !c || c.owner === p.id;
+  };
+  for (const u of runners) {
+    if (u.loc.kind !== 'map') continue;
+    const { x, y } = u.loc;
+    const from = y * w + x;
+    // Breadth-first over the open land, nearest first; `prev` leads each tile back to the runner.
+    let goal = -1;
+    const prev = new Int32Array(w * h).fill(-2);
+    prev[from] = -1;
+    const queue = [from];
+    for (let k = 0; k < queue.length; k++) {
+      const i = queue[k];
+      const qx = i % w;
+      const around = neighbours(s, qx, (i - qx) / w);
+      if (i !== from && around.some((n) => !seen(n.y * w + n.x))) {
+        goal = i;
+        break;
+      }
+      for (const n of around) {
+        const j = n.y * w + n.x;
+        if (prev[j] !== -2) continue;
+        prev[j] = i;
+        if (open(j)) queue.push(j);
+      }
+    }
+    let going = false;
+    if (goal >= 0) {
+      // The route the search found, so no other search is needed (setDestination, continueOrders).
+      const path: { x: number; y: number }[] = [];
+      for (let i = goal; i !== from; i = prev[i]) path.push({ x: i % w, y: Math.floor(i / w) });
+      path.reverse();
+      const to = path[path.length - 1];
+      safely(() => {
+        setDestination(s, u.id, { x: to.x, y: to.y }, path);
+        going = true;
+      });
+    }
+    if (going || atHome(u)) continue;
+    const home = towns.reduce((b, c) => (grid.distance(c.x, c.y, x, y) < grid.distance(b.x, b.y, x, y) ? c : b));
+    safely(() => goTo(s, u, home.x, home.y));
   }
 }

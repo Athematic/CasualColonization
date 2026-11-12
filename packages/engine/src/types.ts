@@ -600,6 +600,11 @@ export interface PeopleRelation {
    * scenario has treaties with peoples.
    */
   tookLand?: number;
+  /**
+   * Turn the two last shared their maps (peoplemaps.ts, Beta 3 step 10b), in a pair with a playing
+   * people and the scenario's `mechanics.mapKnowledge.share`. Missing until they first do.
+   */
+  maps?: number;
 }
 
 /**
@@ -877,6 +882,17 @@ export interface GoodsTally {
   /** Sold to native settlements, and bought from them (by wagon trains, ships and from visiting braves). Missing means none. */
   natives?: Partial<Record<GoodId, number>>;
   fromNatives?: Partial<Record<GoodId, number>>;
+  /**
+   * A playing people's trade (native-nations.md section 16, its Trade report): units sold to European
+   * nations and the gold they brought, units bought from them and the gold paid, and goods given and
+   * taken in barter with other peoples. Missing means none (and in every game without a playing people).
+   */
+  toNations?: Partial<Record<GoodId, number>>;
+  toNationsGold?: Partial<Record<GoodId, number>>;
+  fromNations?: Partial<Record<GoodId, number>>;
+  fromNationsGold?: Partial<Record<GoodId, number>>;
+  barterGiven?: Partial<Record<GoodId, number>>;
+  barterTaken?: Partial<Record<GoodId, number>>;
 }
 
 export interface Ledger {

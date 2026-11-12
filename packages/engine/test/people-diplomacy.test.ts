@@ -36,6 +36,7 @@ import {
   pairTreaty,
   pairTreatyProblem,
   peopleGoodsPrice,
+  peopleTradeOverview,
   peopleLandClosedTo,
   peopleLeasableTiles,
   peopleRelationOf,
@@ -337,6 +338,13 @@ describe('trade for gold between a people and Europeans (T10)', () => {
     const bought = Math.min(50, Math.floor(gold / musket));
     expect(t.goods.muskets).toBe(bought);
     expect(player(s, 'iroquois').gold).toBe(gold - bought * musket);
+    // The people's Trade report counts both deals (step 10b), and prices the colonies it knows.
+    const report = peopleTradeOverview(s, 'iroquois');
+    expect(report.rows.find((r) => r.good === 'furs')!.sold).toEqual({ total: 100, gold: 100 * price, last: 0 });
+    expect(report.rows.find((r) => r.good === 'muskets')!.bought).toEqual({ total: bought, gold: bought * musket, last: 0 });
+    expect(report.wants[0]).toBe('muskets');
+    expect(report.gold).toBe(player(s, 'iroquois').gold);
+    for (const e of report.nations) expect(e.sell.find((x) => x.good === 'furs')!.price).toBe(price);
     // Food is sold only above the town's reserve.
     t.goods.food = 0;
     expect(() => tradeWithPeople(s, 'iroquois', w.id, t.id, 'food', 10, true)).toThrow(/no food/);

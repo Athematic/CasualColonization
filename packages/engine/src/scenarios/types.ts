@@ -213,6 +213,36 @@ export interface Mechanics {
    * and the Caribbean).
    */
   epidemics?: false | EpidemicRules;
+  /**
+   * Knowledge of the land, explored and shared (native-nations.md section 16, Beta 3 step 10b): a
+   * playing people knows unclaimed land (T13) only once it has seen it, peoples share their maps
+   * when they meet, and computer peoples send their runners to explore. Absent or false means off
+   * (the Americas and the Caribbean).
+   */
+  mapKnowledge?: false | MapKnowledgeRules;
+}
+
+/** Knowledge of the land (`Mechanics.mapKnowledge`). */
+export interface MapKnowledgeRules {
+  /**
+   * A playing people knows land nobody claims (moves on it as along a river, T13, movement.ts
+   * `knownLand`) only once it has explored it; its own claimed land it always knows.
+   */
+  seen: boolean;
+  /**
+   * Peoples share their maps when they meet (peoplemaps.ts): two playing peoples each give the other
+   * all they have explored, and a people nobody plays gives a playing people its homeland, the land
+   * within `homeland` tiles of its settlements. Not while either side is at war with the other or
+   * holds it hostile, is a Combative computer people (its profile's `shareMaps`), or is at war with
+   * one of the other's allies (a mutual defence pact, a league). Again every `every` years while
+   * they may (absent: once). False: no sharing.
+   */
+  share: false | { homeland: number; every?: number };
+  /**
+   * How far from its towns a computer people's runners explore, in tiles, times its profile's
+   * `explore` (ai/people.ts); 0 keeps them home.
+   */
+  range: number;
 }
 
 /** Epidemics (`Mechanics.epidemics`). */

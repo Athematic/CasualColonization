@@ -22,6 +22,7 @@
  */
 import { fail } from './errors.js';
 import { gridOf } from './grid.js';
+import { noteGoods } from './history.js';
 import { notePeopleTrade, settlementName } from './natives.js';
 import { pairAtWar, pairTreaty, playingPeople, sideName, standingWith } from './peoplediplomacy.js';
 import { reserveOf } from './peopleeconomy.js';
@@ -36,6 +37,21 @@ import { track } from './telemetry.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
 import { colonyList } from './unitindex.js';
 import { sellPrice } from './europe.js';
+
+/** Notes a playing people's sale to, or purchase from, a European nation in its ledger (its Trade report). */
+function noteDeal(s: GameState, people: PlayerId, sold: boolean, good: GoodId, n: number, gold: number): void {
+  noteGoods(s, people, sold ? 'toNations' : 'fromNations', good, n);
+  noteGoods(s, people, sold ? 'toNationsGold' : 'fromNationsGold', good, gold);
+}
+
+/** Notes a barter in the ledger of each playing people in it. */
+function noteBarter(s: GameState, by: PlayerId, other: PlayerId, give: GoodId, given: number, take: GoodId, taken: number): void {
+  noteGoods(s, by, 'barterGiven', give, given);
+  noteGoods(s, by, 'barterTaken', take, taken);
+  if (!playingPeople(s, other)) return;
+  noteGoods(s, other, 'barterGiven', take, taken);
+  noteGoods(s, other, 'barterTaken', give, given);
+}
 
 /** What a European pays a people for a unit of its goods (a settlement's asking price, Beta 2). */
 export function peopleGoodsPrice(s: GameState, good: GoodId): number {
@@ -122,6 +138,7 @@ export function tradeWithPeople(s: GameState, by: PlayerId, unitId: string, colo
   player(s, buyer).gold -= gold;
   player(s, seller).gold += gold;
   notePeopleTrade(s, nation, people as TribeId, gold);
+  noteDeal(s, people, seller === people, good, n, gold);
   track(by, 'cmd:tradeWithPeople');
   track(people, seller === people ? 'trade:people sold' : 'trade:people bought', gold);
   const text = `${sideName(s, seller).replace(/^the /, 'The ')} sell ${n} ${name} to ${sideName(s, buyer)} at ${c.name} for ${gold} gold.`;
@@ -185,6 +202,7 @@ export function barter(s: GameState, by: PlayerId, unitId: string, at: { colonyI
     if (give === 'muskets' || give === 'horses') goods[give] = (goods[give] ?? 0) + given;
   }
   standingWith(s, u.owner, other).volume += Math.round(n * GOOD_DEFS[take].nativeValue);
+  noteBarter(s, u.owner, other, give, given, take, n);
   track(u.owner, 'cmd:barter');
   const where = town ? town.name : settlementName(s, st!);
   const text = `At ${where}, ${sideName(s, u.owner)} give ${given} ${GOOD_DEFS[give].name.toLowerCase()} for ${n} ${GOOD_DEFS[take].name.toLowerCase()} of ${sideName(s, other)}.`;
@@ -277,6 +295,7 @@ export function computerTradeVisits(s: GameState, people: PlayerId, prof?: { sel
       me.gold -= gold;
       buyer.gold += gold;
       notePeopleTrade(s, best.owner, people as TribeId, gold);
+      noteDeal(s, people, false, good, n, gold);
       track(people, 'trade:people bought', gold);
       track(people, `trade:people bought ${good}`, n);
       const text = `${sideName(s, people).replace(/^the /, 'The ')} buy ${n} ${GOOD_DEFS[good].name.toLowerCase()} at ${best.name} for ${gold} gold and take them to ${town.name}.`;
@@ -293,6 +312,7 @@ function sellTo(s: GameState, people: PlayerId, town: Colony, colony: Colony, go
   player(s, colony.owner).gold -= gold;
   player(s, people).gold += gold;
   notePeopleTrade(s, colony.owner, people as TribeId, gold);
+  noteDeal(s, people, true, good, n, gold);
   track(people, 'trade:people sold', gold);
   const text = `${sideName(s, people).replace(/^the /, 'The ')} bring ${n} ${GOOD_DEFS[good].name.toLowerCase()} from ${town.name} to ${colony.name} and sell them for ${gold} gold.`;
   message(s, text, people, colony);
@@ -373,6 +393,7 @@ function barterVisit(s: GameState, people: PlayerId, from: Colony, other: Player
         if (give === 'muskets' || give === 'horses') goods[give] = (goods[give] ?? 0) + given;
       }
       standingWith(s, people, other).volume += Math.round(n * GOOD_DEFS[take].nativeValue);
+      noteBarter(s, people, other, give, given, take, n);
       track(people, 'trade:people barter');
       const where = town ? town.name : settlementName(s, st!);
       const text = `At ${where}, ${sideName(s, people)} give ${given} ${GOOD_DEFS[give].name.toLowerCase()} from ${from.name} for ${n} ${GOOD_DEFS[take].name.toLowerCase()} of ${sideName(s, other)}.`;

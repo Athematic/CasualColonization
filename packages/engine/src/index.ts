@@ -47,6 +47,7 @@ export * from './playerkind.js';
 export * from './peopleeconomy.js';
 export * from './land.js';
 export * from './peoplediplomacy.js';
+export * from './peoplemaps.js';
 export * from './peopleleague.js';
 export * from './peoplevictory.js';
 export * from './peopletrade.js';

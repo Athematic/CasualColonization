@@ -21,6 +21,8 @@ import type { PlayerId, TribeId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { ledgerFor } from './history.js';
+import { pairTreaty } from './peoplediplomacy.js';
+import { pairPrice } from './peopletrade.js';
 import type { Colony, GameState, Settlement, Unit } from './types.js';
 import { goodsOf, nativeRulesOf, peopleOf, term } from './scenarios/index.js';
 import { colonyList, unitList } from './unitindex.js';
@@ -159,6 +161,106 @@ export function tradeOverview(s: GameState, nation: PlayerId): TradeRow[] {
     foreign: ledger.total.foreign[g] ?? 0,
     stored: colonies.reduce((n, c) => n + c.goods[g], 0),
   }));
+}
+
+// ---- A playing people's trade (native-nations.md section 16) ----
+
+/** One good in a people's trade report: what it sold, bought and bartered over the game and last turn. */
+export interface PeopleTradeRow {
+  good: GoodId;
+  /** Units sold to European nations, and the gold they brought: over the game and last turn. */
+  sold: { total: number; gold: number; last: number };
+  /** Units bought from European nations, and the gold paid. */
+  bought: { total: number; gold: number; last: number };
+  /** Units given and taken in barter with other peoples, over the game. */
+  given: number;
+  taken: number;
+  /** Units in its towns now. */
+  stored: number;
+}
+
+/** A European nation whose colony the people knows of, nearest first: the prices it trades at there. */
+export interface PeopleTradeNation {
+  nation: PlayerId;
+  /** Its colony nearest one of the people's towns, and how far (tiles). */
+  colony: { id: string; name: string; x: number; y: number };
+  distance: number;
+  /** Within a trade visit's reach of one of the people's towns (`visitRange`). */
+  nearby: boolean;
+  atWar: boolean;
+  /** The two hold a trade treaty, so the people get its prices when they come to trade. */
+  treaty: boolean;
+  /** What a unit of the people's goods fetches from the nation, and what a unit of its goods costs the people, when the people come to trade. */
+  sell: { good: GoodId; price: number }[];
+  buy: { good: GoodId; price: number }[];
+}
+
+export interface PeopleTradeOverview {
+  rows: PeopleTradeRow[];
+  nations: PeopleTradeNation[];
+  /** The goods the people want most, first the one it wants above all (it pays more for them). */
+  wants: GoodId[];
+  gold: number;
+}
+
+/** The goods a people sells to Europeans, as its trade report prices them (those of the scenario). */
+const PEOPLE_SELLS: readonly GoodId[] = ['furs', 'food', 'tobacco', 'coats'];
+
+/** The European goods a people buys, as its trade report prices them. */
+const PEOPLE_BUYS: readonly GoodId[] = ['tools', 'muskets', 'horses', 'cloth', 'tradeGoods'];
+
+/**
+ * A playing people's Trade report (Beta 3 step 10b, T10): furs and other goods sold to European
+ * nations and goods bought from them, with the gold, over the game (its ledger, history.ts), barter
+ * with other peoples, and the prices at the colonies it knows of (those on its map), nearest first.
+ */
+export function peopleTradeOverview(s: GameState, people: PlayerId): PeopleTradeOverview {
+  const me = player(s, people);
+  const goods = goodsOf(s);
+  const ledger = ledgerFor(s, people);
+  const total = ledger.total;
+  const last = ledger.last;
+  const towns = colonyList(s).filter((c) => c.owner === people);
+  const rows: PeopleTradeRow[] = goods.map((g) => ({
+    good: g,
+    sold: { total: total.toNations?.[g] ?? 0, gold: total.toNationsGold?.[g] ?? 0, last: last.toNations?.[g] ?? 0 },
+    bought: { total: total.fromNations?.[g] ?? 0, gold: total.fromNationsGold?.[g] ?? 0, last: last.fromNations?.[g] ?? 0 },
+    given: total.barterGiven?.[g] ?? 0,
+    taken: total.barterTaken?.[g] ?? 0,
+    stored: towns.reduce((n, c) => n + (c.goods[g] ?? 0), 0),
+  }));
+  const grid = gridOf(s);
+  const w = s.map.width;
+  const reach = nativeRulesOf(s).visitRange;
+  const nearest = new Map<PlayerId, { c: Colony; d: number }>();
+  for (const c of colonyList(s)) {
+    if (c.owner === people || c.owner === 'crown' || isPeopleId(s, c.owner) || !me.explored[c.y * w + c.x]) continue;
+    let d = Infinity;
+    for (const t of towns) d = Math.min(d, grid.distance(c.x, c.y, t.x, t.y));
+    const best = nearest.get(c.owner);
+    if (!best || d < best.d) nearest.set(c.owner, { c, d });
+  }
+  const sells = PEOPLE_SELLS.filter((g) => goods.includes(g));
+  const buys = PEOPLE_BUYS.filter((g) => goods.includes(g));
+  const nations: PeopleTradeNation[] = [...nearest]
+    .sort((a, b) => a[1].d - b[1].d)
+    .map(([nation, { c, d }]) => ({
+      nation,
+      colony: { id: c.id, name: c.name, x: c.x, y: c.y },
+      distance: d,
+      nearby: d <= reach,
+      atWar: me.stance[nation] === 'war',
+      treaty: !!pairTreaty(s, 'people-trade', people, nation),
+      sell: sells.map((g) => ({ good: g, price: round1(pairPrice(s, people, nation, g, people)) })),
+      buy: buys.map((g) => ({ good: g, price: round1(pairPrice(s, nation, people, g, people)) })),
+    }));
+  return { rows, nations, wants: peopleOf(s, people as TribeId).wants.filter((g) => goods.includes(g)), gold: me.gold };
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+function isPeopleId(s: GameState, id: PlayerId): boolean {
+  return s.players.some((p) => p.id === id && p.kind === 'people') || s.tribes.some((t) => t.id === id);
 }
 
 // ---- Military and naval ----
