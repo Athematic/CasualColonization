@@ -12,6 +12,8 @@ import { clear, h } from '../dom.js';
 const ROUTINE = [
   / begins\.$/,
   /has been born in/,
+  // A people's births (native-nations.md T10).
+  /^A child has been born in /,
   /spoiled in .*warehouse/,
   /has built an? /,
   /has completed the/,
@@ -30,6 +32,18 @@ const ROUTINE = [
   /has joined the .+ of /,
   /You decide in the turn-start briefing\.$/,
 ];
+
+/**
+ * The kind of a notable message the peoples' game brings (native-nations.md T12, T18, T10), for a
+ * tag beside it in the briefing: an epidemic, an arrival from across the sea, a hard year or hunger.
+ */
+export function noticeKind(m: GameMessage): { id: string; label: string } | null {
+  if (/^An epidemic has reached /.test(m.text)) return { id: 'epidemic', label: 'Epidemic' };
+  if (/^Ships of .+ have reached /.test(m.text)) return { id: 'arrival', label: 'Arrival' };
+  if (/^A hard year around /.test(m.text)) return { id: 'hard-year', label: 'Hard year' };
+  if (/^Hunger in |is hungry for a second year|stores have run out/.test(m.text)) return { id: 'hunger', label: 'Hunger' };
+  return null;
+}
 
 export function isRoutine(m: GameMessage): boolean {
   return ROUTINE.some((re) => re.test(m.text));
@@ -359,10 +373,12 @@ export function showTurnStart(app: App, news: TurnNews, opts: { father?: boolean
         body.append(
           h('section', { class: 'turn-section', 'aria-label': 'News' },
             h('h3', null, 'This turn'),
-            h('ul', { class: 'notices' }, news.notable.map((m) =>
-              h('li', null, m.text, m.at
+            h('ul', { class: 'notices' }, news.notable.map((m) => {
+              const kind = noticeKind(m);
+              return h('li', { 'data-kind': kind?.id }, kind ? h('span', { class: `pill notice-${kind.id}` }, kind.label) : null, kind ? ' ' : null, m.text, m.at
                 ? h('button', { class: 'btn tiny', title: 'Show on the map', onclick: () => { app.centerOn(m.at!.x, m.at!.y); close(); } }, 'Show')
-                : null)))));
+                : null);
+            }))));
       }
       if (news.routine.length) {
         body.append(

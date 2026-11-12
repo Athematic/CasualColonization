@@ -1,7 +1,7 @@
 import { sellPrice } from './europe.js';
 import { nationsPresent } from './presence.js';
 import { sonsOfLiberty } from './production.js';
-import { AMERICAS_CALENDAR, buildingsOf, goodsOf, mechanicsOf, scoreWeightsFor, Term } from './scenarios/index.js';
+import { AMERICAS_CALENDAR, buildingsOf, CouncilText, goodsOf, mechanicsOf, scoreWeightsFor, Term } from './scenarios/index.js';
 import { homelandHealth, homelandKept, peopleCount, sidesMet } from './peoplevictory.js';
 import { pairStanding } from './peoplediplomacy.js';
 import { storeYearsHeld } from './peopleeconomy.js';
@@ -177,7 +177,7 @@ function peopleScore(s: GameState, p: Player, w: ScoreWeights): ScoreBreakdown {
     line('stores', 'Stores', stores, 'years of food in store', stores * w.peopleStoreYear),
     line('treaties', 'Treaties', treaties, 'treaties', treaties * w.peopleTreaty),
     line('trust', 'Trust', trust, 'nations and peoples that trust it', trust * w.peopleTrust),
-    line('council', Term(s, 'members'), p.fathers.length, 'members', p.fathers.length * w.peopleCouncil),
+    line('council', CouncilText(s, p.id, 'council'), p.fathers.length, 'members', p.fathers.length * w.peopleCouncil),
   );
   return { lines, total: lines.reduce((sum, l) => sum + l.points, 0) };
 }

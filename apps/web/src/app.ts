@@ -653,7 +653,8 @@ export class App {
     const reason = canFoundColony(this.state, u);
     if (reason) return toast(reason, 'error');
     const cost = charterCost(this.state, u.owner);
-    const name = await promptDialog(cost > 0 ? `Found a colony (charter: ${cost} gold)` : 'Found a colony', 'Name of the new colony', this.suggestedName());
+    const town = isPeoplePlayer(this.me);
+    const name = await promptDialog(town ? 'Found a town' : cost > 0 ? `Found a colony (charter: ${cost} gold)` : 'Found a colony', town ? 'Name of the new town' : 'Name of the new colony', this.suggestedName());
     if (name === null) return;
     if (this.dispatch({ type: 'foundColony', unitId: u.id, name })) {
       const c = colonyAt(this.state, ...(this.posOf(u) as [number, number]));

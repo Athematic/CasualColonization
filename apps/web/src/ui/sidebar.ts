@@ -117,7 +117,11 @@ export class Sidebar {
         people ? null : h('div', { class: 'muted' }, `Crosses ${me.crosses}/${me.crossesRequired} · Recruit ${recruitPrice(s, me)}`),
         h('div', { class: 'muted' },
           h('button', { class: 'link', onclick: () => void app.chooseFather() },
-            me.currentFather ? `${CouncilText(s, me.id, 'councilShort')}: ${FATHERS[me.currentFather].name} ${me.fatherBells}/${nextFatherCost(s, me)}` : `${CouncilText(s, me.id, 'councilShort')}: choose a ${councilText(s, me.id, 'member')} (${me.fatherBells} ${councilText(s, me.id, 'product')})`),
+            me.currentFather
+              ? `${CouncilText(s, me.id, 'councilShort')}: ${FATHERS[me.currentFather].name} ${me.fatherBells}/${nextFatherCost(s, me)}`
+              : !Object.values(me.fatherOffer ?? {}).some(Boolean) && me.fathers.length
+                ? `${CouncilText(s, me.id, 'councilShort')}: every seat is filled (${me.fathers.length} ${councilText(s, me.id, 'members')})`
+                : `${CouncilText(s, me.id, 'councilShort')}: choose a ${councilText(s, me.id, 'member')} (${me.fatherBells} ${councilText(s, me.id, 'product')})`),
           ' · ',
           h('button', { class: 'link', title: `The ${councilText(s, me.id, 'councilShort')} hall (K)`, onclick: () => app.openCongress() }, 'Hall')),
         me.independence === 'declared' ? h('div', null, h('span', { class: 'pill bad' }, `${Term(app.state, 'independenceWar')}`)) : null,

@@ -79,6 +79,8 @@ export interface ReportTab {
   /** The advisor's title, shown as the tab's heading. */
   title: string;
   render: (ctx: ReportContext) => Child[];
+  /** A playing people's own words for the tab: its towns, its council (native-nations.md T2, T8). */
+  people?: { name: string; title: string };
   /** Only for some players: a playing people has no home port market or crosses (native-nations.md T1). */
   shown?: (s: GameState, nation: PlayerId) => boolean;
 }
@@ -597,14 +599,14 @@ function historyTab(ctx: ReportContext): Child[] {
 }
 
 export const REPORT_TABS: ReportTab[] = [
-  { id: 'colonies', name: 'Colonies', title: 'Colonial advisor', render: coloniesTab },
+  { id: 'colonies', name: 'Colonies', title: 'Colonial advisor', render: coloniesTab, people: { name: 'Towns', title: 'The towns' } },
   { id: 'trade', name: 'Trade', title: 'Trade advisor', render: tradeTab, shown: notPeople },
   { id: 'military', name: 'Military', title: 'Military advisor', render: militaryTab },
   { id: 'naval', name: 'Naval', title: 'Naval advisor', render: navalTab },
   { id: 'religion', name: 'Religion', title: 'Religious advisor', render: religionTab, shown: notPeople },
-  { id: 'natives', name: 'Natives', title: 'Indian advisor', render: nativesTab },
+  { id: 'natives', name: 'Natives', title: 'Indian advisor', render: nativesTab, people: { name: 'Peoples', title: 'The peoples nobody plays' } },
   { id: 'congress', name: '{councilShort}', title: '{council}', render: congressTab },
-  { id: 'history', name: 'History', title: 'History of the colonies', render: historyTab },
+  { id: 'history', name: 'History', title: 'History of the colonies', render: historyTab, people: { name: 'History', title: 'History' } },
   // The scenario's ways to win and where the player stands (Beta 3 step 10; native-nations.md T14).
   { id: 'victory', name: 'Victory', title: 'Ways to win', render: (ctx) => victoryTab(ctx) },
 ];
@@ -625,6 +627,17 @@ export class ReportsScreen implements Screen {
     lastTab = this.tab;
     this.body = h('div', { class: 'screen-body' });
     this.el = h('section', { class: 'screen reports-screen', role: 'dialog', 'aria-label': 'Reports' }, this.body);
+  }
+
+  /** A tab's name or title in the words of the player it is about: a people's council is its own (T8). */
+  private words(t: ReportTab, key: 'name' | 'title'): string {
+    const s = this.app.state;
+    const nation = this.nation();
+    if (isPeoplePlayer(s.players.find((p) => p.id === nation))) {
+      if (t.people) return t.people[key];
+      if (t.id === 'congress') return CouncilText(s, nation, key === 'name' ? 'councilShort' : 'council');
+    }
+    return withTerms(s, t[key]);
   }
 
   /** The reports shown for the nation they are about. */
@@ -699,10 +712,10 @@ export class ReportsScreen implements Screen {
           class: `tab${t.id === this.tab ? ' active' : ''}`,
           role: 'tab',
           'aria-selected': String(t.id === this.tab),
-          title: i < 8 ? `${withTerms(this.app.state, t.title)} (F${i + 1}, or ${i + 1} while the reports are open)` : `${withTerms(this.app.state, t.title)} (${i + 1} while the reports are open)`,
+          title: i < 8 ? `${this.words(t, 'title')} (F${i + 1}, or ${i + 1} while the reports are open)` : `${this.words(t, 'title')} (${i + 1} while the reports are open)`,
           onclick: () => this.setTab(t.id),
-        }, h('kbd', null, String(i + 1)), withTerms(this.app.state, t.name)))),
-      h('h3', { class: 'report-title' }, withTerms(this.app.state, tab.title)),
+        }, h('kbd', null, String(i + 1)), this.words(t, 'name')))),
+      h('h3', { class: 'report-title' }, this.words(tab, 'title')),
       h('div', { class: 'report-body', role: 'tabpanel' }, tab.render(ctx)),
     );
     // Keep the scroll position when a sort or filter rebuilds the same tab.

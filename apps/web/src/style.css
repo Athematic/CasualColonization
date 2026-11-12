@@ -2393,3 +2393,23 @@ button.report-chip {
   background: var(--accent);
   color: var(--accent-ink);
 }
+
+/* Tags for the peoples' game's news: epidemics, arrivals, hard years, hunger. */
+.pill.notice-epidemic {
+  background: #7a3b6b;
+  color: #fff;
+  border-color: #7a3b6b;
+}
+
+.pill.notice-arrival {
+  background: #2c4f8a;
+  color: #fff;
+  border-color: #2c4f8a;
+}
+
+.pill.notice-hard-year,
+.pill.notice-hunger {
+  background: #b5761f;
+  color: #fff;
+  border-color: #b5761f;
+}
