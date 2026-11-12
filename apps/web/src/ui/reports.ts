@@ -321,7 +321,7 @@ function peopleTradeTab(ctx: ReportContext): Child[] {
       stat('Wanted most', o.wants.length ? GOOD_DEFS[o.wants[0]].name : '—', o.wants.length > 1 ? `then ${o.wants.slice(1).map((g) => GOOD_DEFS[g].name.toLowerCase()).join(', ')}` : undefined)),
     card('Trade this game',
       rows.length ? sortableTable('people-trade', cols, rows, ctx.rerender) : empty('Nothing sold, bought or bartered yet.'),
-      h('p', { class: 'muted small' }, 'A carrier beside a European colony or wagon train sells and buys there; barter with other peoples trades goods for goods. Your computer people also trades on its own once a year.')),
+      h('p', { class: 'muted small' }, 'A carrier beside a European colony or wagon train sells and buys there; barter with other peoples trades goods for goods. Under the computer (a head start), a people trades on its own once a year.')),
     card('Prices at the colonies you know',
       o.nations.length
         ? scroll(h('table', { class: 'table report-table' },

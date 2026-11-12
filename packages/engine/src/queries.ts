@@ -226,7 +226,8 @@ export function firstMeetingText(people: TribeId): string {
  * is written for them.
  */
 export function meetPeople(s: GameState, nation: PlayerId, people: TribeId, at?: { x: number; y: number }): void {
-  if (!s.players.find((o) => o.id === nation)?.human) return;
+  // A playing people does not meet itself (its own settlements seen at setup, before they become towns).
+  if (nation === people || !s.players.find((o) => o.id === nation)?.human) return;
   const tribe = s.tribes.find((t) => t.id === people);
   if (!tribe || tribe.met?.includes(nation)) return;
   (tribe.met ??= []).push(nation);

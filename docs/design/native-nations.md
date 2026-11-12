@@ -1,6 +1,6 @@
 # Design note: Native nations (Beta 3)
 
-Status: **decided** (11 November 2026): every decision T1–T22 is made. **Steps 1–10 are built** (sections 7–15; step 10's interface plays a people end to end in the web game, with questions for Simon in section 15; step 9's computer people profiles and the North-east's tuning are drafted for Simon's review, with an open question on continuity in section 14; step 8's North-east scenario is registered hidden until step 10, and all of its history (peoples, homelands, values, council members, arrivals, events) is drafted for Simon's review; step 7's people score weights and the computer peoples' league rule are drafted for Simon's review; step 2's units, buildings and numbers, step 3's people's council and step 4's prices, effects from the people's side and epidemic numbers and words are drafted for Simon's review). Simon chose "Native nations" as Beta 3. This note proposes the shape. Simon decided T1–T22 in section 4 on 11 November 2026: all as recommended except T16 (option (a), one turn a year), T17 (the Norse wait for the Vinland scenario, Beta 4) and T21 (no save compatibility); T10 and T14 needed more thought and were rewritten from the peoples' own view (section 4, "T10 in full" and "T14 in full"). Simon then decided T10 the same day: growth is births from food, stores and the land's health, standing only as Beta 2's standing record read from the people's side, gold only as what Europeans pay in trade; kin ties and elders passing on knowledge are kept for a separate scenario. T14 stays open (section 6), except the military victory, which Simon decided: if every European nation is defeated, the people or peoples win. Builds on Beta 2, [native-partners.md](native-partners.md) (built), whose people treaty party was made to grow into this ("Simon's direction on N1", section 4 there), on Beta 1, [cooperation.md](cooperation.md) (a non-European player, `kind: 'company'`), and on the 0.9 scenario framework ([scenario-framework.md](scenario-framework.md), [SCENARIOS.md](../SCENARIOS.md)). The care asked for in [australia.md](australia.md) applies to every people, figure and text here.
+Status: **decided** (11 November 2026): every decision T1–T22 is made. **Steps 1–10 are built** (sections 7–15; step 10's interface plays a people end to end in the web game, with questions for Simon in section 15, answered and built as step 10b in section 16 (the North-east on the New game screen, first towns named by their people, peoples sharing maps and exploring, a people's Trade report, a plan for the peoples' art), with new questions there; step 9's computer people profiles and the North-east's tuning are drafted for Simon's review, with an open question on continuity in section 14; step 8's North-east scenario is registered hidden until step 10, and all of its history (peoples, homelands, values, council members, arrivals, events) is drafted for Simon's review; step 7's people score weights and the computer peoples' league rule are drafted for Simon's review; step 2's units, buildings and numbers, step 3's people's council and step 4's prices, effects from the people's side and epidemic numbers and words are drafted for Simon's review). Simon chose "Native nations" as Beta 3. This note proposes the shape. Simon decided T1–T22 in section 4 on 11 November 2026: all as recommended except T16 (option (a), one turn a year), T17 (the Norse wait for the Vinland scenario, Beta 4) and T21 (no save compatibility); T10 and T14 needed more thought and were rewritten from the peoples' own view (section 4, "T10 in full" and "T14 in full"). Simon then decided T10 the same day: growth is births from food, stores and the land's health, standing only as Beta 2's standing record read from the people's side, gold only as what Europeans pay in trade; kin ties and elders passing on knowledge are kept for a separate scenario. T14 stays open (section 6), except the military victory, which Simon decided: if every European nation is defeated, the people or peoples win. Builds on Beta 2, [native-partners.md](native-partners.md) (built), whose people treaty party was made to grow into this ("Simon's direction on N1", section 4 there), on Beta 1, [cooperation.md](cooperation.md) (a non-European player, `kind: 'company'`), and on the 0.9 scenario framework ([scenario-framework.md](scenario-framework.md), [SCENARIOS.md](../SCENARIOS.md)). The care asked for in [australia.md](australia.md) applies to every people, figure and text here.
 
 ## 1. Goal
 
@@ -829,3 +829,125 @@ Built on branch `beta3/step10`. Code: the web game (`apps/web/src/ui/newgame.ts`
 4. **The computer seats every council member during a head start** (13 of 13 by 1500), so a person taking over a people has no council choices left; fine if the council is meant to fill, otherwise a cost rule for the people's council.
 5. **Sprites.** T22's local sprite trial on the Mac, and prompts for the people's towns, units and council (to be reviewed for care before any image is made, T9), are not started; the painted pack draws the people's towns and units with Ligne claire's procedural art.
 6. **Reports a people does not see**: Trade and Religion are hidden for a people. A people's own trade report (furs sold, goods bought, prices at the colonies near it) would be a small addition if wanted.
+
+## 16. Implementation (step 10b, November 2026): Simon's answers to section 15
+
+Built on branch `beta3/step10b`. Simon answered section 15's six questions: (1) unhide the North-east; (2) the first towns take the scenario's town names; (3) "add some incentives to explore (we already made a gameplay mechanic based on how well they know the land) and have peoples share maps when they meet, unless they are hostile/combative or at war with existing allies"; (4) the council filled after a head start stays as it is; (5) art: only three free images a day, so a short prioritised plan and no images made; (6) a people's trade report, as a Trade tab.
+
+Code: `scenarios/north-east.ts` (no longer `hidden`; `mechanics.mapKnowledge`), `peopleplayer.ts` (the first towns' names), `scenarios/types.ts` (`Mechanics.mapKnowledge`, `MapKnowledgeRules`), `movement.ts` (`knownLand`'s `seen`, `landSeen`, the search context's `seen`), `peoplemaps.ts` (new: `shareMaps`, `mapSharingBar`, `alliesOfSide`), `peoplediplomacy.ts` (calls `shareMaps` after the round's first contacts), `types.ts` (`PeopleRelation.maps`; `GoodsTally.toNations`, `toNationsGold`, `fromNations`, `fromNationsGold`, `barterGiven`, `barterTaken`), `ai/profiles.ts` (`PeopleProfile.shareMaps`, `explore`), `ai/people.ts` (`explore`), `peopletrade.ts` (every sale, purchase and barter goes into the people's ledger), `reports.ts` (`peopleTradeOverview`), the web game's `ui/reports.ts` (the people's Trade tab), and two small corrections a person playing a people saw on the first turn (`queries.ts` `meetPeople`: a people no longer "meets" itself; `peopleplayer.ts`: "The Haudenosaunee take their place…", not "The the Haudenosaunee…"). Tests: `test/map-knowledge.test.ts` (new, 6 tests, with the hidden scenarios `test-map-knowledge` and `test-map-knowledge-home`); the trade test in `test/people-diplomacy.test.ts` reads the report; `test/scenarios/north-east-newgame.test.ts` checks the towns' names; `test/scenarios/north-east.test.ts` checks that the scenario is offered; `test/people-player.test.ts` checks the hidden scenario's names. `Scenario.units`, `buildings` and `nationTypes` and sections 8, 9 and 13 are untouched.
+
+### What was built
+
+- **The North-east on the New game screen** (answer 1): the scenario is no longer `hidden`, so the Scenario list offers "The North-east, 1000–1850" after the Americas and the Caribbean. `?scenario=north-east` still opens it.
+- **First towns named by their people** (answer 2): a playing people's settlements become towns named from its `townNames` in order, the capital first (Onondaga, Ganondagan, Kanonwalohale, Tiononderoge and Canajoharie for the Haudenosaunee; Ossossané… for the Wendat; Kjipuktuk… for the Mi'kmaq; Uashat… for the Innu). Towns founded later take the next names (`nextColonyName` counts from `coloniesFounded`). If a people has more settlements than names, the extra towns keep their settlements' names.
+- **Knowing the land means having seen it** (answer 3, the incentive to explore): with `mechanics.mapKnowledge.seen`, T13's rule (step 5) reads "land nobody claims" as "land nobody claims **that the people has explored**". A people always knows its own claimed land. So exploring, and every map shared, widens where its units move as along a river. The rule is the same for persons and the computer. `moveCost` and the path search read the same `seen` (the people's `explored`), so routes are planned on the costs units pay.
+- **Peoples share maps when they meet** (answer 3, `peoplemaps.ts`): once a round, after the round's first contacts, each playing people shares with each people it has met. (The standing record of step 4 is written when one side has seen the other's towns.)
+  - **Two playing peoples** each give the other everything they have explored.
+  - **A people nobody plays** has no map in the game, so it gives the playing people its homeland: the land within `share.homeland` tiles (3) of its settlements.
+  - **When they don't** (`mapSharingBar`): while the two are at war; while the other side holds it hostile after a broken treaty (`hostileUntil`); while either is a Combative computer people (`PeopleProfile.shareMaps` false, "keeps its maps"); or while either is at war with one of the other's allies (partners in a mutual defence pact, a league or an alliance).
+  - **How often:** a pair kept apart shares as soon as it may. It shares again every `share.every` years (50 in the North-east) while it may. The turn is kept on the pair's record (`PeopleRelation.maps`).
+  - **What a person is told:** "You and the Wendat share what you know of the land: 68 tiles added to your map." or "The Mohican share what they know of their land: 29 tiles added to your map."
+  - European nations neither give nor get maps (question 2 below).
+- **Computer peoples explore** (answer 3, `ai/people.ts` `explore`): setup gives each people one runner, at its capital.
+  - **Where it goes:** to the nearest land tile its people has seen beside land it has not, within `mapKnowledge.range` (12) times its profile's `explore` of one of its towns. The profiles' `explore`: Naive 0.5, Competent 1, Combative 0.75, Creative 1.5 (Creative goes farthest to meet partners).
+  - **How it finds it:** a breadth-first search over the land the people has seen, so an edge across water or behind another's colony is never tried. The route it finds is the route given, so no other path search is needed.
+  - **When it is done:** with nothing left in reach, it goes home and looks again every fifth turn.
+  - **What it brings:** what it sees is land its people now knows, and the peoples it meets share their maps. A people taken over after a head start therefore knows its region and its neighbours (step 10's third question). In a computer game on seed 3000, around 1500 the Haudenosaunee know 1,217 of the map's 6,216 tiles, with the Wendat's map shared; without `mapKnowledge` they know 79.
+- **A people's Trade report** (answer 6): a people has a Trade tab again, in its own words ("Trade with the Europeans and the peoples").
+  - **The figures:** its gold (only from trade), the furs sold and the gold they brought, the gold from sales and the gold spent on goods, and the goods it wants most.
+  - **The table, one row per good:** what is in its towns; what it sold to and bought from European nations, with the gold each way; last turn's deals; and what it gave and took in barter with other peoples.
+  - **The prices, one row per European nation whose colonies it knows of, nearest first:** the nearest colony (a link to the map) and how far it is, "near" when within a trade visit's reach, a "treaty" or "war" tag, what the nation pays for a unit of the people's furs, food, tobacco and coats, and what a unit of tools, muskets, horses, cloth and trade goods costs the people (the goods it wants most in green). These are the prices `pairPrice` gives when the people come to trade.
+  - **The ledger** is written by every deal (`tradeWithPeople`, `barter`, the computer's trade visits and barter), so a head start's trade shows too.
+
+### Map sharing and the Americas
+
+Map sharing runs only inside `processPeopleDiplomacy`, which runs only when a people plays, and only with `mechanics.mapKnowledge`. The Americas and the Caribbean have neither, so peoples nobody plays never share with anyone there. `npm run bench -- --verify` and `--verify --scenario caribbean` say "same" for every game, and the golden tests are unchanged.
+
+### Rates (North-east, step 9's targets)
+
+Run with `npm run tournament -- --scenario north-east --games 24 --turns 851 --play-on --events --seed 3000` and `--seed 4000`: the base (step 10's code) run again on this machine, then this step's code.
+
+| Target (T15, T14) | Base (3000 / 4000) | Step 10b (3000 / 4000) | Together |
+| --- | --- | --- | --- |
+| A people wins in about 1 game in 5 | 8 / 2 games | 5 / 7 games | **12 of 48 (25%)**; base 10 of 48 |
+| Each computer people survives in ≥ 3 games of 4 | 96 of 96 / 96 of 96 | 96 of 96 / 96 of 96 | **100% for each** |
+| Leagues and confederacy sometimes | confederacy 5 / 0 games | confederacy 3 / 3 games | **6 of 48 games** |
+| Military victory ≤ 1 in 100 | 0 / 0 | 0 / 0 | **0 of 48** |
+
+Ways (step 10b): confederacy in 6 games, each won by a Creative people (the Haudenosaunee 4, the Mi'kmaq 2); continuity for 7 peoples (the Innu 5, the Mi'kmaq 2; by level Creative 4, Competent 2, Combative 1); a good life for none (2 in the base).
+
+**One effect to weigh: a good life is now out of reach.** It fails on treaties for 96 of 96 peoples at both seeds (base: 58 of 96). Its `treatyShare` (0.75) is a share of the nations and peoples a people has **met**. A shared map counts as a meeting, because the standing record is written once a people has seen the other's towns, and a shared map shows them. So peoples now meet many more peoples than they make treaties with. The overall win rate still holds, because continuity and the confederacy make up for it. It is not retuned: that is a decision for Simon (question 1 below).
+
+The Europeans' colonists per nation at the end (seeds 3000 / 4000; base in brackets): Competent 32.2 / 34.2 (33.1 / 33.0), Combative 33.2 / 34.6 (32.8 / 30.3), Creative 28.4 / 25.2 (24.8 / 26.1), Naive 14.0 / 13.0 (12.0 / 12.8). Colonies per nation are 5.0–11.0, as before.
+
+Speed: 14.1 and 13.5 seconds a game, against the base's 13.5 and 15.7 on the same machine, three games at a time. A first version of the runners' exploring searched a path to each of the four nearest edges every turn and took 25 seconds a game. The breadth-first search, which hands over its own route, fixed that.
+
+### Art for the peoples: a plan for three images a day (answer 5)
+
+**How the art works now** (SPRITE_PROMPTS.md section 3, `tools/image-gen`, `tools/sprite-pipeline`, `packages/style-sprites`):
+- Each sprite id has one 1024 px master, made from a prompt row. Masters are nation-neutral; a white-cloth pennant, tinted at run time, shows the owner.
+- The pipeline makes every runtime size from the master. A separate `-Variant thumb` generation reads better at 16–48 px, but costs another image.
+- The painted pack (`ligne-claire-painted`) maps engine ids to sprite ids (`DEFAULT_MAPPING`; a pack can override it with `extendPack`). A people's town uses `settlements/{tribe}` when the pack has that sprite. A people's unit uses a sprite only through an explicit mapping; unmapped, Ligne claire draws it (step 10). Anything missing falls back to Ligne claire.
+- T9 and T22 apply: every new prompt is reviewed for care before an image is made. No likeness of a person, no invented face presented as real, nothing sacred or ceremonial, and the council stays emblems.
+
+**Reused, no image needed** (one mapping line each, in the pack):
+- **Haudenosaunee and Wendat towns**, and the settlements of the St. Lawrence Iroquoians and the Attawandaron: `settlements/iroquois` and `settlements/iroquois__capital`. They show bark longhouses, palisades and maize fields, the same building tradition.
+- **The warrior and its roles:** `units/brave__none` (bow), `brave__armed` (the soldier role, muskets by trade), and `brave__mounted` and `brave__armed-mounted` (the scout and dragoon roles, horses by trade). The eastern-woodlands dress fits. The paint horse reads as Plains, so it should become a plain horse the next time these sprites are redrawn.
+- **Goods, terrain, rivers, coasts and decorations:** everything the North-east needs is among the existing 294 sprites.
+- **Ownership:** the existing tinted pennant, so no per-people recolours.
+
+**Essential to test the look: three images, one day.**
+1. **`settlements/mikmaq`** (also used as its `__capital`): a camp of birchbark wigwams by a river mouth, with canoes drawn up and drying racks, and no people.
+   - Why: the "hunting and fishing camps" way of life has no art at all, and it is the commonest on this map.
+   - Covers: the Mi'kmaq and the Innu as towns (mapped), and as settlements the Wolastoqiyik, the Penobscot, the Abenaki, the Algonquin and the Eeyou. The Beothuk's mamateeks are close enough for a test, flagged as an approximation.
+2. **`units/townsperson__none`**: a woman or man of the North-east before contact, in deerskin and fur, carrying a burden basket on a tumpline. Full figure seen from a distance, with no face detail.
+   - Why: it is the most common unit in every town, and it sets the look of a people's figures beside the European colonists.
+   - Covers, by mapping until each has its own sprite: the townsperson, gardener, hunter, fisher, crafter, runner and elder. A procedural tool badge from Ligne claire on top would tell them apart; that is a small code change, not an image.
+3. **`units/birchbark-canoe__none`**: a birchbark canoe with one paddler, in side view, with a bare stern pole for the pennant.
+   - Why: it is the people's only ship, seen on every lake, river and coast, and its procedural drawing is the weakest of the people's art.
+   - Covers: the canoe.
+
+**Next, one day each, in order:**
+- Day 2:
+  - (4) `ui/council-house`: the inside of a bark council longhouse, empty, with fires down the middle, as the council screen's backdrop (procedural now).
+  - (5) `units/elder__none`: white hair, a staff, a blanket.
+  - (6) `units/gardener__none`: with a hoe.
+- Day 3: (7–9) the three day-one sprites again as `-Variant thumb`, because the small sizes are where full masters fail.
+- Then: the camps of the Inuit and Dorset in the north (skin tents), and a hunter and a fisher of their own.
+
+**Derived, no image:**
+- Building icons for the people's buildings, cropped from the settlement masters: one longhouse from `settlements/iroquois` for the longhouse and the council house, one wigwam from `settlements/mikmaq`, and the palisade from `iroquois__capital`.
+- A small town as a crop of the regular sprite (one or two homes), where Ligne claire shows growth.
+- A capital as the regular sprite under Ligne claire's palisade rows, when there is no `__capital` sprite.
+
+The prompts for images 1–3 still need to be written into SPRITE_PROMPTS.md, as a new section 4.11b, "Playing peoples", with its own category block that repeats section 4.11's respect rules. Simon reviews them before the first image is generated. They are not in that file yet, so a full `Generate-Images.ps1` run cannot make them by accident.
+
+### Checks
+
+- `npx tsc -b` is clean, and `npm test` passes (77 files).
+- `npm run bench -- --verify` and `--verify --scenario caribbean` say "same", and the golden tests are unchanged.
+- Played in Chromium with Playwright on the dev server, at device scale 2, with Google Fonts blocked:
+  - The New game screen lists the North-east.
+  - "Begin" as the Haudenosaunee from 1000 gives the towns Onondaga, Ganondagan, Kanonwalohale, Tiononderoge and Canajoharie.
+  - On the first turn the news says "You and the Wendat share what you know of the land: 68 tiles added to your map." and "The Mohican share what they know of their land…".
+  - The Trade tab shows the report: empty in 1001, and after a head start to 1600, the barter of the head start's years and England's prices at Plymouth.
+  - No page errors.
+
+### Choices made while building (for Simon)
+
+1. **A people nobody plays shares only its homeland** (3 tiles around its settlements), because it has no map in the game. Two playing peoples share everything they know.
+2. **Peoples share again every 50 years**, not only once, so neighbours who met early keep learning what the other found. Leaving out `every` means once.
+3. **"Allies" are partners in a mutual defence pact, a league or an alliance.** A trade treaty does not make allies.
+4. **"Hostile" means war, or step 4's hostility after a broken treaty.** A people's temperament (open, guarded or proud) does not stop sharing.
+5. **The seen rule applies to persons too:** a person's people moves swiftly only on land it has explored or been shown. It is scenario data (`mapKnowledge.seen`).
+6. **Only one runner explores**, the one setup gives; a computer people builds no new runners for it. The profiles' reach is the only difference between levels.
+7. **The Trade report counts from this step.** Games saved before it start counting when loaded (the ledger is optional state, as for the Europeans' Trade report).
+
+### Questions for Simon
+
+1. **A good life and the peoples met.** Sharing maps makes peoples "meet", because their standing record is written when they see each other's towns. So a good life's "treaties with three in four of those met" now fails everywhere (96 of 96). Which do you want?
+   - (a) Count as met only the peoples whose units or towns a people has seen itself. This needs a second record, because `explored` cannot tell a shared tile from a seen one.
+   - (b) Lower `treatyShare` for the North-east. The overall win rate holds without it.
+   - (c) Keep it as it is.
+2. **Maps between peoples and Europeans.** Peoples drew maps for Europeans, and the explorers' maps owed much to them. Should a people at peace with a nation, under a trade treaty or a cultural exchange, share its homeland with that nation, perhaps as part of the exchange? Not built: your answer named peoples, and it would change what the Europeans know of the map.
+3. **New runners.** Should a computer people build a new runner when its own is lost, or keep a second one at Creative, to keep exploring?

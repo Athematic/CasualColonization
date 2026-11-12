@@ -108,6 +108,6 @@ export function addPeoplePlayer(s: GameState, id: TribeId, human: boolean): Play
     claimTownLand(s, colony);
     planTownBuild(s, colony, (t) => canBuild(s, colony, t));
   }
-  message(s, `The ${name} take their place among the nations, with ${settlements.length} town${settlements.length === 1 ? '' : 's'}.`, id, { x: first.x, y: first.y });
+  message(s, `${name.startsWith('the ') ? `The ${name.slice(4)}` : `The ${name}`} take their place among the nations, with ${settlements.length} town${settlements.length === 1 ? '' : 's'}.`, id, { x: first.x, y: first.y });
   return p;
 }
