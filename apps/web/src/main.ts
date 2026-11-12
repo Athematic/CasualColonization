@@ -1,4 +1,4 @@
-import { calendarOf, term, deserialize, gameCodeFromSearch, searchWithoutGameCode, formatDate, Game, headStartConfig, serialize, type GameConfig, type GameState } from '@cc/engine';
+import { calendarOf, getScenario, term, deserialize, gameCodeFromSearch, searchWithoutGameCode, formatDate, Game, headStartConfig, serialize, type GameConfig, type GameState } from '@cc/engine';
 import { h } from './dom.js';
 import { App } from './app.js';
 import { savedStyle, setStyle } from './styles.js';
@@ -40,7 +40,20 @@ function showLanding(): void {
 /** The new-game settings screen. */
 function showMenu(code?: string): void {
   leaveGame();
-  newGameScreen(host, startGame, resumeGame, showLanding, code);
+  newGameScreen(host, startGame, resumeGame, showLanding, code, linkedScenario());
+}
+
+/**
+ * A scenario named in the address (`?scenario=north-east`): the New game screen opens with it,
+ * also when it is registered hidden (native-nations.md section 15).
+ */
+function linkedScenario() {
+  try {
+    const id = new URLSearchParams(location.search).get('scenario');
+    return id ? getScenario(id) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export interface HeadStart {
@@ -154,6 +167,11 @@ function boot(data: HotHook['data']): void {
     } catch {
       // Fall through to the title screen if the snapshot cannot be read.
     }
+  }
+  // A link to a scenario opens its New game screen.
+  if (linkedScenario()) {
+    showMenu();
+    return;
   }
   showLanding();
 }

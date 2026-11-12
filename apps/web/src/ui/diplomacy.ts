@@ -113,7 +113,8 @@ export class DiplomacyScreen implements Screen {
       nations.length ? h('p', { class: 'muted small' }, 'A trade agreement lets your trade routes call at each other’s colonies. After years of peace and enough trade routes between you, Favoured Nations may trade, and buy merchant ships, in each other’s home ports. Cancelling it costs both sides dearly.', mechanicsOf(s).alliances ? ' Favoured Nations at peace for many more years, with more trade between them, may ally: an attack on one ally is war with all, allied units may enter each other’s colonies, and allies share what they see.' : '') : null);
 
     const treaties = this.treatyCard();
-    const companies = this.companyCard();
+    // Companies are chartered by a Crown: a people founds none and holds no shares (native-nations.md T1).
+    const companies = people ? null : this.companyCard();
 
     const natives = people ? null : this.nativesCard();
     const pairs = this.pairCard();

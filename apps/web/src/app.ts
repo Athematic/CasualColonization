@@ -50,7 +50,18 @@ import {
   type PlayerId,
   type SettlementAction,
   type Unit,
+  isPeoplePlayer,
 } from '@cc/engine';
+
+/** Who claims a tile and its region's health, for the map's hover text (native-nations.md T5, T10). */
+function landWords(s: GameState, x: number, y: number): string[] {
+  const out: string[] = [];
+  const claim = tileAt(s, x, y)?.claim;
+  if (claim) out.push(`land of ${nationOf(s, claim).name}`);
+  const land = townLand(s, x, y);
+  if (land) out.push(`${land.region}${land.words ? `: ${land.words} (${land.health})` : ''}${land.hard ? ', a hard year' : ''}`);
+  return out;
+}
 import { computeVisibility, screenToTile, type Camera, type MapRenderer, type Point, type Scene } from '@cc/render-api';
 import { h } from './dom.js';
 import { saveAuto } from './save.js';
@@ -67,6 +78,7 @@ import { REPORT_TABS, ReportsScreen } from './ui/reports.js';
 import { RoutesScreen } from './ui/routes.js';
 import { Sidebar } from './ui/sidebar.js';
 import { showTurnStart, sortNews } from './ui/turnstart.js';
+import { townLand } from './ui/town.js';
 import { defenceLine, exchangeLine, inciteDialog, leaseLine, nativeTradeDialog, speakLabel } from './ui/natives.js';
 
 /**
@@ -168,6 +180,8 @@ export class App {
   /** In observer mode, whose view of the world is shown ('all' reveals everything). */
   watch: PlayerId | 'all' = 'all';
   autoplay = false;
+  /** The land overlay (claims and the land's health, native-nations.md T5, T10) is shown on the map. */
+  overlay = false;
   /** Milliseconds between turns while autoplaying. */
   speed = 400;
   private autoplayTimer = 0;
@@ -225,7 +239,9 @@ export class App {
       // A watched head start: follow the nation the player will take over.
       this.speed = HEAD_START_MIN_MS;
       this.camera.zoom = 40;
-      this.setWatch(head.humans[0]);
+      // A nation yet to arrive (native-nations.md T18) has no view yet: show everything until it does.
+      const present = head.humans.find((id) => this.state.players.some((p) => p.id === id));
+      this.setWatch(present ?? 'all');
       this.centerOnStart();
       this.setAutoplay(true);
     } else if (this.observer) {
@@ -409,7 +425,14 @@ export class App {
       pathTurns: u && path?.length ? (pathKind === 'road' ? roadToTurns(this.state, u, path) : pathTurns(this.state, u, path)) : undefined,
       visible: computeVisibility(this.state, this.viewer),
       revealAll: this.revealAll(),
+      ...(this.overlay ? { overlay: 'land' as const } : {}),
     };
+  }
+
+  /** Shows or hides the land overlay. */
+  toggleOverlay(): void {
+    this.overlay = !this.overlay;
+    this.requestRender();
   }
 
   private hoverIsFar(): boolean {
@@ -947,7 +970,7 @@ export class App {
           // Tile info on hover: terrain, river, road.
           const tile = tileAt(this.state, t.x, t.y);
           const braves = bravesAt(this.state, t.x, t.y).map((b) => braveName(b));
-          c.title = tile && this.knows(t.y * this.state.map.width + t.x) ? [tileDescription(tile), ...braves].join(' · ') : '';
+          c.title = tile && this.knows(t.y * this.state.map.width + t.x) ? [tileDescription(tile), ...braves, ...landWords(this.state, t.x, t.y)].join(' · ') : '';
           this.requestRender(true);
         }
       }
@@ -1118,7 +1141,8 @@ export class App {
         const p = u && unitPosition(this.state, u);
         if (p) this.centerOn(p.x, p.y);
       },
-      e: () => this.openEurope(),
+      e: () => (isPeoplePlayer(this.me) ? toast('A native people has no home port: its trade is with the Europeans who come.') : this.openEurope()),
+      l: () => this.toggleOverlay(),
       d: () => this.openDiplomacy(),
       t: () => {
         const u = this.selectedUnit();

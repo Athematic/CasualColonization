@@ -44,10 +44,12 @@ import {
   type HistoryKind,
   type PlayerId,
   type ProductId,
+  isPeoplePlayer,
 } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h, type Child } from '../dom.js';
 import { activeStyle, icon } from '../styles.js';
+import { victoryTab } from './victoryreport.js';
 
 /**
  * The advisor reports, as in the original game's Reports menu: one screen with a tab per
@@ -77,7 +79,12 @@ export interface ReportTab {
   /** The advisor's title, shown as the tab's heading. */
   title: string;
   render: (ctx: ReportContext) => Child[];
+  /** Only for some players: a playing people has no home port market or crosses (native-nations.md T1). */
+  shown?: (s: GameState, nation: PlayerId) => boolean;
 }
+
+/** Whether a report is about a European system a playing people does not have. */
+const notPeople = (s: GameState, nation: PlayerId) => !isPeoplePlayer(s.players.find((p) => p.id === nation));
 
 // ---- Shared pieces ----
 
@@ -591,13 +598,15 @@ function historyTab(ctx: ReportContext): Child[] {
 
 export const REPORT_TABS: ReportTab[] = [
   { id: 'colonies', name: 'Colonies', title: 'Colonial advisor', render: coloniesTab },
-  { id: 'trade', name: 'Trade', title: 'Trade advisor', render: tradeTab },
+  { id: 'trade', name: 'Trade', title: 'Trade advisor', render: tradeTab, shown: notPeople },
   { id: 'military', name: 'Military', title: 'Military advisor', render: militaryTab },
   { id: 'naval', name: 'Naval', title: 'Naval advisor', render: navalTab },
-  { id: 'religion', name: 'Religion', title: 'Religious advisor', render: religionTab },
+  { id: 'religion', name: 'Religion', title: 'Religious advisor', render: religionTab, shown: notPeople },
   { id: 'natives', name: 'Natives', title: 'Indian advisor', render: nativesTab },
   { id: 'congress', name: '{councilShort}', title: '{council}', render: congressTab },
   { id: 'history', name: 'History', title: 'History of the colonies', render: historyTab },
+  // The scenario's ways to win and where the player stands (Beta 3 step 10; native-nations.md T14).
+  { id: 'victory', name: 'Victory', title: 'Ways to win', render: (ctx) => victoryTab(ctx) },
 ];
 
 // Remembered for the session.
@@ -612,9 +621,16 @@ export class ReportsScreen implements Screen {
 
   constructor(private app: App, tab?: string) {
     this.tab = tab && REPORT_TABS.some((t) => t.id === tab) ? tab : lastTab;
+    if (!this.tabs().some((t) => t.id === this.tab)) this.tab = this.tabs()[0].id;
     lastTab = this.tab;
     this.body = h('div', { class: 'screen-body' });
     this.el = h('section', { class: 'screen reports-screen', role: 'dialog', 'aria-label': 'Reports' }, this.body);
+  }
+
+  /** The reports shown for the nation they are about. */
+  private tabs(): ReportTab[] {
+    const nation = this.nation();
+    return REPORT_TABS.filter((t) => !t.shown || t.shown(this.app.state, nation));
   }
 
   /** The nation the reports are about: the player's own, or the one an observer picked. */
@@ -635,20 +651,22 @@ export class ReportsScreen implements Screen {
   }
 
   setTab(id: string): void {
-    if (!REPORT_TABS.some((t) => t.id === id)) return;
+    if (!this.tabs().some((t) => t.id === id)) return;
     this.tab = lastTab = id;
     this.build();
   }
 
   onKey(e: KeyboardEvent): boolean {
-    const n = /^Digit([1-8])$/.exec(e.code) ?? /^F([1-8])$/.exec(e.key);
+    const n = /^Digit([1-9])$/.exec(e.code) ?? /^F([1-9])$/.exec(e.key);
     if (n && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      this.setTab(REPORT_TABS[Number(n[1]) - 1].id);
+      const t = this.tabs()[Number(n[1]) - 1];
+      if (t) this.setTab(t.id);
       return true;
     }
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-      const i = REPORT_TABS.findIndex((t) => t.id === this.tab);
-      this.setTab(REPORT_TABS[(i + (e.key === 'ArrowRight' ? 1 : -1) + REPORT_TABS.length) % REPORT_TABS.length].id);
+      const tabs = this.tabs();
+      const i = tabs.findIndex((t) => t.id === this.tab);
+      this.setTab(tabs[(i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length].id);
       return true;
     }
     return false;
@@ -659,7 +677,9 @@ export class ReportsScreen implements Screen {
     const s = app.state;
     const nation = this.nation();
     this.drawnKey = `${this.tab}|${s.turn}|${s.current}|${s.messages.length}|${nation}|${app.watch}|${activeStyle().id}`;
-    const tab = REPORT_TABS.find((t) => t.id === this.tab)!;
+    const tabs = this.tabs();
+    if (!tabs.some((t) => t.id === this.tab)) this.tab = tabs[0].id;
+    const tab = tabs.find((t) => t.id === this.tab)!;
     const scrollTop = this.el.parentElement?.scrollTop ?? 0;
     clear(this.body);
     const ctx: ReportContext = { app, nation, all: app.observer && app.watch === 'all' && tab.id === 'history', rerender: () => this.build() };
@@ -675,11 +695,11 @@ export class ReportsScreen implements Screen {
         pick,
         h('button', { class: 'btn close', onclick: () => app.closeScreen(), 'aria-label': 'Close reports' }, 'Close')),
       h('nav', { class: 'report-tabs', role: 'tablist', 'aria-label': 'Advisors' },
-        REPORT_TABS.map((t, i) => h('button', {
+        tabs.map((t, i) => h('button', {
           class: `tab${t.id === this.tab ? ' active' : ''}`,
           role: 'tab',
           'aria-selected': String(t.id === this.tab),
-          title: `${withTerms(this.app.state, t.title)} (F${i + 1}, or ${i + 1} while the reports are open)`,
+          title: i < 8 ? `${withTerms(this.app.state, t.title)} (F${i + 1}, or ${i + 1} while the reports are open)` : `${withTerms(this.app.state, t.title)} (${i + 1} while the reports are open)`,
           onclick: () => this.setTab(t.id),
         }, h('kbd', null, String(i + 1)), withTerms(this.app.state, t.name)))),
       h('h3', { class: 'report-title' }, withTerms(this.app.state, tab.title)),

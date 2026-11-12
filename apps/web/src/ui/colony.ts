@@ -51,6 +51,8 @@ import type { App, Screen } from '../app.js';
 import { clear, h } from '../dom.js';
 import { activeStyle, icon } from '../styles.js';
 import { choose, confirmDialog, toast } from './dialogs.js';
+import { isPeopleTown, townCard, townLand, tradeCard } from './town.js';
+import { councilText, storeCapacity } from '@cc/engine';
 
 const TILE = 76;
 
@@ -91,7 +93,8 @@ export class ColonyScreen implements Screen {
   }
 
   private async abandon(colony: Colony): Promise<void> {
-    const ok = await confirmDialog('Abandon colony?', `Abandon ${colony.name}? Its colonists step out onto the land, but its goods and buildings are lost.`, 'Abandon', 'Keep');
+    const town = isPeopleTown(colony);
+    const ok = await confirmDialog(town ? 'Leave the town?' : 'Abandon colony?', `Abandon ${colony.name}? Its ${town ? 'people' : 'colonists'} step out onto the land, but its goods and buildings are lost.`, 'Abandon', 'Keep');
     if (ok) this.dispatch({ type: 'abandonColony', colonyId: colony.id });
   }
 
@@ -112,17 +115,22 @@ export class ColonyScreen implements Screen {
     const report = colonyReport(s, colony);
     clear(this.body);
     const pop = report.population;
+    // A playing people's town (native-nations.md T2): its people, food and counsel, no Sons of Liberty.
+    const town = isPeopleTown(colony);
+    const land = town ? townLand(s, colony.x, colony.y) : undefined;
     this.body.append(
       h('header', { class: 'screen-head' },
         h('h2', null, colony.name),
-        h('span', { class: 'muted' }, `Population ${pop} · Sons of Liberty ${report.sonsOfLiberty}% · Food ${colony.goods.food}/${foodToGrow(s, colony)}`),
+        h('span', { class: 'muted' }, town
+          ? `People ${pop} · Food ${colony.goods.food} · ${councilText(s, colony.owner, 'product').replace(/^./, (c) => c.toUpperCase())} ${report.produced.bells} a turn${land?.words ? ` · Land ${land.words}` : ''}`
+          : `Population ${pop} · Sons of Liberty ${report.sonsOfLiberty}% · Food ${colony.goods.food}/${foodToGrow(s, colony)}`),
         colony.owner === this.app.viewer && !this.app.observer
-          ? h('button', { class: 'btn small', disabled: !this.app.isMyTurn() || abandonProblem(s, colony.id) !== null, title: abandonProblem(s, colony.id) ?? 'Give up this small colony', onclick: () => void this.abandon(colony) }, 'Abandon')
+          ? h('button', { class: 'btn small', disabled: !this.app.isMyTurn() || abandonProblem(s, colony.id) !== null, title: abandonProblem(s, colony.id) ?? (town ? 'Leave this small town' : 'Give up this small colony'), onclick: () => void this.abandon(colony) }, 'Abandon')
           : null,
         h('button', { class: 'btn close', onclick: () => this.app.closeScreen(), 'aria-label': 'Close colony' }, 'Close')),
       h('p', { class: 'hint' }, this.selected
         ? `Selected: ${unitName(s.units[this.selected])}. Click a field or building to put them to work, or use the buttons below.`
-        : 'Click a colonist to select them, then click a field or building to change their work.'),
+        : town ? 'Click a person to select them, then click a field or building to change their work.' : 'Click a colonist to select them, then click a field or building to change their work.'),
       h('div', { class: 'colony-grid' },
         this.landPanel(colony, report.workers),
         this.buildingsPanel(colony, report),
@@ -264,7 +272,7 @@ export class ColonyScreen implements Screen {
     const s = this.app.state;
     const cards: HTMLElement[] = [];
     const passive: string[] = [];
-    for (const kind of buildingsOf(s)) {
+    for (const kind of buildingsOf(s, colony.owner)) {
       const level = colony.buildings[kind];
       if (level === 0) continue;
       const def = BUILDINGS[kind];
@@ -284,7 +292,7 @@ export class ColonyScreen implements Screen {
           : h('span', { class: 'slot empty' }));
       }
       const production = out && def.output
-        ? h('span', { class: 'yield' }, icon({ kind: 'product', product: def.output }, 18), `${out.output}${out.capacity > out.output ? ` of ${out.capacity}` : ''} ${PRODUCT_NAMES[def.output as ProductId].toLowerCase()}`, def.input && out.output ? h('span', { class: 'muted' }, ` (uses ${out.output} ${GOOD_DEFS[def.input].name.toLowerCase()})`) : null)
+        ? h('span', { class: 'yield' }, icon({ kind: 'product', product: def.output }, 18), `${out.output}${out.capacity > out.output ? ` of ${out.capacity}` : ''} ${productWord(s, colony, def.output as ProductId)}`, def.input && out.output ? h('span', { class: 'muted' }, ` (uses ${out.output} ${GOOD_DEFS[def.input].name.toLowerCase()})`) : null)
         : null;
       const teaching = kind === 'schoolhouse'
         ? h('span', { class: 'muted small' }, here.length
@@ -300,7 +308,7 @@ export class ColonyScreen implements Screen {
     return h('div', { class: 'card buildings' },
       h('h3', null, 'Buildings'),
       h('div', { class: 'building-grid' }, cards),
-      passive.length ? h('p', { class: 'muted small' }, `Also: ${passive.join(', ')}. Storage ${warehouseCapacity(colony)} per good.`) : h('p', { class: 'muted small' }, `Storage ${warehouseCapacity(colony)} per good.`));
+      h('p', { class: 'muted small' }, [passive.length ? `Also: ${passive.join(', ')}.` : '', isPeopleTown(colony) ? `Stores keep ${storeCapacity(s, colony)} food and ${warehouseCapacity(colony)} of each other good.` : `Storage ${warehouseCapacity(colony)} per good.`].filter(Boolean).join(' ')));
   }
 
   private clickBuilding(colony: Colony, kind: BuildingKind): void {
@@ -323,9 +331,13 @@ export class ColonyScreen implements Screen {
   private sidePanel(colony: Colony, report: ReturnType<typeof colonyReport>): HTMLElement {
     const s = this.app.state;
     const net = report.net;
+    const town = isPeopleTown(colony);
+    // A people's town has no crosses; its bells are its council's product (counsel, T8).
+    const products = (town ? ['food', 'hammers', 'bells'] : ['food', 'hammers', 'bells', 'crosses']) as ProductId[];
+    const productName = (p: ProductId) => (town && p === 'bells' ? councilText(s, colony.owner, 'product').replace(/^./, (c) => c.toUpperCase()) : town && p === 'hammers' ? 'Building work' : PRODUCT_NAMES[p]);
     const summary = h('div', { class: 'summary' },
-      (['food', 'hammers', 'bells', 'crosses'] as ProductId[]).map((p) =>
-        h('span', { class: 'yield', title: PRODUCT_NAMES[p] }, icon({ kind: 'product', product: p }, 20), p === 'food' ? signed(net.food) : report.produced[p])));
+      products.map((p) =>
+        h('span', { class: 'yield', title: productName(p) }, icon({ kind: 'product', product: p }, 20), p === 'food' ? signed(net.food) : report.produced[p], town && p !== 'food' ? h('span', { class: 'muted small' }, ` ${productName(p).toLowerCase()}`) : null)));
 
     const options = buildOptions(s, colony);
     // Keep the current project listed even if the colony no longer qualifies to start it.
@@ -351,7 +363,7 @@ export class ColonyScreen implements Screen {
       progress = h('div', null,
         h('div', { class: 'bar', role: 'progressbar', 'aria-valuenow': pct, 'aria-valuemin': 0, 'aria-valuemax': 100 }, h('span', { style: `width:${pct}%` })),
         h('div', { class: 'muted small' }, `${colony.hammers}/${cost.hammers} hammers${cost.tools ? ` · ${colony.goods.tools}/${cost.tools} tools` : ''}`),
-        price > 0 ? h('button', { class: 'btn small', disabled: price > this.app.me.gold, onclick: () => this.dispatch({ type: 'hurry', colonyId: colony.id }) }, `Buy now for ${price}`) : null);
+        price > 0 && !town ? h('button', { class: 'btn small', disabled: price > this.app.me.gold, onclick: () => this.dispatch({ type: 'hurry', colonyId: colony.id }) }, `Buy now for ${price}`) : null);
     }
 
     const outside = unitsAt(s, colony.x, colony.y).filter((u) => u.owner === colony.owner && !isCarrier(u));
@@ -360,10 +372,11 @@ export class ColonyScreen implements Screen {
     const working = sel?.loc.kind === 'colony';
     const selActions: HTMLElement[] = [];
     if (sel) {
-      if (working) selActions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'leaveColony', unitId: sel.id }) }, 'Leave colony'));
+      if (working) selActions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'leaveColony', unitId: sel.id }) }, town ? 'Leave the town' : 'Leave colony'));
       if (sel.loc.kind === 'map' && UNIT_TYPES[sel.type].kind === 'colonist') {
-        selActions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'assignJob', unitId: sel.id, colonyId: colony.id }) }, 'Join colony'));
-        for (const role of ['soldier', 'dragoon', 'pioneer', 'scout', 'missionary', 'none'] as RoleId[]) {
+        selActions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'assignJob', unitId: sel.id, colonyId: colony.id }) }, town ? 'Join the town' : 'Join colony'));
+        // A people's warriors take up muskets and horses by trade (T6); no pioneers or missionaries.
+        for (const role of (town ? ['soldier', 'dragoon', 'scout', 'none'] : ['soldier', 'dragoon', 'pioneer', 'scout', 'missionary', 'none']) as RoleId[]) {
           if (role === sel.role) continue;
           if (role === 'missionary' && colony.buildings.church < 2) continue;
           selActions.push(h('button', { class: 'btn small', onclick: () => this.dispatch({ type: 'equip', unitId: sel.id, role }) }, role === 'none' ? 'Unequip' : `Make ${ROLES[role].name.toLowerCase()}`));
@@ -381,11 +394,12 @@ export class ColonyScreen implements Screen {
       icon({ kind: 'unit', type: u.type, role: u.role, color: nationOf(this.app.state, u.owner).color }, 32), unitName(u));
 
     return h('div', { class: 'card side' },
+      town ? townCard(this.app, colony) : null,
       h('h3', null, 'Production'),
       summary,
       h('label', { class: 'field' }, h('span', null, 'Building'), select),
       progress,
-      h('h3', null, 'On the colony square'),
+      h('h3', null, town ? 'In the town' : 'On the colony square'),
       outside.length ? h('div', { class: 'chips' }, outside.map(chip)) : h('p', { class: 'muted small' }, 'Nobody is waiting outside.'),
       carriers.length ? h('h3', null, 'In port') : null,
       carriers.map((c) => h('div', { class: `carrier${c.id === this.carrier ? ' selected' : ''}` },
@@ -395,7 +409,8 @@ export class ColonyScreen implements Screen {
           unitsAboard(s, c).map(chip),
           goodsOf(s).filter((g) => (c.cargo?.[g] ?? 0) > 0).map((g) => h('button', { class: 'chip', title: 'Unload', onclick: () => this.dispatch({ type: 'unloadGoods', carrierId: c.id, good: g, amount: c.cargo![g]! }) },
             icon({ kind: 'product', product: g }, 22), `${c.cargo![g]} ⤓`))))),
-      selActions.length ? h('div', { class: 'actions' }, selActions) : null);
+      selActions.length ? h('div', { class: 'actions' }, selActions) : null,
+      tradeCard(this.app, colony));
   }
 
   private warehouse(colony: Colony, net: Record<ProductId, number>): HTMLElement {
@@ -404,7 +419,8 @@ export class ColonyScreen implements Screen {
     return h('div', { class: 'card warehouse' },
       h('h3', null, this.carrier ? 'Warehouse — click a good to load 100 onto the ship' : 'Warehouse'),
       customs ? h('p', { class: 'muted small' }, `Custom house: ticked goods above 50 are sold in ${term(this.app.state, 'homeland')} at the end of each turn.`) : null,
-      h('div', { class: 'goods' }, goodsOf(this.app.state).map((g) => {
+      // A people's town lists food, furs and what it holds: no colonial cash crops it never makes (T10).
+      h('div', { class: 'goods' }, goodsOf(this.app.state).filter((g) => !isPeopleTown(colony) || g === 'food' || g === 'furs' || colony.goods[g] > 0 || (net[g] ?? 0) !== 0).map((g) => {
         const amount = colony.goods[g];
         const over = g !== 'food' && amount > cap;
         const exportBox = customs && g !== 'food'
@@ -420,6 +436,13 @@ export class ColonyScreen implements Screen {
         }, icon({ kind: 'product', product: g }, 28), h('span', { class: 'amount' }, amount), net[g] ? h('span', { class: `delta ${net[g] > 0 ? 'up' : 'down'}` }, signed(net[g])) : null), exportBox);
       })));
   }
+}
+
+/** A product's name in a town's or colony's words: a people's bells are its council's counsel, its hammers building work (T8). */
+function productWord(s: Parameters<typeof councilText>[0], colony: Colony, p: ProductId): string {
+  if (isPeopleTown(colony) && p === 'bells') return councilText(s, colony.owner, 'product');
+  if (isPeopleTown(colony) && p === 'hammers') return 'building work';
+  return PRODUCT_NAMES[p].toLowerCase();
 }
 
 function signed(n: number): string {

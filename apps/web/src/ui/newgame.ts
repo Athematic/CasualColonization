@@ -29,6 +29,9 @@ import {
   type NationId,
   type Rivals,
   type Scenario,
+  type TribeId,
+  arrivalStartTurn,
+  arrivalYear,
 } from '@cc/engine';
 import { clear, h } from '../dom.js';
 import { loadAuto, loadManual, pickSaveFile } from '../save.js';
@@ -41,8 +44,17 @@ interface Slot {
   controller: 'human' | AiLevel;
 }
 
+/** A people the scenario lets play as a nation (native-nations.md T4): not played, a person, or a computer level. */
+interface PeopleSlot {
+  people: TribeId;
+  controller: 'off' | 'human' | AiLevel;
+}
+
 /** The scenario new games start in until another is chosen: the Americas. */
 const DEFAULT = scenarioOf({ config: {} });
+
+/** "the Haudenosaunee" → "The Haudenosaunee". */
+const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** Scenarios still to come, shown as disabled choices (Q15). */
 const PLANNED_SCENARIOS = ['Australia, 1788–1901', 'Vinland, around 1000'];
@@ -86,6 +98,8 @@ export function newGameScreen(
   back?: () => void,
   /** A game code from a share link: fills in the screen (nothing starts by itself). */
   initialCode?: string,
+  /** A scenario to open with (`?scenario=` in the address), also one not offered in the list. */
+  initialScenario?: Scenario,
 ): HTMLElement {
   /** The chosen scenario: its nations, maps, calendar and switches decide what the screen offers. */
   let scenario: Scenario = DEFAULT;
@@ -143,7 +157,24 @@ export function newGameScreen(
     const sizes = options.sizes.map((z) => z.id);
     if (sizes.length && !sizes.includes(mapSize)) mapSize = sizes.includes('medium') ? 'medium' : sizes[0];
     if (!options.startYears.some((y) => y.year === headYear)) headYear = 0;
+    resetPeoples();
   };
+
+  /**
+   * The peoples the scenario lets play (native-nations.md T4, T22). In a people's game (no nation
+   * there at the start) the person plays the first people with the second as a computer rival, and
+   * every nation is a computer; elsewhere peoples start unplayed and a seat stays the person's.
+   */
+  let peopleSlots: PeopleSlot[] = [];
+  function resetPeoples(): void {
+    peopleSlots = options.peoples.map((p, i): PeopleSlot => ({ people: p.id, controller: options.peoplesFirst ? (i === 0 ? 'human' : i === 1 ? 'competent' : 'off') : 'off' }));
+    if (options.peoplesFirst) {
+      for (const slot of slots) if (slot.controller === 'human') slot.controller = 'competent';
+    } else if (!slots.some((x) => x.controller === 'human') && slots[0]) {
+      slots[0].controller = 'human';
+    }
+  }
+  resetPeoples();
 
   /** Restores the New game choices from a game code. Returns false (and says why) when it is not one. */
   const applyCode = (text: string): boolean => {
@@ -172,6 +203,7 @@ export function newGameScreen(
     colonyCharter = c.colonyCharter;
     headYear = options.startYears.find((y) => y.turn === c.headStartTurn)?.year ?? 0;
     seedText = c.seedPhrase ?? String(c.seed);
+    peopleSlots = options.peoples.map((p): PeopleSlot => ({ people: p.id, controller: c.peoples?.find((x) => x.people === p.id)?.controller ?? 'off' }));
     fromCode = true;
     codeNote = r.versionWarning ?? `Game code applied (game version ${r.version}).`;
     return true;
@@ -189,7 +221,51 @@ export function newGameScreen(
     render();
   };
 
+  if (initialScenario) setScenario(initialScenario);
   if (initialCode) applyCode(initialCode);
+
+  /** The game settings the screen's choices make. */
+  const configOf = (chosen: Slot[], playing: PeopleSlot[]): GameConfig => ({
+    ...parseSeedInput(seedText),
+    mapSize,
+    ...(map ? { map } : {}),
+    nations: chosen.map((s) => s.nation),
+    humans: [...chosen.filter((s) => s.controller === 'human').map((s) => s.nation), ...playing.filter((p) => p.controller === 'human').map((p) => p.people)],
+    ai: Object.fromEntries([
+      ...chosen.flatMap((s) => (s.controller === 'human' ? [] : [[s.nation, s.controller]])),
+      ...playing.flatMap((p) => (p.controller === 'human' ? [] : [[p.people, p.controller]])),
+    ]),
+    difficulty,
+    historicalEvents,
+    randomEvents,
+    // Off where the scenario has no charter (the option is hidden then).
+    colonyCharter: colonyCharter && !!options.charter,
+    // Only real rivals is written, so alternative-history configs (and their saves and game codes) are as before.
+    ...(rivals !== scenario.nations.default ? { rivals } : {}),
+    // Likewise the scenario, only outside the Americas.
+    ...(scenario.id !== DEFAULT_SCENARIO ? { scenario: scenario.id } : {}),
+    // And the peoples playing as nations, only where some play (native-nations.md T4).
+    ...(playing.length ? { peoples: playing.map((p) => p.people) } : {}),
+  });
+
+  /** The peoples the scenario lets play (T4, T22): a row each, not played, a person or a computer level. */
+  const peoplesTable = (): HTMLElement =>
+    h('div', { class: 'people-slots' },
+      h('h3', null, 'Native peoples'),
+      h('p', { class: 'muted small' }, options.peoplesFirst
+        ? 'Play a native people: choose Player for one of them. The peoples nobody plays live on in their settlements under simple rules.'
+        : 'A native people can play as a nation, by you or by the computer; the others live in their settlements under simple rules.'),
+      h('div', { class: 'slots-table' }, peopleSlots.map((slot) => {
+        const info = options.peoples.find((p) => p.id === slot.people)!;
+        return h('div', { class: 'slot-row', 'data-people': slot.people },
+          h('span', { class: 'flag', style: `background:${info.color}` }),
+          h('span', { class: 'people-name' }, capital(info.name)),
+          h('select', { 'aria-label': `Controller of ${info.name}`, title: slot.controller === 'off' || slot.controller === 'human' ? undefined : AI_LEVEL_INFO[slot.controller].description, onchange: (e: Event) => { slot.controller = (e.target as HTMLSelectElement).value as PeopleSlot['controller']; render(); } },
+            h('option', { value: 'off', selected: slot.controller === 'off' || undefined }, 'Not played (settlements)'),
+            h('option', { value: 'human', selected: slot.controller === 'human' || undefined }, 'Player'),
+            AI_LEVELS.map((level) => h('option', { value: level, selected: slot.controller === level || undefined, title: AI_LEVEL_INFO[level].description }, `Computer: ${AI_LEVEL_INFO[level].name}`))),
+          h('span', { class: 'muted small bonus' }, info.lifeway));
+      })));
 
   const el = h('main', { class: 'menu-screen' });
   // Clearing the screen blurs a focused input, whose change handler may render again; a render
@@ -220,7 +296,8 @@ export function newGameScreen(
     // Saves this version cannot read (from before 0.4) are named, not hidden.
     const unreadable = [autoSave?.error && `Your autosaved game can't be continued: ${autoSave.error}`, manualSave?.error && `Your saved game can't be loaded: ${manualSave.error}`].filter(Boolean) as string[];
     const chosen = slots.slice(0, count);
-    const humans = chosen.filter((s) => s.controller === 'human').length;
+    const playing = peopleSlots.filter((p) => p.controller !== 'off');
+    const humans = chosen.filter((s) => s.controller === 'human').length + playing.filter((p) => p.controller === 'human').length;
     // What the chosen scenario offers.
     /** The scenario's colony charter, if it has one (the option is hidden otherwise). */
     const CHARTER = options.charter;
@@ -239,11 +316,19 @@ export function newGameScreen(
     const scenarios = playableScenarios();
     /** The scenario with the chosen rivals, for the nations' entries in that set. */
     const setup = { config: { scenario: scenario.id, rivals } };
-    const firstHuman = chosen.find((s) => s.controller === 'human')?.nation ?? chosen[0]?.nation ?? 'england';
+    const firstHuman = playing.find((p) => p.controller === 'human')?.people ?? chosen.find((s) => s.controller === 'human')?.nation ?? chosen[0]?.nation ?? 'england';
+    const config = configOf(chosen, playing);
+    /** A person who plays only nations that arrive later starts at the first arrival (T16, T18). */
+    const arrival = arrivalStartTurn(config);
+    const startYears = options.startYears.filter((y) => y.turn > arrival);
+    const arrivalYearText = arrival ? formatDate(arrival + 1, scenario.calendar) : '';
+    if (headYear && !startYears.some((y) => y.year === headYear)) headYear = 0;
+    const headTurn = headYear ? turnOfYear(headYear, scenario.calendar) : arrival;
+    const noPeopleNoNation = options.peoplesFirst && !playing.length;
     el.append(
       h('div', { class: 'menu-card' },
         h('div', { class: 'menu-title' },
-          icon({ kind: 'unit', type: 'caravel', role: 'none', color: nationOf(scenario, firstHuman).color }, 72),
+          icon({ kind: 'unit', type: playing.some((p) => p.people === firstHuman) ? 'birchbarkCanoe' : 'caravel', role: 'none', color: nationOf(scenario, firstHuman).color }, 72),
           back ? h('button', { class: 'btn small back', onclick: back, 'aria-label': 'Back to the title screen' }, '←') : null,
           h('div', null, h('h1', null, 'Casual Colonization'), h('p', { class: 'muted' }, term(scenario, 'newGame.tagline')))),
         auto || manual
@@ -285,8 +370,12 @@ export function newGameScreen(
             h('select', { 'aria-label': `Controller of nation ${i + 1}`, title: slot.controller === 'human' ? undefined : AI_LEVEL_INFO[slot.controller].description, onchange: (e: Event) => { slot.controller = (e.target as HTMLSelectElement).value as Slot['controller']; render(); } },
               h('option', { value: 'human', selected: slot.controller === 'human' || undefined }, 'Player'),
               AI_LEVELS.map((level) => h('option', { value: level, selected: slot.controller === level || undefined, title: AI_LEVEL_INFO[level].description }, `Computer: ${AI_LEVEL_INFO[level].name}`))),
-            h('span', { class: 'muted small bonus' }, nationOf(setup, slot.nation).bonus.text));
+            h('span', { class: 'muted small bonus' }, [nationOf(setup, slot.nation).bonus.text, (() => {
+              const year = arrivalYear(scenario, rivals, slot.nation);
+              return year ? `Arrives in ${year}.` : '';
+            })()].filter(Boolean).join(' ')));
         })),
+        options.peoples.length ? peoplesTable() : null,
         h('div', { class: 'row wrap' },
           h('label', { class: 'field', title: `${DIFFICULTY[difficulty].description} Applies to the players; computer players use the standard (Conquistador) economics.` },
             h('span', null, 'Difficulty'),
@@ -296,6 +385,7 @@ export function newGameScreen(
           plannedSelect('Online play', 'Later', ['Online'], 'Several people can already play on this device (hot seat): set more than one nation to Player.')),
         humans > 1 ? h('p', { class: 'muted small' }, 'Several players take turns on this device (hot seat).') : null,
         humans === 0 ? h('p', { class: 'muted small' }, 'No players: you watch the computer nations play each other, with a live scoreboard.') : null,
+        noPeopleNoNation ? h('p', { class: 'save-error', role: 'status' }, `Every nation arrives after ${options.firstYear}: choose at least one people to play, by you or by the computer.`) : null,
         h('div', { class: 'row wrap' },
           h('label', { class: 'field' }, h('span', null, 'Map'),
             h('select', { 'aria-label': 'Map', onchange: (e: Event) => { map = (e.target as HTMLSelectElement).value; render(); } },
@@ -335,10 +425,10 @@ export function newGameScreen(
           humans > 0
             ? h('label', { class: 'field' }, h('span', null, 'Start'),
                 h('select', { 'aria-label': 'Start year', onchange: (e: Event) => { headYear = Number((e.target as HTMLSelectElement).value); render(); } },
-                  h('option', { value: 0, selected: !headYear || undefined }, `At the beginning (${options.firstYear})`),
-                  options.startYears.map((y) => h('option', { value: y.year, selected: headYear === y.year || undefined }, `Take over in ${y.year} (turn ${y.turn})`))))
+                  h('option', { value: 0, selected: !headYear || undefined }, arrival ? `On arrival (${arrivalYearText})` : `At the beginning (${options.firstYear})`),
+                  startYears.map((y) => h('option', { value: y.year, selected: headYear === y.year || undefined }, `Take over in ${y.year} (turn ${y.turn})`))))
             : null,
-          humans > 0 && headYear
+          humans > 0 && headTurn
             ? h('label', { class: 'field' }, h('span', null, 'Until then'),
                 h('select', { 'aria-label': 'Head start display', onchange: (e: Event) => { watchHeadStart = (e.target as HTMLSelectElement).value === 'watch'; } },
                   h('option', { value: 'watch', selected: watchHeadStart || undefined }, 'Watch the speedrun'),
@@ -373,29 +463,16 @@ export function newGameScreen(
         h('p', { class: 'muted small', id: 'seed-shown', 'aria-live': 'polite' }, seedLine(seedText)),
         codeNote ? h('p', { class: codeNote.startsWith('Game code applied') ? 'muted small' : 'save-error', role: 'status' }, codeNote) : null,
         humans > 0 && headYear
-          ? h('p', { class: 'muted small' }, `The strongest computer player runs your nation until ${headYear}, then hands it to you. Everyone else plays at the levels chosen above.`)
-          : null,
+          ? h('p', { class: 'muted small' }, `The strongest computer player runs your ${playing.some((p) => p.controller === 'human') ? 'people' : 'nation'} until ${headYear}, then hands it to you. Everyone else plays at the levels chosen above.`)
+          : humans > 0 && arrival
+            ? h('p', { class: 'muted small' }, `Your nation arrives in ${arrivalYearText}. The computer plays the years before (a head start), and the game is yours from your arrival.`)
+            : null,
         h('div', { class: 'row wrap' },
           h('button', {
             class: 'btn primary big',
-            onclick: () => start({
-              ...parseSeedInput(seedText),
-              mapSize,
-              ...(map ? { map } : {}),
-              nations: chosen.map((s) => s.nation),
-              humans: chosen.filter((s) => s.controller === 'human').map((s) => s.nation),
-              ai: Object.fromEntries(chosen.flatMap((s) => (s.controller === 'human' ? [] : [[s.nation, s.controller]]))),
-              difficulty,
-              historicalEvents,
-              randomEvents,
-              // Off where the scenario has no charter (the option is hidden then).
-              colonyCharter: colonyCharter && !!options.charter,
-              // Only real rivals is written, so alternative-history configs (and their saves and game codes) are as before.
-              ...(rivals !== scenario.nations.default ? { rivals } : {}),
-              // Likewise the scenario, only outside the Americas.
-              ...(scenario.id !== DEFAULT_SCENARIO ? { scenario: scenario.id } : {}),
-            }, humans > 0 && headYear ? { turn: turnOfYear(headYear, scenario.calendar), watch: watchHeadStart } : undefined),
-          }, fromCode ? 'Start this game' : humans === 0 ? 'Watch the computers play' : 'Set sail'),
+            disabled: noPeopleNoNation || undefined,
+            onclick: () => start(config, humans > 0 && headTurn ? { turn: headTurn, watch: watchHeadStart } : undefined),
+          }, fromCode ? 'Start this game' : humans === 0 ? 'Watch the computers play' : playing.some((p) => p.controller === 'human') ? 'Begin' : 'Set sail'),
           h('button', {
             class: 'btn',
             onclick: async () => {
