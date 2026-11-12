@@ -31,7 +31,7 @@ import { EUROPEAN_UNIT_TYPES, PEOPLE_UNIT_TYPES } from '../rules/units.js';
 import { NORTH_EAST_PEOPLES, NORTH_EAST_RENEWAL } from '../maps/north-east.js';
 import { AMERICAS } from './americas.js';
 import type { Calendar } from './calendar.js';
-import type { NationEntry, PeopleOverride, PlayablePeople, Scenario } from './types.js';
+import type { ContinuityParams, NationEntry, PeopleOverride, PlayablePeople, Scenario } from './types.js';
 import { HUDSONS_BAY, WEST_INDIA } from './companies.js';
 
 const without = <T>(list: readonly T[], ...drop: T[]): T[] => list.filter((x) => !drop.includes(x));
@@ -227,16 +227,35 @@ const PLAYABLE: PlayablePeople[] = [
 ];
 
 /**
+ * Continuity per playing people (T14; native-nations.md section 18), over the scenario's victory
+ * params: "still here despite the Europeans", measured against each people's own land rather than
+ * one number for the whole map. Its homeland is the land it held in 1000, so nearly all of it kept
+ * (`homelandShare`; Europeans buy or take land beside their colonies, and leased land counts as
+ * kept), its homeland's regions in the health its own restraint can keep there (`landHealth`: the
+ * Innu's Labrador renews little and is hunted little, Iroquoia and Huronia are farmed, crowded and
+ * hunted hard), and its people grown by births as far as a people kept from hunger, war and
+ * epidemics grows there (`peopleShare`, times its people in 1000). Set from 48 computer games
+ * (seeds 3000 and 4000) so that each people wins this way about as often as the others: drafted
+ * for Simon's review.
+ */
+const CONTINUITY_OF = {
+  haudenosaunee: { homelandShare: 0.95, landHealth: 92, peopleShare: 5.2 },
+  wendat: { homelandShare: 0.95, landHealth: 88, peopleShare: 4.6 },
+  mikmaq: { homelandShare: 0.95, landHealth: 94, peopleShare: 3.4 },
+  innu: { homelandShare: 0.95, landHealth: 97.5, peopleShare: 3.8 },
+} satisfies Partial<Record<NorthEastPeopleId, Partial<ContinuityParams>>>;
+
+/**
  * Each people's own values (T10, T14): what it keeps in store, and the weights of its score where
  * they differ from the scenario's. A first reading of the sources, for Simon's review: the
  * Haudenosaunee's League and council, the Wendat's trade and the corn they kept to trade north,
  * the hunting peoples' land kept whole.
  */
 const OVERRIDES: Partial<Record<NorthEastPeopleId, PeopleOverride>> = {
-  haudenosaunee: { score: { peopleCouncil: 7, peopleTreaty: 4 } },
-  wendat: { storeYears: 1.5, score: { peopleTrust: 7, peopleTreaty: 4 } },
-  mikmaq: { score: { peopleLandHealth: 0.8, peopleHomeland: 0.7, peopleTrust: 6 } },
-  innu: { score: { peopleLandHealth: 0.8, peopleHomeland: 0.7, peopleStoreYear: 3 } },
+  haudenosaunee: { score: { peopleCouncil: 7, peopleTreaty: 4 }, victory: { continuity: CONTINUITY_OF.haudenosaunee } },
+  wendat: { storeYears: 1.5, score: { peopleTrust: 7, peopleTreaty: 4 }, victory: { continuity: CONTINUITY_OF.wendat } },
+  mikmaq: { score: { peopleLandHealth: 0.8, peopleHomeland: 0.7, peopleTrust: 6 }, victory: { continuity: CONTINUITY_OF.mikmaq } },
+  innu: { score: { peopleLandHealth: 0.8, peopleHomeland: 0.7, peopleStoreYear: 3 }, victory: { continuity: CONTINUITY_OF.innu } },
 };
 
 /** The terrains of the map (no savannah, swamp, desert or arctic). */
@@ -328,10 +347,10 @@ export const NORTH_EAST: Scenario = {
     mapKnowledge: { seen: true, share: { homeland: 3, every: 50 }, range: 12 },
   },
   // Both sides judged at the end year, in the decided order (T14). The peoples' peaceful ways are
-  // tuned so that a people wins in about 1 game in 5 (T15; Beta 3 step 9, native-nations.md section
-  // 14): the computer peoples are seldom pressed off their land here (their claimed land is closed
-  // to colonies), so continuity asks for a homeland whose land is all but untouched, and a good life
-  // for land kept whole, a century without hunger and treaties with three in four of those met.
+  // tuned so that a people wins in about 1 game in 5 (T15; Beta 3 step 9, native-nations.md sections
+  // 14 and 18): continuity by each playing people's own thresholds (`CONTINUITY_OF`, in its
+  // overrides; the 97.5 here is for a people with none), and a good life for land kept whole, a
+  // century without hunger and treaties with three in four of those met.
   victory: [
     { id: 'military' },
     { id: 'independence-war' },

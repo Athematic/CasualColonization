@@ -8,6 +8,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   AMERICAS,
+  CONTINUITY,
+  NORTH_EAST,
   PEOPLE_BUILDINGS,
   PEOPLE_UNIT_TYPES,
   SCORE_WEIGHTS,
@@ -38,9 +40,11 @@ import {
   standingWith,
   startWar,
   turnOfYear,
+  victoryParams,
   waysOf,
   type GameConfig,
   type GameState,
+  type PlayerId,
   type Scenario,
 } from '../src/index.js';
 import { colonyAt, createUnit, isWater, settlementAt, tileAt } from '../src/index.js';
@@ -502,4 +506,19 @@ describe('a game with the peoples’ victories (save and load)', () => {
     expect(b).toEqual(a);
     expect(serialize(deserialize(serialize(s)))).toBe(serialize(s));
   }, 180_000);
+});
+
+describe('continuity per people (native-nations.md section 18)', () => {
+  it('a people’s own thresholds over the scenario’s, over the engine’s', () => {
+    const s = createGame({ seed: 3000, mapSize: 'medium', nations: ['england'], humans: [], ai: { england: 'competent' }, peoples: ['haudenosaunee', 'innu'], scenario: 'north-east', map: 'north-east', historicalEvents: true, randomEvents: true, colonyCharter: true });
+    const params = NORTH_EAST.victory.find((v) => v.id === 'continuity')?.params ?? {};
+    for (const id of ['haudenosaunee', 'wendat', 'mikmaq', 'innu'] as PlayerId[]) {
+      const own = NORTH_EAST.peoples.overrides?.[id as 'innu']?.victory?.continuity;
+      expect(own, id).toBeDefined();
+      const w = victoryParams(s, 'continuity', CONTINUITY, params, id);
+      for (const [k, v] of Object.entries(own!)) expect(w[k as keyof typeof w], `${id} ${k}`).toBe(v);
+    }
+    // A people with none of its own reads the scenario's.
+    expect(victoryParams(s, 'continuity', CONTINUITY, params, 'abenaki').landHealth).toBe((params as { landHealth?: number }).landHealth ?? CONTINUITY.landHealth);
+  });
 });

@@ -29,6 +29,7 @@ import { regionHealth, regionOf } from './land.js';
 import type { PlayerId, TribeId } from './rules/nations.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { calendarOf, mechanicsOf, scenarioOf, yearValue } from './scenarios/index.js';
+import type { ContinuityParams, GoodLifeParams } from './scenarios/types.js';
 import { treatyEndedBy } from './treaties.js';
 import type { Colony, GameState, Player } from './types.js';
 import { colonyList, unitList } from './unitindex.js';
@@ -37,11 +38,11 @@ import { colonyList, unitList } from './unitindex.js';
 // Params
 
 /** Continuity's defaults (T14). */
-export const CONTINUITY = { homelandShare: 0.5, landHealth: 40, peopleShare: 1, members: 1 };
+export const CONTINUITY: ContinuityParams = { homelandShare: 0.5, landHealth: 40, peopleShare: 1, members: 1 };
 /** Confederacy's defaults (T14). */
 export const CONFEDERACY = { members: 3, years: 50, homelandShare: 0.5 };
 /** A good life's defaults (T14). */
-export const GOOD_LIFE = { storeYears: 1, hungerYears: 20, landHealth: 60, peaceYears: 30, faithYears: 30, treatyShare: 0.5 };
+export const GOOD_LIFE: GoodLifeParams = { storeYears: 1, hungerYears: 20, landHealth: 60, peaceYears: 30, faithYears: 30, treatyShare: 0.5 };
 /** The military victory's defaults (T14): the rounds every European must stay defeated (0: at once). */
 export const MILITARY = { years: 0 };
 
@@ -61,8 +62,8 @@ export function peopleAiTargets(s: GameState): typeof PEOPLE_AI_TARGETS {
  * A victory kind's numbers: its defaults, the scenario's `params` over them, and, for one people,
  * that people's own (`peoples.overrides[id].victory[kind]`) over those.
  */
-export function victoryParams<T extends Record<string, number>>(s: GameState, kind: string, defaults: T, params: Record<string, unknown> = {}, people?: PlayerId): T {
-  const own = people ? scenarioOf(s).peoples.overrides?.[people as TribeId]?.victory?.[kind] : undefined;
+export function victoryParams<T extends { [K in keyof T]: number }>(s: GameState, kind: string, defaults: T, params: Record<string, unknown> = {}, people?: PlayerId): T {
+  const own = people ? (scenarioOf(s).peoples.overrides?.[people as TribeId]?.victory as Record<string, Record<string, number | undefined> | undefined> | undefined)?.[kind] : undefined;
   const out = { ...defaults } as Record<string, number>;
   for (const src of [params, own ?? {}]) for (const k in defaults) if (typeof src[k] === 'number') out[k] = src[k] as number;
   return out as T;

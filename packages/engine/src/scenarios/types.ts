@@ -817,8 +817,41 @@ export interface PlayablePeople {
  */
 export type PeopleOverride = Partial<Pick<PeopleDef, 'name' | 'skills' | 'wants' | 'temperament' | 'storeYears' | 'seedKey'>> & {
   score?: Partial<ScoreWeights>;
-  victory?: Partial<Record<string, Record<string, number>>>;
+  /**
+   * Its own thresholds for the peoples' ways that judge one people at a time (native-nations.md
+   * T14, section 18), over the scenario's victory entry's `params`, which are over the engine's
+   * defaults (peoplevictory.ts `CONTINUITY`, `GOOD_LIFE`). A confederacy is judged as a league, so it has none here.
+   */
+  victory?: PeopleVictoryOverride;
 };
+
+/** Continuity's thresholds (native-nations.md T14): the engine's defaults are peoplevictory.ts `CONTINUITY`. */
+export interface ContinuityParams {
+  /** Share of its starting homeland kept (claimed by it or by no one; leased land counts as kept). */
+  homelandShare: number;
+  /** Average health (0–100) of its homeland's regions, where land health is on. */
+  landHealth: number;
+  /** Its people now against its people at the start. */
+  peopleShare: number;
+  /** Council members. */
+  members: number;
+}
+
+/** A good life's thresholds (T14): the engine's defaults are peoplevictory.ts `GOOD_LIFE`. */
+export interface GoodLifeParams {
+  storeYears: number;
+  hungerYears: number;
+  landHealth: number;
+  peaceYears: number;
+  faithYears: number;
+  treatyShare: number;
+}
+
+/** A people's own thresholds, by victory kind (`peoples.overrides[id].victory`). */
+export interface PeopleVictoryOverride {
+  continuity?: Partial<ContinuityParams>;
+  'good-life'?: Partial<GoodLifeParams>;
+}
 
 export interface ScenarioPeoples {
   /** Peoples in play, north to south (the generator's band order). */
