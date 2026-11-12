@@ -87,8 +87,7 @@ function plannedSelect(label: string, release: string, choices: string[], note?:
 
 /** Rule options from the roadmap, shown as disabled switches. */
 const PLANNED_OPTIONS: { label: string; release: string; note: string }[] = [
-  { label: 'Native peoples as partners', release: 'Beta 2', note: 'Trade agreements, shared land and mutual defence with the native peoples.' },
-  { label: 'Hexagon maps', release: 'Later', note: 'A scenario can choose hexagon tiles instead of squares.' },
+  { label: 'Hexagon maps', release: 'Beta 4', note: 'A scenario can choose hexagon tiles instead of squares.' },
 ];
 
 export function newGameScreen(
@@ -312,6 +311,10 @@ export function newGameScreen(
       scenario.victory.some((v) => v.id === 'concord') ? 'winning together as an alliance' : null,
       scenario.victory.some((v) => v.id === 'prosperity') ? 'winning by prosperity in partnership with the native peoples' : null,
       scenario.mechanics.confederation && scenario.mechanics.independence ? 'declaring independence together' : null,
+      // Beta 2 (docs/design/native-partners.md) and Beta 3 (docs/design/native-nations.md), where the scenario has them.
+      scenario.mechanics.peopleTreaties?.length ? 'treaties with the native peoples (trade, land use, cultural exchange, defence)' : null,
+      options.peoples.length ? 'native peoples played as nations, by a person or the computer' : null,
+      scenario.mechanics.landSales ? "buying or taking a playing people's land" : null,
     ].filter((x): x is string => !!x);
     const scenarios = playableScenarios();
     /** The scenario with the chosen rivals, for the nations' entries in that set. */
