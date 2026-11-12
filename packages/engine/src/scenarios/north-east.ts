@@ -8,7 +8,8 @@
  *
  * Everything here that is history (the peoples, their homelands and values, the council's new
  * members, the arrivals, the events, the words) is drafted for Simon's review, with its sources in
- * the note (section 13). The numbers are a first tuning; computer players are step 9.
+ * docs/research/north-east-peoples.md (the game's data: native-nations.md section 13). The numbers
+ * are a first tuning; computer players are step 9.
  *
  * Registered hidden until its drafted history is reviewed: the New game screen offers its peoples
  * since step 10 (every European nation arrives after 1000, so a game needs a playing people at its
@@ -130,7 +131,7 @@ const N = {
     bonus: { text: 'Whaling fleets: a second caravel waits in the home port from the start.', modifiers: [{ hook: 'startingDocks', units: ['caravel'] }] },
     colonyNames: [
       // The Basque whaling harbours of the Strait of Belle Isle as the Basque records name them (Red Bay
-      // was Butus), and Placentia's Basque name: from Barkham's work, to be checked (note, section 13).
+      // was Butus), and Placentia's Basque name: from Barkham's work, to be checked (docs/research/north-east-peoples.md, section 5).
       'Butus', 'Plazentzia', 'Gradun', 'Puerto Nuevo', 'Puerto de los Hornos',
       // In the style of the Basque whaling ports of Gipuzkoa and Bizkaia.
       'Donostia Berria', 'Pasaia Berria', 'Orio', 'Getaria', 'Zumaia', 'Mutriku', 'Deba', 'Hondarribia', 'Lekeitio', 'Bermeo',
@@ -182,7 +183,7 @@ const REAL: NationEntry[] = [N.england, N.portugal, N.france, N.spain, N.netherl
  */
 const COUNCIL: FatherId[] = without(AMERICAS_FATHERS, 'hernanCortes', 'franciscoDeCoronado', 'hernandoDeSoto', 'juanDeSepulveda', 'simonBolivar');
 
-/** The peoples, north to south (T20). Their research and sources: native-nations.md section 13. */
+/** The peoples, north to south (T20). Their research and sources: docs/research/north-east-peoples.md, section 1. */
 const PEOPLES: NorthEastPeopleId[] = [
   'dorset', 'inuit', 'eeyou', 'innu', 'beothuk', 'algonquin', 'mikmaq', 'wolastoqiyik', 'penobscot', 'abenaki', 'wendat',
   'stLawrenceIroquoians', 'attawandaron', 'haudenosaunee', 'mohican', 'massachusett', 'wampanoag', 'narragansett', 'munsee',
