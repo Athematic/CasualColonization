@@ -11,6 +11,8 @@ import { defencePartner, hasDefence, hasExchange, hasLandUse, hasPeopleTrade, le
 import { cooperationOf, LEVEL_COOPERATION } from '../alliances.js';
 import { bound, treatyPeoples } from '../treaties.js';
 import { peoplePairRandom } from '../relations.js';
+import { pairTreaty, pairTreatyProblem, proposePairTreaty, standingOf } from '../peoplediplomacy.js';
+import { landSalesOf } from '../peopleland.js';
 import type { TribeId } from '../rules/nations.js';
 import { cargoRoomFor, colonyWorkers, isCoastal } from '../queries.js';
 import { nativeRulesOf } from '../scenarios/index.js';
@@ -102,6 +104,8 @@ export function peopleAffairs(s: GameState, p: Player, prof?: AiProfile): void {
   const chance = cooperationOf(s).proposePeopleTrade * LEVEL_COOPERATION[p.ai ?? 'naive'].people;
   if (chance <= 0) return;
   const combative = p.ai === 'combative';
+  // The playing peoples too, where Europeans deal with their land (native-nations.md section 19).
+  if (landSalesOf(s)) playingPeopleTrade(s, p, chance);
   let learner = !prof?.learnFromNatives;
   for (const t of s.tribes) {
     const people: TribeId = t.id;
@@ -118,6 +122,26 @@ export function peopleAffairs(s: GameState, p: Player, prof?: AiProfile): void {
     if (peopleTreatyProblem(s, p.id, people) || peopleRefusal(s, p.id, people)) continue;
     if (peoplePairRandom(s, p.id, people, `${p.id} propose trade ${s.turn}`) >= chance) continue;
     safely(() => proposePeopleTreaty(s, p.id, people));
+  }
+}
+
+/**
+ * Section 19 (Simon: the advanced levels "more interested in trade and peace"): a computer nation
+ * proposes a trade treaty to each playing people it has met, as it does to the peoples nobody plays:
+ * at the same chance (the scenario's `proposePeopleTrade` times its level's share; Naive never),
+ * Combative only where it has traded enough with the people to pay. Drawn from the pair's own
+ * stream; a computer people answers by its profile. Land use follows from the land deal
+ * (peopleland.ts `computerLandDeal`), once a trade treaty stands.
+ */
+function playingPeopleTrade(s: GameState, p: Player, chance: number): void {
+  for (const q of s.players) {
+    if (q.kind !== 'people') continue;
+    const rel = standingOf(s, p.id, q.id);
+    if (!rel || pairTreaty(s, 'people-trade', p.id, q.id)) continue;
+    if (p.ai === 'combative' && rel.volume < COMBATIVE_TREATY_VOLUME) continue;
+    if (pairTreatyProblem(s, p.id, q.id, 'people-trade')) continue;
+    if (peoplePairRandom(s, p.id, q.id as TribeId, `${p.id} propose trade ${s.turn}`) >= chance) continue;
+    safely(() => proposePairTreaty(s, p.id, q.id, 'people-trade'));
   }
 }
 

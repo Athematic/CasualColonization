@@ -28,7 +28,7 @@ import { canDeclareIndependence, declareIndependence, rebelShare } from '../inde
 import { abandonColony } from '../leaving.js';
 import { boardShip, canImprove, findPath, goTo, setDestination, startImprovement } from '../movement.js';
 import { buyLand, establishMission, giftToTribe, landPrice, learnSkill, nativeLandOwner, speakToChief, takeLand, tensionOf } from '../natives.js';
-import { computerAcquire, computerLandDeal, computerMayAsk, landSalesOf, playingPeopleLand } from '../peopleland.js';
+import { computerAcquire, computerLandDeal, computerMayAsk, farmlandPull, landSalesOf, playingPeopleLand } from '../peopleland.js';
 import { buildingCapacityPerWorker, landYield, workerTileYield, type ColonyReport } from '../production.js';
 import { landAdjusted } from '../land.js';
 import { aiColonyReport } from './reports.js';
@@ -251,11 +251,17 @@ const nativeCrowding = (s: GameState) => {
 function expansionScore(s: GameState, p: Player, prof: AiProfile): (x: number, y: number) => number {
   if (!landSalesOf(s)) return (x, y) => keenSiteScore(s, x, y);
   const spare = p.gold - prof.reserve - turnSaving;
+  // Section 19: drawn to a playing people's farmland near the site, where the scenario has a `pull`.
+  const pull = farmlandPull(s, p.id);
   return (x, y) => {
-    const v = keenSiteScore(s, x, y);
-    if (v !== -Infinity) return v;
-    const people = computerMayAsk(s, p.id, prof, x, y, spare);
-    return people ? claimedSiteScore(s, x, y, people) * 0.8 : v;
+    let v = keenSiteScore(s, x, y);
+    if (v === -Infinity) {
+      const people = computerMayAsk(s, p.id, prof, x, y, spare);
+      if (!people) return v;
+      v = claimedSiteScore(s, x, y, people) * 0.8;
+      if (v === -Infinity) return v;
+    }
+    return pull ? v + pull(x, y) : v;
   };
 }
 

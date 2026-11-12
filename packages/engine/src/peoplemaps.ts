@@ -21,7 +21,8 @@
 import { peopleProfileOf } from './ai/profiles.js';
 import { gridOf } from './grid.js';
 import { pairAtWar, playingPeople, sideName, standingOf } from './peoplediplomacy.js';
-import { message } from './queries.js';
+import { message, sightRadius } from './queries.js';
+import { colonyList } from './unitindex.js';
 import type { PlayerId } from './rules/nations.js';
 import { calendarOf, mechanicsOf, yearValue } from './scenarios/index.js';
 import { track } from './telemetry.js';
@@ -86,6 +87,74 @@ function tell(s: GameState, p: Player, text: string, n: number): void {
 }
 
 const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/** How far a town, colony or settlement sees, for meetings in person (as a new colony reveals the land around it). */
+const PLACE_SIGHT = 2;
+
+/**
+ * Meetings in person (native-nations.md section 19, Simon's answer to section 18's third question):
+ * once a round, where the scenario has `mapKnowledge`, a pair with a playing people whose standing
+ * record is written but who have not yet met in person meet when a unit, town, colony or settlement
+ * of one stands within sight of one of the other's (a unit's sight, `PLACE_SIGHT` for a place). The
+ * turn is kept on the pair's record (`PeopleRelation.metInPerson`), apart from the standing record,
+ * which a shared map can write. A good life counts only these as met.
+ */
+export function noteMeetings(s: GameState): void {
+  const list = s.peopleRelations;
+  if (!list) return;
+  const { width, height } = s.map;
+  const grid = gridOf(s);
+  let places: Map<PlayerId, { i: number; r: number }[]> | undefined;
+  const sight = new Map<PlayerId, Uint8Array>();
+  const placesOf = (id: PlayerId) => {
+    if (!places) {
+      places = new Map();
+      const add = (owner: PlayerId, x: number, y: number, r: number) => {
+        let l = places!.get(owner);
+        if (!l) places!.set(owner, (l = []));
+        l.push({ i: y * width + x, r });
+      };
+      for (const c of colonyList(s)) add(c.owner, c.x, c.y, PLACE_SIGHT);
+      for (const k in s.settlements) add(s.settlements[k].tribe, s.settlements[k].x, s.settlements[k].y, PLACE_SIGHT);
+      for (const k in s.units) {
+        const u = s.units[k];
+        if (u.loc.kind === 'map') add(u.owner, u.loc.x, u.loc.y, sightRadius(u, s));
+      }
+    }
+    return places.get(id) ?? [];
+  };
+  const sightOf = (id: PlayerId) => {
+    let m = sight.get(id);
+    if (m) return m;
+    sight.set(id, (m = new Uint8Array(width * height)));
+    for (const p of placesOf(id)) {
+      const x = p.i % width;
+      const y = (p.i - x) / width;
+      const within = grid.withinOffsets(x, y, p.r);
+      for (let k = 0; k < within.length; k += 2) {
+        const nx = x + within[k];
+        const ny = y + within[k + 1];
+        if (nx >= 0 && ny >= 0 && nx < width && ny < height) m[ny * width + nx] = 1;
+      }
+    }
+    return m;
+  };
+  const sees = (a: PlayerId, b: PlayerId) => {
+    const m = sightOf(a);
+    return placesOf(b).some((p) => m[p.i] === 1);
+  };
+  for (const key in list) {
+    const rel = list[key];
+    if (rel.metInPerson !== undefined) continue;
+    if (!playingPeople(s, rel.nation) && !playingPeople(s, rel.people)) continue;
+    if (sees(rel.nation, rel.people) || sees(rel.people, rel.nation)) rel.metInPerson = s.turn;
+  }
+}
+
+/** Whether two sides have met in person (`noteMeetings`). */
+export function metInPerson(s: GameState, a: PlayerId, b: PlayerId): boolean {
+  return standingOf(s, a, b)?.metInPerson !== undefined;
+}
 
 /**
  * Once a round, in a game with a playing people and `mechanics.mapKnowledge.share`: each playing

@@ -230,8 +230,11 @@ export function goodLifeStanding(s: GameState, id: PlayerId, params: Record<stri
   if (atWarNow(s, id) || (p.lastWar !== undefined && yearsSince(s, p.lastWar) < w.peaceYears)) fails.push('peace');
   const broke = (s.treaties ?? []).some((t) => t.end?.why === 'broken' && treatyEndedBy(t)?.id === id && yearsSince(s, t.end.turn) < w.faithYears);
   if (broke) fails.push('faith');
-  const met = sidesMet(s, id);
   const sides = treatySides(s, id);
+  // Where peoples share maps (`mapKnowledge`), met means met in person (section 19), not known from
+  // a shared map; a treaty partner counts as met.
+  const firstHand = !!mechanicsOf(s).mapKnowledge;
+  const met = sidesMet(s, id).filter((o) => !firstHand || sides.has(o) || standingOf(s, id, o)?.metInPerson !== undefined);
   const partners = met.filter((o) => sides.has(o)).length;
   const needed = Math.max(1, Math.ceil(w.treatyShare * met.length - 1e-9));
   if (partners < needed) fails.push('treaties');

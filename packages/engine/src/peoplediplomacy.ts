@@ -60,8 +60,8 @@ import { colonyList, setUnitLoc } from './unitindex.js';
 import { gridOf } from './grid.js';
 import { computerLeague, leagueWar, processLeagues } from './peopleleague.js';
 import { peopleProfileOf, type PeopleProfile } from './ai/profiles.js';
-import { shareMaps } from './peoplemaps.js';
-import { processLandOffers } from './peopleland.js';
+import { noteMeetings, shareMaps } from './peoplemaps.js';
+import { landSalesOf, landTrust, processLandOffers } from './peopleland.js';
 
 // ---------------------------------------------------------------------------
 // Who is who
@@ -321,7 +321,10 @@ function computerAccepts(s: GameState, from: PlayerId, to: PlayerId, kind: Peopl
   // A people, playing by the computer or nobody plays: Beta 2's answer (N8), a computer people's
   // times its profile's `accept` (ai/profiles.ts).
   if (peopleRefuses(s, to, from)) return false;
-  return r < peopleTreatyRules(s).accept * temperamentOf(s, to as TribeId).accept * (peopleProfileOf(s.players, to)?.accept ?? 1);
+  const prof = peopleProfileOf(s.players, to);
+  // A computer people lends its land more readily after years of peace (section 19), where the scenario has land sales.
+  const trust = kind === 'land-use' && prof && landSalesOf(s) ? landTrust(s, to, from) : 1;
+  return r < peopleTreatyRules(s).accept * temperamentOf(s, to as TribeId).accept * (prof?.accept ?? 1) * trust;
 }
 
 /** A people's own reason to say no: it has not forgotten land taken from it lately (N8). */
@@ -348,6 +351,7 @@ export function proposePairTreaty(s: GameState, from: PlayerId, to: PlayerId, ki
   }
   if (!computerAccepts(s, from, to, kind)) {
     track(from, 'natives:people treaty refused');
+    if (kind === 'land-use') track(standingPair(from, to)[0], 'natives:people lease refused');
     const text = (sideOf(s, to) !== 'nation' && peopleRefuses(s, to, from)) || `${capital(sideName(s, to))} thank you, but are not ready for ${peopleTreatyText(kind)} with ${sideName(s, from)}.`;
     message(s, text, from);
     return text;
@@ -455,6 +459,7 @@ function makePeopleLease(s: GameState, nation: PlayerId, people: PlayerId): stri
   for (const q of tiles) tileAt(s, q.x, q.y)!.use = nation;
   track(nation, 'natives:people treaty made');
   track(nation, 'natives:lease made');
+  track(nation, 'natives:people land leased');
   if (paid > 0) track(nation, 'natives:rent paid', paid);
   const n = `${tiles.length} ${tiles.length === 1 ? 'tile' : 'tiles'}`;
   const text = `${capital(sideName(s, nation))} and ${sideName(s, people)} agree on land use: the colonies of ${sideName(s, nation)} may work ${n} of the land of ${sideName(s, people)} beside them for ${rent} gold a tile a year (${paid} gold paid for the first year). The land stays theirs.`;
@@ -692,7 +697,11 @@ export function processPeopleDiplomacy(s: GameState): void {
   if (!peopleTreatiesOn(s)) return;
   noteContacts(s);
   // Peoples that have met share their maps (Beta 3 step 10b), where the scenario has it.
-  if (mechanicsOf(s).mapKnowledge) shareMaps(s);
+  if (mechanicsOf(s).mapKnowledge) {
+    // Who has met in person, apart from maps shared (section 19: a good life counts only these).
+    noteMeetings(s);
+    shareMaps(s);
+  }
   for (const t of s.treaties ?? []) {
     if (t.end || !(t.kind in KIND_NAME) || !withPlayingPeople(s, t)) continue;
     const [a, b] = [t.parties[0].id, t.parties[1].id];
@@ -730,7 +739,9 @@ export function peopleProposals(s: GameState, p: Player, prof: PeopleProfile): v
     for (const kind of sideOf(s, other) === 'nation' ? prof.nationKinds : peopleKinds) {
       if (pairTreatyProblem(s, p.id, other, kind)) continue;
       const [n, q] = standingPair(p.id, other);
-      if (peoplePairRandom(s, n, q, `offer ${kind} ${s.turn}`) >= chance) continue;
+      // It offers its land for use more readily after years of peace with the nation (section 19).
+      const trust = kind === 'land-use' && landSalesOf(s) ? landTrust(s, p.id, other) : 1;
+      if (peoplePairRandom(s, n, q, `offer ${kind} ${s.turn}`) >= chance * trust) continue;
       proposePairTreaty(s, p.id, other, kind);
     }
   }

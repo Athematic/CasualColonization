@@ -42,7 +42,7 @@ const GOOD_LIFE_WORDS: Record<GoodLifeCondition, string> = {
   land: 'the land of your homeland is not whole enough',
   peace: 'you have been at war too recently',
   faith: 'you broke a treaty too recently',
-  treaties: 'too few of those you have met hold a treaty with you',
+  treaties: 'too few of those you have met in person hold a treaty with you',
 };
 
 /** A sentence from a list of reasons. */
@@ -66,7 +66,7 @@ function standing(ctx: ReportContext, id: string, params: Record<string, unknown
     case 'good-life': {
       if (!people) return null;
       const g = goodLifeStanding(s, me.id, params);
-      const detail = `Treaties with ${g.partners} of the ${g.met} nations and peoples you have met (${g.needed} needed).`;
+      const detail = `Treaties with ${g.partners} of the ${g.met} nations and peoples you have met in person or hold a treaty with (${g.needed} needed).`;
       return g.fails.length ? { ok: false, text: `Not yet: ${because(g.fails.map((f) => GOOD_LIFE_WORDS[f]))}. ${detail}` } : { ok: true, text: `You would win this way now. ${detail}` };
     }
     case 'confederacy': {

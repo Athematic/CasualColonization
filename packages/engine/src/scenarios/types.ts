@@ -228,6 +228,34 @@ export interface LandSaleRules {
   waitYears: number;
   /** Years an offer waits for a person's answer before it lapses. */
   offerYears: number;
+  /**
+   * How strongly a computer nation's choice of a new colony's site is drawn to a playing people's
+   * farmland (native-nations.md section 19): each tile a playing people claims within `reach` of the
+   * site adds this times its food. 0: not at all (section 18).
+   */
+  pull: number;
+  /**
+   * A computer people's willingness to sell or lease land to a nation (section 19) grows with the
+   * years of unbroken good relations with it, to its profile's full willingness after `peaceYears`,
+   * and with a trade treaty; `wary` is the share it starts from, with neither.
+   */
+  peaceYears: number;
+  wary: number;
+  /**
+   * How a computer nation gets a playing people's land, by its level (Naive never asks): `take` is
+   * the chance it takes the land rather than offering for it, only from the year `from` and only
+   * from a people that has refused its offers `refusals` times; with `lease` it proposes land use
+   * first, where the treaty ladder allows it.
+   */
+  levels: Record<'competent' | 'combative' | 'creative', LandDealLevel>;
+}
+
+/** How a computer nation of one level gets a playing people's land (`LandSaleRules.levels`). */
+export interface LandDealLevel {
+  take: number;
+  from?: number;
+  refusals?: number;
+  lease?: boolean;
 }
 
 /** Knowledge of the land (`Mechanics.mapKnowledge`). */

@@ -31,7 +31,9 @@
 import { bestJob } from './colony.js';
 import { fail } from './errors.js';
 import { noteHistory } from './history.js';
-import { breakPairFaith, pairAtWar, pairTreaty, playingPeople, sideName, standingOf, standingPair, standingWith, stillThere } from './peoplediplomacy.js';
+import { breakPairFaith, pairAtWar, pairTreaty, pairTreatyProblem, peopleLeasableTiles, peopleLeaseRent, playingPeople, proposePairTreaty, sideName, standingOf, standingPair, standingWith, stillThere } from './peoplediplomacy.js';
+import { yearsOfGoodRelations } from './natives.js';
+import { baseTileYield } from './production.js';
 import { homelandKept } from './peoplevictory.js';
 import { kindOfId, systemsOfId } from './playerkind.js';
 import { peopleTreatyRules } from './peopletreaties.js';
@@ -40,8 +42,8 @@ import { colonyAt, message, player, tileAt, tileWorkedBy, unitName, unitsAt } fr
 import { UNIT_TYPES } from './rules/units.js';
 import { peoplePairRandom } from './relations.js';
 import type { PlayerId, TribeId } from './rules/nations.js';
-import { calendarOf, mechanicsOf, scenarioOf, settlementKindIn, turnAfterYears } from './scenarios/index.js';
-import type { LandSaleRules } from './scenarios/types.js';
+import { calendarOf, mechanicsOf, scenarioOf, settlementKindIn, turnAfterYears, yearValue } from './scenarios/index.js';
+import type { LandDealLevel, LandSaleRules } from './scenarios/types.js';
 import { track } from './telemetry.js';
 import type { Colony, GameState, PeopleRelation } from './types.js';
 import { colonyList, setUnitLoc } from './unitindex.js';
@@ -49,7 +51,23 @@ import { peopleProfileOf, type AiProfile } from './ai/profiles.js';
 import { startWar } from './diplomacy.js';
 
 /** The engine's rules for offers and land taken, where the scenario has `mechanics.landSales`. */
-export const LAND_SALES: LandSaleRules = { reach: 3, price: 1, accept: 0.6, waitYears: 5, offerYears: 2 };
+export const LAND_SALES: LandSaleRules = {
+  reach: 3,
+  price: 1,
+  accept: 0.6,
+  waitYears: 5,
+  offerYears: 2,
+  pull: 0,
+  peaceYears: 50,
+  wary: 0.2,
+  // Section 19 (Simon): Combative mostly takes; Competent and Creative lease or offer, Competent
+  // taking only rarely, late, and from a people that refused it; Creative never takes.
+  levels: {
+    competent: { take: 0.05, from: 1750, refusals: 3, lease: true },
+    combative: { take: 1 },
+    creative: { take: 0, lease: true },
+  },
+};
 
 /** The scenario's rules for a playing people's land, or undefined where Europeans neither buy nor take it. */
 export function landSalesOf(s: GameState): LandSaleRules | undefined {
@@ -130,6 +148,21 @@ function transfer(s: GameState, nation: PlayerId, people: PlayerId, x: number, y
   displaceWorker(s, x, y, people);
 }
 
+/**
+ * How willing a computer people is to sell or lease land to `nation` now, as a share of its
+ * profile's willingness (native-nations.md section 19, Simon: "more open to leasing and selling after
+ * prolonged peace", yet not likely to give up its land): `wary` with no years of good relations and
+ * no trade treaty, growing with the years of unbroken good relations (all of it after `peaceYears`)
+ * and a trade treaty (a quarter of the way).
+ */
+export function landTrust(s: GameState, people: PlayerId, nation: PlayerId): number {
+  const rules = landSalesOf(s) ?? LAND_SALES;
+  const [n, p] = standingPair(nation, people);
+  const peace = rules.peaceYears > 0 ? Math.min(1, yearsOfGoodRelations(s, n, p) / rules.peaceYears) : 1;
+  const treaty = pairTreaty(s, 'people-trade', nation, people) ? 1 : 0;
+  return rules.wary + (1 - rules.wary) * Math.min(1, 0.75 * peace + 0.25 * treaty);
+}
+
 /** Whether a computer people sells this tile for this gold (its profile; drawn from the pair's stream). */
 function computerSells(s: GameState, people: PlayerId, nation: PlayerId, x: number, y: number, gold: number): boolean {
   const prof = peopleProfileOf(s.players, people);
@@ -144,8 +177,7 @@ function computerSells(s: GameState, people: PlayerId, nation: PlayerId, x: numb
   const took = standingOf(s, nation, people)?.tookLand;
   if (took !== undefined && s.turn < turnAfterYears(took, peopleTreatyRules(s).landYears, calendarOf(s))) return false;
   const price = peopleLandPrice(s, people);
-  const good = pairTreaty(s, 'people-trade', nation, people) ? 1 : 0.5;
-  const chance = rules.accept * prof.sellsLand * good * Math.min(2, gold / price);
+  const chance = rules.accept * prof.sellsLand * landTrust(s, people, nation) * Math.min(2, gold / price);
   const [n, p] = standingPair(nation, people);
   return peoplePairRandom(s, n, p, `land answer ${x} ${y} ${s.turn}`) < chance;
 }
@@ -187,6 +219,7 @@ export function offerForLand(s: GameState, nation: PlayerId, x: number, y: numbe
     return `Your offer of ${offer} gold has been sent to ${sideName(s, people)}.`;
   }
   if (computerSells(s, people, nation, x, y, offer)) return sell(s, nation, people, x, y, offer);
+  rel.landRefused = (rel.landRefused ?? 0) + 1;
   track(nation, 'natives:people land refused');
   const text = `${capital(sideName(s, people))} will not sell this land.`;
   message(s, text, nation, { x, y });
@@ -218,6 +251,7 @@ export function answerLandOffer(s: GameState, people: PlayerId, nation: PlayerId
   delete rel.landOffer;
   track(people, 'cmd:answerLandOffer');
   if (!accept) {
+    rel.landRefused = (rel.landRefused ?? 0) + 1;
     track(nation, 'natives:people land refused');
     message(s, `${capital(sideName(s, people))} will not sell their land.`, nation, offer);
     return `You keep your land.`;
@@ -280,7 +314,33 @@ export function processLandOffers(s: GameState): void {
 
 
 // ---------------------------------------------------------------------------
-// Computer nations (ai/advanced.ts), by their level's `land` (ai/profiles.ts)
+// Computer nations (ai/advanced.ts), by their level's `land` (ai/profiles.ts; Naive never asks) and
+// the scenario's `landSales.levels` (native-nations.md section 19)
+
+/** How a computer nation of this level gets land: the scenario's `levels` entry, or none (Naive). */
+function dealLevel(s: GameState, nation: PlayerId, prof: AiProfile): LandDealLevel | undefined {
+  const rules = landSalesOf(s);
+  if (!rules || prof.land === 'avoid') return undefined;
+  const level = s.players.find((p) => p.id === nation)?.ai;
+  if (level === 'competent' || level === 'combative' || level === 'creative') return rules.levels[level];
+  // A profile without a level of its own: as its `land` says.
+  return prof.land === 'take' ? rules.levels.combative : rules.levels.competent;
+}
+
+/**
+ * Whether a computer nation takes `people`'s land this turn rather than offering for it: by its
+ * level's `take` (1 always, 0 never), from the year `from`, and only from a people that has refused
+ * its offers `refusals` times; drawn from the pair's stream once a turn, so a turn's answers agree.
+ */
+export function computerTakes(s: GameState, nation: PlayerId, prof: AiProfile, people: PlayerId): boolean {
+  const level = dealLevel(s, nation, prof);
+  if (!level || level.take <= 0) return false;
+  if (level.take >= 1) return true;
+  if (level.from !== undefined && yearValue(s.turn, calendarOf(s)) < level.from) return false;
+  if ((standingOf(s, nation, people)?.landRefused ?? 0) < (level.refusals ?? 0)) return false;
+  const [n, p] = standingPair(nation, people);
+  return peoplePairRandom(s, n, p, `land take ${s.turn}`) < level.take;
+}
 
 /**
  * Whether a computer nation may try for this tile of a playing people's land now: no offer
@@ -290,7 +350,7 @@ export function processLandOffers(s: GameState): void {
  */
 export function computerMayAsk(s: GameState, nation: PlayerId, prof: AiProfile, x: number, y: number, spare: number): PlayerId | undefined {
   const rules = landSalesOf(s);
-  if (!rules || prof.land === 'avoid') return undefined;
+  if (!rules || !dealLevel(s, nation, prof)) return undefined;
   const people = playingPeopleLand(s, x, y);
   if (!people) return undefined;
   const tile = tileAt(s, x, y)!;
@@ -299,31 +359,106 @@ export function computerMayAsk(s: GameState, nation: PlayerId, prof: AiProfile, 
   const rel = standingOf(s, nation, people);
   if (rel?.landOffer) return undefined;
   if (rel?.landAsked !== undefined && s.turn < turnAfterYears(rel.landAsked, rules.waitYears, calendarOf(s))) return undefined;
-  if (prof.land === 'take') return people;
+  if (computerTakes(s, nation, prof, people)) return people;
   if (tileWorkedBy(s, x, y)?.owner === people || pairAtWar(s, nation, people)) return undefined;
   return spare >= peopleLandPrice(s, people) ? people : undefined;
 }
 
-/** A computer nation offers the asking price for the tile (`buy`) or takes it (`take`); whether the tile is now its own. */
+/** A computer nation offers the asking price for the tile or takes it (`computerTakes`); whether the tile is now its own. */
 export function computerAcquire(s: GameState, nation: PlayerId, prof: AiProfile, x: number, y: number): boolean {
-  if (landDealProblem(s, nation, x, y, prof.land === 'take')) return false;
-  if (prof.land === 'take') takePeopleLand(s, nation, x, y);
-  else offerForLand(s, nation, x, y, peopleLandPrice(s, playingPeopleLand(s, x, y)!));
+  const people = playingPeopleLand(s, x, y);
+  if (!people) return false;
+  const take = computerTakes(s, nation, prof, people);
+  if (landDealProblem(s, nation, x, y, take)) return false;
+  if (take) takePeopleLand(s, nation, x, y);
+  else offerForLand(s, nation, x, y, peopleLandPrice(s, people));
   return tileAt(s, x, y)!.claim === nation;
+}
+
+/** Gold a computer nation keeps beyond `LEASE_YEARS_IN_HAND` years of rent before it proposes land use to a playing people (as ai/natives.ts does with a people nobody plays). */
+const LEASE_RESERVE = 1000;
+const LEASE_YEARS_IN_HAND = 5;
+
+/**
+ * A computer nation whose level leases first proposes land use to the people, where the treaty
+ * ladder allows it (a trade treaty, years of good relations, the people's land beside the nation's
+ * colonies) and it holds a few years' rent; a computer people answers by its profile and its trust
+ * (peoplediplomacy.ts, `landTrust`). Returns whether it proposed.
+ */
+function proposeLease(s: GameState, nation: PlayerId, people: PlayerId): boolean {
+  if (pairTreatyProblem(s, nation, people, 'land-use')) return false;
+  const first = peopleLeaseRent(s, people) * peopleLeasableTiles(s, nation, people).length;
+  if (player(s, nation).gold < first * LEASE_YEARS_IN_HAND + LEASE_RESERVE) return false;
+  track(nation, 'natives:people lease proposed');
+  proposePairTreaty(s, nation, people, 'land-use');
+  return true;
 }
 
 /**
  * A computer nation's turn for a playing people's land near a colony (ai/advanced.ts
- * `acquireLand`): it offers for, or takes, the first tile within `reach` it may (`computerMayAsk`),
- * then waits `waitYears` before it asks that people again. Returns whether it did either.
+ * `acquireLand`): for the first tile within `reach` it may try for (`computerMayAsk`), a level that
+ * leases first proposes land use where it can; otherwise it offers for the tile, or takes it. It then
+ * waits `waitYears` before it asks that people again. Returns whether it did any of these.
  */
 export function computerLandDeal(s: GameState, nation: PlayerId, colony: Colony, prof: AiProfile, spare: number): boolean {
   const rules = landSalesOf(s);
-  if (!rules || prof.land === 'avoid') return false;
+  const level = dealLevel(s, nation, prof);
+  if (!rules || !level) return false;
   for (const q of gridOf(s).tilesWithin(s.map, colony.x, colony.y, rules.reach)) {
-    if (!computerMayAsk(s, nation, prof, q.x, q.y, spare) || landDealProblem(s, nation, q.x, q.y, prof.land === 'take')) continue;
+    const people = computerMayAsk(s, nation, prof, q.x, q.y, spare);
+    if (!people) continue;
+    const take = computerTakes(s, nation, prof, people);
+    if (landDealProblem(s, nation, q.x, q.y, take)) continue;
+    if (!take && level.lease && proposeLease(s, nation, people)) {
+      standingWith(s, nation, people).landAsked = s.turn;
+      return true;
+    }
     computerAcquire(s, nation, prof, q.x, q.y);
     return true;
   }
   return false;
+}
+
+/** Tiles beyond `reach` over which section 19's pull fades out, so that colonies a little further off are drawn closer step by step. */
+export const PULL_FADE = 4;
+
+/**
+ * Section 19's pull on a computer nation's choice of a site: `pull` times the food of every tile a
+ * playing people claims within `reach` of the site (not a town's, not leased to another nation), the
+ * land the colony could later lease, buy or take, and less of it for such land up to `PULL_FADE`
+ * tiles further. Built once per call from the map; undefined where
+ * the scenario has no pull or no such land.
+ */
+export function farmlandPull(s: GameState, nation: PlayerId): ((x: number, y: number) => number) | undefined {
+  const rules = landSalesOf(s);
+  if (!rules || !(rules.pull > 0)) return undefined;
+  const { width, height, tiles } = s.map;
+  let food: Float32Array | undefined;
+  for (let i = 0; i < tiles.length; i++) {
+    const t = tiles[i];
+    if (!t.claim || kindOfId(t.claim) !== 'people' || (t.use && t.use !== nation) || !playingPeople(s, t.claim)) continue;
+    const v = baseTileYield(t, 'food');
+    if (v <= 0) continue;
+    (food ??= new Float32Array(tiles.length))[i] = v;
+  }
+  if (!food) return undefined;
+  for (const c of colonyList(s)) food[c.y * width + c.x] = 0;
+  const grid = gridOf(s);
+  const pull = rules.pull;
+  const reach = rules.reach;
+  const land = food;
+  return (x, y) => {
+    const within = grid.withinOffsets(x, y, reach + PULL_FADE);
+    let sum = 0;
+    for (let k = 0; k < within.length; k += 2) {
+      const nx = x + within[k];
+      const ny = y + within[k + 1];
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const v = land[ny * width + nx];
+      if (!v) continue;
+      const d = grid.distance(x, y, nx, ny);
+      sum += d <= reach ? v : (v * (reach + PULL_FADE + 1 - d)) / (PULL_FADE + 1);
+    }
+    return sum * pull;
+  };
 }

@@ -615,6 +615,14 @@ export interface PeopleRelation {
   /** Tiles of its land the people sold to the nation, and the nation took from it, over the game. */
   landSold?: number;
   landTaken?: number;
+  /** Offers of the nation for the people's land that the people refused, over the game (section 19: Competent takes only after one). */
+  landRefused?: number;
+  /**
+   * Turn the two first met in person (native-nations.md section 19): a unit, town, colony or
+   * settlement of one within sight of one of the other's, not through a shared map. Written once a
+   * round where the scenario has `mechanics.mapKnowledge`; a good life counts only these as met.
+   */
+  metInPerson?: number;
 }
 
 /**
