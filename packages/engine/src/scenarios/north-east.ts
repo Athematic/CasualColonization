@@ -324,7 +324,7 @@ export const NORTH_EAST: Scenario = {
     { id: 'confederacy' },
     { id: 'concord' },
     { id: 'prosperity' },
-    { id: 'continuity', params: { landHealth: knob('CC_CL', 97) } },
+    { id: 'continuity', params: { landHealth: knob('CC_CL', 97.5) } },
     { id: 'good-life', params: { landHealth: knob('CC_GL', 93), hungerYears: knob('CC_GY', 100), treatyShare: knob('CC_GT', 0.75) } },
     { id: 'time' },
   ],
