@@ -45,6 +45,8 @@ import {
   type ProductId,
   type RoleId,
   type Unit,
+  peopleLandClosedTo,
+  sideName,
 } from '@cc/engine';
 import type { MapRenderer } from '@cc/render-api';
 import type { App, Screen } from '../app.js';
@@ -184,12 +186,14 @@ export class ColonyScreen implements Screen {
       const native = nativeLandOwner(s, x, y);
       // Land leased to the colony's nation (land use, N5) is worked like its own, and stays the people's.
       const leased = !!native && tile.use === colony.owner;
+      // A playing people's claimed land (bought, leased or taken from the people, section 18).
+      const theirs = !isPeopleTown(colony) ? peopleLandClosedTo(s, colony.owner, x, y) : undefined;
       const job = worker?.loc.kind === 'colony' ? (worker.loc.job as Extract<Job, { kind: 'tile' }>) : undefined;
       cells.push(h('button', {
-        class: `cell${worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}${leased ? ' leased' : native ? ' native' : ''}`,
+        class: `cell${worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}${leased ? ' leased' : native || theirs ? ' native' : ''}`,
         style,
         'data-leased': leased ? 'true' : undefined,
-        title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : leased ? ` (land of the ${peopleName(s, native!.tribe)}, leased to you)` : native ? ` (land of the ${peopleName(s, native.tribe)})` : ''}`,
+        title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : leased ? ` (land of the ${peopleName(s, native!.tribe)}, leased to you)` : native ? ` (land of the ${peopleName(s, native.tribe)})` : theirs ? ` (land of ${sideName(s, theirs)}: buy, lease or take it)` : ''}`,
         onclick: () => this.clickTile(colony, x, y, worker),
       },
       worker ? icon({ kind: 'unit', type: worker.type, role: 'none', color: nationOf(this.app.state, worker.owner).color }, 40, unitName(worker)) : null,
@@ -228,6 +232,15 @@ export class ColonyScreen implements Screen {
       const native = nativeLandClosedTo(s, colony.owner, x, y);
       if (native) {
         void this.settleLand(colony, sel, x, y);
+        return;
+      }
+      // A playing people's land: offered for, leased or taken first (native-nations.md section 18).
+      if (peopleLandClosedTo(s, colony.owner, x, y) && !isPeopleTown(colony)) {
+        void this.app.dealForPeopleLand(x, y, true).then((ours) => {
+          if (!ours) return;
+          const good = this.bestGood(colony, sel, x, y);
+          if (good) this.dispatch({ type: 'assignJob', unitId: sel.id, colonyId: colony.id, job: { kind: 'tile', x, y, good } });
+        });
         return;
       }
       const good = this.bestGood(colony, sel, x, y);

@@ -1,4 +1,4 @@
-import { independenceQuestion, leagueProposalFor, sideName, councilText, CouncilText, aBrave, peopleTradeBenefits, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, peopleName, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { colonyBeside, homelandKept, independenceQuestion, landOffersFor, leagueProposalFor, sideName, councilText, CouncilText, aBrave, peopleTradeBenefits, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, peopleName, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import { icon } from '../styles.js';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -254,6 +254,24 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
           h('div', { class: 'decision-actions' },
             h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerLeague', by: league.by, accept: true }, true) && done('Agreed.') }, 'Accept'),
             h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerLeague', by: league.by, accept: false }, true) && done('Turned down.') }, 'Turn down'))),
+    });
+  }
+  // A European nation's offer for a tile of a person's people's land (peopleland.ts, native-nations.md section 18).
+  for (const o of landOffersFor(app.state, me.id)) {
+    const by = sideName(app.state, o.nation).replace(/^the /, 'The ');
+    const beside = colonyBeside(app.state, o.nation, o.x, o.y);
+    const home = homelandKept(app.state, me.id);
+    list.push({
+      id: `land-${o.nation}`,
+      title: `${by} would buy your land`,
+      required: false,
+      render: (done) =>
+        h('div', { class: 'decision-body' },
+          h('p', null, `${by} offer ${o.gold} gold for a tile of your land${beside ? ` beside ${beside.name}` : ''} (${o.x}, ${o.y}). Sold, it is theirs: your towns no longer work it, and it is no longer part of your homeland (you keep ${home.kept} of its ${home.start} tiles). You have ${me.gold} gold. The offer lapses if you leave it unanswered.`),
+          h('div', { class: 'decision-actions' },
+            h('button', { class: 'btn', onclick: () => app.centerOn(o.x, o.y) }, 'Show on the map'),
+            h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerLandOffer', nation: o.nation, accept: true }, true) && done(`Sold for ${o.gold} gold.`) }, `Sell for ${o.gold} gold`),
+            h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerLandOffer', nation: o.nation, accept: false }, true) && done('You keep your land.') }, 'Keep the land'))),
     });
   }
   const offer = Object.values(me.fatherOffer) as FatherId[];

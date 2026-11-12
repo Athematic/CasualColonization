@@ -43,6 +43,8 @@ import {
   FOREIGN_KEEP,
   isPeoplePlayer,
   kindOfId,
+  landDealProblem,
+  playingPeopleLand,
   pairAtWar,
   pairPrice,
   sideName,
@@ -233,7 +235,9 @@ export class Sidebar {
       actions.push(h('button', { class: 'btn small', onclick, disabled: !enabled, title: key ? `Shortcut: ${key}` : undefined }, label, key ? h('kbd', null, key) : null));
     if (mine && u.loc.kind === 'map') {
       const peopleUnit = kindOfId(u.owner) === 'people';
-      if (def.kind === 'colonist') btn(peopleUnit ? 'Found town' : charterCost(s, u.owner) > 0 ? `Found colony (${charterCost(s, u.owner)} gold)` : 'Found colony', 'B', () => void app.foundColony(), can(() => canFoundColony(s, u)));
+      // On a playing people's land a European colonist may buy or take the site first (native-nations.md section 18).
+      const landDeal = !peopleUnit && !!pos && !!playingPeopleLand(s, pos.x, pos.y) && !landDealProblem(s, u.owner, pos.x, pos.y, true);
+      if (def.kind === 'colonist') btn(peopleUnit ? 'Found town' : landDeal ? 'Found colony (buy or take the land)' : charterCost(s, u.owner) > 0 ? `Found colony (${charterCost(s, u.owner)} gold)` : 'Found colony', 'B', () => void app.foundColony(), can(() => (landDeal ? null : canFoundColony(s, u))));
       // A people claims unclaimed land next to its own, near its towns (T5).
       if (peopleUnit && pos && tile && tile.claim !== u.owner && !isShip(u)) btn('Claim this land', '', () => { if (app.dispatch({ type: 'claimLand', x: pos.x, y: pos.y })) app.requestRender(); }, mine && app.isMyTurn() && !tile.claim);
       if (u.role === 'pioneer') {

@@ -51,6 +51,13 @@ import {
   type SettlementAction,
   type Unit,
   isPeoplePlayer,
+  landDealProblem,
+  pairTreatyProblem,
+  peopleLandPrice,
+  peopleLeasableTiles,
+  peopleLeaseRent,
+  playingPeopleLand,
+  sideName,
 } from '@cc/engine';
 
 /** Who claims a tile and its region's health, for the map's hover text (native-nations.md T5, T10). */
@@ -647,9 +654,56 @@ export class App {
     if (ok) this.afterUnitAction();
   }
 
+  /**
+   * A tile of a playing people's land, near your colony or under your colonist (native-nations.md
+   * section 18): offer to buy it (the asking price, or half as much again), lease the people's land
+   * beside your colonies (from a colony), or take it. Resolves whether the tile is now yours; an
+   * offer to a person's people waits for their answer.
+   */
+  async dealForPeopleLand(x: number, y: number, lease: boolean): Promise<boolean> {
+    const s = this.state;
+    const people = playingPeopleLand(s, x, y);
+    if (!people) return false;
+    const why = landDealProblem(s, this.viewer, x, y, true);
+    if (why) {
+      toast(why, 'error');
+      return false;
+    }
+    const name = sideName(s, people);
+    const Name = name.replace(/^the /, 'The ');
+    const price = peopleLandPrice(s, people);
+    const more = Math.round(price * 1.5);
+    const gold = this.me.gold;
+    const atWar = !!landDealProblem(s, this.viewer, x, y);
+    const leaseWhy = lease ? pairTreatyProblem(s, this.viewer, people, 'land-use') : null;
+    const rent = lease && !leaseWhy ? peopleLeaseRent(s, people) * peopleLeasableTiles(s, this.viewer, people).length : 0;
+    const choice = await choose(`Land of ${name}`,
+      `${Name} claim this land. They may sell it: they ask about ${price} gold, and decide for themselves${player(s, people).human ? ' (their answer comes on their turn)' : ''}. ${lease ? 'A lease lets your colonies work their land beside them for a yearly rent, and the land stays theirs. ' : ''}Taking it breaks faith with them: every treaty between you ends, they refuse new ones for years, and they may go to war over it.`,
+      [
+        { label: `Offer ${price} gold`, value: 'offer' as const, primary: true, disabled: atWar || gold < price, hint: atWar ? `You are at war with ${name}.` : gold < price ? `You have ${gold} gold.` : undefined },
+        { label: `Offer ${more} gold`, value: 'more' as const, disabled: atWar || gold < more },
+        ...(lease ? [{ label: rent ? `Lease their land beside your colonies (${rent} gold a year)` : 'Lease their land beside your colonies', value: 'lease' as const, disabled: !!leaseWhy || !this.isMyTurn(), hint: leaseWhy ?? undefined }] : []),
+        { label: 'Take it', value: 'take' as const },
+        { label: 'Leave it', value: null },
+      ]);
+    if (!choice) return false;
+    const ok = choice === 'lease'
+      ? this.dispatch({ type: 'proposePairTreaty', to: people, kind: 'land-use' })
+      : choice === 'take'
+        ? this.dispatch({ type: 'takePeopleLand', x, y })
+        : this.dispatch({ type: 'offerForLand', x, y, gold: choice === 'more' ? more : price });
+    this.requestRender();
+    return ok && tileAt(this.state, x, y)?.claim === this.viewer;
+  }
+
   async foundColony(): Promise<void> {
     const u = this.selectedUnit();
     if (!u) return;
+    const at = unitPosition(this.state, u);
+    // On a playing people's land, the site is bought or taken first (native-nations.md section 18).
+    if (at && playingPeopleLand(this.state, at.x, at.y) && playingPeopleLand(this.state, at.x, at.y) !== u.owner && !landDealProblem(this.state, u.owner, at.x, at.y, true)) {
+      if (!(await this.dealForPeopleLand(at.x, at.y, false))) return;
+    }
     const reason = canFoundColony(this.state, u);
     if (reason) return toast(reason, 'error');
     const cost = charterCost(this.state, u.owner);
