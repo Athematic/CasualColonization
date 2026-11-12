@@ -5,7 +5,7 @@ import { fail } from './errors.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { hasModifier, modifiers, mulOf } from './scenarios/modifiers.js';
-import { mechanicsOf, nationOf, nationTitle, nativeRulesOf, settlementKindOf, term, Term } from './scenarios/index.js';
+import { mechanicsOf, nationOf, nationTitle, nativeRulesOf, settlementKindOf, term, Term , peopleName } from './scenarios/index.js';
 import { canAttack } from './movement.js';
 import { braveDefence, braveName, bravesOf, killBrave } from './braves.js';
 import { addTension, settlementName } from './natives.js';
@@ -37,7 +37,7 @@ import { kindOfId, systemsOfId } from './playerkind.js';
 import { noteDefeat } from './peoplevictory.js';
 import { BUILDINGS, STOCKADE_DEFENCE } from './rules/buildings.js';
 import { AMBUSH_BONUS, BOMBARD_CHANCE, CAPTURE_CHANCE, REPAIR_COST, RIVER_DEFENCE } from './rules/combat.js';
-import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
+import { type PlayerId, type TribeId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
 import type { Colony, GameState, Unit } from './types.js';
@@ -453,22 +453,22 @@ function hostile(s: GameState, tribeId: TribeId, nation: PlayerId, at: { x: numb
   const partner = s.treaties ? defencePartner(s, tribeId) : undefined;
   if (partner && partner !== nation && nation !== 'crown' && player(s, nation).stance[partner] !== 'war') {
     track(partner, 'natives:pact war');
-    message(s, `${nationOf(s, partner).name} stands by its pact with the ${TRIBES[tribeId].name}: the attack on them is war.`);
-    noteHistory(s, 'war', [nation, partner], `${nationOf(s, partner).name} goes to war with ${nationOf(s, nation).name} to defend the ${TRIBES[tribeId].name}, its partners in a mutual defence pact.`);
+    message(s, `${nationOf(s, partner).name} stands by its pact with the ${peopleName(s, tribeId)}: the attack on them is war.`);
+    noteHistory(s, 'war', [nation, partner], `${nationOf(s, partner).name} goes to war with ${nationOf(s, nation).name} to defend the ${peopleName(s, tribeId)}, its partners in a mutual defence pact.`);
     declareWar(s, nation, partner);
   }
   // A playing people bound by a pact to the people attacked stands by it (Beta 3 step 4).
   if (s.treaties && anyPlayingPeople(s)) {
     for (const id of pactPlayersOf(s, tribeId, nation)) {
-      message(s, `${nationOf(s, id).name} stand by their pact with the ${TRIBES[tribeId].name}: the attack on them is war.`);
+      message(s, `${nationOf(s, id).name} stand by their pact with the ${peopleName(s, tribeId)}: the attack on them is war.`);
       declareWar(s, nation, id);
     }
   }
   if (tribe.submitted?.includes(nation)) tribe.submitted = tribe.submitted.filter((n) => n !== nation);
   if (tribe.stance[nation] !== 'war') {
     tribe.stance[nation] = 'war';
-    message(s, `The ${TRIBES[tribeId].name} now consider ${nationOf(s, nation).name} an enemy.`, nation, at);
-    noteHistory(s, 'tribe', [nation], `War with the ${TRIBES[tribeId].name}, after ${cause}.`, { secret: true, at });
+    message(s, `The ${peopleName(s, tribeId)} now consider ${nationOf(s, nation).name} an enemy.`, nation, at);
+    noteHistory(s, 'tribe', [nation], `War with the ${peopleName(s, tribeId)}, after ${cause}.`, { secret: true, at });
   }
 }
 
@@ -491,7 +491,7 @@ function attackBrave(s: GameState, u: Unit, braveId: string): CombatResult {
   const def = braveDefence(s, b);
   const braveGear = { armed: !!b.armed, mounted: !!b.mounted };
   const won = random(s) < off / (off + def);
-  const name = braveName(b);
+  const name = braveName(s, b);
   let text: string;
   if (won) {
     killBrave(s, b, u.owner, atWar);
@@ -538,10 +538,10 @@ function attackSettlement(s: GameState, u: Unit, settlementId: string): CombatRe
   let text: string;
   if (won) {
     st.defenders--;
-    text = st.defenders <= 0 ? destroySettlement(s, u, settlementId) : `${unitName(u)} defeats a ${TRIBES[st.tribe].name} brave.`;
+    text = st.defenders <= 0 ? destroySettlement(s, u, settlementId) : `${unitName(u)} defeats a ${peopleName(s, st.tribe)} brave.`;
     text += promote(s, u);
   } else {
-    text = `${unitName(u)} is driven back by the ${TRIBES[st.tribe].name}: ${demote(s, u, u)}.`;
+    text = `${unitName(u)} is driven back by the ${peopleName(s, st.tribe)}: ${demote(s, u, u)}.`;
   }
   message(s, text, u.owner, st);
   return { attackerWon: won, text };
@@ -603,8 +603,8 @@ function surrender(s: GameState, tribeId: TribeId, nation: PlayerId, at: { x: nu
   }
   player(s, nation).gold += tribute;
   track(nation, 'natives:tribe surrendered');
-  noteHistory(s, 'tribe', [nation], `The ${TRIBES[tribeId].name} surrender to ${nationOf(s, nation).name} after losing their capital, and pay ${tribute} gold.`, { at });
-  return ` The remaining ${TRIBES[tribeId].name} settlements surrender and pay a tribute of ${tribute} gold; their land is now open to you.`;
+  noteHistory(s, 'tribe', [nation], `The ${peopleName(s, tribeId)} surrender to ${nationOf(s, nation).name} after losing their capital, and pay ${tribute} gold.`, { at });
+  return ` The remaining ${peopleName(s, tribeId)} settlements surrender and pay a tribute of ${tribute} gold; their land is now open to you.`;
 }
 
 /** The Crown carries a treasure home from a coastal colony, for a fee unless Cortés is in Congress. */

@@ -77,7 +77,7 @@ const GAME: Scenario = {
   peoples: {
     ...AMERICAS.peoples,
     playable: [
-      { id: 'iroquois', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga', 'Kanonwalohale'] },
+      { id: 'haudenosaunee', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga', 'Kanonwalohale'] },
       { id: 'cherokee', name: 'the Cherokee', adjective: 'Cherokee', townNames: ['Chota', 'Tellico', 'Echota'] },
     ],
   },
@@ -95,7 +95,7 @@ function config(over: Partial<GameConfig> = {}): GameConfig {
     nations: ['england', 'france', 'netherlands'],
     humans: [],
     ai: { england: 'creative', france: 'combative', netherlands: 'competent' },
-    peoples: ['iroquois'],
+    peoples: ['haudenosaunee'],
     scenario: GAME.id,
     historicalEvents: true,
     randomEvents: true,
@@ -114,7 +114,7 @@ function play(s: GameState, rounds: number): GameState {
   return s;
 }
 
-const town = (s: GameState, people = 'iroquois'): Colony => colonyList(s).find((c) => c.owner === people)!;
+const town = (s: GameState, people = 'haudenosaunee'): Colony => colonyList(s).find((c) => c.owner === people)!;
 const player = (s: GameState, id: string) => s.players.find((p) => p.id === id)!;
 
 /** A game some years on, with the two sides in contact for a long time and trade between them well past the hidden thresholds. */
@@ -162,66 +162,66 @@ function colonyBeside(s: GameState, owner = 'england'): Colony {
 
 describe('treaties from the people’s side (T11)', () => {
   it('a playing people proposes a trade treaty to a nation, which a computer nation answers by its level', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
     s.turn = 120;
-    expect(pairTreatyProblem(s, 'iroquois', 'england', 'people-trade')).toMatch(/not met/);
-    standingWith(s, 'iroquois', 'england');
-    expect(pairTreatyProblem(s, 'iroquois', 'england', 'people-trade')).toMatch(/do not know each other well enough/);
-    expect(pairStanding(s, 'iroquois', 'england')).toBe('Barely knows you');
-    friends(s, 'iroquois', 'england');
-    expect(pairStanding(s, 'iroquois', 'england')).toBe('Trusts you');
+    expect(pairTreatyProblem(s, 'haudenosaunee', 'england', 'people-trade')).toMatch(/not met/);
+    standingWith(s, 'haudenosaunee', 'england');
+    expect(pairTreatyProblem(s, 'haudenosaunee', 'england', 'people-trade')).toMatch(/do not know each other well enough/);
+    expect(pairStanding(s, 'haudenosaunee', 'england')).toBe('Barely knows you');
+    friends(s, 'haudenosaunee', 'england');
+    expect(pairStanding(s, 'haudenosaunee', 'england')).toBe('Trusts you');
     // A people's own land use or defence needs the trade treaty first.
-    expect(pairTreatyProblem(s, 'iroquois', 'england', 'defence')).toMatch(/needs a trade treaty/);
-    const t = agree(s, 'iroquois', 'england', 'people-trade');
+    expect(pairTreatyProblem(s, 'haudenosaunee', 'england', 'defence')).toMatch(/needs a trade treaty/);
+    const t = agree(s, 'haudenosaunee', 'england', 'people-trade');
     // The same treaty Beta 2 reads: one nation and one people.
-    expect(t.parties).toEqual([{ kind: 'nation', id: 'england' }, { kind: 'people', id: 'iroquois' }]);
-    expect(peopleTreatyBetween(s, 'people-trade', 'england', 'iroquois')).toBe(t);
-    expect(pairStanding(s, 'iroquois', 'england')).toBe('Partners in trade');
-    expect(pairStanding(s, 'england', 'iroquois')).toBe('Partners in trade');
-    expect(pairTreatyProblem(s, 'iroquois', 'england', 'people-trade')).toMatch(/already have/);
+    expect(t.parties).toEqual([{ kind: 'nation', id: 'england' }, { kind: 'people', id: 'haudenosaunee' }]);
+    expect(peopleTreatyBetween(s, 'people-trade', 'england', 'haudenosaunee')).toBe(t);
+    expect(pairStanding(s, 'haudenosaunee', 'england')).toBe('Partners in trade');
+    expect(pairStanding(s, 'england', 'haudenosaunee')).toBe('Partners in trade');
+    expect(pairTreatyProblem(s, 'haudenosaunee', 'england', 'people-trade')).toMatch(/already have/);
     // The record is Beta 2's, keyed nation first.
-    expect(peopleRelationOf(s, 'england', 'iroquois')).toBe(standingOf(s, 'iroquois', 'england'));
+    expect(peopleRelationOf(s, 'england', 'haudenosaunee')).toBe(standingOf(s, 'haudenosaunee', 'england'));
   });
 
   it('a nation proposes to a playing people: a person answers later, a computer people at once', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
-    friends(s, 'england', 'iroquois');
-    const text = proposePairTreaty(s, 'england', 'iroquois', 'people-trade');
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
+    friends(s, 'england', 'haudenosaunee');
+    const text = proposePairTreaty(s, 'england', 'haudenosaunee', 'people-trade');
     expect(text).toMatch(/has been sent/);
-    expect(standingOf(s, 'england', 'iroquois')!.proposal).toMatchObject({ kind: 'people-trade', by: 'england' });
-    expect(s.messages.some((m) => m.to === 'iroquois' && /England propose a trade treaty/.test(m.text))).toBe(true);
-    expect(pairTreatyProblem(s, 'iroquois', 'england', 'people-trade')).toMatch(/waiting for your answer/);
+    expect(standingOf(s, 'england', 'haudenosaunee')!.proposal).toMatchObject({ kind: 'people-trade', by: 'england' });
+    expect(s.messages.some((m) => m.to === 'haudenosaunee' && /England propose a trade treaty/.test(m.text))).toBe(true);
+    expect(pairTreatyProblem(s, 'haudenosaunee', 'england', 'people-trade')).toMatch(/waiting for your answer/);
     expect(applyCommand(s, { type: 'answerPairProposal', from: 'england', accept: true }).ok).toBe(true);
-    expect(pairTreaty(s, 'people-trade', 'england', 'iroquois')).toBeDefined();
-    expect(() => answerPairProposal(s, 'iroquois', 'england', true)).toThrow(/no proposal/);
+    expect(pairTreaty(s, 'people-trade', 'england', 'haudenosaunee')).toBeDefined();
+    expect(() => answerPairProposal(s, 'haudenosaunee', 'england', true)).toThrow(/no proposal/);
 
     // A computer people answers by Beta 2's rule, at once.
     const c = createGame(config({ humans: ['england'] }));
-    friends(c, 'england', 'iroquois');
-    agree(c, 'england', 'iroquois', 'people-trade');
+    friends(c, 'england', 'haudenosaunee');
+    agree(c, 'england', 'haudenosaunee', 'people-trade');
   });
 
   it('land use: a nation leases a people’s claimed land, pays it rent, and the lease lapses unpaid', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
     const c = colonyBeside(s);
-    friends(s, 'iroquois', 'england');
-    makePairTreaty(s, 'iroquois', 'england', 'people-trade');
-    const tiles = peopleLeasableTiles(s, 'england', 'iroquois');
+    friends(s, 'haudenosaunee', 'england');
+    makePairTreaty(s, 'haudenosaunee', 'england', 'people-trade');
+    const tiles = peopleLeasableTiles(s, 'england', 'haudenosaunee');
     expect(tiles.length).toBeGreaterThan(0);
-    for (const q of tiles) expect(peopleLandClosedTo(s, 'england', q.x, q.y)).toBe('iroquois');
+    for (const q of tiles) expect(peopleLandClosedTo(s, 'england', q.x, q.y)).toBe('haudenosaunee');
     player(s, 'england').gold = 1000;
     const gold = player(s, 'england').gold;
-    const t = agree(s, 'iroquois', 'england', 'land-use');
+    const t = agree(s, 'haudenosaunee', 'england', 'land-use');
     expect(t.terms).toMatchObject({ kind: 'land-use' });
     const rent = (t.terms as { rent: number }).rent;
     expect(rent).toBeGreaterThanOrEqual(1);
-    expect(player(s, 'iroquois').gold).toBe(rent * tiles.length);
+    expect(player(s, 'haudenosaunee').gold).toBe(rent * tiles.length);
     expect(player(s, 'england').gold).toBe(gold - rent * tiles.length);
     for (const q of tiles) {
       expect(tileAt(s, q.x, q.y)!.use).toBe('england');
-      expect(tileAt(s, q.x, q.y)!.claim).toBe('iroquois');
+      expect(tileAt(s, q.x, q.y)!.claim).toBe('haudenosaunee');
       expect(peopleLandClosedTo(s, 'england', q.x, q.y)).toBeUndefined();
-      expect(peopleLandClosedTo(s, 'france', q.x, q.y)).toBe('iroquois');
+      expect(peopleLandClosedTo(s, 'france', q.x, q.y)).toBe('haudenosaunee');
     }
     // English colonists work the leased land, and nobody else's colonists do.
     const u = colonyWorkers(s, c)[0];
@@ -231,9 +231,9 @@ describe('treaties from the people’s side (T11)', () => {
     // Rent day: paid to the people.
     const due = (t.terms as { due: number }).due;
     s.turn = due;
-    const before = player(s, 'iroquois').gold;
+    const before = player(s, 'haudenosaunee').gold;
     processPeopleDiplomacy(s);
-    expect(player(s, 'iroquois').gold).toBe(before + rent * peopleLeasableTiles(s, 'england', 'iroquois').length);
+    expect(player(s, 'haudenosaunee').gold).toBe(before + rent * peopleLeasableTiles(s, 'england', 'haudenosaunee').length);
     // Unpaid: the lease lapses and the land is the people's alone again.
     s.turn = (t.terms as { due: number }).due;
     player(s, 'england').gold = 0;
@@ -243,12 +243,12 @@ describe('treaties from the people’s side (T11)', () => {
   });
 
   it('cultural exchange: the nation’s colonists learn the people’s skills at its towns; its elders teach sooner', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
-    friends(s, 'iroquois', 'england');
-    makePairTreaty(s, 'iroquois', 'england', 'people-trade');
-    expect(exchangeTeachBonus(s, 'iroquois')).toBe(0);
-    agree(s, 'iroquois', 'england', 'exchange');
-    expect(exchangeTeachBonus(s, 'iroquois')).toBe(1);
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
+    friends(s, 'haudenosaunee', 'england');
+    makePairTreaty(s, 'haudenosaunee', 'england', 'people-trade');
+    expect(exchangeTeachBonus(s, 'haudenosaunee')).toBe(0);
+    agree(s, 'haudenosaunee', 'england', 'exchange');
+    expect(exchangeTeachBonus(s, 'haudenosaunee')).toBe(1);
     expect(exchangeTeachBonus(s, 'england')).toBe(0);
     const t = town(s);
     const at = landAt(s, t.x, t.y, 1);
@@ -268,43 +268,43 @@ describe('treaties from the people’s side (T11)', () => {
   });
 
   it('mutual defence: war declared on either partner is war with the other', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
-    friends(s, 'iroquois', 'england');
-    makePairTreaty(s, 'iroquois', 'england', 'people-trade');
-    makePairTreaty(s, 'iroquois', 'england', 'exchange');
-    agree(s, 'iroquois', 'england', 'defence');
-    expect(pairTreatyProblem(s, 'iroquois', 'france', 'defence')).toMatch(/not met|trade treaty/);
-    startWar(s, 'france', 'iroquois');
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
+    friends(s, 'haudenosaunee', 'england');
+    makePairTreaty(s, 'haudenosaunee', 'england', 'people-trade');
+    makePairTreaty(s, 'haudenosaunee', 'england', 'exchange');
+    agree(s, 'haudenosaunee', 'england', 'defence');
+    expect(pairTreatyProblem(s, 'haudenosaunee', 'france', 'defence')).toMatch(/not met|trade treaty/);
+    startWar(s, 'france', 'haudenosaunee');
     expect(player(s, 'england').stance.france).toBe('war');
-    expect(player(s, 'iroquois').stance.france).toBe('war');
+    expect(player(s, 'haudenosaunee').stance.france).toBe('war');
     // And the other way: war on the nation brings in the people.
-    const c = createGame(config({ humans: ['iroquois'] }));
-    friends(c, 'iroquois', 'england');
-    makePairTreaty(c, 'iroquois', 'england', 'people-trade');
-    makePairTreaty(c, 'iroquois', 'england', 'exchange');
-    makePairTreaty(c, 'iroquois', 'england', 'defence');
+    const c = createGame(config({ humans: ['haudenosaunee'] }));
+    friends(c, 'haudenosaunee', 'england');
+    makePairTreaty(c, 'haudenosaunee', 'england', 'people-trade');
+    makePairTreaty(c, 'haudenosaunee', 'england', 'exchange');
+    makePairTreaty(c, 'haudenosaunee', 'england', 'defence');
     startWar(c, 'netherlands', 'england');
-    expect(player(c, 'iroquois').stance.netherlands).toBe('war');
+    expect(player(c, 'haudenosaunee').stance.netherlands).toBe('war');
     // A people keeps a pact with one nation at a time.
-    friends(c, 'iroquois', 'france');
-    makePairTreaty(c, 'iroquois', 'france', 'people-trade');
-    makePairTreaty(c, 'iroquois', 'france', 'exchange');
-    expect(pairTreatyProblem(c, 'iroquois', 'france', 'defence')).toMatch(/already have a mutual defence pact with England/);
+    friends(c, 'haudenosaunee', 'france');
+    makePairTreaty(c, 'haudenosaunee', 'france', 'people-trade');
+    makePairTreaty(c, 'haudenosaunee', 'france', 'exchange');
+    expect(pairTreatyProblem(c, 'haudenosaunee', 'france', 'defence')).toMatch(/already have a mutual defence pact with England/);
   });
 
   it('breaking faith: a people ends a treaty, and trust is slow to come back on both sides', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
-    friends(s, 'iroquois', 'england');
-    makePairTreaty(s, 'iroquois', 'england', 'people-trade');
-    makePairTreaty(s, 'iroquois', 'england', 'exchange');
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
+    friends(s, 'haudenosaunee', 'england');
+    makePairTreaty(s, 'haudenosaunee', 'england', 'people-trade');
+    makePairTreaty(s, 'haudenosaunee', 'england', 'exchange');
     expect(applyCommand(s, { type: 'endPairTreaty', with: 'england', kind: 'people-trade' }).ok).toBe(true);
     const t = s.treaties!.find((o) => o.kind === 'people-trade')!;
-    expect(t.end).toMatchObject({ why: 'broken', by: { kind: 'people', id: 'iroquois' } });
-    const rel = standingOf(s, 'iroquois', 'england')!;
+    expect(t.end).toMatchObject({ why: 'broken', by: { kind: 'people', id: 'haudenosaunee' } });
+    const rel = standingOf(s, 'haudenosaunee', 'england')!;
     expect(rel.breaks).toBe(1);
     expect(rel.waitUntil).toBeGreaterThan(s.turn);
-    expect(pairStanding(s, 'england', 'iroquois')).toBe('Distrusts you');
-    expect(pairTreatyProblem(s, 'england', 'iroquois', 'people-trade')).toMatch(/not come back/);
+    expect(pairStanding(s, 'england', 'haudenosaunee')).toBe('Distrusts you');
+    expect(pairTreatyProblem(s, 'england', 'haudenosaunee', 'people-trade')).toMatch(/not come back/);
     // The exchange stood on the trade treaty: it ends at the round.
     processPeopleDiplomacy(s);
     expect(s.treaties!.find((o) => o.kind === 'exchange')!.end?.why).toBe('cancelled');
@@ -315,63 +315,63 @@ describe('treaties from the people’s side (T11)', () => {
 
 describe('trade for gold between a people and Europeans (T10)', () => {
   it('a people sells furs to a European wagon train beside its town and earns gold; it buys muskets', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
     const t = town(s);
     t.goods.furs = 100;
     const at = landAt(s, t.x, t.y, 1);
     const w = createUnit(s, 'england', 'wagonTrain', { kind: 'map', x: at.x, y: at.y });
     w.cargo = { muskets: 50 };
     player(s, 'england').gold = 1000;
-    expect(player(s, 'iroquois').gold).toBe(0);
+    expect(player(s, 'haudenosaunee').gold).toBe(0);
     const price = peopleGoodsPrice(s, 'furs');
     expect(applyCommand(s, { type: 'tradeWithPeople', unitId: w.id, colonyId: t.id, good: 'furs', amount: 100, load: true }).ok).toBe(true);
-    expect(player(s, 'iroquois').gold).toBe(100 * price);
+    expect(player(s, 'haudenosaunee').gold).toBe(100 * price);
     expect(player(s, 'england').gold).toBe(1000 - 100 * price);
     expect(w.cargo!.furs).toBe(100);
     expect(t.goods.furs).toBe(0);
-    expect(standingOf(s, 'england', 'iroquois')!.volume).toBe(100 * price);
+    expect(standingOf(s, 'england', 'haudenosaunee')!.volume).toBe(100 * price);
     // The people buys muskets from the wagon train, as far as its gold goes.
-    const musket = europeanGoodsPrice(s, 'iroquois', 'muskets');
+    const musket = europeanGoodsPrice(s, 'haudenosaunee', 'muskets');
     expect(musket).toBe(6); // muskets are what the Iroquois want most: twice their worth
-    const gold = player(s, 'iroquois').gold;
-    tradeWithPeople(s, 'iroquois', w.id, t.id, 'muskets', 50, false);
+    const gold = player(s, 'haudenosaunee').gold;
+    tradeWithPeople(s, 'haudenosaunee', w.id, t.id, 'muskets', 50, false);
     const bought = Math.min(50, Math.floor(gold / musket));
     expect(t.goods.muskets).toBe(bought);
-    expect(player(s, 'iroquois').gold).toBe(gold - bought * musket);
+    expect(player(s, 'haudenosaunee').gold).toBe(gold - bought * musket);
     // The people's Trade report counts both deals (step 10b), and prices the colonies it knows.
-    const report = peopleTradeOverview(s, 'iroquois');
+    const report = peopleTradeOverview(s, 'haudenosaunee');
     expect(report.rows.find((r) => r.good === 'furs')!.sold).toEqual({ total: 100, gold: 100 * price, last: 0 });
     expect(report.rows.find((r) => r.good === 'muskets')!.bought).toEqual({ total: bought, gold: bought * musket, last: 0 });
     expect(report.wants[0]).toBe('muskets');
-    expect(report.gold).toBe(player(s, 'iroquois').gold);
+    expect(report.gold).toBe(player(s, 'haudenosaunee').gold);
     for (const e of report.nations) expect(e.sell.find((x) => x.good === 'furs')!.price).toBe(price);
     // Food is sold only above the town's reserve.
     t.goods.food = 0;
-    expect(() => tradeWithPeople(s, 'iroquois', w.id, t.id, 'food', 10, true)).toThrow(/no food/);
+    expect(() => tradeWithPeople(s, 'haudenosaunee', w.id, t.id, 'food', 10, true)).toThrow(/no food/);
   });
 
   it('a trade treaty gives the side that comes to trade better prices; a canoe at a European colony', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
     const c = colonyBeside(s);
     const at = landAt(s, c.x, c.y, 1);
-    const canoe = createUnit(s, 'iroquois', 'birchbarkCanoe', { kind: 'map', x: at.x, y: at.y });
+    const canoe = createUnit(s, 'haudenosaunee', 'birchbarkCanoe', { kind: 'map', x: at.x, y: at.y });
     canoe.cargo = { furs: 100 };
     player(s, 'england').gold = 5000;
-    const plain = pairPrice(s, 'iroquois', 'england', 'furs', 'iroquois');
-    friends(s, 'iroquois', 'england');
-    makePairTreaty(s, 'iroquois', 'england', 'people-trade');
-    const better = pairPrice(s, 'iroquois', 'england', 'furs', 'iroquois');
+    const plain = pairPrice(s, 'haudenosaunee', 'england', 'furs', 'haudenosaunee');
+    friends(s, 'haudenosaunee', 'england');
+    makePairTreaty(s, 'haudenosaunee', 'england', 'people-trade');
+    const better = pairPrice(s, 'haudenosaunee', 'england', 'furs', 'haudenosaunee');
     expect(better).toBeGreaterThan(plain);
     // A European who comes to the people's town gets the treaty's prices from its side.
-    expect(pairPrice(s, 'iroquois', 'england', 'furs', 'england')).toBeLessThanOrEqual(plain);
-    tradeWithPeople(s, 'iroquois', canoe.id, c.id, 'furs', 100, false);
-    expect(player(s, 'iroquois').gold).toBe(Math.round(100 * better));
+    expect(pairPrice(s, 'haudenosaunee', 'england', 'furs', 'england')).toBeLessThanOrEqual(plain);
+    tradeWithPeople(s, 'haudenosaunee', canoe.id, c.id, 'furs', 100, false);
+    expect(player(s, 'haudenosaunee').gold).toBe(Math.round(100 * better));
     expect(c.goods.furs).toBe(100);
     // The people buys cloth from the colony with what it earned, at the treaty's lower price.
     c.goods.cloth = 30;
-    tradeWithPeople(s, 'iroquois', canoe.id, c.id, 'cloth', 30, true);
+    tradeWithPeople(s, 'haudenosaunee', canoe.id, c.id, 'cloth', 30, true);
     expect(canoe.cargo!.cloth).toBeGreaterThan(0);
-    expect(pairPrice(s, 'england', 'iroquois', 'cloth', 'iroquois')).toBeLessThan(europeanGoodsPrice(s, 'iroquois', 'cloth'));
+    expect(pairPrice(s, 'england', 'haudenosaunee', 'cloth', 'haudenosaunee')).toBeLessThan(europeanGoodsPrice(s, 'haudenosaunee', 'cloth'));
   });
 
   it('a computer people takes furs to a computer nation’s colony nearby once a year, as braves do', () => {
@@ -380,107 +380,107 @@ describe('trade for gold between a people and Europeans (T10)', () => {
     const c = colonyBeside(s);
     t.goods.furs = 150;
     player(s, 'england').gold = 1000;
-    computerTradeVisits(s, 'iroquois');
+    computerTradeVisits(s, 'haudenosaunee');
     const price = peopleGoodsPrice(s, 'furs');
-    expect(player(s, 'iroquois').gold).toBe(100 * price);
+    expect(player(s, 'haudenosaunee').gold).toBe(100 * price);
     expect(c.goods.furs).toBe(100);
     expect(t.goods.furs).toBe(50);
-    expect(standingOf(s, 'england', 'iroquois')!.volume).toBe(100 * price);
+    expect(standingOf(s, 'england', 'haudenosaunee')!.volume).toBe(100 * price);
     // A colony of a nation a person plays is left to the person.
     const h = createGame(config({ humans: ['england'] }));
     town(h).goods.furs = 150;
     colonyBeside(h);
-    computerTradeVisits(h, 'iroquois');
-    expect(player(h, 'iroquois').gold).toBe(0);
+    computerTradeVisits(h, 'haudenosaunee');
+    expect(player(h, 'haudenosaunee').gold).toBe(0);
   });
 
   it('a people does not sell to a settlement for gold, and no trade at war', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
     const st = Object.values(s.settlements)[0];
     const at = landAt(s, st.x, st.y, 1);
-    const canoe = createUnit(s, 'iroquois', 'birchbarkCanoe', { kind: 'map', x: at.x, y: at.y });
+    const canoe = createUnit(s, 'haudenosaunee', 'birchbarkCanoe', { kind: 'map', x: at.x, y: at.y });
     canoe.cargo = { furs: 100 };
     canoe.moves = 4;
     expect(() => tradeWithSettlement(s, canoe.id, st.id, 'furs')).toThrow(/barter/);
     const t = town(s);
     const w = createUnit(s, 'england', 'wagonTrain', { kind: 'map', x: landAt(s, t.x, t.y, 1).x, y: landAt(s, t.x, t.y, 1).y });
     t.goods.furs = 50;
-    startWar(s, 'iroquois', 'england');
+    startWar(s, 'haudenosaunee', 'england');
     expect(() => tradeWithPeople(s, 'england', w.id, t.id, 'furs', 50, true)).toThrow(/at war/);
   });
 });
 
 describe('treaties between peoples (T11)', () => {
   it('two playing peoples make a trade treaty and a defence pact, barter, and stand together in war', () => {
-    const s = createGame(config({ humans: ['iroquois'], peoples: ['iroquois', 'cherokee'] }));
-    expect(pairTreatyProblem(s, 'iroquois', 'cherokee', 'land-use')).toMatch(/only trade treaties and mutual defence/);
-    friends(s, 'iroquois', 'cherokee');
-    const t = agree(s, 'iroquois', 'cherokee', 'people-trade');
-    expect(t.parties).toEqual([{ kind: 'people', id: 'cherokee' }, { kind: 'people', id: 'iroquois' }]);
-    agree(s, 'iroquois', 'cherokee', 'defence');
+    const s = createGame(config({ humans: ['haudenosaunee'], peoples: ['haudenosaunee', 'cherokee'] }));
+    expect(pairTreatyProblem(s, 'haudenosaunee', 'cherokee', 'land-use')).toMatch(/only trade treaties and mutual defence/);
+    friends(s, 'haudenosaunee', 'cherokee');
+    const t = agree(s, 'haudenosaunee', 'cherokee', 'people-trade');
+    expect(t.parties).toEqual([{ kind: 'people', id: 'cherokee' }, { kind: 'people', id: 'haudenosaunee' }]);
+    agree(s, 'haudenosaunee', 'cherokee', 'defence');
     // Barter: furs for food, the one who came getting the treaty's rate.
     const ct = town(s, 'cherokee');
     ct.goods.food = 2000;
-    const canoe = createUnit(s, 'iroquois', 'birchbarkCanoe', { kind: 'map', x: landAt(s, ct.x, ct.y, 1).x, y: landAt(s, ct.x, ct.y, 1).y });
+    const canoe = createUnit(s, 'haudenosaunee', 'birchbarkCanoe', { kind: 'map', x: landAt(s, ct.x, ct.y, 1).x, y: landAt(s, ct.x, ct.y, 1).y });
     canoe.cargo = { furs: 40 };
-    const volume = standingOf(s, 'iroquois', 'cherokee')!.volume;
+    const volume = standingOf(s, 'haudenosaunee', 'cherokee')!.volume;
     // 40 furs for 96 food fill the canoe's one hold; 50 would leave furs with no hold of their own.
-    barter(s, 'iroquois', canoe.id, { colonyId: ct.id }, 'furs', 40, 'food');
+    barter(s, 'haudenosaunee', canoe.id, { colonyId: ct.id }, 'furs', 40, 'food');
     expect(canoe.cargo).toEqual({ food: Math.floor((40 * 1 * 1.2) / 0.5) });
     expect(ct.goods.furs).toBe(40);
-    expect(standingOf(s, 'iroquois', 'cherokee')!.volume).toBeGreaterThan(volume);
+    expect(standingOf(s, 'haudenosaunee', 'cherokee')!.volume).toBeGreaterThan(volume);
     // No gold changes hands between peoples.
-    expect(player(s, 'iroquois').gold).toBe(0);
+    expect(player(s, 'haudenosaunee').gold).toBe(0);
     expect(player(s, 'cherokee').gold).toBe(0);
     // War on one people is war with its partner.
     startWar(s, 'france', 'cherokee');
-    expect(player(s, 'iroquois').stance.france).toBe('war');
+    expect(player(s, 'haudenosaunee').stance.france).toBe('war');
   });
 
   it('a playing people and a people nobody plays: Beta 2’s answer, and the pact brings the other people to war', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
     expect(s.players.some((p) => p.id === 'sioux')).toBe(false);
-    friends(s, 'iroquois', 'sioux');
-    agree(s, 'iroquois', 'sioux', 'people-trade');
-    agree(s, 'iroquois', 'sioux', 'defence');
+    friends(s, 'haudenosaunee', 'sioux');
+    agree(s, 'haudenosaunee', 'sioux', 'people-trade');
+    agree(s, 'haudenosaunee', 'sioux', 'defence');
     // Beta 2's round leaves the treaty alone (it has no nation party).
     play(s, 2);
-    expect(pairTreaty(s, 'defence', 'iroquois', 'sioux')).toBeDefined();
-    startWar(s, 'england', 'iroquois');
+    expect(pairTreaty(s, 'defence', 'haudenosaunee', 'sioux')).toBeDefined();
+    startWar(s, 'england', 'haudenosaunee');
     expect(s.tribes.find((t) => t.id === 'sioux')!.stance.england).toBe('war');
   });
 });
 
 describe('war and peace between a people and a nation (T11)', () => {
   it('a people declares war, its treaties end broken, and peace comes when the nation is tired of war', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
-    friends(s, 'iroquois', 'england');
-    makePairTreaty(s, 'iroquois', 'england', 'people-trade');
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
+    friends(s, 'haudenosaunee', 'england');
+    makePairTreaty(s, 'haudenosaunee', 'england', 'people-trade');
     expect(applyCommand(s, { type: 'declareWar', nation: 'england' }).ok).toBe(true);
-    expect(player(s, 'england').stance.iroquois).toBe('war');
-    expect(pairTreaty(s, 'people-trade', 'iroquois', 'england')).toBeUndefined();
+    expect(player(s, 'england').stance.haudenosaunee).toBe('war');
+    expect(pairTreaty(s, 'people-trade', 'haudenosaunee', 'england')).toBeUndefined();
     expect(s.treaties!.find((t) => t.kind === 'people-trade')!.end).toMatchObject({ why: 'broken' });
-    expect(pairStanding(s, 'iroquois', 'england')).toBe('At war');
-    expect(proposePeace(s, 'iroquois', 'england')).toMatch(/refuses/);
+    expect(pairStanding(s, 'haudenosaunee', 'england')).toBe('At war');
+    expect(proposePeace(s, 'haudenosaunee', 'england')).toMatch(/refuses/);
     s.turn += 6;
-    expect(proposePeace(s, 'iroquois', 'england')).toMatch(/have made peace/);
-    expect(player(s, 'iroquois').stance.england).toBe('peace');
-    expect(pairStanding(s, 'iroquois', 'england')).toBe('Distrusts you');
+    expect(proposePeace(s, 'haudenosaunee', 'england')).toMatch(/have made peace/);
+    expect(player(s, 'haudenosaunee').stance.england).toBe('peace');
+    expect(pairStanding(s, 'haudenosaunee', 'england')).toBe('Distrusts you');
   });
 
   it('a nation makes war on a computer people, which makes peace when tired of it; two peoples fight too', () => {
-    const s = createGame(config({ peoples: ['iroquois', 'cherokee'] }));
-    startWar(s, 'england', 'iroquois');
-    expect(player(s, 'iroquois').stance.england).toBe('war');
-    player(s, 'iroquois').warSince.england = s.turn - 20;
-    player(s, 'england').warSince.iroquois = s.turn - 20;
+    const s = createGame(config({ peoples: ['haudenosaunee', 'cherokee'] }));
+    startWar(s, 'england', 'haudenosaunee');
+    expect(player(s, 'haudenosaunee').stance.england).toBe('war');
+    player(s, 'haudenosaunee').warSince.england = s.turn - 20;
+    player(s, 'england').warSince.haudenosaunee = s.turn - 20;
     play(s, 1);
-    expect(player(s, 'iroquois').stance.england).toBe('peace');
-    startWar(s, 'iroquois', 'cherokee');
-    expect(player(s, 'cherokee').stance.iroquois).toBe('war');
-    expect(proposePeace(s, 'iroquois', 'cherokee')).toMatch(/refuses/);
+    expect(player(s, 'haudenosaunee').stance.england).toBe('peace');
+    startWar(s, 'haudenosaunee', 'cherokee');
+    expect(player(s, 'cherokee').stance.haudenosaunee).toBe('war');
+    expect(proposePeace(s, 'haudenosaunee', 'cherokee')).toMatch(/refuses/);
     s.turn += 6;
-    expect(proposePeace(s, 'iroquois', 'cherokee')).toMatch(/have made peace/);
+    expect(proposePeace(s, 'haudenosaunee', 'cherokee')).toMatch(/have made peace/);
   });
 });
 
@@ -491,12 +491,12 @@ describe('epidemics (T12)', () => {
   });
 
   it('strike a people’s town and a European colony alike, after contact, by the seed', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
     const t = town(s);
     // Before contact, a town near no European colony is not exposed.
     const rules = { chance: 1, years: 3, loss: 1, reach: 8 };
     const grid = gridOf(s);
-    if (!colonyList(s).some((c) => c.owner !== 'iroquois' && grid.distance(c.x, c.y, t.x, t.y) <= 8)) expect(exposedColonies(s, rules)).not.toContain(t);
+    if (!colonyList(s).some((c) => c.owner !== 'haudenosaunee' && grid.distance(c.x, c.y, t.x, t.y) <= 8)) expect(exposedColonies(s, rules)).not.toContain(t);
     const c = colonyBeside(s);
     const exposed = exposedColonies(s, rules);
     expect(exposed).toContain(t);
@@ -518,7 +518,7 @@ describe('epidemics (T12)', () => {
     }
     expect(colonyWorkers(s, t).length).toBe(before.town - 1);
     expect(colonyWorkers(s, c).length).toBe(before.colony - 1);
-    expect(s.messages.some((m) => m.to === 'iroquois' && m.text === epidemicText(t, 1, 3, true))).toBe(true);
+    expect(s.messages.some((m) => m.to === 'haudenosaunee' && m.text === epidemicText(t, 1, 3, true))).toBe(true);
     expect(s.messages.some((m) => m.to === 'england' && m.text === epidemicText(c, 1, 3, false))).toBe(true);
     // No births while it recovers: neither in the town nor in the colony.
     t.goods.food = 5000;
@@ -542,15 +542,15 @@ describe('epidemics (T12)', () => {
 
 describe('a game with a playing people’s diplomacy (save and load)', () => {
   it('computer peoples and nations play on with treaties and epidemics; the game saves, loads and plays on the same', () => {
-    const s = createGame(config({ peoples: ['iroquois', 'cherokee'] }));
+    const s = createGame(config({ peoples: ['haudenosaunee', 'cherokee'] }));
     play(s, 60);
-    friends(s, 'iroquois', 'england');
+    friends(s, 'haudenosaunee', 'england');
     player(s, 'england').gold += 2000;
     colonyBeside(s);
-    for (const kind of ['people-trade', 'land-use', 'exchange', 'defence'] as const) makePairTreaty(s, 'iroquois', 'england', kind);
-    friends(s, 'iroquois', 'cherokee');
-    makePairTreaty(s, 'iroquois', 'cherokee', 'people-trade');
-    makePairTreaty(s, 'iroquois', 'cherokee', 'defence');
+    for (const kind of ['people-trade', 'land-use', 'exchange', 'defence'] as const) makePairTreaty(s, 'haudenosaunee', 'england', kind);
+    friends(s, 'haudenosaunee', 'cherokee');
+    makePairTreaty(s, 'haudenosaunee', 'cherokee', 'people-trade');
+    makePairTreaty(s, 'haudenosaunee', 'cherokee', 'defence');
     play(s, 60);
     expect(s.gameOver).toBeUndefined();
     // First contacts were written for the peoples.
@@ -563,7 +563,7 @@ describe('a game with a playing people’s diplomacy (save and load)', () => {
     expect(serialize(loaded)).toBe(serialize(s));
     // Gold only from European trade: a computer people that trades with nobody has none from elsewhere.
     for (const p of s.players.filter((o) => o.kind === 'people')) expect(p.gold).toBeGreaterThanOrEqual(0);
-    for (const u of unitList(s).filter((o) => o.owner === 'iroquois')) expect(UNIT_TYPES[u.type].people).toBe(true);
+    for (const u of unitList(s).filter((o) => o.owner === 'haudenosaunee')) expect(UNIT_TYPES[u.type].people).toBe(true);
   }, 180_000);
 });
 

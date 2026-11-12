@@ -1,12 +1,12 @@
 import { BUILDINGS, WAREHOUSE_CAPACITY } from './rules/buildings.js';
 import type { GoodId } from './rules/goods.js';
-import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
+import { type PlayerId, type TribeId } from './rules/nations.js';
 import { FOREST_DEFENCE, TERRAIN, type TerrainDef } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES, type UnitTypeDef } from './rules/units.js';
 import type { Colony, GameState, Player, Settlement, Tile, Unit, UnitLocation } from './types.js';
 import type { UnitTypeId } from './rules/units.js';
 import { gridOf } from './grid.js';
-import { goodsOf } from './scenarios/index.js';
+import { goodsOf , peopleName } from './scenarios/index.js';
 import { modifiers } from './scenarios/modifiers.js';
 import { sightSharers } from './alliances.js';
 import { addUnit, indexedColonyAt, indexedColonyPopulation, indexedColonyWorkers, indexedTileWorker, indexedUnitsAboard, indexedUnitsAt, colonyList } from './unitindex.js';
@@ -215,8 +215,8 @@ function revealTo(s: GameState, p: Player, x: number, y: number, radius: number)
 }
 
 /** What a person is told on first meeting a native people (meetPeople). */
-export function firstMeetingText(people: TribeId): string {
-  return `You have met the ${TRIBES[people].name}. Their braves know the land so well that they move swiftly when they defend it.`;
+export function firstMeetingText(s: GameState, people: TribeId): string {
+  return `You have met the ${peopleName(s, people)}. Their braves know the land so well that they move swiftly when they defend it.`;
 }
 
 /**
@@ -231,7 +231,7 @@ export function meetPeople(s: GameState, nation: PlayerId, people: TribeId, at?:
   const tribe = s.tribes.find((t) => t.id === people);
   if (!tribe || tribe.met?.includes(nation)) return;
   (tribe.met ??= []).push(nation);
-  message(s, firstMeetingText(people), nation, at);
+  message(s, firstMeetingText(s, people), nation, at);
 }
 
 /** True if the tile is worked by any colony's colonist. */

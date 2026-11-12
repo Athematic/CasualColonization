@@ -273,7 +273,7 @@ export class ProgressScreen implements Screen {
     if (new Set(winners.map((n) => over.ways?.[n])).size > 1) {
       return h('p', { class: 'winners' }, h('strong', null, `Winners: ${winners.map((n, i) => `${names[i]} (${WAY_NAMES[over.ways![n]!] ?? over.ways![n]})`).join(', ')}.`));
     }
-    const partners = over.partners?.length ? `, with ${peopleList(over.partners)}` : '';
+    const partners = over.partners?.length ? `, with ${peopleList(this.app.state, over.partners)}` : '';
     const text = names.length === 1 ? `${names[0]} wins${partners}.` : `${names.slice(0, -1).join(', ')} and ${names.at(-1)} win together${partners}.`;
     return h('p', { class: 'winners' }, h('strong', null, text));
   }

@@ -51,7 +51,7 @@ const GAME: Scenario = {
   peoples: {
     ...AMERICAS.peoples,
     playable: [
-      { id: 'iroquois', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga', 'Kanonwalohale'] },
+      { id: 'haudenosaunee', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga', 'Kanonwalohale'] },
       { id: 'cherokee', name: 'the Cherokee', adjective: 'Cherokee', townNames: ['Chota', 'Tellico', 'Echota'] },
     ],
   },
@@ -68,15 +68,15 @@ function config(level: AiLevel, over: Partial<GameConfig> = {}): GameConfig {
     mapSize: 'medium',
     nations: ['england', 'france', 'netherlands'],
     humans: [],
-    ai: { england: 'creative', france: 'combative', netherlands: 'competent', iroquois: level, cherokee: 'competent' },
-    peoples: ['iroquois', 'cherokee'],
+    ai: { england: 'creative', france: 'combative', netherlands: 'competent', haudenosaunee: level, cherokee: 'competent' },
+    peoples: ['haudenosaunee', 'cherokee'],
     scenario: GAME.id,
     colonyCharter: true,
     ...over,
   };
 }
 
-const towns = (s: GameState, people = 'iroquois'): Colony[] => colonyList(s).filter((c) => c.owner === people);
+const towns = (s: GameState, people = 'haudenosaunee'): Colony[] => colonyList(s).filter((c) => c.owner === people);
 const player = (s: GameState, id: string) => s.players.find((p) => p.id === id)!;
 
 /** An English colony two tiles from the Haudenosaunee capital, with one worker. */
@@ -92,7 +92,7 @@ function colonyBeside(s: GameState, owner = 'england'): Colony {
 }
 
 /** Puts every worker of the people's towns on a hunting tile where one is free; returns how many hunt. */
-function huntEverywhere(s: GameState, people = 'iroquois'): number {
+function huntEverywhere(s: GameState, people = 'haudenosaunee'): number {
   let n = 0;
   for (const c of towns(s, people)) {
     for (const u of colonyWorkers(s, c)) {
@@ -105,7 +105,7 @@ function huntEverywhere(s: GameState, people = 'iroquois'): number {
   return n;
 }
 
-function hunters(s: GameState, people = 'iroquois'): number {
+function hunters(s: GameState, people = 'haudenosaunee'): number {
   let n = 0;
   for (const c of towns(s, people)) for (const u of colonyWorkers(s, c)) if (u.loc.kind === 'colony' && u.loc.job.kind === 'tile' && wayOf(tileAt(s, u.loc.job.x, u.loc.job.y)!, u.loc.job.good, ['plains', 'grassland', 'prairie', 'savannah', 'hills']) === 'hunting') n++;
   return n;
@@ -134,10 +134,10 @@ describe('the people profiles (T15)', () => {
 
   it('a Combative people keeps half the reserve; a person playing it keeps its own', () => {
     const s = createGame(config('combative'));
-    expect(storeYearsOf(s, 'iroquois')).toBe(0.5);
+    expect(storeYearsOf(s, 'haudenosaunee')).toBe(0.5);
     expect(storeYearsOf(s, 'cherokee')).toBe(1);
-    const h = createGame(config('combative', { humans: ['iroquois'] }));
-    expect(storeYearsOf(h, 'iroquois')).toBe(1);
+    const h = createGame(config('combative', { humans: ['haudenosaunee'] }));
+    expect(storeYearsOf(h, 'haudenosaunee')).toBe(1);
   });
 
   it('town builds follow the level’s plan; a person’s towns choose their own', () => {
@@ -148,7 +148,7 @@ describe('the people profiles (T15)', () => {
       planTownBuild(s, t, () => true);
       expect(t.build, level).toEqual({ kind: 'building', id: first });
     }
-    const h = createGame(config('creative', { humans: ['iroquois'] }));
+    const h = createGame(config('creative', { humans: ['haudenosaunee'] }));
     const t = towns(h)[0];
     t.build = null;
     planTownBuild(h, t, () => true);
@@ -176,7 +176,7 @@ describe('a computer people’s turn', () => {
       const s = createGame(config(level));
       expect(huntEverywhere(s)).toBeGreaterThan(0);
       s.land!.health!.fill(health);
-      runPeopleAi(s, player(s, 'iroquois'));
+      runPeopleAi(s, player(s, 'haudenosaunee'));
       return hunters(s);
     };
     const s = createGame(config('competent'));
@@ -192,15 +192,15 @@ describe('a computer people’s turn', () => {
     const c = colonyBeside(s);
     c.goods.tools = 200;
     c.goods.muskets = 120;
-    player(s, 'iroquois').gold = 1000;
+    player(s, 'haudenosaunee').gold = 1000;
     const england = player(s, 'england').gold;
     const tools = (g: GameState) => towns(g).reduce((n, t) => n + t.goods.tools, 0);
     const before = tools(s);
-    computerTradeVisits(s, 'iroquois', PEOPLE_PROFILES.competent);
+    computerTradeVisits(s, 'haudenosaunee', PEOPLE_PROFILES.competent);
     expect(tools(s)).toBeGreaterThan(before);
     expect(c.goods.tools).toBeGreaterThanOrEqual(50);
     expect(towns(s).some((t) => t.goods.muskets > 0)).toBe(true);
-    expect(player(s, 'iroquois').gold).toBeLessThan(1000);
+    expect(player(s, 'haudenosaunee').gold).toBeLessThan(1000);
     expect(player(s, 'england').gold).toBeGreaterThan(england);
     // Without gold it buys nothing (nor does it earn any: England cannot pay for its furs).
     const p = createGame(config('competent'));
@@ -208,7 +208,7 @@ describe('a computer people’s turn', () => {
     c2.goods.tools = 200;
     player(p, 'england').gold = 0;
     const had = tools(p);
-    computerTradeVisits(p, 'iroquois', PEOPLE_PROFILES.competent);
+    computerTradeVisits(p, 'haudenosaunee', PEOPLE_PROFILES.competent);
     expect(tools(p)).toBe(had);
   });
 
@@ -217,49 +217,49 @@ describe('a computer people’s turn', () => {
     const grid = gridOf(s);
     // A settlement of another people three tiles from the Haudenosaunee capital.
     const t = towns(s)[0];
-    const near = Object.values(s.settlements).filter((st) => st.tribe !== 'iroquois' && st.tribe !== 'cherokee').sort((a, b) => a.id.localeCompare(b.id))[0];
+    const near = Object.values(s.settlements).filter((st) => st.tribe !== 'haudenosaunee' && st.tribe !== 'cherokee').sort((a, b) => a.id.localeCompare(b.id))[0];
     const at = grid.tilesWithin(s.map, t.x, t.y, 3).find((q) => grid.distance(q.x, q.y, t.x, t.y) === 3 && !TERRAIN[tileAt(s, q.x, q.y)!.t].water && !colonyAt(s, q.x, q.y) && !settlementAt(s, q.x, q.y))!;
     near.x = at.x;
     near.y = at.y;
     near.goods = { furs: 100 };
-    standingWith(s, 'iroquois', near.tribe);
+    standingWith(s, 'haudenosaunee', near.tribe);
     for (const t of towns(s)) t.goods.cloth = 20;
-    computerBarter(s, 'iroquois', 1);
-    expect(standingOf(s, 'iroquois', near.tribe)?.volume ?? 0).toBeGreaterThan(0);
+    computerBarter(s, 'haudenosaunee', 1);
+    expect(standingOf(s, 'haudenosaunee', near.tribe)?.volume ?? 0).toBeGreaterThan(0);
   });
 
   it('Combative goes to war with a European that settles beside its towns, and seeks peace after its years; Competent does not', () => {
     const s = createGame(config('combative'));
     colonyBeside(s);
-    runPeopleAi(s, player(s, 'iroquois'));
-    expect(player(s, 'iroquois').stance.england).toBe('war');
+    runPeopleAi(s, player(s, 'haudenosaunee'));
+    expect(player(s, 'haudenosaunee').stance.england).toBe('war');
     // After its profile's years of war it seeks peace, which a computer nation tired of war accepts
     // (the round notes the war: turn.ts notePeopleWars).
     s.turn += 30;
-    player(s, 'iroquois').lastWar = s.turn;
-    runPeopleAi(s, player(s, 'iroquois'));
-    expect(player(s, 'iroquois').stance.england).toBe('peace');
+    player(s, 'haudenosaunee').lastWar = s.turn;
+    runPeopleAi(s, player(s, 'haudenosaunee'));
+    expect(player(s, 'haudenosaunee').stance.england).toBe('peace');
 
     const c = createGame(config('competent'));
     colonyBeside(c);
-    runPeopleAi(c, player(c, 'iroquois'));
-    expect(player(c, 'iroquois').stance.england).not.toBe('war');
+    runPeopleAi(c, player(c, 'haudenosaunee'));
+    expect(player(c, 'haudenosaunee').stance.england).not.toBe('war');
   });
 
   it('a Naive or Combative people keeps out of a league; a Competent one may join', () => {
     const answers = (level: AiLevel) => {
-      const s = createGame(config('creative', { ai: { england: 'creative', france: 'combative', netherlands: 'competent', iroquois: 'creative', cherokee: level } }));
+      const s = createGame(config('creative', { ai: { england: 'creative', france: 'combative', netherlands: 'competent', haudenosaunee: 'creative', cherokee: level } }));
       if (s.turn < 120) s.turn = 120;
-      for (const [a, b] of [['iroquois', 'cherokee'], ['iroquois', 'sioux'], ['cherokee', 'sioux']]) {
+      for (const [a, b] of [['haudenosaunee', 'cherokee'], ['haudenosaunee', 'sioux'], ['cherokee', 'sioux']]) {
         const rel = standingWith(s, a as never, b as never);
         rel.goodSince = 0;
         rel.volume = 5000;
       }
       for (const o of ['cherokee', 'sioux']) {
-        makePairTreaty(s, 'iroquois', o as never, 'people-trade');
-        makePairTreaty(s, 'iroquois', o as never, 'defence');
+        makePairTreaty(s, 'haudenosaunee', o as never, 'people-trade');
+        makePairTreaty(s, 'haudenosaunee', o as never, 'defence');
       }
-      for (let i = 0; i < 40 && !leagueOf(s, 'iroquois'); i++, s.turn++) proposeLeague(s, 'iroquois', ['cherokee', 'sioux']);
+      for (let i = 0; i < 40 && !leagueOf(s, 'haudenosaunee'); i++, s.turn++) proposeLeague(s, 'haudenosaunee', ['cherokee', 'sioux']);
       return !!leagueOf(s, 'cherokee');
     };
     expect(answers('competent')).toBe(true);

@@ -35,7 +35,7 @@ const LAND_GAME: Scenario = {
   id: 'test-knows-land',
   name: 'Knowledge of the land test',
   hidden: true,
-  peoples: { ...AMERICAS.peoples, playable: [{ id: 'iroquois', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga'] }] },
+  peoples: { ...AMERICAS.peoples, playable: [{ id: 'haudenosaunee', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga'] }] },
   nationTypes: { ...AMERICAS.nationTypes, people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS], council: 'people' } },
 };
 registerScenario(LAND_GAME);
@@ -55,7 +55,7 @@ function game(scenario = LAND_GAME.id): GameState {
     nations: ['england', 'france', 'netherlands'],
     humans: [],
     ai: { england: 'competent', france: 'combative', netherlands: 'creative' },
-    peoples: ['iroquois'],
+    peoples: ['haudenosaunee'],
     scenario,
     historicalEvents: true,
     randomEvents: true,
@@ -65,8 +65,8 @@ function game(scenario = LAND_GAME.id): GameState {
 }
 
 /** A new land unit of the people or of a nation, on a tile. */
-const landUnit = (s: GameState, owner: 'iroquois' | 'england', x: number, y: number): Unit =>
-  createUnit(s, owner, owner === 'iroquois' ? 'townsperson' : 'freeColonist', { kind: 'map', x, y });
+const landUnit = (s: GameState, owner: 'haudenosaunee' | 'england', x: number, y: number): Unit =>
+  createUnit(s, owner, owner === 'haudenosaunee' ? 'townsperson' : 'freeColonist', { kind: 'map', x, y });
 
 /** A clean block of land, `w` tiles wide and three rows high, with nothing on it; its middle row's west end. */
 function clearBlock(s: GameState, w: number): { x: number; y: number } {
@@ -101,15 +101,15 @@ function plain(t: Tile, terrain: Tile['t'], over: Partial<Tile> = {}): void {
 describe('knowledge of the land (T13)', () => {
   it('is a trait of a playing people only, switched off by the scenario', () => {
     const s = game();
-    expect(knowsLand(s, 'iroquois')).toBe(true);
+    expect(knowsLand(s, 'haudenosaunee')).toBe(true);
     for (const id of ['england', 'france', 'netherlands', 'crown', 'hudsonsBay'] as const) expect(knowsLand(s, id), id).toBe(false);
-    expect(knowsLand(game(UNKNOWING_GAME.id), 'iroquois')).toBe(false);
+    expect(knowsLand(game(UNKNOWING_GAME.id), 'haudenosaunee')).toBe(false);
   });
 
   it('costs at most the river cost on own and unclaimed land, not on plowed land or another player\'s', () => {
     const s = game();
     const { x, y } = clearBlock(s, 2);
-    const people = landUnit(s, 'iroquois', x, y);
+    const people = landUnit(s, 'haudenosaunee', x, y);
     const nation = landUnit(s, 'england', x, y);
     const from = tileAt(s, x, y)!;
     const to = tileAt(s, x + 1, y)!;
@@ -128,17 +128,17 @@ describe('knowledge of the land (T13)', () => {
     expect(cost(nation)).toBe(3);
 
     // Its own claimed land, also where leased to a nation (the claim stays the people's).
-    plain(to, 'hills', { claim: 'iroquois' });
+    plain(to, 'hills', { claim: 'haudenosaunee' });
     expect(cost(people)).toBe(RIVER_MOVE_COST);
-    plain(to, 'hills', { claim: 'iroquois', use: 'england' });
+    plain(to, 'hills', { claim: 'haudenosaunee', use: 'england' });
     expect(cost(people)).toBe(RIVER_MOVE_COST);
-    expect(knownLand(to, 'iroquois')).toBe(true);
+    expect(knownLand(to, 'haudenosaunee')).toBe(true);
 
     // Plowed land is lost to it, own or unclaimed.
     plain(to, 'plains', { p: true });
-    expect(knownLand(to, 'iroquois')).toBe(false);
+    expect(knownLand(to, 'haudenosaunee')).toBe(false);
     expect(cost(people)).toBe(3);
-    plain(to, 'plains', { p: true, claim: 'iroquois' });
+    plain(to, 'plains', { p: true, claim: 'haudenosaunee' });
     expect(cost(people)).toBe(3);
 
     // Someone else's claimed land: a nation's, or another people's.
@@ -161,9 +161,9 @@ describe('knowledge of the land (T13)', () => {
   it('is off where the scenario switches it off', () => {
     const s = game(UNKNOWING_GAME.id);
     const { x, y } = clearBlock(s, 2);
-    const people = landUnit(s, 'iroquois', x, y);
+    const people = landUnit(s, 'haudenosaunee', x, y);
     plain(tileAt(s, x, y)!, 'plains');
-    plain(tileAt(s, x + 1, y)!, 'plains', { f: true, claim: 'iroquois' });
+    plain(tileAt(s, x + 1, y)!, 'plains', { f: true, claim: 'haudenosaunee' });
     expect(moveCost(s, people, x, y, x + 1, y)).toBe(6);
   });
 
@@ -186,7 +186,7 @@ describe('knowledge of the land (T13)', () => {
         for (const dy of [-2, -1, 1, 2]) plain(tileAt(s, x + dx, y + dy)!, 'plains', { claim: 'england' });
         plain(tileAt(s, x + dx, y)!, dx >= 1 && dx <= 3 ? 'mountains' : 'plains', dx === -1 || dx === 5 ? { claim: 'england' } : {});
       }
-      for (const owner of ['iroquois', 'england'] as const) {
+      for (const owner of ['haudenosaunee', 'england'] as const) {
         const u = landUnit(s, owner, x, y);
         const path = findPath(s, u, x + 4, y)!;
         expect(path, owner).not.toBeNull();
@@ -197,7 +197,7 @@ describe('knowledge of the land (T13)', () => {
           at = step;
         }
         const straight = path.every((p) => p.y === y);
-        if (owner === 'iroquois' && knows) {
+        if (owner === 'haudenosaunee' && knows) {
           expect(straight).toBe(true);
           expect(total).toBe(4 * RIVER_MOVE_COST);
         } else {

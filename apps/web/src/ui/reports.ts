@@ -34,6 +34,7 @@ import {
   tradeOverview,
   peopleTradeOverview,
   TRIBES,
+  peopleName,
   UNIT_TYPES,
   warSupport,
   yearOf,
@@ -502,7 +503,7 @@ function religionTab(ctx: ReportContext): Child[] {
         ? scroll(h('table', { class: 'table report-table' },
             h('thead', null, h('tr', null, h('th', null, 'Tribe'), h('th', { class: 'num' }, 'Yours'), h('th', null, 'Others'))),
             h('tbody', null, r.missions.map((m) => h('tr', null,
-              h('td', null, h('span', { class: 'flag', style: `background:${TRIBES[m.tribe].color}` }), ' ', TRIBES[m.tribe].name),
+              h('td', null, h('span', { class: 'flag', style: `background:${TRIBES[m.tribe].color}` }), ' ', peopleName(s, m.tribe)),
               h('td', { class: 'num' }, String(m.own)),
               h('td', null, (Object.entries(m.rival) as [PlayerId, number][]).map(([n, k]) => h('span', { class: 'report-chip' }, flag(app.state, n), `${nationOf(app.state, n).adjective} ${k}`))))))))
         : empty('No missions among the settlements you know.'),
@@ -540,7 +541,7 @@ function nativesTab(ctx: ReportContext): Child[] {
       ];
       return card(null,
         h('div', { class: 'report-tribe-head' },
-          h('h3', null, h('span', { class: 'flag', style: `background:${TRIBES[t.tribe].color}` }), ' ', TRIBES[t.tribe].name),
+          h('h3', null, h('span', { class: 'flag', style: `background:${TRIBES[t.tribe].color}` }), ' ', peopleName(app.state, t.tribe)),
           moodPill(t.tension, t.atWar),
           h('span', { class: 'muted small' }, `${t.known} settlement${t.known > 1 ? 's' : ''} known`)),
         sortableTable(`natives-${t.tribe}`, cols, t.settlements, ctx.rerender));

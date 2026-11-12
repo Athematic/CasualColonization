@@ -629,7 +629,7 @@ Nineteen peoples in the catalogue, north to south. Names are the peoples' own wh
 
 - **Their own values (T10, T14), per people:** the Haudenosaunee weigh their council and treaties more (`peopleCouncil` 7, `peopleTreaty` 4), the Wendat trust and treaties (`peopleTrust` 7, `peopleTreaty` 4) and keep a larger store (`storeYears` 1.5), the Mi'kmaq and the Innu the land's health and their homeland (`peopleLandHealth` 0.8, `peopleHomeland` 0.7; the Mi'kmaq also `peopleTrust` 6), the Innu stored food less (`peopleStoreYear` 3). A first reading of the sources ([research, section 1](../research/north-east-peoples.md#1-the-peoples)); no temperaments are set.
 - **Peoples who come and go** (`PeopleRegion.from` and `until`, `peoplemoves.ts`): the Dorset leave northern Labrador and Nunavik's coast in 1350, the Inuit come in 1400, the St. Lawrence Iroquoians leave in 1580 (why these years, and the fifty-year gap: research, section 1). Nothing names a cause. A playing people never leaves (if the St. Lawrence Iroquoians were playable, they would stay: tested).
-- **The Haudenosaunee have a catalogue entry of their own** (`haudenosaunee`), beside the Americas' `iroquois`: sentences read the catalogue's name, and renaming the Americas' entry would change its games' messages. The Clan Mothers, Garakontié and Thayendanegea are offered to both ids.
+- **The Haudenosaunee have a catalogue entry of their own** (`haudenosaunee`), beside the Americas' `iroquois`: sentences read the catalogue's name, and renaming the Americas' entry would change its games' messages. The Clan Mothers, Garakontié and Thayendanegea are offered to both ids. **Superseded by section 18:** one id, `haudenosaunee`, everywhere; the Americas show it as "Iroquois".
 - **Town names** for the playable peoples' later towns (`PlayablePeople.townNames`): Haudenosaunee towns of the 17th and 18th centuries, Wendat towns the Jesuits recorded, Mi'kmaw names of places of Mi'kma'ki in use today and Innu communities by their Innu names; the lists are in research, section 1. Using today's community names for towns of earlier centuries is a choice to review.
 
 ### The council (T9), drafted for Simon's review
@@ -664,7 +664,7 @@ Who came in each year (Cabot, Corte-Real, Cartier, the Basque whalers, Block), w
 
 ### Choices made while building (for Simon)
 
-1. **Haudenosaunee as a new catalogue id** (above), not a renamed `iroquois`.
+1. **Haudenosaunee as a new catalogue id** (above), not a renamed `iroquois` (superseded by section 18: the two are now one id, `haudenosaunee`).
 2. **Spacing two tiles** between settlements: with three, the Five Nations had room for three or four towns and the Narragansett none.
 3. **`PeopleRegion.from` and `until`** (new) to bring the Inuit and to let the Dorset and the St. Lawrence Iroquoians go; the alternative, leaving the Dorset out and the Inuit there from 1000, rewrites the north's history.
 4. **Own entry points per nation on a map** (new, above), since the tournaments showed every colony on Newfoundland's tundra without them.
@@ -959,7 +959,7 @@ Built on branch `beta3/datamodel`, bit-identical (bench, golden tests and the 24
 - **The research in its own file:** the history drafted for Simon's review (sections 8, 9 and 13, and the sourced context in T10 and T14) moved to [research/north-east-peoples.md](../research/north-east-peoples.md), with its sources gathered and the items still to be sourced or checked listed; this note keeps the game's data and decisions and links to it.
 
 **Other compromises of the same kind, looked for and left** (each would change the Americas' or the Caribbean's saved state or games, which the bench and golden hashes guard, or reaches into work in progress):
-1. **Two catalogue ids for one people**, `iroquois` (the Americas) and `haudenosaunee` (the North-east), section 13: renaming the Americas' entry, or giving the North-east the `iroquois` id with its own name, changes the Americas' messages and history (in the hashes) or every North-east save, game code and test; the council members offered to both ids would then need one. Worth doing with Simon's review of the names, as its own step.
+1. **Two catalogue ids for one people**, `iroquois` (the Americas) and `haudenosaunee` (the North-east), section 13: renaming the Americas' entry, or giving the North-east the `iroquois` id with its own name, changes the Americas' messages and history (in the hashes) or every North-east save, game code and test; the council members offered to both ids would then need one. Worth doing with Simon's review of the names, as its own step. **Done in section 18.**
 2. **`TreatyEnd.by` keeps a nation as its bare id** beside a people's party (`PlayerId | TreatyParty`, Beta 2 step 0's choice 4), so treaties between nations save as before; one shape for both is a change to every saved treaty's end, so to the hashes.
 3. **Two ways of judging victory** (section 12): without a playing people the scenario's own order, as before; with one, `VICTORY_ORDER` and both sides judged. One path for all could end some Americas and Caribbean games differently (the order of kinds and the end-year judging differ), so it is a rules change for Simon, not a clean-up.
 4. **Peoples nobody plays make no treaties with each other** (section 10, choice 9): allowing it changes the Americas' and the Caribbean's games.

@@ -101,7 +101,6 @@ export const NATION_ORDER: AmericasNationId[] = ['england', 'france', 'netherlan
 export type PlayerId = NationId | TribeId;
 
 export type TribeId =
-  | 'iroquois'
   | 'cherokee'
   | 'sioux'
   | 'apache'
@@ -162,6 +161,12 @@ export interface PeopleDef {
    * engine's `PeopleEconomy.storeYears` when missing). Scenario data (`peoples.overrides`).
    */
   storeYears?: number;
+  /**
+   * The string the people's seeded streams hash in place of its id (relations.ts `stream`), where a
+   * scenario's games must not change with an id: the Americas' Haudenosaunee hash `iroquois`, their
+   * id there until native-nations.md section 18. Missing means the id. Scenario data (`peoples.overrides`).
+   */
+  seedKey?: string;
 }
 
 /** A people's temperament towards treaties (N8). Not "wary", which is a mood word (tensionLabel). */
@@ -171,7 +176,13 @@ export type Temperament = 'open' | 'guarded' | 'proud';
 export type TribeDef = PeopleDef;
 
 export const TRIBES: Record<TribeId, PeopleDef> = {
-  iroquois: { id: 'iroquois', name: 'Iroquois', color: '#7a4b2a', lifeway: 'agricultural', skills: ['expertFarmer', 'expertFurTrapper', 'masterTobaccoPlanter', 'expertFisherman'], wants: ['muskets', 'cloth', 'tools'] },
+  /**
+   * The Haudenosaunee ("people of the longhouse"; the Iroquois to Europeans), the Mohawk, Oneida,
+   * Onondaga, Cayuga and Seneca of today's upstate New York, joined in their League; the Tuscarora
+   * joined in the 1720s. One id in every scenario, the people's own name (native-nations.md section
+   * 18); a scenario may show another name (the Americas: "Iroquois", in `peoples.overrides`).
+   */
+  haudenosaunee: { id: 'haudenosaunee', name: 'Haudenosaunee', color: '#7a4b2a', lifeway: 'agricultural', skills: ['expertFarmer', 'expertFurTrapper', 'masterTobaccoPlanter', 'expertFisherman'], wants: ['muskets', 'cloth', 'tools'] },
   cherokee: { id: 'cherokee', name: 'Cherokee', color: '#2f7d6a', lifeway: 'agricultural', skills: ['masterTobaccoPlanter', 'expertFarmer', 'masterCottonPlanter', 'expertFurTrapper'], wants: ['cloth', 'tradeGoods', 'horses'] },
   sioux: { id: 'sioux', name: 'Sioux', color: '#a8452b', lifeway: 'nomadic', skills: ['expertFurTrapper', 'seasonedScout', 'masterFurTrader'], wants: ['horses', 'muskets', 'tradeGoods'] },
   apache: { id: 'apache', name: 'Apache', color: '#c0702f', lifeway: 'nomadic', skills: ['expertFurTrapper', 'seasonedScout', 'masterCottonPlanter'], wants: ['horses', 'rum', 'tradeGoods'] },
@@ -265,13 +276,6 @@ export const TRIBES: Record<TribeId, PeopleDef> = {
    * Grand River and the Niagara, dispersed in the 1650s.
    */
   attawandaron: { id: 'attawandaron', name: 'Attawandaron', color: '#b07a3a', lifeway: 'agricultural', skills: ['expertFarmer', 'masterTobaccoPlanter', 'expertFurTrapper'], wants: ['tools', 'tradeGoods', 'cloth'] },
-  /**
-   * The Haudenosaunee ("people of the longhouse"; the Iroquois to Europeans), the Mohawk, Oneida,
-   * Onondaga, Cayuga and Seneca of today's upstate New York, joined in their League; the Tuscarora
-   * joined in the 1720s. A catalogue entry of its own beside the Americas' "Iroquois", so that
-   * sentences name them as they name themselves without changing the Americas' games.
-   */
-  haudenosaunee: { id: 'haudenosaunee', name: 'Haudenosaunee', color: '#7a4b2a', lifeway: 'agricultural', skills: ['expertFarmer', 'expertFurTrapper', 'masterTobaccoPlanter', 'expertFisherman'], wants: ['muskets', 'cloth', 'tools'] },
   /** The Mohican (Muhheaconneok) of the upper Hudson valley; the Stockbridge-Munsee Community descends from them. */
   mohican: { id: 'mohican', name: 'Mohican', color: '#7f6a3a', lifeway: 'agricultural', skills: ['expertFurTrapper', 'expertFarmer', 'expertFisherman'], wants: ['tools', 'tradeGoods', 'muskets'] },
   /** The Massachusett of Massachusetts Bay, farming and fishing peoples of the coast. */
@@ -285,4 +289,4 @@ export const TRIBES: Record<TribeId, PeopleDef> = {
 };
 
 /** North to south. */
-export const TRIBE_ORDER: TribeId[] = ['iroquois', 'cherokee', 'sioux', 'apache', 'aztec', 'arawak', 'tupi', 'inca'];
+export const TRIBE_ORDER: TribeId[] = ['haudenosaunee', 'cherokee', 'sioux', 'apache', 'aztec', 'arawak', 'tupi', 'inca'];

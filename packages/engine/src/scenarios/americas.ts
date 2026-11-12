@@ -146,6 +146,9 @@ export const AMERICAS: Scenario = {
     ids: [...TRIBE_ORDER],
     produce: [...NATIVE_PRODUCE],
     settlements: { nomadic: SETTLEMENT_KINDS.camp, agricultural: SETTLEMENT_KINDS.village, urban: SETTLEMENT_KINDS.city },
+    // The Haudenosaunee keep the name the Americas has always shown, and their seeded draws hash
+    // their id before native-nations.md section 18 (`iroquois`), so the Americas' games are as they were.
+    overrides: { haudenosaunee: { name: 'Iroquois', seedKey: 'iroquois' } },
   },
   goods: [...GOODS],
   // No people plays in the Americas (native-nations.md T4), so only the European nations' selection.

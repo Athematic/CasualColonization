@@ -48,10 +48,10 @@ import {
 } from './peopletreaties.js';
 import { message, player, tileAt, tileWorkedBy, unitName, unitPosition, workArea } from './queries.js';
 import { peoplePairRandom } from './relations.js';
-import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
+import { type PlayerId, type TribeId } from './rules/nations.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import { cooperationOf, LEVEL_COOPERATION } from './alliances.js';
-import { calendarOf, mechanicsOf, nationOf, peopleOf, scenarioOf, settlementKindIn, turnAfterYears, yearValue } from './scenarios/index.js';
+import { calendarOf, mechanicsOf, nationOf, peopleOf, scenarioOf, settlementKindIn, turnAfterYears, yearValue , peopleName } from './scenarios/index.js';
 import type { YearsAround } from './scenarios/types.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, nationParty, peopleParty } from './treaties.js';
@@ -118,7 +118,7 @@ export function pairTreaties(s: GameState, a: PlayerId, b: PlayerId): Treaty[] {
 /** A side's name in running text: "England", "the Haudenosaunee", "the Sioux". */
 export function sideName(s: GameState, id: PlayerId): string {
   if (kindOfId(id) !== 'people' || playingPeople(s, id)) return nationOf(s, id).name;
-  return `the ${TRIBES[id as TribeId].name}`;
+  return `the ${peopleName(s, id as TribeId)}`;
 }
 
 function capital(text: string): string {

@@ -38,7 +38,7 @@ const ARRIVALS_GAME: Scenario = {
   name: 'Arrivals test',
   hidden: true,
   nations: { ...AMERICAS.nations, sets: { alternative: AMERICAS.nations.sets.alternative.map(withArrivals) } },
-  peoples: { ...AMERICAS.peoples, playable: [{ id: 'iroquois', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga'] }] },
+  peoples: { ...AMERICAS.peoples, playable: [{ id: 'haudenosaunee', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga'] }] },
   nationTypes: { ...AMERICAS.nationTypes, people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS], council: 'people' } },
   // Step 7: the peoples' ways of winning beside the Europeans', both sides judged (T14).
   victory: [{ id: 'military' }, { id: 'independence-war' }, { id: 'confederacy' }, { id: 'concord' }, { id: 'prosperity' }, { id: 'continuity' }, { id: 'good-life' }, { id: 'time' }],
@@ -63,7 +63,7 @@ function config(over: Partial<GameConfig> = {}): GameConfig {
     nations: ['england', 'france', 'netherlands'],
     humans: [],
     ai: { england: 'competent', france: 'creative', netherlands: 'combative' },
-    peoples: ['iroquois'],
+    peoples: ['haudenosaunee'],
     scenario: ARRIVALS_GAME.id,
     historicalEvents: true,
     randomEvents: true,
@@ -110,7 +110,7 @@ describe('arrivals (T18)', () => {
     const s = createGame(config());
     expect(FRANCE).toBe(8);
     expect(NETHERLANDS).toBe(13);
-    expect(ids(s)).toEqual(['england', 'iroquois']);
+    expect(ids(s)).toEqual(['england', 'haudenosaunee']);
     expect(s.arrivals?.map((a) => [a.nation, a.turn])).toEqual([['france', FRANCE], ['netherlands', NETHERLANDS]]);
     expect(nationsPresent(s)).toBe(1);
     expectAbsent(s, 'france');
@@ -126,7 +126,7 @@ describe('arrivals (T18)', () => {
     const entry = s.arrivals!.find((a) => a.nation === 'france')!.entry;
     playTo(s, FRANCE);
     expect(s.turn).toBe(FRANCE);
-    expect(ids(s)).toEqual(['england', 'france', 'iroquois']);
+    expect(ids(s)).toEqual(['england', 'france', 'haudenosaunee']);
     expect(yetToArrive(s, 'france')).toBe(false);
     expect(nationsPresent(s)).toBe(2);
     expectAbsent(s, 'netherlands');
@@ -141,7 +141,7 @@ describe('arrivals (T18)', () => {
     expect(units.map((u) => u.type).sort()).toEqual(['caravel', 'hardyPioneer', 'veteranSoldier']);
     // Its own arrival message, and news of it to everyone else.
     expect(s.messages.some((m) => m.to === 'france' && m.turn === FRANCE && /expedition for France/.test(m.text))).toBe(true);
-    expect(s.messages.filter((m) => m.turn === FRANCE && /Ships of France have reached/.test(m.text)).map((m) => m.to)).toEqual(['england', 'iroquois']);
+    expect(s.messages.filter((m) => m.turn === FRANCE && /Ships of France have reached/.test(m.text)).map((m) => m.to)).toEqual(['england', 'haudenosaunee']);
     // Its relations with the nations already there start in its year, at peace.
     expect(s.relations['england|france']?.peaceSince ?? s.relations['france|england']?.peaceSince).toBe(FRANCE);
 
@@ -149,7 +149,7 @@ describe('arrivals (T18)', () => {
     play(s, 1);
     expect(unitList(s).find((u) => u.owner === 'france' && u.type === 'caravel')!.loc).not.toEqual({ kind: 'map', x: entry.x, y: entry.y });
     playTo(s, NETHERLANDS);
-    expect(ids(s)).toEqual(['england', 'france', 'netherlands', 'iroquois']);
+    expect(ids(s)).toEqual(['england', 'france', 'netherlands', 'haudenosaunee']);
     expect(s.arrivals).toBeUndefined();
     play(s, 40);
     expect(colonyList(s).some((c) => c.owner === 'france')).toBe(true);
@@ -164,7 +164,7 @@ describe('arrivals (T18)', () => {
     expect(serialize(loaded)).toBe(json);
     play(s, 20);
     play(loaded, 20);
-    expect(ids(loaded)).toEqual(['england', 'france', 'netherlands', 'iroquois']);
+    expect(ids(loaded)).toEqual(['england', 'france', 'netherlands', 'haudenosaunee']);
     expect(serialize(loaded)).toBe(serialize(s));
   }, 120_000);
 
@@ -189,7 +189,7 @@ describe('arrivals (T18)', () => {
     const s = createGame(headStartConfig(config({ humans: ['france'] }), turn));
     expect(ids(s)).not.toContain('france');
     expect(playUntil(s, turn)).toBe(true);
-    expect(ids(s)).toEqual(['england', 'france', 'netherlands', 'iroquois']);
+    expect(ids(s)).toEqual(['england', 'france', 'netherlands', 'haudenosaunee']);
     const france = s.players.find((p) => p.id === 'france')!;
     expect(france.ai).toBe('creative');
     // The head start's difficulty is the person's (game.ts), from its arrival.
@@ -219,9 +219,9 @@ describe('arrivals (T18)', () => {
     expect(() => createGame(config({ nations: ['france', 'netherlands'], peoples: [] }))).toThrow(/Nobody is in the game in 1492/);
     // A people in the game from the start is enough: the nations arrive to it.
     const s = createGame(config({ nations: ['france', 'netherlands'], ai: { france: 'naive', netherlands: 'naive' } }));
-    expect(ids(s)).toEqual(['iroquois']);
+    expect(ids(s)).toEqual(['haudenosaunee']);
     playTo(s, FRANCE);
-    expect(ids(s)).toEqual(['france', 'iroquois']);
+    expect(ids(s)).toEqual(['france', 'haudenosaunee']);
   }, 60_000);
 
   it('writes nothing in games without arrivals', () => {
@@ -246,10 +246,10 @@ describe('arrivals (T18)', () => {
     while (s.arrivals) play(s, 1);
     expect(s.gameOver).toBeUndefined();
     for (const p of s.players) if (p.kind !== 'people') p.coloniesFounded = Math.max(1, p.coloniesFounded);
-    for (const c of colonyList(s)) if (c.owner !== 'iroquois') removeColony(s, c.id);
-    for (const u of unitList(s)) if (u.owner !== 'iroquois' && u.loc.kind !== 'carrier' && u.type !== 'caravel') removeUnit(s, u.id);
+    for (const c of colonyList(s)) if (c.owner !== 'haudenosaunee') removeColony(s, c.id);
+    for (const u of unitList(s)) if (u.owner !== 'haudenosaunee' && u.loc.kind !== 'carrier' && u.type !== 'caravel') removeUnit(s, u.id);
     expect(europeansDefeated(s)).toBe(true);
     play(s, 1);
-    expect(s.gameOver?.ways).toEqual({ iroquois: 'military' });
+    expect(s.gameOver?.ways).toEqual({ haudenosaunee: 'military' });
   });
 });

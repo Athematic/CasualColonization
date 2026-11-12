@@ -7,8 +7,7 @@ import { randInt, weightedPick } from './rng.js';
 import { randomImmigrant } from './europe.js';
 import { modifiers } from './scenarios/modifiers.js';
 import type { RumourOutcome } from './rules/modifiers.js';
-import { difficultyOf, mechanicsOf, nationOf, nativeRulesOf, rumoursOf, term } from './scenarios/index.js';
-import { TRIBES } from './rules/nations.js';
+import { difficultyOf, mechanicsOf, nationOf, nativeRulesOf, rumoursOf, term , peopleName } from './scenarios/index.js';
 import { systemsOfId } from './playerkind.js';
 import type { GameState, Settlement, Unit } from './types.js';
 import { removeUnit } from './unitindex.js';
@@ -111,7 +110,7 @@ export function resolveRumour(s: GameState, u: Unit): void {
       tribe.stance[u.owner] = 'war';
       for (const st of Object.values(s.settlements)) if (st.tribe === tribeId) st.tension[u.owner] = 1000;
       track(u.owner, 'natives:burial ground disturbed');
-      const vars = { tribe: TRIBES[tribeId].name, nation: nationOf(s, u.owner).name, adjective: nationOf(s, u.owner).adjective };
+      const vars = { tribe: peopleName(s, tribeId), nation: nationOf(s, u.owner).name, adjective: nationOf(s, u.owner).adjective };
       noteHistory(s, 'tribe', [u.owner], term(s, 'rumour.burial.history', vars), { at: pos });
       track(u.owner, 'natives:tribe went to war');
       message(s, term(s, 'rumour.burial', vars), u.owner, pos);

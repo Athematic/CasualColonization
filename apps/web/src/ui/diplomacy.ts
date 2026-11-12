@@ -57,6 +57,7 @@ import {
   treatiesWithPeople,
   systemsOf,
   TRIBES,
+  peopleName,
   withPeople,
   anyPlayingPeople,
   isPeoplePlayer,
@@ -270,14 +271,14 @@ export class DiplomacyScreen implements Screen {
         return { t, settlements, met, tension, missions, contact, inForce };
       })
       .filter((r) => r.met)
-      .sort((a, b) => Number(b.inForce.length > 0) - Number(a.inForce.length > 0) || Number(b.contact) - Number(a.contact) || TRIBES[a.t.id].name.localeCompare(TRIBES[b.t.id].name));
+      .sort((a, b) => Number(b.inForce.length > 0) - Number(a.inForce.length > 0) || Number(b.contact) - Number(a.contact) || peopleName(s, a.t.id).localeCompare(peopleName(s, b.t.id)));
     const head = () => h('tr', null, h('th', null, 'People'), h('th', null, 'Settlements'), h('th', null, 'Mood'), treaties ? h('th', null, 'Standing') : null, treaties ? h('th', null, 'Treaties') : null, h('th', null, 'Missions'), h('th', null, 'Gift'));
     // Words and colours at the thresholds the braves act on (demands, raids, war).
     const row = ({ t, settlements, tension, missions, contact, inForce }: (typeof rows)[number]) => {
       const war = t.stance[me.id] === 'war';
       const mood = war ? 'at war' : tensionLabel(tension, thresholds);
       const why = treaties ? peopleTreatyProblem(s, me.id, t.id) : null;
-      const name = TRIBES[t.id].name;
+      const name = peopleName(s, t.id);
       // Land use (a lease, N5) is the next rung once trade is agreed.
       const landOn = treaties && peopleTreatyOn(s, 'land-use');
       const trading = inForce.some((x) => x.kind === 'people-trade');

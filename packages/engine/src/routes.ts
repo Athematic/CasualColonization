@@ -22,13 +22,12 @@ import { type PlayerId } from './rules/nations.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { track } from './telemetry.js';
 import type { GameState, RouteCargo, RouteStop, TradeRoute, Unit } from './types.js';
-import { goodsOf, nationOf, term, Term } from './scenarios/index.js';
+import { goodsOf, nationOf, term, Term , peopleName } from './scenarios/index.js';
 import { indexedUnitsOf, setUnitLoc, colonyList, unitList } from './unitindex.js';
 import { gridOf } from './grid.js';
 import { buyFromSettlement, nativeOffer, settlementName, tradeWithSettlement } from './natives.js';
 import { settlementForSale } from './braves.js';
 import { settlementStopOpen } from './peopletreaties.js';
-import { TRIBES } from './rules/nations.js';
 
 export const EUROPE_STOP = 'europe';
 export const MAX_ROUTE_STOPS = 12;
@@ -112,7 +111,7 @@ function cleanStops(s: GameState, nation: PlayerId, stops: RouteStop[] | undefin
   return list.map((stop) => {
     const settlement = stop.at !== EUROPE_STOP && !s.colonies[stop.at] ? s.settlements[stop.at] : undefined;
     if (settlement) {
-      if (!settlementStopOpen(s, nation, settlement.id)) fail(`Route stops at a native settlement need a trade treaty with the ${TRIBES[settlement.tribe].name}.`);
+      if (!settlementStopOpen(s, nation, settlement.id)) fail(`Route stops at a native settlement need a trade treaty with the ${peopleName(s, settlement.tribe)}.`);
     } else if (stop.at !== EUROPE_STOP) {
       const c = s.colonies[stop.at];
       if (!c) fail('No such colony.');
@@ -265,7 +264,7 @@ function stopProblem(s: GameState, u: Unit, stop: RouteStop): string | null {
   if (!c) {
     const st = s.settlements[stop.at];
     if (!st) return 'the colony is gone';
-    if (!settlementStopOpen(s, u.owner, st.id)) return `we have no trade treaty with the ${TRIBES[st.tribe].name}`;
+    if (!settlementStopOpen(s, u.owner, st.id)) return `we have no trade treaty with the ${peopleName(s, st.tribe)}`;
     if (isShip(u) && !isCoastal(s, st.x, st.y)) return `the ${settlementName(s, st)} is not on the coast`;
     return null;
   }

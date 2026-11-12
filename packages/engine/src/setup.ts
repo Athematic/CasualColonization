@@ -7,7 +7,7 @@
 import { STORED_MAPS, type StoredMap } from './maps/index.js';
 import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
 import { firstYear, turnOfYear } from './scenarios/calendar.js';
-import { nationEntry, nationSet, playablePeoples, scenarioOf, type Rivals, type Scenario } from './scenarios/index.js';
+import { nationEntry, nationSet, playablePeoples, scenarioOf, type Rivals, type Scenario, peopleIn } from './scenarios/index.js';
 import type { GameConfig, MapSize } from './types.js';
 import { getVictory } from './victory.js';
 
@@ -65,7 +65,7 @@ export function newGameOptions(scenario: Scenario): NewGameOptions {
     victory: scenario.victory.map((v) => getVictory(v.id)?.name ?? v.id),
     peoples: playablePeoples(scenario).map((pp) => ({
       id: pp.id,
-      name: pp.name ?? TRIBES[pp.id].name,
+      name: pp.name ?? peopleIn(scenario, pp.id).name,
       color: TRIBES[pp.id].color,
       lifeway: LIFEWAY_WORDS[TRIBES[pp.id].lifeway] ?? '',
     })),

@@ -183,7 +183,7 @@ export function describeMove(s: GameState, unitId: string, dir: Direction): Move
   // Braves of a tribe at peace step aside; hostile ones must be fought.
   const brave = !colony ? hostileBraveAt(s, u.owner, x, y) : undefined;
   if (brave) {
-    return canAttack(u) ? { kind: 'attack', braveId: brave.id } : { kind: 'blocked', reason: `A hostile ${braveName(brave)} is in the way.` };
+    return canAttack(u) ? { kind: 'attack', braveId: brave.id } : { kind: 'blocked', reason: `A hostile ${braveName(s, brave)} is in the way.` };
   }
   if (foreign.length) {
     return canAttack(u) ? { kind: 'attack', targetUnitId: foreign[0].id } : { kind: 'blocked', reason: 'Foreign units block the way.' };

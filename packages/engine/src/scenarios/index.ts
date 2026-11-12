@@ -254,13 +254,18 @@ export function peopleIn(scenario: Scenario, tribe: TribeId): PeopleDef {
   return def;
 }
 
+/** A people's name in its game's scenario (the Americas' "Iroquois", the North-east's "Haudenosaunee"). */
+export function peopleName(s: HasScenario, tribe: TribeId): string {
+  return peopleOf(s, tribe).name;
+}
+
 /**
  * The kind of settlement a people lives in, in a scenario: the row its settlement-kind table gives
  * the people's lifeway.
  */
 export function settlementKindIn(scenario: Scenario, tribe: TribeId): SettlementKindDef {
   const kind = scenario.peoples.settlements[TRIBES[tribe].lifeway];
-  if (!kind) throw new Error(`${scenario.name} has no settlement kind for the ${TRIBES[tribe].lifeway} ${TRIBES[tribe].name}.`);
+  if (!kind) throw new Error(`${scenario.name} has no settlement kind for the ${TRIBES[tribe].lifeway} ${peopleIn(scenario, tribe).name}.`);
   return kind;
 }
 

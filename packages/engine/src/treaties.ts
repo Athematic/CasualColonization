@@ -12,8 +12,8 @@
  * (with `end` set) after those in force, in the order they were made. Lookups scan the list, which
  * stays short (a few dozen treaties in a long game).
  */
-import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
-import { calendarOf, formatDate, nationOf } from './scenarios/index.js';
+import { type PlayerId, type TribeId } from './rules/nations.js';
+import { calendarOf, formatDate, nationOf , peopleName } from './scenarios/index.js';
 import type { GameState, Treaty, TreatyEnd, TreatyKind, TreatyParty, TreatyTerms } from './types.js';
 
 type NationParty = Extract<TreatyParty, { kind: 'nation' }>;
@@ -47,7 +47,7 @@ export function sameParty(a: TreatyParty, b: TreatyParty): boolean {
 /** A party's name: the nation's ("France") or the people's, with its article ("the Kalinago"). */
 export function partyName(s: GameState, p: TreatyParty): string {
   // A playing people (Beta 3) is named as a player: "the Haudenosaunee".
-  return partyIsPeople(p) && !s.players.some((o) => o.id === p.id) ? `the ${TRIBES[p.id].name}` : nationOf(s, p.id).name;
+  return partyIsPeople(p) && !s.players.some((o) => o.id === p.id) ? `the ${peopleName(s, p.id)}` : nationOf(s, p.id).name;
 }
 
 /** Whether a nation is a party to the treaty. */

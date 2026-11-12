@@ -108,7 +108,7 @@ const PEOPLE_GAME: Scenario = {
   id: 'test-people-player',
   name: 'People player test',
   hidden: true,
-  peoples: { ...AMERICAS.peoples, playable: [{ id: 'iroquois', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga', 'Kanonwalohale'] }] },
+  peoples: { ...AMERICAS.peoples, playable: [{ id: 'haudenosaunee', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga', 'Kanonwalohale'] }] },
   // Step 2: the people's own units and buildings (T6, T7), hard years and land health (T10).
   nationTypes: { ...AMERICAS.nationTypes, people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS], council: 'people' } },
   mechanics: { ...AMERICAS.mechanics, hardYears: { chance: 1 / 8 }, landHealth: { regionSize: 8, renewal: 40, recovery: 5, floor: 0.2 } },
@@ -124,7 +124,7 @@ function config(over: Partial<GameConfig> = {}): GameConfig {
     nations: ['england', 'france', 'netherlands'],
     humans: [],
     ai: { england: 'competent', france: 'combative', netherlands: 'creative' },
-    peoples: ['iroquois'],
+    peoples: ['haudenosaunee'],
     scenario: PEOPLE_GAME.id,
     historicalEvents: true,
     randomEvents: true,
@@ -133,7 +133,7 @@ function config(over: Partial<GameConfig> = {}): GameConfig {
   };
 }
 
-const people = (s: GameState): Player => s.players.find((p) => p.id === 'iroquois')!;
+const people = (s: GameState): Player => s.players.find((p) => p.id === 'haudenosaunee')!;
 
 function play(s: GameState, rounds: number): GameState {
   const until = s.turn + rounds;
@@ -177,8 +177,8 @@ function expectNoEurope(s: GameState): void {
   const crownWords = /tax rate|immigra|docks|Royal Expeditionary|demands \d+ gold/i;
   expect(s.messages.filter((m) => m.to === p.id && crownWords.test(m.text))).toEqual([]);
   // Not a European to the peoples nobody plays: no tension towards it, no stance.
-  for (const st of Object.values(s.settlements)) expect(st.tension.iroquois).toBeUndefined();
-  for (const t of s.tribes) expect(t.stance.iroquois).toBeUndefined();
+  for (const st of Object.values(s.settlements)) expect(st.tension.haudenosaunee).toBeUndefined();
+  for (const t of s.tribes) expect(t.stance.haudenosaunee).toBeUndefined();
 }
 
 describe('the systems table (playerkind.ts)', () => {
@@ -186,11 +186,11 @@ describe('the systems table (playerkind.ts)', () => {
     expect(kindOfId('england')).toBe('nation');
     expect(kindOfId('crown')).toBe('crown');
     expect(kindOfId('hudsonsBay')).toBe('company');
-    expect(kindOfId('iroquois')).toBe('people');
+    expect(kindOfId('haudenosaunee')).toBe('people');
     expect(playerKind({ id: 'england' })).toBe('nation');
     expect(playerKind({ id: 'crown' })).toBe('crown');
     expect(playerKind({ id: 'hudsonsBay', kind: 'company' })).toBe('company');
-    expect(playerKind({ id: 'iroquois', kind: 'people' })).toBe('people');
+    expect(playerKind({ id: 'haudenosaunee', kind: 'people' })).toBe('people');
   });
 
   it('switches every Europe-only system off for a people', () => {
@@ -214,13 +214,13 @@ describe('a people playing as a nation (Beta 3 step 1)', () => {
     const p = people(s);
     expect(p.kind).toBe('people');
     expect(systemsOf(p)).toBe(PLAYER_SYSTEMS.people);
-    expect(s.players.map((o) => o.id)).toEqual(['england', 'france', 'netherlands', 'iroquois']);
-    expect(nationOf(s, 'iroquois').name).toBe('the Haudenosaunee');
+    expect(s.players.map((o) => o.id)).toEqual(['england', 'france', 'netherlands', 'haudenosaunee']);
+    expect(nationOf(s, 'haudenosaunee').name).toBe('the Haudenosaunee');
     // No settlement of the people is left; its Tribe record stays.
-    expect(Object.values(s.settlements).some((st) => st.tribe === 'iroquois')).toBe(false);
+    expect(Object.values(s.settlements).some((st) => st.tribe === 'haudenosaunee')).toBe(false);
     expect(Object.values(s.settlements).length).toBeGreaterThan(0);
-    expect(s.tribes.some((t) => t.id === 'iroquois')).toBe(true);
-    const towns = colonyList(s).filter((c) => c.owner === 'iroquois');
+    expect(s.tribes.some((t) => t.id === 'haudenosaunee')).toBe(true);
+    const towns = colonyList(s).filter((c) => c.owner === 'haudenosaunee');
     expect(towns.length).toBeGreaterThan(0);
     expect(p.coloniesFounded).toBe(towns.length);
     // The people's own town names, the capital first, then the settlements' names (step 10b).
@@ -241,8 +241,8 @@ describe('a people playing as a nation (Beta 3 step 1)', () => {
       expect(inside.map((u) => u.type).filter((t) => t !== 'elder')).toEqual(['gardener', 'townsperson']);
       expect(unitList(s).some((u) => u.loc.kind === 'map' && u.loc.x === c.x && u.loc.y === c.y && u.type === 'warrior')).toBe(true);
     }
-    expect(unitList(s).filter((u) => u.owner === 'iroquois' && u.type === 'elder')).toHaveLength(1);
-    expect(unitList(s).filter((u) => u.owner === 'iroquois' && u.type === 'runner')).toHaveLength(1);
+    expect(unitList(s).filter((u) => u.owner === 'haudenosaunee' && u.type === 'elder')).toHaveLength(1);
+    expect(unitList(s).filter((u) => u.owner === 'haudenosaunee' && u.type === 'runner')).toHaveLength(1);
     // No caravel, no Europe; the nations start as before.
     expectNoEurope(s);
     for (const n of ['england', 'france', 'netherlands']) expect(unitList(s).some((u) => u.owner === n && u.type === 'caravel')).toBe(true);
@@ -251,7 +251,7 @@ describe('a people playing as a nation (Beta 3 step 1)', () => {
   it('refuses peoples the scenario does not let play', () => {
     expect(() => createGame(config({ peoples: ['sioux'] }))).toThrow(/lets play as a nation/);
     expect(() => createGame(config({ scenario: undefined }))).toThrow(/lets play as a nation/);
-    expect(() => createGame(config({ peoples: ['iroquois', 'iroquois'] }))).toThrow(/only take part once/);
+    expect(() => createGame(config({ peoples: ['haudenosaunee', 'haudenosaunee'] }))).toThrow(/only take part once/);
   });
 
   it('plays rounds with computer players, and Europe-only systems never touch the people', () => {
@@ -277,13 +277,13 @@ describe('a people playing as a nation (Beta 3 step 1)', () => {
   }, 120_000);
 
   it('can be played by a person: the turn comes round to it and it ends its turn', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
-    expect(s.players[s.current].id).toBe('iroquois');
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
+    expect(s.players[s.current].id).toBe('haudenosaunee');
     expect(people(s).human).toBe(true);
     for (let i = 0; i < 20; i++) {
       const r = applyCommand(s, { type: 'endTurn' });
       expect(r.ok, r.ok ? '' : r.error).toBe(true);
-      expect(s.players[s.current].id).toBe('iroquois');
+      expect(s.players[s.current].id).toBe('haudenosaunee');
     }
     expect(s.turn).toBe(20);
     expectNoEurope(s);
@@ -291,18 +291,18 @@ describe('a people playing as a nation (Beta 3 step 1)', () => {
 
   it('is played by the computer as a no-op until step 9, with its towns working', () => {
     const s = play(createGame(config()), 30);
-    const towns = colonyList(s).filter((c) => c.owner === 'iroquois');
+    const towns = colonyList(s).filter((c) => c.owner === 'haudenosaunee');
     expect(towns.length).toBeGreaterThan(0);
     // Its towns produce: food is gathered (a town may have grown).
-    expect(towns.some((c) => c.goods.food > 0) || unitList(s).filter((u) => u.owner === 'iroquois').length > 2 * towns.length).toBe(true);
+    expect(towns.some((c) => c.goods.food > 0) || unitList(s).filter((u) => u.owner === 'haudenosaunee').length > 2 * towns.length).toBe(true);
   }, 60_000);
 });
 
 // ---------------------------------------------------------------------------
 // Beta 3, step 2 (native-nations.md T5, T6, T7, T10): economy and growth without Europe.
 
-const capital = (s: GameState): Colony => colonyList(s).find((c) => c.owner === 'iroquois')!;
-const folk = (s: GameState) => unitList(s).filter((u) => u.owner === 'iroquois' && UNIT_TYPES[u.type].kind === 'colonist');
+const capital = (s: GameState): Colony => colonyList(s).find((c) => c.owner === 'haudenosaunee')!;
+const folk = (s: GameState) => unitList(s).filter((u) => u.owner === 'haudenosaunee' && UNIT_TYPES[u.type].kind === 'colonist');
 
 /** A game with the land quiet: no hard year anywhere, every region whole. */
 function quiet(over: Partial<GameConfig> = {}, rounds = 0): GameState {
@@ -355,15 +355,15 @@ describe("a people's units and buildings (T6, T7)", () => {
       for (const l of BUILDINGS[b].levels) expect(l.tools, b).toBe(0);
     }
     expect(EUROPEAN_UNIT_TYPES.length + PEOPLE_UNIT_TYPES.length).toBe(Object.keys(UNIT_TYPES).length);
-    const s = createGame(config({ humans: ['iroquois'] }));
-    expect(bornType(s, 'iroquois')).toBe('townsperson');
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
+    expect(bornType(s, 'haudenosaunee')).toBe('townsperson');
     expect(bornType(s, 'england')).toBe('freeColonist');
     // A canoe is built at a canoe landing; nothing else of the people's is built.
     const c = capital(s);
     expect(canBuild(s, c, { kind: 'unit', id: 'birchbarkCanoe' })).toBe(false);
     c.buildings.canoeLanding = 1;
     expect(canBuild(s, c, { kind: 'unit', id: 'birchbarkCanoe' })).toBe(true);
-    expect(unitsOf(s, 'iroquois').colonyBuilds).toEqual(['birchbarkCanoe']);
+    expect(unitsOf(s, 'haudenosaunee').colonyBuilds).toEqual(['birchbarkCanoe']);
     // A people does not buy its builds.
     c.build = { kind: 'building', id: 'palisade' };
     expect(() => hurryBuild(s, c.id)).toThrow(/own work/);
@@ -396,9 +396,9 @@ describe("a people's units and buildings (T6, T7)", () => {
   it('a warrior fights with a bow, a runner sees further, a townsperson does neither', () => {
     const s = createGame(config());
     const c = capital(s);
-    const w = createUnit(s, 'iroquois', 'warrior', { kind: 'map', x: c.x, y: c.y });
-    const t = createUnit(s, 'iroquois', 'townsperson', { kind: 'map', x: c.x, y: c.y });
-    const r = createUnit(s, 'iroquois', 'runner', { kind: 'map', x: c.x, y: c.y });
+    const w = createUnit(s, 'haudenosaunee', 'warrior', { kind: 'map', x: c.x, y: c.y });
+    const t = createUnit(s, 'haudenosaunee', 'townsperson', { kind: 'map', x: c.x, y: c.y });
+    const r = createUnit(s, 'haudenosaunee', 'runner', { kind: 'map', x: c.x, y: c.y });
     expect(offencePower(s, w)).toBe(1.5);
     expect(offencePower(s, t)).toBe(0);
     w.role = 'soldier';
@@ -440,7 +440,7 @@ describe('births, stores and hunger (T10)', () => {
     growPeopleTown(s, c);
     expect(folk(s).length).toBe(n);
     delete c.foughtAt;
-    while (townDwellers(s, c) < housingOf(s, c)) createUnit(s, 'iroquois', 'townsperson', { kind: 'map', x: c.x, y: c.y });
+    while (townDwellers(s, c) < housingOf(s, c)) createUnit(s, 'haudenosaunee', 'townsperson', { kind: 'map', x: c.x, y: c.y });
     const full = folk(s).length;
     growPeopleTown(s, c);
     expect(folk(s).length).toBe(full);
@@ -461,7 +461,7 @@ describe('births, stores and hunger (T10)', () => {
     // Storage pits keep other goods as a warehouse does.
     expect(warehouseCapacity(c)).toBe(200);
     // Food beyond the town's keeping spoils (here the longhouses are full: no birth).
-    while (townDwellers(s, c) < housingOf(s, c)) createUnit(s, 'iroquois', 'townsperson', { kind: 'map', x: c.x, y: c.y });
+    while (townDwellers(s, c) < housingOf(s, c)) createUnit(s, 'haudenosaunee', 'townsperson', { kind: 'map', x: c.x, y: c.y });
     c.goods.food = 2000;
     growPeopleTown(s, c);
     expect(c.goods.food).toBe(foodCapacity(s, c));
@@ -497,14 +497,14 @@ describe('births, stores and hunger (T10)', () => {
     expect(c.hunger).toEqual({ since: s.turn, last: s.turn });
     expect(hungryThisYear(s, c)).toBe(true);
     expect(colonyWorkers(s, c).length).toBe(pop);
-    expect(s.messages.some((m) => m.to === 'iroquois' && /stores have run out/.test(m.text))).toBe(true);
+    expect(s.messages.some((m) => m.to === 'haudenosaunee' && /stores have run out/.test(m.text))).toBe(true);
     // A second hungry year in a row: the town loses a person.
     s.turn++;
     processColony(s, c);
     expect(colonyWorkers(s, c).length).toBe(pop - 1);
-    expect(s.messages.some((m) => m.to === 'iroquois' && /Hunger in/.test(m.text))).toBe(true);
+    expect(s.messages.some((m) => m.to === 'haudenosaunee' && /Hunger in/.test(m.text))).toBe(true);
     // A European colony in a hard region feels it too.
-    const e = colonyList(s).find((o) => o.owner !== 'iroquois')!;
+    const e = colonyList(s).find((o) => o.owner !== 'haudenosaunee')!;
     s.land!.hard = [regionOf(s.land!, e.x, e.y)];
     const eHard = colonyReport(s, e).produced.food;
     s.land!.hard = [];
@@ -523,7 +523,7 @@ describe('births, stores and hunger (T10)', () => {
     expect(s.units[student.id].type).toBe('crafter');
     expect(elder.teach).toBe(0);
     // Only elders teach.
-    const hunter = createUnit(s, 'iroquois', 'hunter', { kind: 'map', x: c.x, y: c.y });
+    const hunter = createUnit(s, 'haudenosaunee', 'hunter', { kind: 'map', x: c.x, y: c.y });
     expect(() => assignJob(s, hunter.id, c.id, { kind: 'building', building: 'longhouse' })).toThrow(/Only elders teach/);
   });
 });
@@ -608,35 +608,35 @@ describe("a people's land (T5) and standing (T10)", () => {
   it('its towns claim their land, closed to other players’ colonies', () => {
     const s = createGame(config());
     const c = capital(s);
-    expect(tileAt(s, c.x, c.y)!.claim).toBe('iroquois');
-    const claimed = s.map.tiles.flatMap((t, i) => (t.claim === 'iroquois' ? [{ x: i % s.map.width, y: Math.floor(i / s.map.width) }] : []));
+    expect(tileAt(s, c.x, c.y)!.claim).toBe('haudenosaunee');
+    const claimed = s.map.tiles.flatMap((t, i) => (t.claim === 'haudenosaunee' ? [{ x: i % s.map.width, y: Math.floor(i / s.map.width) }] : []));
     expect(claimed.length).toBeGreaterThan(1);
     const q = claimed.find((p) => p.x !== c.x || p.y !== c.y)!;
-    expect(peopleLandClosedTo(s, 'england', q.x, q.y)).toBe('iroquois');
-    expect(peopleLandClosedTo(s, 'iroquois', q.x, q.y)).toBeUndefined();
+    expect(peopleLandClosedTo(s, 'england', q.x, q.y)).toBe('haudenosaunee');
+    expect(peopleLandClosedTo(s, 'haudenosaunee', q.x, q.y)).toBeUndefined();
     expect(colonySiteProblem(s, q.x, q.y, 'england')).toMatch(/belongs to the Haudenosaunee/);
     expect(colonySiteProblem(s, q.x, q.y)).toMatch(/belongs to/);
-    expect(isPeopleLand(s, 'iroquois', q.x, q.y)).toBe(true);
+    expect(isPeopleLand(s, 'haudenosaunee', q.x, q.y)).toBe(true);
   });
 
   it('a people claims land next to its own, not land too far or held by others', () => {
-    const s = createGame(config({ humans: ['iroquois'] }));
-    expect(s.players[s.current].id).toBe('iroquois');
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
+    expect(s.players[s.current].id).toBe('haudenosaunee');
     const c = capital(s);
     const grid = gridOf(s);
-    const reach = claimRadius(s, 'iroquois') + 1;
+    const reach = claimRadius(s, 'haudenosaunee') + 1;
     let free: { x: number; y: number } | undefined;
     for (const p of grid.tilesWithin(s.map, c.x, c.y, reach)) {
       const t = tileAt(s, p.x, p.y)!;
       if (t.claim || TERRAIN[t.t].water || colonyAt(s, p.x, p.y) || settlementAt(s, p.x, p.y) || nativeLandOwner(s, p.x, p.y)) continue;
-      if (!neighbours(s, p.x, p.y).some((n) => tileAt(s, n.x, n.y)?.claim === 'iroquois')) continue;
+      if (!neighbours(s, p.x, p.y).some((n) => tileAt(s, n.x, n.y)?.claim === 'haudenosaunee')) continue;
       free = p;
       break;
     }
     expect(free).toBeDefined();
     const r = applyCommand(s, { type: 'claimLand', x: free!.x, y: free!.y });
     expect(r.ok, r.ok ? '' : r.error).toBe(true);
-    expect(tileAt(s, free!.x, free!.y)!.claim).toBe('iroquois');
+    expect(tileAt(s, free!.x, free!.y)!.claim).toBe('haudenosaunee');
     expect(applyCommand(s, { type: 'claimLand', x: free!.x, y: free!.y }).ok).toBe(false);
     // Far from its towns.
     const far = s.map.tiles.findIndex((t, i) => !t.claim && !TERRAIN[t.t].water && grid.distance(c.x, c.y, i % s.map.width, Math.floor(i / s.map.width)) > 6);
@@ -647,11 +647,11 @@ describe("a people's land (T5) and standing (T10)", () => {
 
   it('reads Beta 2’s standing record from the people’s side: good while at peace', () => {
     const s = createGame(config());
-    expect(goodRelations(s, 'england', 'iroquois')).toBe(true);
-    const rel = peopleRelation(s, 'england', 'iroquois');
+    expect(goodRelations(s, 'england', 'haudenosaunee')).toBe(true);
+    const rel = peopleRelation(s, 'england', 'haudenosaunee');
     expect(rel.goodSince).toBe(s.turn);
-    startWar(s, 'england', 'iroquois');
-    expect(goodRelations(s, 'england', 'iroquois')).toBe(false);
+    startWar(s, 'england', 'haudenosaunee');
+    expect(goodRelations(s, 'england', 'haudenosaunee')).toBe(false);
   });
 });
 
@@ -659,10 +659,10 @@ describe('a computer people’s towns grow and produce by the rules (T10)', () =
   it('grows by births and builds over 150 rounds, its stores kept, nothing of Europe', () => {
     const s = createGame(config());
     const start = folk(s).length;
-    const built = (g: GameState) => colonyList(g).filter((c) => c.owner === 'iroquois').reduce((n, c) => n + PEOPLE_BUILDINGS.reduce((m, b) => m + (c.buildings[b] ?? 0), 0), 0);
+    const built = (g: GameState) => colonyList(g).filter((c) => c.owner === 'haudenosaunee').reduce((n, c) => n + PEOPLE_BUILDINGS.reduce((m, b) => m + (c.buildings[b] ?? 0), 0), 0);
     const startBuildings = built(s);
     play(s, 150);
-    const towns = colonyList(s).filter((c) => c.owner === 'iroquois');
+    const towns = colonyList(s).filter((c) => c.owner === 'haudenosaunee');
     expect(towns.length).toBeGreaterThan(0);
     expect(folk(s).length).toBeGreaterThan(start);
     expect(built(s)).toBeGreaterThan(startBuildings);
@@ -675,8 +675,8 @@ describe('a computer people’s towns grow and produce by the rules (T10)', () =
       expect(townDwellers(s, c)).toBeLessThanOrEqual(housingOf(s, c));
     }
     // Experts learned from elders, none bought; nothing but the people's own units.
-    expect(unitList(s).some((u) => u.owner === 'iroquois' && ['hunter', 'fisher', 'gardener', 'crafter'].includes(u.type))).toBe(true);
-    expect(unitList(s).filter((u) => u.owner === 'iroquois' && !UNIT_TYPES[u.type].people)).toEqual([]);
+    expect(unitList(s).some((u) => u.owner === 'haudenosaunee' && ['hunter', 'fisher', 'gardener', 'crafter'].includes(u.type))).toBe(true);
+    expect(unitList(s).filter((u) => u.owner === 'haudenosaunee' && !UNIT_TYPES[u.type].people)).toEqual([]);
     // Its council house's counsel brings members into its own council (step 3).
     expect(people(s).fathers.length).toBeGreaterThan(0);
     expectNoEurope(s);
@@ -723,9 +723,9 @@ describe('councils (Beta 3 step 3, T8, T9)', () => {
   it("a people sits its own council: the engine's people's council, offered at setup", () => {
     const s = createGame(config());
     const p = people(s);
-    expect(councilOf(s, 'iroquois')).toBe(PEOPLE_COUNCIL);
-    expect(councilText(s, 'iroquois', 'council')).toBe('Council');
-    expect(councilText(s, 'iroquois', 'product')).toBe('counsel');
+    expect(councilOf(s, 'haudenosaunee')).toBe(PEOPLE_COUNCIL);
+    expect(councilText(s, 'haudenosaunee', 'council')).toBe('Council');
+    expect(councilText(s, 'haudenosaunee', 'product')).toBe('counsel');
     expect(Object.keys(p.fatherOffer)).toEqual(['household', 'land', 'knowledge', 'defence', 'peace']);
     for (const id of Object.values(p.fatherOffer) as FatherId[]) expect(PEOPLE_COUNCIL.members).toContain(id);
     expect(nextFatherCost(s, p)).toBe(fatherCost(0, 3));
@@ -753,11 +753,11 @@ describe('councils (Beta 3 step 3, T8, T9)', () => {
       offerFathers(s, other);
       for (const id of Object.values(other.fatherOffer) as string[]) seen.add(id);
       offerFathers(s, p);
-      for (const id of Object.values(p.fatherOffer) as string[]) seen.add(`iroquois:${id}`);
+      for (const id of Object.values(p.fatherOffer) as string[]) seen.add(`haudenosaunee:${id}`);
     }
     for (const id of NAMED) {
       expect(seen.has(id), id).toBe(false);
-      expect(seen.has(`iroquois:${id}`), id).toBe(true);
+      expect(seen.has(`haudenosaunee:${id}`), id).toBe(true);
     }
     expect(seen.has('keepersOfTheStores')).toBe(true);
   });
@@ -775,9 +775,9 @@ describe('councils (Beta 3 step 3, T8, T9)', () => {
     expect(p.fatherBells).toBe(0);
     expect(p.currentFather).toBeNull();
     expect(Object.values(p.fatherOffer)).not.toContain('clanMothers');
-    expect(s.messages.some((m) => m.to === 'iroquois' && m.text.startsWith('The Clan Mothers join the Council of the Haudenosaunee.'))).toBe(true);
+    expect(s.messages.some((m) => m.to === 'haudenosaunee' && m.text.startsWith('The Clan Mothers join the Council of the Haudenosaunee.'))).toBe(true);
     expect(s.messages.some((m) => m.to === 'england' && m.text === 'The Clan Mothers have joined the Council of the Haudenosaunee.')).toBe(true);
-    expect(fatherJoinTurns(s, 'iroquois')).toEqual({ clanMothers: s.turn });
+    expect(fatherJoinTurns(s, 'haudenosaunee')).toEqual({ clanMothers: s.turn });
     expect(nextFatherCost(s, p)).toBe(fatherCost(1, 3));
     // A computer people chooses its own candidates by the council's preference.
     expect(p.human).toBe(false);
@@ -828,9 +828,9 @@ describe('councils (Beta 3 step 3, T8, T9)', () => {
     elder.teach = 2;
     processColony(s, c);
     expect(s.units[student.id].type).toBe('crafter');
-    const canoe = createUnit(s, 'iroquois', 'birchbarkCanoe', { kind: 'map', x: c.x, y: c.y });
-    const runner = createUnit(s, 'iroquois', 'runner', { kind: 'map', x: c.x, y: c.y });
-    const warrior = createUnit(s, 'iroquois', 'warrior', { kind: 'map', x: c.x, y: c.y });
+    const canoe = createUnit(s, 'haudenosaunee', 'birchbarkCanoe', { kind: 'map', x: c.x, y: c.y });
+    const runner = createUnit(s, 'haudenosaunee', 'runner', { kind: 'map', x: c.x, y: c.y });
+    const warrior = createUnit(s, 'haudenosaunee', 'warrior', { kind: 'map', x: c.x, y: c.y });
     const moves = maxMoves(canoe, s);
     const sight = sightRadius(runner, s);
     const offence = offencePower(s, warrior);
@@ -841,17 +841,17 @@ describe('councils (Beta 3 step 3, T8, T9)', () => {
     expect(sightRadius(runner, s)).toBe(sight + 1);
     expect(offencePower(s, warrior)).toBe(offence * 1.5);
     join(s, 'warLeaders');
-    const t = createUnit(s, 'iroquois', 'townsperson', { kind: 'map', x: c.x, y: c.y });
+    const t = createUnit(s, 'haudenosaunee', 'townsperson', { kind: 'map', x: c.x, y: c.y });
     expect(promote(s, t)).toMatch(/warriors/);
     expect(t.type).toBe('warrior');
     // Peace: refused while England is not tired of war, accepted with the Speakers.
-    startWar(s, 'england', 'iroquois');
-    expect(proposePeace(s, 'iroquois', 'england')).toMatch(/refuses/);
+    startWar(s, 'england', 'haudenosaunee');
+    expect(proposePeace(s, 'haudenosaunee', 'england')).toMatch(/refuses/);
     join(s, 'speakers');
-    expect(proposePeace(s, 'iroquois', 'england')).toMatch(/made peace/);
+    expect(proposePeace(s, 'haudenosaunee', 'england')).toMatch(/made peace/);
     // Garakontié ends every war.
-    startWar(s, 'england', 'iroquois');
-    startWar(s, 'france', 'iroquois');
+    startWar(s, 'england', 'haudenosaunee');
+    startWar(s, 'france', 'haudenosaunee');
     join(s, 'garakontie');
     expect(people(s).stance.england).toBe('peace');
     expect(people(s).stance.france).toBe('peace');

@@ -47,11 +47,11 @@ import { bestJob } from './colony.js';
 import { addTension, goodRelations, landPrice, nativeLandClosedTo, nativeLandOwner, peopleRelation, peopleRelationOf, peopleThreshold, settlementName, tensionOf } from './natives.js';
 import { isShip, message, player, tileAt, tileWorkedBy, unitName, unitPosition, workArea } from './queries.js';
 import { isFavoured, peoplePairRandom, settlementRandom } from './relations.js';
-import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
+import { type PlayerId, type TribeId } from './rules/nations.js';
 import { systemsOfId } from './playerkind.js';
 import type { UnitTypeId } from './rules/units.js';
 import { cooperationOf, LEVEL_COOPERATION, warOnFriend } from './alliances.js';
-import { calendarOf, mechanicsOf, nationOf, nativeRulesOf, peopleOf, scenarioOf, Term, turnAfterYears, yearValue } from './scenarios/index.js';
+import { calendarOf, mechanicsOf, nationOf, nativeRulesOf, peopleOf, scenarioOf, Term, turnAfterYears, yearValue , peopleName } from './scenarios/index.js';
 import type { PeopleTreatyRules, Scenario, TemperamentRules, YearsAround } from './scenarios/types.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, nationParty, partyIsNation, peopleParty, peopleTreatyBetween, treatiesWithPeople, treatyNations, treatyPeoples } from './treaties.js';
@@ -268,9 +268,6 @@ function settlementsOf(s: GameState, people: TribeId): Settlement[] {
   return out;
 }
 
-function peopleName(people: TribeId): string {
-  return TRIBES[people].name;
-}
 
 const KIND_TEXT: Record<PeopleTreatyKind, string> = { 'people-trade': 'a trade treaty', 'land-use': 'a land use treaty', exchange: 'a cultural exchange', defence: 'a mutual defence pact' };
 
@@ -294,7 +291,7 @@ export function peopleTreatyProblem(s: GameState, nation: PlayerId, people: Trib
   if (!peopleTreatiesOn(s)) return 'There are no treaties with native peoples in this scenario.';
   if (!peopleTreatyOn(s, kind)) return `There is no ${KIND_TEXT[kind].replace(/^an? /, '')} with native peoples in this scenario.`;
   if (!treatyNation(nation) || !s.players.some((p) => p.id === nation)) return 'Treaties with native peoples are made by European nations.';
-  const name = peopleName(people);
+  const name = peopleName(s, people);
   const tribe = s.tribes.find((t) => t.id === people);
   if (!tribe || !settlementsOf(s, people).length) return `The ${name} have no settlements left.`;
   if (!inContact(s, nation, people)) return `You have not met the ${name} yet: a scout's visit, a mission or trade comes first.`;
@@ -312,7 +309,7 @@ export function peopleTreatyProblem(s: GameState, nation: PlayerId, people: Trib
 
 /** The people's own reasons to refuse a treaty with a nation now, or null (N8): an angry settlement, land taken lately. */
 export function peopleRefusal(s: GameState, nation: PlayerId, people: TribeId): string | null {
-  const name = peopleName(people);
+  const name = peopleName(s, people);
   const angry = nativeRulesOf(s).tension.angry;
   const st = settlementsOf(s, people).find((o) => tensionOf(o, nation) >= angry);
   if (st) return `The ${name} refuse: the ${settlementName(s, st)} is angry with you.`;
@@ -330,7 +327,7 @@ export function proposePeopleTreaty(s: GameState, nation: PlayerId, people: Trib
   const chance = peopleTreatyRules(s).accept * temperamentOf(s, people).accept;
   if (refusal || peoplePairRandom(s, nation, people, `answer ${kind} ${s.turn}`) >= chance) {
     track(nation, 'natives:people treaty refused');
-    const text = refusal ?? `The ${peopleName(people)} thank you, but are not ready for ${KIND_TEXT[kind]} with ${nationOf(s, nation).name}.`;
+    const text = refusal ?? `The ${peopleName(s, people)} thank you, but are not ready for ${KIND_TEXT[kind]} with ${nationOf(s, nation).name}.`;
     message(s, text, nation);
     return text;
   }
@@ -344,7 +341,7 @@ export function makePeopleTreaty(s: GameState, nation: PlayerId, people: TribeId
   track(nation, 'natives:people treaty made');
   if (kind === 'exchange') track(nation, 'natives:exchange made');
   if (kind === 'defence') track(nation, 'natives:defence made');
-  const name = peopleName(people);
+  const name = peopleName(s, people);
   const text = kind === 'people-trade'
     ? `${nationOf(s, nation).name} and the ${name} have made a trade treaty: better prices both ways, more goods for sale, more visits to trade, and trade routes may call at their settlements.`
     : kind === 'exchange'
@@ -381,7 +378,7 @@ export function peopleWouldOffer(s: GameState, st: Settlement, nation: PlayerId)
 
 /** The answer to a people's offer (a person's from the briefing, or a computer player's at once). */
 export function answerPeopleOffer(s: GameState, nation: PlayerId, people: TribeId, kind: PeopleTreatyKind, accept: boolean): string {
-  const name = peopleName(people);
+  const name = peopleName(s, people);
   if (!accept) {
     track(nation, 'natives:people offer declined');
     const text = `You decline the ${name} offer of ${KIND_TEXT[kind]}.`;
@@ -488,7 +485,7 @@ export function leaseRent(s: GameState, nation: PlayerId, tiles: readonly { x: n
 
 /** What stands in the way of a lease, beyond the checks every treaty with a people shares (`peopleTreatyProblem`). */
 function landUseProblem(s: GameState, nation: PlayerId, people: TribeId): string | null {
-  const name = peopleName(people);
+  const name = peopleName(s, people);
   if (!hasPeopleTrade(s, nation, people)) return `Land use needs a trade treaty with the ${name} first.`;
   if (!landUseUnlocked(s, nation, people)) return `The ${name} do not know you well enough to lend you land yet: it takes more years of good relations.`;
   const tiles = leasableTiles(s, nation, people);
@@ -516,7 +513,7 @@ function makeLease(s: GameState, nation: PlayerId, people: TribeId): string {
   for (const p of tiles) tileAt(s, p.x, p.y)!.use = nation;
   track(nation, 'natives:people treaty made');
   track(nation, 'natives:lease made');
-  const name = peopleName(people);
+  const name = peopleName(s, people);
   const n = `${tiles.length} ${tiles.length === 1 ? 'tile' : 'tiles'}`;
   const text = `${nationOf(s, nation).name} and the ${name} agree on land use: your colonies may work ${n} of their land beside them for ${rent} gold a tile a year (${paid} gold paid for the first year). The land stays theirs.`;
   message(s, text, nation);
@@ -542,7 +539,7 @@ function evictWorkers(s: GameState, tiles: readonly { x: number; y: number }[]):
       setUnitLoc(s, u, { kind: 'map', x: colony.x, y: colony.y });
       u.moves = 0;
     }
-    message(s, `${unitName(u)} in ${colony.name} may no longer work the land of the ${peopleName(owner.tribe)} and finds other work.`, u.owner, colony);
+    message(s, `${unitName(u)} in ${colony.name} may no longer work the land of the ${peopleName(s, owner.tribe)} and finds other work.`, u.owner, colony);
   }
 }
 
@@ -577,7 +574,7 @@ function releaseLease(s: GameState, nation: PlayerId, people: TribeId): void {
  * lease: the people ends it (it lapses), with no breach of faith.
  */
 function rentDay(s: GameState, t: Treaty, terms: LandUseTerms, nation: PlayerId, people: TribeId): void {
-  const name = peopleName(people);
+  const name = peopleName(s, people);
   const tiles = leasableTiles(s, nation, people);
   const due = terms.rent * tiles.length;
   if (player(s, nation).gold < due) {
@@ -663,7 +660,7 @@ export function exchangeUnlocked(s: GameState, nation: PlayerId, people: TribeId
 
 /** What stands in the way of an exchange, beyond the checks every treaty with a people shares. */
 function exchangeProblem(s: GameState, nation: PlayerId, people: TribeId): string | null {
-  const name = peopleName(people);
+  const name = peopleName(s, people);
   if (!hasPeopleTrade(s, nation, people)) return `A cultural exchange needs a trade treaty with the ${name} first.`;
   if (!exchangeUnlocked(s, nation, people)) return `The ${name} do not know you well enough for a cultural exchange yet: it takes more years of good relations.`;
   return null;
@@ -791,7 +788,7 @@ export function defenceUnlocked(s: GameState, nation: PlayerId, people: TribeId)
 
 /** What stands in the way of a defence pact, beyond the checks every treaty with a people shares. */
 function defenceProblem(s: GameState, nation: PlayerId, people: TribeId): string | null {
-  const name = peopleName(people);
+  const name = peopleName(s, people);
   if (!hasPeopleTrade(s, nation, people)) return `A mutual defence pact needs a trade treaty with the ${name} first.`;
   if (!hasLandUse(s, nation, people) && !hasExchange(s, nation, people)) return `A mutual defence pact needs land use or a cultural exchange with the ${name} first.`;
   const other = defencePartner(s, people);
@@ -843,7 +840,7 @@ export function callToDefence(s: GameState, colony: Colony, attacker: Unit): voi
     if (!near.length) continue;
     const tribe = s.tribes.find((o) => o.id === people);
     if (!tribe) continue;
-    const name = peopleName(people);
+    const name = peopleName(s, people);
     if (by !== 'crown') {
       if (hasSubmitted(s, people, by)) continue;
       if (tribe.stance[by] !== 'war') {
@@ -946,7 +943,7 @@ export function breakFaith(s: GameState, nation: PlayerId, people: TribeId, why:
   delete rel.goodSince;
   if (s.nativeDemands) s.nativeDemands = s.nativeDemands.filter((d) => !(d.kind === 'treaty' && d.nation === nation && s.settlements[d.settlementId]?.tribe === people));
   pruneSettlementStops(s, nation, people);
-  const name = peopleName(people);
+  const name = peopleName(s, people);
   message(s, `${nationOf(s, nation).name} has broken faith with the ${name} by ${BREACH_TEXT[why]}. Every treaty with them is over, and they will not soon trust ${nationOf(s, nation).name} again.`, nation);
   noteHistory(s, 'cancel', [nation], `${nationOf(s, nation).name} breaks faith with the ${name} by ${BREACH_TEXT[why]}; its treaties with them end.`);
 }
@@ -959,7 +956,7 @@ function peopleEnds(s: GameState, t: Treaty, nation: PlayerId, people: TribeId, 
   if (t.kind === 'defence') track(nation, 'natives:defence ended');
   if (t.kind === 'land-use') releaseLease(s, nation, people);
   pruneSettlementStops(s, nation, people);
-  const name = peopleName(people);
+  const name = peopleName(s, people);
   const reason = why === 'war' ? 'with the war' : why === 'lapsed' ? 'with their last settlement' : 'in anger';
   message(s, `The ${name} have ended their ${treatyNameOf(t)} with ${nationOf(s, nation).name} ${reason}.`, nation);
   noteHistory(s, 'cancel', [nation], `The ${name} end their ${treatyNameOf(t)} with ${nationOf(s, nation).name} ${reason}.`, { secret: true });
@@ -1043,7 +1040,7 @@ export function pruneSettlementStops(s: GameState, nation: PlayerId, people: Tri
         delete u.dest;
       }
     }
-    message(s, `The ${route.name} route no longer calls at the settlements of the ${peopleName(people)}.`, nation);
+    message(s, `The ${route.name} route no longer calls at the settlements of the ${peopleName(s, people)}.`, nation);
   }
 }
 

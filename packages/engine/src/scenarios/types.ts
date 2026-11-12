@@ -809,12 +809,13 @@ export interface PlayablePeople {
 }
 
 /**
- * A people's own data in a scenario (`peoples.overrides[id]`): its skills, wants and temperament
- * where they differ from the catalogue, and, as a playing people (native-nations.md T14), its own
+ * A people's own data in a scenario (`peoples.overrides[id]`): its name (the Americas call the
+ * Haudenosaunee the Iroquois), skills, wants and temperament where they differ from the catalogue,
+ * the key its seeded streams hash (`seedKey`), and, as a playing people (native-nations.md T14), its own
  * score weights over the scenario's (`score`) and its own params for the peoples' victory kinds
  * (`victory`, by kind id: `continuity`, `good-life`), over the scenario's victory entry.
  */
-export type PeopleOverride = Partial<Pick<PeopleDef, 'skills' | 'wants' | 'temperament' | 'storeYears'>> & {
+export type PeopleOverride = Partial<Pick<PeopleDef, 'name' | 'skills' | 'wants' | 'temperament' | 'storeYears' | 'seedKey'>> & {
   score?: Partial<ScoreWeights>;
   victory?: Partial<Record<string, Record<string, number>>>;
 };

@@ -10,13 +10,13 @@ import { cargoRoomFor, colonyPopulation, createUnit, message, player, reveal, ti
 import { random, randInt } from './rng.js';
 import { noteTrade } from './stats.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
-import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
+import { type PlayerId, type TribeId } from './rules/nations.js';
 import { kindOfId, systemsOf, systemsOfId } from './playerkind.js';
 import { NATIVE_RULES, type TensionThresholds } from './rules/natives.js';
 import { TERRAIN } from './rules/terrain.js';
 import { UNIT_TYPES, type UnitTypeId } from './rules/units.js';
 import type { Colony, GameState, PeopleRelation, Settlement, Unit } from './types.js';
-import { calendarOf, difficultyOf, goodsOf, landReachOf, mechanicsOf, nationOf, nativeProduceOf, nativeRulesOf, peopleOf, yearValue } from './scenarios/index.js';
+import { calendarOf, difficultyOf, goodsOf, landReachOf, mechanicsOf, nationOf, nativeProduceOf, nativeRulesOf, peopleOf, yearValue , peopleName } from './scenarios/index.js';
 import { peoplePairRandom } from './relations.js';
 import { removeUnit, colonyList } from './unitindex.js';
 import { breakFaith, chiefAgainTurn, chiefWelcomes, defencePartner, leasedFromBeside, noteLandTaken, notePeopleContact, noteSpoken, noteTaught, peopleSellFactor, peopleTensionFall, peopleTreatyRules, processPeopleTreaties, settlementTeaches } from './peopletreaties.js';
@@ -36,7 +36,7 @@ function adjacentSettlement(s: GameState, u: Unit, settlementId: string, deal?: 
   // A unit on a trade route trades at the stop it has just reached, as at a partner's colony.
   if (u.moves <= 0 && !(deal && visit) && !routed) fail(`${unitName(u)} has no moves left.`);
   const tribe = s.tribes.find((t) => t.id === st.tribe)!;
-  if (tribe.stance[u.owner] === 'war') fail(`The ${TRIBES[st.tribe].name} refuse to meet you.`);
+  if (tribe.stance[u.owner] === 'war') fail(`The ${peopleName(s, st.tribe)} refuse to meet you.`);
   return st;
 }
 
@@ -53,7 +53,7 @@ function noteDeal(s: GameState, u: Unit, st: Settlement, deal: 'sold' | 'bought'
 }
 
 export function settlementName(s: GameState, st: Settlement): string {
-  return `${TRIBES[st.tribe].name} ${st.capital ? 'capital' : settlementKind(s, st).name}`;
+  return `${peopleName(s, st.tribe)} ${st.capital ? 'capital' : settlementKind(s, st).name}`;
 }
 
 /**
@@ -68,7 +68,7 @@ export function speakToChief(s: GameState, unitId: string, settlementId: string)
   track(u.owner, 'cmd:speak');
   if (tensionOf(st, u.owner) > 500 && random(s) < 0.3) {
     removeUnit(s, u.id);
-    const text = `The angry ${TRIBES[st.tribe].name} have killed your scout.`;
+    const text = `The angry ${peopleName(s, st.tribe)} have killed your scout.`;
     message(s, text, u.owner, st);
     return text;
   }
@@ -122,7 +122,7 @@ export function learnSkill(s: GameState, unitId: string, settlementId: string): 
   st.skill = null;
   noteTaught(s, st, renewed);
   track(u.owner, 'cmd:learn');
-  const text = `Your colonist has lived among the ${TRIBES[st.tribe].name} and become a ${UNIT_TYPES[skill].name}.`;
+  const text = `Your colonist has lived among the ${peopleName(s, st.tribe)} and become a ${UNIT_TYPES[skill].name}.`;
   message(s, text, u.owner, st);
   return text;
 }
@@ -183,14 +183,14 @@ export function buyFromSettlement(s: GameState, unitId: string, settlementId: st
   if (!u || !['wagon', 'ship'].includes(UNIT_TYPES[u.type].kind) || UNIT_TYPES[u.type].cargo <= 0) fail('Only wagon trains and ships can buy goods.');
   const st = adjacentSettlement(s, u, settlementId, 'bought', routed);
   noPeopleCarrier(u);
-  if (!nativeProduceOf(s).includes(good)) fail(`The ${TRIBES[st.tribe].name} do not sell ${GOOD_DEFS[good].name.toLowerCase()}.`);
+  if (!nativeProduceOf(s).includes(good)) fail(`The ${peopleName(s, st.tribe)} do not sell ${GOOD_DEFS[good].name.toLowerCase()}.`);
   const stock = st.goods?.[good] ?? 0;
   const n = Math.min(amount, stock, cargoRoomFor(s, u, good));
   if (stock <= 0) fail(`The ${settlementName(s, st)} has no ${GOOD_DEFS[good].name.toLowerCase()} to sell.`);
   if (n <= 0) fail('There is no room aboard.');
   const price = nativeUnitPrice(s, st, good, u.owner) * n;
   const p = player(s, u.owner);
-  if (p.gold < price) fail(`The ${TRIBES[st.tribe].name} ask ${price} gold for ${n} ${GOOD_DEFS[good].name.toLowerCase()}.`);
+  if (p.gold < price) fail(`The ${peopleName(s, st.tribe)} ask ${price} gold for ${n} ${GOOD_DEFS[good].name.toLowerCase()}.`);
   p.gold -= price;
   notePeopleTrade(s, u.owner, st.tribe, price);
   st.gold += price;
@@ -284,7 +284,7 @@ export function buyLand(s: GameState, nation: PlayerId, x: number, y: number): s
   if (!st) fail('Nobody claims that land.');
   const price = landPrice(s, nation, x, y);
   const p = player(s, nation);
-  if (p.gold < price) fail(`The ${TRIBES[st.tribe].name} ask ${price} gold for this land.`);
+  if (p.gold < price) fail(`The ${peopleName(s, st.tribe)} ask ${price} gold for this land.`);
   p.gold -= price;
   st.gold += price;
   const tile = tileAt(s, x, y)!;
@@ -293,7 +293,7 @@ export function buyLand(s: GameState, nation: PlayerId, x: number, y: number): s
   delete tile.use;
   addTension(st, nation, -20);
   track(nation, 'cmd:buyLand');
-  return price ? `You buy the land from the ${TRIBES[st.tribe].name} for ${price} gold.` : `The ${TRIBES[st.tribe].name} let you use the land freely.`;
+  return price ? `You buy the land from the ${peopleName(s, st.tribe)} for ${price} gold.` : `The ${peopleName(s, st.tribe)} let you use the land freely.`;
 }
 
 export function takeLand(s: GameState, nation: PlayerId, x: number, y: number): string {
@@ -310,7 +310,7 @@ export function takeLand(s: GameState, nation: PlayerId, x: number, y: number): 
   addTension(st, nation, Math.round(250 * anger));
   track(nation, 'cmd:takeLand');
   for (const other of Object.values(s.settlements)) if (other.tribe === st.tribe && other.id !== st.id) addTension(other, nation, Math.round(60 * anger));
-  const text = `You take the land. The ${TRIBES[st.tribe].name} are ${tensionLabel(tensionOf(st, nation), nativeRulesOf(s).tension)}.`;
+  const text = `You take the land. The ${peopleName(s, st.tribe)} are ${tensionLabel(tensionOf(st, nation), nativeRulesOf(s).tension)}.`;
   message(s, text, nation, st);
   return text;
 }
@@ -337,7 +337,7 @@ export function giftToTribe(s: GameState, nation: PlayerId, tribe: TribeId, gold
     st.gold += Math.round(gold / settlements.length);
     addTension(st, nation, -Math.round((gold * 1.5) / settlements.length));
   }
-  return `The ${TRIBES[tribe].name} accept your gift of ${gold} gold.`;
+  return `The ${peopleName(s, tribe)} accept your gift of ${gold} gold.`;
 }
 
 /** A missionary settles in the village and starts a mission. */
@@ -352,14 +352,14 @@ export function establishMission(s: GameState, unitId: string, settlementId: str
   let text: string;
   if (tensionOf(st, u.owner) > 600) {
     track(u.owner, 'natives:missionary killed');
-    text = `The ${TRIBES[st.tribe].name} have killed your missionary.`;
+    text = `The ${peopleName(s, st.tribe)} have killed your missionary.`;
   } else {
     track(u.owner, 'natives:mission founded');
     st.mission = u.owner;
     st.missionExpert = u.type === 'firebrandPreacher';
     addTension(st, u.owner, -100);
     notePeopleContact(s, u.owner, st.tribe);
-    text = `A mission has been established among the ${TRIBES[st.tribe].name}.`;
+    text = `A mission has been established among the ${peopleName(s, st.tribe)}.`;
   }
   message(s, text, u.owner, st);
   return text;
@@ -428,13 +428,13 @@ export function processNatives(s: GameState): void {
       if (!atWar && (burial || (t >= rules.tension.war && !hasSubmitted(s, st.tribe, nation)))) {
         tribe.stance[nation] = 'war';
         track(nation, 'natives:tribe went to war');
-        message(s, `The ${TRIBES[st.tribe].name} have dug up the hatchet against ${nationOf(s, nation).name}!`, nation, st);
-        noteHistory(s, 'tribe', [nation], `The ${TRIBES[st.tribe].name} go to war with ${nationOf(s, nation).name}${burial ? ' over a desecrated burial ground' : ', their anger risen too far'}.`, { secret: true, at: st });
+        message(s, `The ${peopleName(s, st.tribe)} have dug up the hatchet against ${nationOf(s, nation).name}!`, nation, st);
+        noteHistory(s, 'tribe', [nation], `The ${peopleName(s, st.tribe)} go to war with ${nationOf(s, nation).name}${burial ? ' over a desecrated burial ground' : ', their anger risen too far'}.`, { secret: true, at: st });
       } else if (atWar && !burial && t < 250 && !Object.values(s.settlements).some((o) => o.tribe === st.tribe && tensionOf(o, nation) >= 250)) {
         tribe.stance[nation] = 'peace';
         notePeopleWarEnded(s, tribe, nation);
-        message(s, `The ${TRIBES[st.tribe].name} have made peace with ${nationOf(s, nation).name}.`, nation, st);
-        noteHistory(s, 'tribe', [nation], `The ${TRIBES[st.tribe].name} make peace with ${nationOf(s, nation).name}.`, { secret: true, at: st });
+        message(s, `The ${peopleName(s, st.tribe)} have made peace with ${nationOf(s, nation).name}.`, nation, st);
+        noteHistory(s, 'tribe', [nation], `The ${peopleName(s, st.tribe)} make peace with ${nationOf(s, nation).name}.`, { secret: true, at: st });
       }
     }
     if (st.mission) {
@@ -444,7 +444,7 @@ export function processNatives(s: GameState): void {
         const type = convertType(s, st.mission);
         createUnit(s, st.mission, type, { kind: 'map', x: colony.x, y: colony.y });
         track(st.mission, 'natives:convert joined');
-        message(s, `A ${TRIBES[st.tribe].name} convert has joined ${colony.name}.`, st.mission, colony);
+        message(s, `A ${peopleName(s, st.tribe)} convert has joined ${colony.name}.`, st.mission, colony);
       }
     }
   }
@@ -475,15 +475,15 @@ export function denounceMission(s: GameState, unitId: string, settlementId: stri
     delete st.mission;
     delete st.missionExpert;
     track(u.owner, 'natives:rival mission expelled');
-    noteHistory(s, 'tribe', [u.owner, rival], `${nationOf(s, u.owner).adjective} missionaries have the ${nationOf(s, rival).adjective} mission among the ${TRIBES[st.tribe].name} expelled.`, { secret: true, at: st });
-    text = `Your missionary denounces the ${nationOf(s, rival).adjective} mission. The ${TRIBES[st.tribe].name} expel it.`;
-    message(s, `The ${TRIBES[st.tribe].name} have expelled your mission at the ${settlementName(s, st)}, denounced by ${nationOf(s, u.owner).adjective} missionaries.`, rival, st);
+    noteHistory(s, 'tribe', [u.owner, rival], `${nationOf(s, u.owner).adjective} missionaries have the ${nationOf(s, rival).adjective} mission among the ${peopleName(s, st.tribe)} expelled.`, { secret: true, at: st });
+    text = `Your missionary denounces the ${nationOf(s, rival).adjective} mission. The ${peopleName(s, st.tribe)} expel it.`;
+    message(s, `The ${peopleName(s, st.tribe)} have expelled your mission at the ${settlementName(s, st)}, denounced by ${nationOf(s, u.owner).adjective} missionaries.`, rival, st);
   } else if (random(s) < rules.denounceFailDeath) {
     removeUnit(s, u.id);
     track(u.owner, 'natives:missionary killed');
-    text = `The ${TRIBES[st.tribe].name} side with the ${nationOf(s, rival).adjective} mission and kill your missionary.`;
+    text = `The ${peopleName(s, st.tribe)} side with the ${nationOf(s, rival).adjective} mission and kill your missionary.`;
   } else {
-    text = `The ${TRIBES[st.tribe].name} listen, but keep the ${nationOf(s, rival).adjective} mission.`;
+    text = `The ${peopleName(s, st.tribe)} listen, but keep the ${nationOf(s, rival).adjective} mission.`;
   }
   message(s, text, u.owner, st);
   return text;
@@ -501,30 +501,30 @@ export function inciteTribe(s: GameState, unitId: string, settlementId: string, 
   const st = adjacentSettlement(s, u, settlementId);
   if (u.role !== 'missionary') fail('Only missionaries can incite the natives.');
   if (target === u.owner || !systemsOfId(target).peoples || !s.players.some((p) => p.id === target)) fail('Choose a rival European nation.');
-  if (tensionOf(st, u.owner) >= rules.tension.angry) fail(`The ${TRIBES[st.tribe].name} will not listen to you.`);
+  if (tensionOf(st, u.owner) >= rules.tension.angry) fail(`The ${peopleName(s, st.tribe)} will not listen to you.`);
   const tribe = tribeOf(s, st);
-  if (tribe.stance[target] === 'war') fail(`The ${TRIBES[st.tribe].name} are already at war with ${nationOf(s, target).name}.`);
+  if (tribe.stance[target] === 'war') fail(`The ${peopleName(s, st.tribe)} are already at war with ${nationOf(s, target).name}.`);
   // Nobody can incite a people against its partner in a mutual defence pact (N7).
-  if (s.treaties && defencePartner(s, st.tribe) === target) fail(`The ${TRIBES[st.tribe].name} will not turn on ${nationOf(s, target).name}: they are bound to it by a mutual defence pact.`);
+  if (s.treaties && defencePartner(s, st.tribe) === target) fail(`The ${peopleName(s, st.tribe)} will not turn on ${nationOf(s, target).name}: they are bound to it by a mutual defence pact.`);
   const price = incitePrice(s, st);
   const p = player(s, u.owner);
-  if (p.gold < price) fail(`The ${TRIBES[st.tribe].name} want ${price} gold to take up arms.`);
+  if (p.gold < price) fail(`The ${peopleName(s, st.tribe)} want ${price} gold to take up arms.`);
   p.gold -= price;
   st.gold += price;
   u.moves = 0;
   track(u.owner, 'cmd:incite');
   // Paying a partner people to make war breaks faith with it (N8).
   breakFaith(s, u.owner, st.tribe, 'incite');
-  noteHistory(s, 'tribe', [u.owner], `${nationOf(s, u.owner).adjective} missionaries pay the ${TRIBES[st.tribe].name} ${price} gold to turn against ${nationOf(s, target).name}.`, { secret: true, at: st });
+  noteHistory(s, 'tribe', [u.owner], `${nationOf(s, u.owner).adjective} missionaries pay the ${peopleName(s, st.tribe)} ${price} gold to turn against ${nationOf(s, target).name}.`, { secret: true, at: st });
   for (const o of Object.values(s.settlements)) if (o.tribe === st.tribe) addTension(o, target, o.id === st.id ? rules.inciteTension : rules.inciteTensionOthers);
-  let text = `For ${price} gold, the ${TRIBES[st.tribe].name} agree to make trouble for ${nationOf(s, target).name}.`;
+  let text = `For ${price} gold, the ${peopleName(s, st.tribe)} agree to make trouble for ${nationOf(s, target).name}.`;
   if (tensionOf(st, target) >= rules.tension.war) {
     tribe.stance[target] = 'war';
     if (tribe.submitted) tribe.submitted = tribe.submitted.filter((n) => n !== target);
     track(target, 'natives:tribe went to war');
     track(u.owner, 'natives:tribe incited to war');
-    message(s, `The ${TRIBES[st.tribe].name} have dug up the hatchet against ${nationOf(s, target).name}!`, target, st);
-    noteHistory(s, 'tribe', [u.owner, target], `${nationOf(s, u.owner).adjective} missionaries incite the ${TRIBES[st.tribe].name} to war with ${nationOf(s, target).name}.`, { secret: true, at: st });
+    message(s, `The ${peopleName(s, st.tribe)} have dug up the hatchet against ${nationOf(s, target).name}!`, target, st);
+    noteHistory(s, 'tribe', [u.owner, target], `${nationOf(s, u.owner).adjective} missionaries incite the ${peopleName(s, st.tribe)} to war with ${nationOf(s, target).name}.`, { secret: true, at: st });
     text += ' They go to war!';
   }
   message(s, text, u.owner, st);

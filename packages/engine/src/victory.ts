@@ -167,7 +167,7 @@ registerVictory({
     if (!won) return null;
     const names = won.winners.map((n) => nationOf(s, n).name);
     const winners = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
-    const reason = term(s, 'gameOver.prosperity', { year: cal.end.year, winners, partners: peopleList(won.partners), win: names.length > 1 ? 'win together' : 'wins' });
+    const reason = term(s, 'gameOver.prosperity', { year: cal.end.year, winners, partners: peopleList(s, won.partners), win: names.length > 1 ? 'win together' : 'wins' });
     return { turn: s.turn, reason, winner: won.winners[0], winners: won.winners, partners: won.partners, scores };
   },
 });
@@ -335,7 +335,7 @@ function verdict(s: GameState, way: string, winners: readonly PlayerId[], partne
   const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
   const win = names.length === 1 && european(winners[0]) ? 'wins' : 'win';
   const key = way === 'confederacy' && partners.length ? 'gameOver.way.confederacy.partners' : `gameOver.way.${way}`;
-  return term(s, key as Parameters<typeof term>[1], { winners: list, win, partners: peopleList(partners) });
+  return term(s, key as Parameters<typeof term>[1], { winners: list, win, partners: peopleList(s, partners) });
 }
 
 function judgeBothSides(s: GameState, moment: VictoryMoment): void {

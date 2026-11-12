@@ -1,4 +1,4 @@
-import { independenceQuestion, leagueProposalFor, sideName, councilText, CouncilText, aBrave, peopleTradeBenefits, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, TRIBES, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { independenceQuestion, leagueProposalFor, sideName, councilText, CouncilText, aBrave, peopleTradeBenefits, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, peopleName, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import { icon } from '../styles.js';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -145,7 +145,7 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
     const st = app.state.settlements[d.settlementId];
     const colony = app.state.colonies[d.colonyId];
     if (!st || !colony) continue;
-    const tribe = TRIBES[st.tribe].name;
+    const tribe = peopleName(app.state, st.tribe);
     const what = demandText(d);
     if (d.kind === 'treaty') {
       // A people's own offer of a treaty (native-partners.md N8, N13).

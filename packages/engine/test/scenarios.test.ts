@@ -70,7 +70,10 @@ describe('the Americas scenario is today’s tables', () => {
     expect(AMERICAS.peoples.ids).toEqual(TRIBE_ORDER);
     // The catalogue's first eight peoples; the Kalinago belong to the Caribbean.
     expect(AMERICAS.peoples.ids).toEqual(Object.keys(TRIBES).slice(0, 8));
-    expect(AMERICAS.peoples.overrides).toBeUndefined();
+    // Only the Haudenosaunee's Americas name and seeded key (native-nations.md section 18).
+    expect(AMERICAS.peoples.overrides).toEqual({ haudenosaunee: { name: 'Iroquois', seedKey: 'iroquois' } });
+    expect(peopleIn(AMERICAS, 'haudenosaunee').name).toBe('Iroquois');
+    expect(peopleIn(getScenario('north-east')!, 'haudenosaunee').name).toBe('Haudenosaunee');
     expect(AMERICAS.peoples.produce).toEqual(NATIVE_PRODUCE);
     expect(AMERICAS.councils.congress.members).toEqual(Object.keys(FATHERS).slice(0, 25));
     expect(AMERICAS.councils.congress.members).toHaveLength(25);

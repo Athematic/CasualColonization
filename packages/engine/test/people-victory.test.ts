@@ -57,7 +57,7 @@ const GAME: Scenario = {
   peoples: {
     ...AMERICAS.peoples,
     playable: [
-      { id: 'iroquois', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga', 'Kanonwalohale'] },
+      { id: 'haudenosaunee', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga', 'Kanonwalohale'] },
       { id: 'cherokee', name: 'the Cherokee', adjective: 'Cherokee', townNames: ['Chota', 'Tellico', 'Echota'] },
     ],
   },
@@ -73,7 +73,7 @@ const TUNED: Scenario = {
   ...GAME,
   id: 'test-people-victory-tuned',
   score: { peoplePerson: 2 },
-  peoples: { ...GAME.peoples, overrides: { iroquois: { score: { peopleCouncil: 50 }, victory: { 'good-life': { treatyShare: 0 } } } } },
+  peoples: { ...GAME.peoples, overrides: { ...GAME.peoples.overrides, haudenosaunee: { ...GAME.peoples.overrides?.haudenosaunee, score: { peopleCouncil: 50 }, victory: { 'good-life': { treatyShare: 0 } } } } },
 };
 registerScenario(TUNED);
 
@@ -84,8 +84,8 @@ function config(over: Partial<GameConfig> = {}): GameConfig {
     nations: ['england', 'france', 'netherlands'],
     humans: [],
     // The computer peoples at levels that join leagues (ai/profiles.ts: Naive, the default, keeps out of them).
-    ai: { england: 'creative', france: 'combative', netherlands: 'competent', iroquois: 'creative', cherokee: 'competent' },
-    peoples: ['iroquois', 'cherokee'],
+    ai: { england: 'creative', france: 'combative', netherlands: 'competent', haudenosaunee: 'creative', cherokee: 'competent' },
+    peoples: ['haudenosaunee', 'cherokee'],
     scenario: GAME.id,
     colonyCharter: true,
     ...over,
@@ -138,12 +138,12 @@ describe('the victory order and the records (T14)', () => {
     const s = createGame(config());
     expect(VICTORY_ORDER).toEqual(ALL_KINDS.map((k) => k.id));
     expect(orderedVictory(s).map((r) => r.id)).toEqual(VICTORY_ORDER);
-    expect(s.homelands?.iroquois?.tiles.length).toBeGreaterThan(5);
-    expect(s.homelands?.iroquois?.people).toBe(peopleCount(s, 'iroquois'));
+    expect(s.homelands?.haudenosaunee?.tiles.length).toBeGreaterThan(5);
+    expect(s.homelands?.haudenosaunee?.people).toBe(peopleCount(s, 'haudenosaunee'));
     // Peoples nobody plays have their settlements' land as homeland, and no count of people.
     expect(s.homelands?.sioux?.tiles.length).toBeGreaterThan(0);
     expect(s.homelands?.sioux?.people).toBeUndefined();
-    expect(homelandKept(s, 'iroquois')).toEqual({ start: s.homelands!.iroquois!.tiles.length, kept: s.homelands!.iroquois!.tiles.length });
+    expect(homelandKept(s, 'haudenosaunee')).toEqual({ start: s.homelands!.haudenosaunee!.tiles.length, kept: s.homelands!.haudenosaunee!.tiles.length });
     const americas = createGame({ ...config(), peoples: undefined, scenario: undefined });
     expect(americas.homelands).toBeUndefined();
   });
@@ -152,38 +152,38 @@ describe('the victory order and the records (T14)', () => {
 describe('people score lines (T14)', () => {
   it('count people, homeland, the land, stores, treaties, trust and council, not gold or buildings', () => {
     const s = createGame(config());
-    const p = player(s, 'iroquois');
+    const p = player(s, 'haudenosaunee');
     p.gold = 5000;
     const b = scoreBreakdown(s, p);
     expect(b.lines.map((l) => l.key)).toEqual(['people', 'homeland', 'land', 'stores', 'treaties', 'trust', 'council']);
     const line = (k: string) => b.lines.find((l) => l.key === k)!;
-    expect(line('people').value).toBe(peopleCount(s, 'iroquois'));
-    expect(line('people').points).toBe(Math.round(peopleCount(s, 'iroquois') * SCORE_WEIGHTS.peoplePerson));
-    expect(line('homeland').value).toBe(s.homelands!.iroquois!.tiles.length);
+    expect(line('people').value).toBe(peopleCount(s, 'haudenosaunee'));
+    expect(line('people').points).toBe(Math.round(peopleCount(s, 'haudenosaunee') * SCORE_WEIGHTS.peoplePerson));
+    expect(line('homeland').value).toBe(s.homelands!.haudenosaunee!.tiles.length);
     expect(line('land').value).toBe(100);
     expect(b.total).toBe(b.lines.reduce((n, l) => n + l.points, 0));
     // Gold changes nothing.
     p.gold = 0;
     expect(scoreBreakdown(s, p).total).toBe(b.total);
     // A treaty, a side that trusts it, a council member: each counts.
-    friends(s, 'iroquois', 'england');
-    makePairTreaty(s, 'iroquois', 'england', 'people-trade');
+    friends(s, 'haudenosaunee', 'england');
+    makePairTreaty(s, 'haudenosaunee', 'england', 'people-trade');
     p.fathers.push('keepersOfTheStores');
     const after = scoreBreakdown(s, p);
     expect(after.lines.find((l) => l.key === 'treaties')!.value).toBe(1);
     expect(after.lines.find((l) => l.key === 'council')!.points).toBe(SCORE_WEIGHTS.peopleCouncil);
     // A people's score is not a European's: not in the final scores, but in the peoples' own.
-    expect(Object.keys(peopleScores(s)).sort()).toEqual(['cherokee', 'iroquois']);
+    expect(Object.keys(peopleScores(s)).sort()).toEqual(['cherokee', 'haudenosaunee']);
   });
 
   it('take the scenario’s weights and a people’s own', () => {
     const s = createGame(config({ scenario: TUNED.id }));
-    const iro = scoreBreakdown(s, player(s, 'iroquois'));
+    const iro = scoreBreakdown(s, player(s, 'haudenosaunee'));
     const che = scoreBreakdown(s, player(s, 'cherokee'));
-    expect(iro.lines.find((l) => l.key === 'people')!.points).toBe(2 * peopleCount(s, 'iroquois'));
-    player(s, 'iroquois').fathers.push('keepersOfTheStores');
+    expect(iro.lines.find((l) => l.key === 'people')!.points).toBe(2 * peopleCount(s, 'haudenosaunee'));
+    player(s, 'haudenosaunee').fathers.push('keepersOfTheStores');
     player(s, 'cherokee').fathers.push('keepersOfTheStores');
-    expect(scoreBreakdown(s, player(s, 'iroquois')).lines.find((l) => l.key === 'council')!.points).toBe(50);
+    expect(scoreBreakdown(s, player(s, 'haudenosaunee')).lines.find((l) => l.key === 'council')!.points).toBe(50);
     expect(scoreBreakdown(s, player(s, 'cherokee')).lines.find((l) => l.key === 'council')!.points).toBe(SCORE_WEIGHTS.peopleCouncil);
     expect(che.lines.find((l) => l.key === 'people')!.points).toBe(2 * peopleCount(s, 'cherokee'));
   });
@@ -192,152 +192,152 @@ describe('people score lines (T14)', () => {
 describe('continuity (T14)', () => {
   it('a people on its homeland, as many as at the start, under its own council wins at the end year', () => {
     const s = createGame(config());
-    settled(s, 'iroquois');
-    expect(continuityStanding(s, 'iroquois').fails).toEqual([]);
+    settled(s, 'haudenosaunee');
+    expect(continuityStanding(s, 'haudenosaunee').fails).toEqual([]);
     // The Cherokee have no council member yet.
     expect(continuityStanding(s, 'cherokee').fails).toEqual(['council']);
     const over = judgeEnd(s);
-    expect(over.ways?.iroquois).toBe('continuity');
+    expect(over.ways?.haudenosaunee).toBe('continuity');
     expect(over.ways?.cherokee).toBeUndefined();
     expect(over.reason).toMatch(/the Haudenosaunee win by continuity/i);
   });
 
   it('is missed with fewer people, the homeland lost, or a town taken', () => {
     const s = createGame(config());
-    settled(s, 'iroquois');
+    settled(s, 'haudenosaunee');
     // One person fewer than at the start.
-    const u = unitList(s).find((o) => o.owner === 'iroquois' && o.loc.kind === 'map')!;
+    const u = unitList(s).find((o) => o.owner === 'haudenosaunee' && o.loc.kind === 'map')!;
     removeUnit(s, u.id);
-    expect(continuityStanding(s, 'iroquois').fails).toEqual(['people']);
+    expect(continuityStanding(s, 'haudenosaunee').fails).toEqual(['people']);
     // Its homeland claimed by a nation.
-    for (const i of s.homelands!.iroquois!.tiles) s.map.tiles[i].claim = 'england';
-    expect(continuityStanding(s, 'iroquois').fails).toEqual(expect.arrayContaining(['homeland', 'people']));
-    for (const i of s.homelands!.iroquois!.tiles) s.map.tiles[i].claim = 'iroquois';
+    for (const i of s.homelands!.haudenosaunee!.tiles) s.map.tiles[i].claim = 'england';
+    expect(continuityStanding(s, 'haudenosaunee').fails).toEqual(expect.arrayContaining(['homeland', 'people']));
+    for (const i of s.homelands!.haudenosaunee!.tiles) s.map.tiles[i].claim = 'haudenosaunee';
     // A town of its own held by another player.
-    const town = colonyList(s).find((c) => c.owner === 'iroquois')!;
+    const town = colonyList(s).find((c) => c.owner === 'haudenosaunee')!;
     town.owner = 'england';
-    town.takenFrom = 'iroquois';
-    expect(continuityStanding(s, 'iroquois').fails).toContain('towns taken');
-    expect(judgeEnd(s).ways?.iroquois).toBeUndefined();
+    town.takenFrom = 'haudenosaunee';
+    expect(continuityStanding(s, 'haudenosaunee').fails).toContain('towns taken');
+    expect(judgeEnd(s).ways?.haudenosaunee).toBeUndefined();
   });
 });
 
 describe('a good life (T14)', () => {
   it('fed, the land whole, at peace, faith kept and treaties with half of those met: wins', () => {
     const s = createGame(config({ scenario: TUNED.id }));
-    settled(s, 'iroquois');
-    friends(s, 'iroquois', 'england');
-    makePairTreaty(s, 'iroquois', 'england', 'people-trade');
+    settled(s, 'haudenosaunee');
+    friends(s, 'haudenosaunee', 'england');
+    makePairTreaty(s, 'haudenosaunee', 'england', 'people-trade');
     // The Haudenosaunee's own params ask for one treaty only (treatyShare 0).
-    expect(goodLifeStanding(s, 'iroquois').fails).toEqual([]);
+    expect(goodLifeStanding(s, 'haudenosaunee').fails).toEqual([]);
     const over = judgeEnd(s);
     // Continuity comes first in the order: each player judged once, by the first kind that names it.
-    expect(over.ways?.iroquois).toBe('continuity');
+    expect(over.ways?.haudenosaunee).toBe('continuity');
   });
 
   it('is missed after a hungry year, a recent war or a broken treaty', () => {
     const s = createGame(config({ scenario: TUNED.id }));
-    settled(s, 'iroquois');
-    friends(s, 'iroquois', 'england');
-    makePairTreaty(s, 'iroquois', 'england', 'people-trade');
-    const p = player(s, 'iroquois');
+    settled(s, 'haudenosaunee');
+    friends(s, 'haudenosaunee', 'england');
+    makePairTreaty(s, 'haudenosaunee', 'england', 'people-trade');
+    const p = player(s, 'haudenosaunee');
     // No council member: continuity is missed, so a good life names it.
     p.fathers = [];
     s.turn = lastTurn(calendarOf(s));
-    expect(goodLifeStanding(s, 'iroquois').fails).toEqual([]);
+    expect(goodLifeStanding(s, 'haudenosaunee').fails).toEqual([]);
     p.lastHunger = s.turn - 5;
-    expect(goodLifeStanding(s, 'iroquois').fails).toEqual(['hunger']);
+    expect(goodLifeStanding(s, 'haudenosaunee').fails).toEqual(['hunger']);
     delete p.lastHunger;
     p.lastWar = s.turn - 10;
-    expect(goodLifeStanding(s, 'iroquois').fails).toEqual(['peace']);
+    expect(goodLifeStanding(s, 'haudenosaunee').fails).toEqual(['peace']);
     delete p.lastWar;
     s.land!.health!.fill(30);
-    expect(goodLifeStanding(s, 'iroquois').fails).toEqual(['land']);
+    expect(goodLifeStanding(s, 'haudenosaunee').fails).toEqual(['land']);
     s.land!.health!.fill(100);
     checkVictory(s, { kind: 'round' });
-    expect(s.gameOver!.ways?.iroquois).toBe('good-life');
+    expect(s.gameOver!.ways?.haudenosaunee).toBe('good-life');
     expect(s.gameOver!.reason).toMatch(/the Haudenosaunee win by a good life/i);
   });
 
   it('is missed by a people that broke faith within the years', () => {
-    const s = createGame(config({ humans: ['iroquois'], scenario: TUNED.id }));
-    settled(s, 'iroquois');
-    friends(s, 'iroquois', 'england');
-    makePairTreaty(s, 'iroquois', 'england', 'people-trade');
+    const s = createGame(config({ humans: ['haudenosaunee'], scenario: TUNED.id }));
+    settled(s, 'haudenosaunee');
+    friends(s, 'haudenosaunee', 'england');
+    makePairTreaty(s, 'haudenosaunee', 'england', 'people-trade');
     applyCommand(s, { type: 'endPairTreaty', with: 'england', kind: 'people-trade' });
-    expect(goodLifeStanding(s, 'iroquois').fails).toEqual(expect.arrayContaining(['faith', 'treaties']));
+    expect(goodLifeStanding(s, 'haudenosaunee').fails).toEqual(expect.arrayContaining(['faith', 'treaties']));
   });
 });
 
 describe('confederacy and the league (T14)', () => {
   /** The Haudenosaunee (a person), the Cherokee (the computer) and the Sioux (nobody plays), with pacts and good standing. */
   function threePeoples(): GameState {
-    const s = createGame(config({ humans: ['iroquois'] }));
-    friends(s, 'iroquois', 'cherokee');
-    friends(s, 'iroquois', 'sioux');
+    const s = createGame(config({ humans: ['haudenosaunee'] }));
+    friends(s, 'haudenosaunee', 'cherokee');
+    friends(s, 'haudenosaunee', 'sioux');
     friends(s, 'cherokee', 'sioux');
-    makePairTreaty(s, 'iroquois', 'cherokee', 'people-trade');
-    makePairTreaty(s, 'iroquois', 'cherokee', 'defence');
-    makePairTreaty(s, 'iroquois', 'sioux', 'people-trade');
-    makePairTreaty(s, 'iroquois', 'sioux', 'defence');
+    makePairTreaty(s, 'haudenosaunee', 'cherokee', 'people-trade');
+    makePairTreaty(s, 'haudenosaunee', 'cherokee', 'defence');
+    makePairTreaty(s, 'haudenosaunee', 'sioux', 'people-trade');
+    makePairTreaty(s, 'haudenosaunee', 'sioux', 'defence');
     return s;
   }
 
   function makeLeagueBy(s: GameState): void {
-    for (let i = 0; i < 40 && !leagueOf(s, 'iroquois'); i++) {
-      expect(leagueProblem(s, 'iroquois', ['cherokee', 'sioux'])).toBeNull();
-      proposeLeague(s, 'iroquois', ['cherokee', 'sioux']);
+    for (let i = 0; i < 40 && !leagueOf(s, 'haudenosaunee'); i++) {
+      expect(leagueProblem(s, 'haudenosaunee', ['cherokee', 'sioux'])).toBeNull();
+      proposeLeague(s, 'haudenosaunee', ['cherokee', 'sioux']);
       s.turn++;
     }
   }
 
   it('is proposed among peoples at peace, with a pact and in good standing; refused otherwise', () => {
     const s = threePeoples();
-    expect(leagueProblem(s, 'iroquois', ['cherokee'])).toMatch(/at least 3 peoples/);
-    expect(leagueProblem(s, 'iroquois', ['cherokee', 'england'])).toMatch(/Only peoples/);
-    expect(leagueProblem(s, 'iroquois', ['cherokee', 'aztec'])).toMatch(/do not stand well|no mutual defence/);
+    expect(leagueProblem(s, 'haudenosaunee', ['cherokee'])).toMatch(/at least 3 peoples/);
+    expect(leagueProblem(s, 'haudenosaunee', ['cherokee', 'england'])).toMatch(/Only peoples/);
+    expect(leagueProblem(s, 'haudenosaunee', ['cherokee', 'aztec'])).toMatch(/do not stand well|no mutual defence/);
     makeLeagueBy(s);
-    const t = leagueOf(s, 'iroquois')!;
+    const t = leagueOf(s, 'haudenosaunee')!;
     expect(t.kind).toBe('league');
-    expect(leagueMembers(t)).toEqual(['iroquois', 'cherokee', 'sioux']);
+    expect(leagueMembers(t)).toEqual(['haudenosaunee', 'cherokee', 'sioux']);
     expect(leagueOf(s, 'sioux')).toBe(t);
     expect(leagueProblem(s, 'cherokee', ['aztec'])).toBeTruthy();
   });
 
   it('a person invited answers later; the league is made when every person said yes', () => {
     const s = createGame(config({ humans: ['cherokee'] }));
-    friends(s, 'iroquois', 'cherokee');
-    friends(s, 'iroquois', 'sioux');
+    friends(s, 'haudenosaunee', 'cherokee');
+    friends(s, 'haudenosaunee', 'sioux');
     friends(s, 'cherokee', 'sioux');
     for (const o of ['cherokee', 'sioux']) {
-      makePairTreaty(s, 'iroquois', o as never, 'people-trade');
-      makePairTreaty(s, 'iroquois', o as never, 'defence');
+      makePairTreaty(s, 'haudenosaunee', o as never, 'people-trade');
+      makePairTreaty(s, 'haudenosaunee', o as never, 'defence');
     }
     // The Sioux answer by Beta 2's rule: try until they agree.
-    for (let i = 0; i < 40 && !s.leagueProposals; i++, s.turn++) proposeLeague(s, 'iroquois', ['cherokee', 'sioux']);
+    for (let i = 0; i < 40 && !s.leagueProposals; i++, s.turn++) proposeLeague(s, 'haudenosaunee', ['cherokee', 'sioux']);
     expect(s.leagueProposals?.[0].waiting).toEqual(['cherokee']);
-    expect(leagueOf(s, 'iroquois')).toBeUndefined();
+    expect(leagueOf(s, 'haudenosaunee')).toBeUndefined();
     // The Cherokee's turn: they accept.
     s.current = s.players.findIndex((p) => p.id === 'cherokee');
-    expect(applyCommand(s, { type: 'answerLeague', by: 'iroquois', accept: true }).ok).toBe(true);
+    expect(applyCommand(s, { type: 'answerLeague', by: 'haudenosaunee', accept: true }).ok).toBe(true);
     expect(s.leagueProposals).toBeUndefined();
-    expect(leagueMembers(leagueOf(s, 'cherokee')!)).toEqual(['iroquois', 'cherokee', 'sioux']);
+    expect(leagueMembers(leagueOf(s, 'cherokee')!)).toEqual(['haudenosaunee', 'cherokee', 'sioux']);
   });
 
   it('a league that held for 50 years wins at the end year, its members together; too young, it does not', () => {
     const s = threePeoples();
     makeLeagueBy(s);
-    const t = leagueOf(s, 'iroquois')!;
+    const t = leagueOf(s, 'haudenosaunee')!;
     const end = lastTurn(calendarOf(s));
     t.start = end - 30;
     const young = structuredClone(s);
-    settled(young, 'iroquois');
-    expect(judgeEnd(young).ways?.iroquois).toBe('continuity');
+    settled(young, 'haudenosaunee');
+    expect(judgeEnd(young).ways?.haudenosaunee).toBe('continuity');
     t.start = turnOfYear(1700);
-    settled(s, 'iroquois');
+    settled(s, 'haudenosaunee');
     const over = judgeEnd(s);
     // Groups before single winners: the league wins as a league, though the Haudenosaunee also pass continuity.
-    expect(over.ways?.iroquois).toBe('confederacy');
+    expect(over.ways?.haudenosaunee).toBe('confederacy');
     expect(over.ways?.cherokee).toBe('confederacy');
     expect(over.partners).toContain('sioux');
     expect(over.reason).toMatch(/win as a league of peoples, with the Sioux/);
@@ -346,12 +346,12 @@ describe('confederacy and the league (T14)', () => {
   it('a war between members takes the one that declared it out; a league left with one member ends', () => {
     const s = threePeoples();
     makeLeagueBy(s);
-    startWar(s, 'cherokee', 'iroquois');
+    startWar(s, 'cherokee', 'haudenosaunee');
     const t = s.treaties!.find((o) => o.kind === 'league')!;
-    expect(leagueMembers(t)).toEqual(['iroquois', 'sioux']);
+    expect(leagueMembers(t)).toEqual(['haudenosaunee', 'sioux']);
     expect(t.left?.map((l) => l.party.id)).toEqual(['cherokee']);
     expect(t.end).toBeUndefined();
-    s.current = s.players.findIndex((p) => p.id === 'iroquois');
+    s.current = s.players.findIndex((p) => p.id === 'haudenosaunee');
     expect(applyCommand(s, { type: 'leaveLeague' }).ok).toBe(true);
     expect(t.end?.why).toBe('left');
     expect(leagueOf(s, 'sioux')).toBeUndefined();
@@ -367,9 +367,9 @@ describe('the military victory (T14)', () => {
     player(s, 'cherokee').defeats = { units: 3, colonies: 1 };
     expect(europeansDefeated(s)).toBe(true);
     play(s, 1);
-    expect(s.gameOver?.ways).toEqual({ cherokee: 'military', iroquois: 'military' });
+    expect(s.gameOver?.ways).toEqual({ cherokee: 'military', haudenosaunee: 'military' });
     // Ranked by their part in the war: the Cherokee took a colony.
-    expect(s.gameOver?.winners).toEqual(['cherokee', 'iroquois']);
+    expect(s.gameOver?.winners).toEqual(['cherokee', 'haudenosaunee']);
     expect(s.gameOver?.reason).toMatch(/No European nation holds a colony or an army in the New World any more: The Cherokee and the Haudenosaunee win/);
   });
 
@@ -379,7 +379,7 @@ describe('the military victory (T14)', () => {
     // At the start no nation has landed: not defeated, only arriving.
     expect(europeansDefeated(s)).toBe(false);
     clearEuropeans(s);
-    const town = colonyList(s).find((c) => c.owner === 'iroquois')!;
+    const town = colonyList(s).find((c) => c.owner === 'haudenosaunee')!;
     // One English soldier on land.
     const u = createUnitAt(s, 'england', town.x + 3, town.y);
     expect(europeansDefeated(s)).toBe(false);
@@ -404,14 +404,14 @@ function createUnitAt(s: GameState, owner: string, x: number, y: number) {
 describe('both sides judged at the end year (T14)', () => {
   it('a European and a people win in one game, each by its way; time names a European only if none won otherwise', () => {
     const s = createGame(config());
-    settled(s, 'iroquois');
+    settled(s, 'haudenosaunee');
     const over = judgeEnd(s);
-    const european = over.winners.find((id) => !['iroquois', 'cherokee'].includes(id))!;
+    const european = over.winners.find((id) => !['haudenosaunee', 'cherokee'].includes(id))!;
     expect(over.ways?.[european]).toBe('time');
-    expect(over.ways?.iroquois).toBe('continuity');
-    expect(over.winners).toEqual(['iroquois', european]);
+    expect(over.ways?.haudenosaunee).toBe('continuity');
+    expect(over.winners).toEqual(['haudenosaunee', european]);
     expect(over.reason).toMatch(/the Haudenosaunee win by continuity, still on their homeland; .+ wins with the highest score/i);
-    expect(over.peopleScores?.iroquois).toBeGreaterThan(0);
+    expect(over.peopleScores?.haudenosaunee).toBeGreaterThan(0);
     expect(Object.keys(over.scores).sort()).toEqual(['england', 'france', 'netherlands']);
     expect(waysOf(s)).toBe(over.ways);
   });
@@ -434,7 +434,7 @@ describe('the independence choice (T14, Simon)', () => {
   it('in a game with a playing people: a person at war with a people is asked; no ends with the victory, yes plays on', () => {
     for (const keepPlaying of [false, true]) {
       const s = createGame(config({ humans: ['england'], ai: { france: 'combative', netherlands: 'competent' } }));
-      startWar(s, 'england', 'iroquois');
+      startWar(s, 'england', 'haudenosaunee');
       checkVictory(s, { kind: 'warEnded', nation: 'england', outcome: 'won', text: 'England has won the War of Independence!' });
       expect(s.gameOver).toBeUndefined();
       expect(player(s, 'england').independenceChoice).toBeDefined();
@@ -479,15 +479,15 @@ describe('a game with the peoples’ victories (save and load)', () => {
   it('computer peoples and nations play on; the game saves, loads and plays on the same, a league and the records included', () => {
     const s = createGame(config());
     play(s, 40);
-    friends(s, 'iroquois', 'cherokee');
-    friends(s, 'iroquois', 'sioux');
+    friends(s, 'haudenosaunee', 'cherokee');
+    friends(s, 'haudenosaunee', 'sioux');
     friends(s, 'cherokee', 'sioux');
     for (const o of ['cherokee', 'sioux']) {
-      makePairTreaty(s, 'iroquois', o as never, 'people-trade');
-      makePairTreaty(s, 'iroquois', o as never, 'defence');
+      makePairTreaty(s, 'haudenosaunee', o as never, 'people-trade');
+      makePairTreaty(s, 'haudenosaunee', o as never, 'defence');
     }
-    for (let i = 0; i < 40 && !leagueOf(s, 'iroquois'); i++, s.turn++) proposeLeague(s, 'iroquois', ['cherokee', 'sioux']);
-    expect(leagueOf(s, 'iroquois')).toBeDefined();
+    for (let i = 0; i < 40 && !leagueOf(s, 'haudenosaunee'); i++, s.turn++) proposeLeague(s, 'haudenosaunee', ['cherokee', 'sioux']);
+    expect(leagueOf(s, 'haudenosaunee')).toBeDefined();
     play(s, 40);
     expect(s.gameOver).toBeUndefined();
     const json = serialize(s);

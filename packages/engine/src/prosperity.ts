@@ -21,8 +21,7 @@
  */
 import { peopleRelationOf } from './natives.js';
 import type { PlayerId, TribeId } from './rules/nations.js';
-import { TRIBES } from './rules/nations.js';
-import { calendarOf, scenarioOf, yearValue } from './scenarios/index.js';
+import { calendarOf, scenarioOf, yearValue , peopleName } from './scenarios/index.js';
 import { bound, treatyPeoples } from './treaties.js';
 import type { GameState, Tribe } from './types.js';
 
@@ -152,7 +151,7 @@ export function prosperityWinners(s: GameState, scores: Partial<Record<PlayerId,
 }
 
 /** "the Kalinago and the Arawak", for the game-over texts. */
-export function peopleList(peoples: readonly TribeId[]): string {
-  const names = peoples.map((p) => `the ${TRIBES[p].name}`);
+export function peopleList(s: GameState, peoples: readonly TribeId[]): string {
+  const names = peoples.map((p) => `the ${peopleName(s, p)}`);
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? '');
 }

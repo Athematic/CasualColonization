@@ -31,7 +31,7 @@ import {
   tileAt,
   tileDescription,
   tileYield,
-  TRIBES,
+  peopleName,
   UNIT_TYPES,
   unitName,
   unitsAboard,
@@ -189,7 +189,7 @@ export class ColonyScreen implements Screen {
         class: `cell${worker && worker.id === this.selected ? ' selected' : ''}${other || settlement ? ' taken' : ''}${leased ? ' leased' : native ? ' native' : ''}`,
         style,
         'data-leased': leased ? 'true' : undefined,
-        title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : leased ? ` (land of the ${TRIBES[native!.tribe].name}, leased to you)` : native ? ` (land of the ${TRIBES[native.tribe].name})` : ''}`,
+        title: `${tileDescription(tile)}${other ? ' (worked by another colony)' : settlement ? ' (native settlement)' : leased ? ` (land of the ${peopleName(s, native!.tribe)}, leased to you)` : native ? ` (land of the ${peopleName(s, native.tribe)})` : ''}`,
         onclick: () => this.clickTile(colony, x, y, worker),
       },
       worker ? icon({ kind: 'unit', type: worker.type, role: 'none', color: nationOf(this.app.state, worker.owner).color }, 40, unitName(worker)) : null,
@@ -246,7 +246,7 @@ export class ColonyScreen implements Screen {
   private async settleLand(colony: Colony, u: Unit, x: number, y: number): Promise<void> {
     const s = this.app.state;
     const owner = nativeLandOwner(s, x, y)!;
-    const tribe = TRIBES[owner.tribe].name;
+    const tribe = peopleName(s, owner.tribe);
     const price = landPrice(s, this.app.viewer, x, y);
     const leasing = peopleTreatyOn(s, 'land-use');
     const whyLease = leasing ? peopleTreatyProblem(s, this.app.viewer, owner.tribe, 'land-use') : null;

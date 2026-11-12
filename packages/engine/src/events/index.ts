@@ -10,10 +10,10 @@ import { fail } from '../errors.js';
 import { noteHistory } from '../history.js';
 import { random } from '../rng.js';
 import { message, player, unitName } from '../queries.js';
-import { calendarOf, formatDate, nationOf, nationTitle, scenarioOf, yearOf } from '../scenarios/index.js';
+import { calendarOf, formatDate, nationOf, nationTitle, peopleName, scenarioOf, yearOf } from '../scenarios/index.js';
 import { buildingName } from '../rules/buildings.js';
 import { GOOD_DEFS } from '../rules/goods.js';
-import { TRIBES, type PlayerId } from '../rules/nations.js';
+import { type PlayerId } from '../rules/nations.js';
 import { systemsOf } from '../playerkind.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import { track, tracking } from '../telemetry.js';
@@ -99,7 +99,7 @@ export function eventText(s: GameState, text: string, v: EventVars): string {
       case 'colony':
         return (v.colony && s.colonies[v.colony]?.name) || 'the colony';
       case 'tribe':
-        return v.tribe ? TRIBES[v.tribe].name : 'the natives';
+        return v.tribe ? peopleName(s, v.tribe) : 'the natives';
       case 'good':
         return v.good ? GOOD_DEFS[v.good].name.toLowerCase() : 'goods';
       case 'building': {

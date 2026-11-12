@@ -29,7 +29,7 @@ import {
 } from './queries.js';
 import { BUILDINGS, SCHOOL_TEACHERS, TEACH_TURNS } from './rules/buildings.js';
 import { GOOD_DEFS, emptyGoods, type GoodId } from './rules/goods.js';
-import { TRIBES, type PlayerId } from './rules/nations.js';
+import { type PlayerId } from './rules/nations.js';
 import { COLONY_BUILDS, PIONEER_MAX_TOOLS, ROLES, UNIT_TYPES, type RoleId } from './rules/units.js';
 import { runCustomHouse } from './europe.js';
 import { addOf, modifiers } from './scenarios/modifiers.js';
@@ -37,7 +37,7 @@ import { noteMining } from './mines.js';
 import { noteProduction } from './stats.js';
 import { nativeLandClosedTo, onColonyFounded } from './natives.js';
 import type { BuildTarget, Colony, GameState, Job, Unit } from './types.js';
-import { bornType, buildingsOf, difficultyOf, goodsOf, mechanicsOf, nationOf, newColonyBuildings, unitsOf } from './scenarios/index.js';
+import { bornType, buildingsOf, difficultyOf, goodsOf, mechanicsOf, nationOf, newColonyBuildings, unitsOf , peopleName } from './scenarios/index.js';
 import { addColony, setUnitLoc, removeUnit, colonyList } from './unitindex.js';
 
 export function canFoundColony(s: GameState, u: Unit): string | null {
@@ -330,7 +330,7 @@ function validateJob(s: GameState, colony: Colony, u: Unit, job: Job): void {
     if (settlementAt(s, job.x, job.y)) fail('Natives live on that tile.');
     // Native land is worked once bought or taken, or while leased to the colony's nation (N5).
     const owner = nativeLandClosedTo(s, colony.owner, job.x, job.y);
-    if (owner) fail(`This land belongs to the ${TRIBES[owner.tribe].name}. ${mechanicsOf(s).peopleTreaties?.includes('land-use') ? 'Buy it, take it or lease it' : 'Buy it or take it'} first.`);
+    if (owner) fail(`This land belongs to the ${peopleName(s, owner.tribe)}. ${mechanicsOf(s).peopleTreaties?.includes('land-use') ? 'Buy it, take it or lease it' : 'Buy it or take it'} first.`);
     const people = peopleLandClosedTo(s, colony.owner, job.x, job.y);
     if (people) fail(`This land belongs to ${nationOf(s, people).name}.`);
     if (colonyAt(s, job.x, job.y)) fail('Another colony stands on that tile.');

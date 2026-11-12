@@ -14,8 +14,8 @@ import { buyPrice, portName, sellPrice } from './europe.js';
 import { noteTrade } from './stats.js';
 import { cargoRoomFor, colonyAt, isShip, message, player, unitName, unitPosition, warehouseCapacity } from './queries.js';
 import { random } from './rng.js';
-import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, term, turnAfterYears, yearValue } from './scenarios/index.js';
-import { type PlayerId, type TribeId } from './rules/nations.js';
+import { calendarOf, goodsOf, mechanicsOf, nationOf, nationTitle, peopleOf, term, turnAfterYears, yearValue } from './scenarios/index.js';
+import { TRIBES, type PlayerId, type TribeId } from './rules/nations.js';
 import { systemsOfId } from './playerkind.js';
 import { track } from './telemetry.js';
 import { addTreaty, endTreaty, treatyBetween } from './treaties.js';
@@ -42,10 +42,16 @@ export const FOREIGN_KEEP = 50;
 
 const SALT = 0x0fa7_0e1d;
 
+/** The string a player or people id is hashed as in the seeded streams: its id, or a people's `seedKey`. */
+function seedKeyOf(s: GameState, id: string): string {
+  return Object.hasOwn(TRIBES, id) ? (peopleOf(s, id as TribeId).seedKey ?? id) : id;
+}
+
 /** A small seeded stream for one pair (two nations, or a nation and a people) and one purpose; independent of `GameState.rng`. */
 function stream(s: GameState, a: string, b: string, purpose: string): { rng: number } {
-  // FNV-1a over the purpose and the pair (in a fixed order), mixed with the game seed.
-  const [x, y] = [a, b].sort();
+  // FNV-1a over the purpose and the pair (in a fixed order), mixed with the game seed. A people
+  // hashes its scenario's `seedKey` when it has one (the Americas' Haudenosaunee: `iroquois`).
+  const [x, y] = [seedKeyOf(s, a), seedKeyOf(s, b)].sort();
   let h = 0x811c9dc5 ^ SALT;
   for (const ch of `${purpose}|${x}|${y}`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193);
   const holder = { rng: (h ^ Math.imul(s.config.seed | 0, 0x9e3779b1)) | 0 };

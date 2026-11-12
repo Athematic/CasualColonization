@@ -212,7 +212,7 @@ Object.assign(FATHERS, {
   // fields, and named (and could remove) the clans' chiefs.
   clanMothers: role('clanMothers', 'The Clan Mothers', 'household', 'A town needs 160 food above its reserve for a birth, not 200.',
     'Dean R. Snow, The Iroquois (Blackwell, 1994); National Museum of the American Indian, Haudenosaunee Guide for Educators (Smithsonian Institution, 2009)', {
-      peoples: ['iroquois', 'haudenosaunee'],
+      peoples: ['haudenosaunee'],
       modifiers: [{ hook: 'foodToGrow', set: 160 }],
     }),
   // Food dried, smoked and put by in pits and bark-lined stores for winter and hard years (T10).
@@ -269,14 +269,14 @@ Object.assign(FATHERS, {
   // Garakontié (d. 1676), Onondaga leader who worked for peace between the Haudenosaunee and New
   // France in the 1660s and 1670s.
   garakontie: f('garakontie', 'Garakontié', 'peace', 'Every war you are in ends in peace.', 3, {
-    peoples: ['iroquois', 'haudenosaunee'],
+    peoples: ['haudenosaunee'],
     portrait: 'emblem',
     source: 'Dictionary of Canadian Biography, vol. 1 (University of Toronto Press, 1966), "Garakontié, Daniel"',
     onJoin: [{ kind: 'makePeace' }],
   }),
   // Thayendanegea (Joseph Brant, 1743–1807), Mohawk leader in the American Revolution and after.
   thayendanegea: f('thayendanegea', 'Thayendanegea (Joseph Brant)', 'defence', 'Warriors fight 50% harder.', 3, {
-    peoples: ['iroquois', 'haudenosaunee'],
+    peoples: ['haudenosaunee'],
     portrait: 'emblem',
     source: 'Isabel Thompson Kelsay, Joseph Brant, 1743–1807: Man of Two Worlds (Syracuse University Press, 1984)',
     modifiers: [{ hook: 'unitOffence', unit: 'warrior', mul: 1.5 }],

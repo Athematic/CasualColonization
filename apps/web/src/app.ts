@@ -598,7 +598,7 @@ export class App {
         return;
       case 'attack': {
         const brave = opt.braveId ? this.state.braves?.[opt.braveId] : undefined;
-        const target = opt.colonyId ? this.state.colonies[opt.colonyId]?.name : brave ? `the ${braveName(brave)}` : 'the enemy unit';
+        const target = opt.colonyId ? this.state.colonies[opt.colonyId]?.name : brave ? `the ${braveName(this.state, brave)}` : 'the enemy unit';
         const ok = await confirmDialog('Attack?', `Attack ${target}? This is an act of war.`, 'Attack', 'Hold back');
         if (ok && this.dispatch({ type: 'attack', unitId: u.id, target: { unitId: opt.targetUnitId, colonyId: opt.colonyId, braveId: opt.braveId } })) this.afterUnitAction();
         return;
@@ -970,7 +970,7 @@ export class App {
           this.hover = t;
           // Tile info on hover: terrain, river, road.
           const tile = tileAt(this.state, t.x, t.y);
-          const braves = bravesAt(this.state, t.x, t.y).map((b) => braveName(b));
+          const braves = bravesAt(this.state, t.x, t.y).map((b) => braveName(this.state, b));
           c.title = tile && this.knows(t.y * this.state.map.width + t.x) ? [tileDescription(tile), ...braves, ...landWords(this.state, t.x, t.y)].join(' · ') : '';
           this.requestRender(true);
         }
