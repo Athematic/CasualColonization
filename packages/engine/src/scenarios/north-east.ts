@@ -345,15 +345,17 @@ export const NORTH_EAST: Scenario = {
     // within 3 tiles of its settlements, again every 50 years), and computer peoples' runners explore
     // up to 12 tiles from their towns (times their profile's reach).
     mapKnowledge: { seen: true, share: { homeland: 3, every: 50 }, range: 12 },
-    // Europeans offer to buy a playing people's land near their colonies, or take it (native-nations.md
-    // T5, section 18): the engine's rules (peopleland.ts LAND_SALES).
-    landSales: {},
+    // Europeans offer to buy a playing people's land near their colonies, lease it or take it, each
+    // level its own way (native-nations.md T5, sections 18 and 19: peopleland.ts LAND_SALES), and the
+    // computer Europeans' new colonies are drawn gently towards the peoples' farmland (`pull`, section
+    // 19: without it they settled where they landed and pressed almost only the Mi'kmaq).
+    landSales: { pull: 0.25 },
   },
   // Both sides judged at the end year, in the decided order (T14). The peoples' peaceful ways are
   // tuned so that a people wins in about 1 game in 5 (T15; Beta 3 step 9, native-nations.md sections
-  // 14 and 18): continuity by each playing people's own thresholds (`CONTINUITY_OF`, in its
-  // overrides; the 97.5 here is for a people with none), and a good life for land kept whole, a
-  // century without hunger and treaties with three in four of those met.
+  // 14, 18 and 19): continuity by each playing people's own thresholds (`CONTINUITY_OF`, in its
+  // overrides; the 97.5 here is for a people with none), and a good life for land kept nearly whole,
+  // a century without hunger and treaties with two in five of those met in person (section 19).
   victory: [
     { id: 'military' },
     { id: 'independence-war' },
@@ -361,7 +363,7 @@ export const NORTH_EAST: Scenario = {
     { id: 'concord' },
     { id: 'prosperity' },
     { id: 'continuity', params: { landHealth: 97.5 } },
-    { id: 'good-life', params: { landHealth: 93, hungerYears: 100, treatyShare: 0.75 } },
+    { id: 'good-life', params: { landHealth: 88, hungerYears: 100, treatyShare: 0.4 } },
     { id: 'time' },
   ],
   rumours: AMERICAS.rumours,
