@@ -1,6 +1,6 @@
 # Design note: Native nations (Beta 3)
 
-Status: **decided** (11 November 2026): every decision T1–T22 is made. **Steps 1–8 are built** (sections 7–13; step 8's North-east scenario is registered hidden until step 10, and all of its history (peoples, homelands, values, council members, arrivals, events) is drafted for Simon's review; step 7's people score weights and the computer peoples' league rule are drafted for Simon's review; step 2's units, buildings and numbers, step 3's people's council and step 4's prices, effects from the people's side and epidemic numbers and words are drafted for Simon's review). Simon chose "Native nations" as Beta 3. This note proposes the shape. Simon decided T1–T22 in section 4 on 11 November 2026: all as recommended except T16 (option (a), one turn a year), T17 (the Norse wait for the Vinland scenario, Beta 4) and T21 (no save compatibility); T10 and T14 needed more thought and were rewritten from the peoples' own view (section 4, "T10 in full" and "T14 in full"). Simon then decided T10 the same day: growth is births from food, stores and the land's health, standing only as Beta 2's standing record read from the people's side, gold only as what Europeans pay in trade; kin ties and elders passing on knowledge are kept for a separate scenario. T14 stays open (section 6), except the military victory, which Simon decided: if every European nation is defeated, the people or peoples win. Builds on Beta 2, [native-partners.md](native-partners.md) (built), whose people treaty party was made to grow into this ("Simon's direction on N1", section 4 there), on Beta 1, [cooperation.md](cooperation.md) (a non-European player, `kind: 'company'`), and on the 0.9 scenario framework ([scenario-framework.md](scenario-framework.md), [SCENARIOS.md](../SCENARIOS.md)). The care asked for in [australia.md](australia.md) applies to every people, figure and text here.
+Status: **decided** (11 November 2026): every decision T1–T22 is made. **Steps 1–9 are built** (sections 7–14; step 9's computer people profiles and the North-east's tuning are drafted for Simon's review, with an open question on continuity in section 14; step 8's North-east scenario is registered hidden until step 10, and all of its history (peoples, homelands, values, council members, arrivals, events) is drafted for Simon's review; step 7's people score weights and the computer peoples' league rule are drafted for Simon's review; step 2's units, buildings and numbers, step 3's people's council and step 4's prices, effects from the people's side and epidemic numbers and words are drafted for Simon's review). Simon chose "Native nations" as Beta 3. This note proposes the shape. Simon decided T1–T22 in section 4 on 11 November 2026: all as recommended except T16 (option (a), one turn a year), T17 (the Norse wait for the Vinland scenario, Beta 4) and T21 (no save compatibility); T10 and T14 needed more thought and were rewritten from the peoples' own view (section 4, "T10 in full" and "T14 in full"). Simon then decided T10 the same day: growth is births from food, stores and the land's health, standing only as Beta 2's standing record read from the people's side, gold only as what Europeans pay in trade; kin ties and elders passing on knowledge are kept for a separate scenario. T14 stays open (section 6), except the military victory, which Simon decided: if every European nation is defeated, the people or peoples win. Builds on Beta 2, [native-partners.md](native-partners.md) (built), whose people treaty party was made to grow into this ("Simon's direction on N1", section 4 there), on Beta 1, [cooperation.md](cooperation.md) (a non-European player, `kind: 'company'`), and on the 0.9 scenario framework ([scenario-framework.md](scenario-framework.md), [SCENARIOS.md](../SCENARIOS.md)). The care asked for in [australia.md](australia.md) applies to every people, figure and text here.
 
 ## 1. Goal
 
@@ -223,7 +223,7 @@ Each step keeps the Americas and the Caribbean identical (golden and bench hashe
 | 6 | **Arrivals.** `NationEntry.arrives` (T18). No calendar work: one turn a year with head starts, which the framework already does (T16). **Built** (section 11) | S | P1 |
 | 7 | **Victory and score** (T14). Now: the `military` kind (decided), "defeated" as defined, `winners: PlayerId[]`. Once T14 is decided, as recommended: `continuity`, `confederacy` (with the `league` treaty kind), `good-life`, both sides judged at the end year (`gameOver.ways`), people score lines. **Built** (section 12) | M–L | P1 |
 | 8 | **The North-east, 1000–1850.** The North-east map on squares with its regions and their renewal rates, its peoples researched with their own values (T19, T20), the arrivals, events (hard years among them), terms, head starts. **Built** (section 13; registered hidden until step 10) | L | P1 |
-| 9 | **Computer native nations** per level: stores, restraint on the land, treaties and leagues by profile; measuring how often a military win happens (no guard rule unless it comes too often); tuning against T15 and the military target (1 in 100 or fewer) with tournaments | L | P1 |
+| 9 | **Computer native nations** per level: stores, restraint on the land, treaties and leagues by profile; measuring how often a military win happens (no guard rule unless it comes too often); tuning against T15 and the military target (1 in 100 or fewer) with tournaments. **Built** (section 14) | L | P1 |
 | 10 | **Interface and art.** New game, towns, council, Foreign Affairs from the people's side; procedural art; the Mac sprite trial in parallel (T22) | M–L | P1 (art P2) |
 
 Total: well over **XL**, larger than Beta 2 (three L steps more), a little smaller without the calendar work. Steps 1–6 can start now (T10 is decided); step 7's military victory can start now, its other kinds wait for T14; step 8's research can run alongside.
@@ -697,3 +697,94 @@ Both nation sets are these five (no alternative history yet); the Dutch West Ind
 ### Measurements
 
 Every commit kept the Americas and the Caribbean bit-identical: `npm run bench -- --verify` and `--verify --scenario caribbean` "same" for all eight games, the golden tests unchanged, and the 24-game Americas tournament (`npm run tournament -- --games 24 --turns 609 --play-on --events --seed 1000`) identical to the base. The new tests pass with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1`, and a full 851-turn North-east game with four computer nations and the four peoples ran with both checks on.
+
+## 14. Implementation (step 9, November 2026)
+
+Built on branch `beta3/step9`. Code: `ai/people.ts` (new: a computer people's turn), `ai/profiles.ts` (`PeopleProfile`, `PEOPLE_PROFILES`, `peopleProfileOf`), `peopletrade.ts` (trade visits that sell food and buy European goods, `computerBarter`), `peoplediplomacy.ts` (`peopleProposals` by profile; a computer people's answers times its profile's `accept`; the old `peopleComputerDiplomacy` replaced), `peopleleague.ts` (a computer people's answer to a league by profile), `peopleeconomy.ts` (`storeYearsOf` by profile, `planTownBuild` from the profile's plan, `useTools`, `TOOLS_PER_TURN`), `colony.ts` (iron tools put to a town's building work; `townJobValue` exported), `scenarios/types.ts` and `scenarios/index.ts` (`ScenarioAi.stretch` in `aiTurn`), `scenarios/north-east.ts` (the tuning below), `arena.ts` (peoples at rotating levels, their end state, the table by level). Tests: `test/people-ai.test.ts` (9 tests, with the hidden scenario `test-people-ai`: the Americas with the Iroquois and the Cherokee playable on a land that renews nothing); `test/people-victory.test.ts` plays its computer peoples at levels that join leagues; `test/scenarios/north-east.test.ts` reads the stretch and the peoples' levels in the arena.
+
+**The profiles and every tuned number are drafted for Simon's review.**
+
+### The profiles (T15)
+
+How levels are assigned: as for nations, `GameConfig.ai[id]` (Naive when absent). Until now no caller set it, so every computer people played the same simple rules; the arena now gives each playing people one of the run's levels, rotating with the games as the nations' levels do, so a four-level tournament plays each level once a game.
+
+| | Naive (grows) | Competent (balances) | Combative (defends, raids) | Creative (trades, treaties) |
+| --- | --- | --- | --- | --- |
+| Reserve (`stores`, times `storeYears`) | 1 | 1 | 0.5 | 1 |
+| Town builds (`plan`, the first it can) | longhouses, pits, workshop, landing, smokehouse, palisade | pits, longhouses, palisade, landing, workshop, smokehouse | palisade, pits, longhouses, workshop, landing, smokehouse | pits, longhouses, landing, workshop, smokehouse, palisade |
+| Restraint on the land (`restraint`) | never (follows the price) | hunters held within renewal under health 90 | under 60 | under 90 |
+| Trade visits once a year | furs; food to a colony short of it | furs; buys tools, muskets, cloth | furs; buys muskets, horses, tools | furs; buys tools, cloth, trade goods, muskets |
+| Barter with other peoples a year (`barter`) | 0 | 1 | 0 | 2 |
+| Proposals (`offer` × Beta 2's 0.3), answers (`accept` × 0.8) | 0.5, 1 | 1, 1 | 0.5, 0.7 | 2, 1.2 |
+| Treaties proposed to nations | trade | trade, exchange, defence | trade | all four, land use too |
+| Trade treaties and pacts with peoples | trade only | both | both | both |
+| League (T14) | keeps out | joins one it is offered | keeps out | leads one once it holds pacts |
+| War | defends | defends | raids: war on a European whose colony stands within 5 tiles of its towns, with a warrior in every town and 30 years of peace behind it; arms idle townspeople with muskets | defends |
+| Peace after (`peaceAfter`, years) | 12 | 8 | 20 | 5 |
+| Edge to attack (`margin`) | 1.2 | 1.2 | 0.9 | 1.2 |
+| Land claimed a year (`claims`) | 0 | 1 | 2 | 1 |
+
+Common to every level, every turn: warriors standing in a town take up its muskets, then its horses (the soldier and dragoon roles); armed units attack an enemy unit beside them **outside any colony** (no profile ever attacks a colony, so none aims at the military victory). Once a year: the trade visit and barter, restraint, food first (a town that eats more than it gets moves a worker from building work to food), claims, and (Combative) the raid. Elders keep teaching by step 2's rules (the setup's elder stays in the longhouse; no profile choice was needed). Iron tools: a people's town puts up to 4 tools a turn into its building work (`useTools`, for a person's people too: T10's "taken up as they served").
+
+Counted over 8 North-east games while tuning (per people and game): proposals Naive 0.5, Competent 7, Combative 1.3, Creative 13; barter visits Competent 174, Creative 349; tools bought Naive 57, Competent 93, Combative 28, Creative 15 units, muskets Competent 53–113, Combative 81; wars declared by Combative 3.1 a game, each ending in peace; leagues led only by Creative.
+
+### Tuning (North-east scenario data)
+
+| What | Before | After | Why |
+| --- | --- | --- | --- |
+| `mechanics.epidemics.chance` | 1/25 | 1/75 | At 1 in 25 a year per region in contact, every colony and town was struck about every 25 years. Among settlements everywhere, the Europeans' small colonies lost more colonists to it than they gained by births: with epidemics off the advanced levels reached 33–49 colonists, at 1/25 13–20. Same rules for both sides (Simon's decision); the peoples, at their towns' housing, hardly feel the difference. |
+| `ai.stretch` (new) | — (1) | 1.5 | The computer Europeans read the Americas' dates (`ai.dates`), so Creative took up an independence plan from 1626 and Competent from 1666 with a handful of colonists, and lost: their colonies went to the Crown. With 1.5 those plans come in 1693 and 1753 (+4 to +7 colonists for the advanced levels). Read only with `dates`, so the Americas and the Caribbean are untouched. |
+| continuity `landHealth` | 40 | 97.5 | Continuity was met by every people in every game (192 of 192). Its other conditions cannot tell peoples apart here: the homeland is always fully kept (a playing people's claimed land is closed to colonies, and leased land counts as kept), people grow from about 17 to 50–90 by births, and the council fills all the seats open to the people by 1850 (13 for the Haudenosaunee, 11 for the Wendat and the Mi'kmaq, 10 for the Innu: `members` would just pick the Haudenosaunee). Only the homeland's land varies, so continuity asks for land all but untouched. |
+| good life `landHealth`, `hungerYears`, `treatyShare` | 60, 20, 0.5 | 93, 100, 0.75 | A good life qualified for about 45% of computer peoples once the profiles made treaties; it now asks land kept whole, a century without a hungry year and treaties with three in four of those met. |
+| confederacy | defaults | defaults (3 peoples, 50 years) | Leagues now form; at the defaults they win in about 1 game in 10. |
+| profiles' `restraint` | T10 drafted 70 (Creative, Competent) and 40 (Combative) | 90 and 60 | At 70 the levels' land ended alike (health 80–85 for all); at 90 Creative and Competent keep 86–87 against Naive's 78–80, so the land conditions reward restraint. |
+
+Tried and dropped: a higher first-landing score and a weight against tundra for the Europeans' site choice (`ai.landing`, `ai.siteTerrain`): their colonies went elsewhere but grew no larger (±2 colonists), so neither was kept. Epidemic reach 4 instead of 8 did about as much as 1/50. Hard years off would add little (+2); land health off +6 (not changed: decided mechanics).
+
+### Rates against the targets
+
+`npm run tournament -- --scenario north-east --games 24 --turns 851 --play-on --events --seed 3000` and `--seed 4000` (48 games, 192 computer peoples, four levels for both sides), before (step 8's code; all peoples then played the same simple rules) and after:
+
+| Target (T15, T14) | Before (seed 3000 / 4000) | After (3000 / 4000) | Together |
+| --- | --- | --- | --- |
+| A people wins in about 1 game in 5 | 24 of 24 / 24 of 24 (continuity, every people) | 8 of 24 / 2 of 24 | **10 of 48 (21%)** |
+| Each computer people survives in ≥ 3 games of 4 | 96 of 96 / 96 of 96 | 96 of 96 / 96 of 96 | **100% for each** |
+| Leagues and confederacy sometimes | none / none | confederacy won in 5 games / a league at the end in 1 game | **confederacy 5 of 48 games (about 1 in 10)** |
+| Military victory ≤ 1 in 100 | 0 / 0 | 0 / 0 | **0 of 48** (and none in any tournament of this step) |
+
+Ways (after): confederacy 5 games, continuity 3 peoples (Innu 2, Mi'kmaq 1), good life 2 (Innu); by level, Creative 9 of the 10 people wins (all 5 confederacies), Competent 1, Naive and Combative none: T15's "Creative trades and makes treaties" is the level that wins by the peaceful ways. On fresh seeds (5000, 6000; 48 games, with continuity at 97) 15 of 48 games had a people's win, so the rate is noisy around 1 in 4 to 1 in 5. Failing at the end (192 peoples): continuity on land 188; a good life on land 154, treaties 116, hunger 89, stores 69, peace 33.
+
+Peoples by level (after, 48 games each): treaties in force at the end Naive 1.9, Competent 3.7, Combative 1.2, Creative 5.1; land health 79, 87, 81, 87; people 71, 69, 64, 65 (Combative's half reserve costs it people to hunger); gold in hand 2,600, 2,200, 2,200, 2,800 (they now spend on tools, muskets and cloth, but the colonies within reach have little to spare).
+
+### The Europeans in the North-east
+
+Target: a meaningful presence, about twice step 8's, with Competent and Combative at 30 colonists or more by 1850 (the Americas' advanced levels have 50–90 at the same number of turns played; the North-east's nations play 236–353 turns on poorer land). Results (colonists per nation at the end, seeds 3000 / 4000):
+
+| Level | Before | After |
+| --- | --- | --- |
+| Competent | 18.0 / 18.3 | 33.1 / 33.0 |
+| Combative | 17.5 / 19.0 | 32.8 / 30.3 |
+| Creative | 13.2 / 15.0 | 24.8 / 26.1 |
+| Naive | 9.3 / 10.2 | 12.0 / 12.8 |
+
+Colonies per nation rose from 5.2–8.1 to 6.1–9.7 (each nation), the advanced levels' from 5.5–8.3 to 7.1–10.7. Creative stays below 30: it still declares independence early (5 won, 8 lost in 48 nations) and a lost war leaves its colonies to the Crown. Naive barely moves (it reads no dates and expands slowly on its own).
+
+### Speed
+
+7.0 and 7.2 seconds a game on average (4.9–11.1), three games at a time on this machine, against 4.9 and 5.2 before: the computer peoples' turns (colony reports for restraint and food, the trade visits, proposals) and the Europeans' larger colonies. A North-east tournament with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1` (8 games, seed 5000) gives the same tables as without.
+
+### Choices made while building (for Simon)
+
+1. **Continuity is tuned on the land alone (97.5).** In computer-only North-east games the peoples are seldom pressed: their claimed land is closed to colonies (so `homelandShare` never binds), they grow four- to fivefold by births and fill their councils. The only condition that varies is the homeland's land, and it varies mostly by region (the Innu's Labrador stays whole; the Haudenosaunee's never reaches 85). So continuity is won mostly by the Innu and the Mi'kmaq. A continuity that means "still here despite the Europeans" needs pressure on a playing people's land that the game does not have yet: computer Europeans buying or taking a playing people's land (T5's sale from the seller's side was never built), or wars that cost towns. **Open question for Simon:** keep these thresholds (a rare, land-driven continuity), give each people its own (the note allows `peoples.overrides[id].victory`, as step 8 gave each people its own score values), or build the land pressure first and tune again.
+2. **The restraint numbers differ from T10's draft** (90 and 60 instead of 70 and 40), so the levels' land differs; T10's "Naive follows the price" is kept.
+3. **Epidemics at 1 in 75** rather than the drafted 1 in 25, the same for both sides. Historically epidemics struck the peoples far harder than the colonists; the same-rules decision stands, and the number is the one that lets the Europeans grow.
+4. **`ai.stretch`** is a new scenario field rather than per-nation arrival offsets: one number, read only with `dates`.
+5. **Raids are wars, with few fights.** Combative goes to war with a European that settles within five tiles of its towns and attacks units next to its warriors; it has few warriors (one a town at setup, more only by muskets or by winning fights), so raids are mostly declared wars that end in peace after 20 years (3 a game). Raids on other peoples were left out, to keep T15's survival target safe.
+6. **No new towns.** Every people's towns reach their longhouses' housing by about 1500 and then hold; founding new towns (and claiming more land) would be a natural profile choice, but it would close more land to the Europeans. Not built.
+7. **Iron tools** are a rule for every people (4 tools a turn become building work), not only an AI choice; cloth and trade goods are used in barter, muskets and horses to arm warriors.
+8. **Barter between peoples** is abstract, as the trade visits are (no canoe or carrier moves), and once a year.
+9. **Not measured:** T15's "each computer people holds a treaty with a European nation in most games" (the arena counts treaties of all kinds; the peoples hold 1.2–5.1 at the end).
+
+### Measurements
+
+Every commit kept the Americas and the Caribbean bit-identical: `npm run bench -- --verify` and `--verify --scenario caribbean` "same" for all eight games, the golden tests unchanged, and the 24-game Americas tournament (`npm run tournament -- --games 24 --turns 609 --play-on --events --seed 1000`) identical to the base but for its running time. `npx tsc -b` is clean; `npm test` passes (75 files, 913 tests, 1 skipped); the people tests, the North-east's and the arrivals' pass with `CC_INDEX_CHECKS=1 CC_AI_CHECKS=1`.
