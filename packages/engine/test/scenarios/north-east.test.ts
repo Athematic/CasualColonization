@@ -147,13 +147,16 @@ describe('the North-east scenario', () => {
     }
   });
 
-  it('keeps the computer Europeans to the Americas’ dates', () => {
+  it('keeps the computer Europeans to the Americas’ dates, half as late again (ai.stretch 1.5)', () => {
     const s = createGame(config());
-    // "Wars after turn 50" of the Americas is 1542; its turn 120 (1600 and twelve turns of spring and autumn) is 1606.
-    expect(aiTurn(s, 50)).toBe(turnOfYear(1542, calendarOf(s)));
+    // "Wars after turn 50" of the Americas is 1542, 50 years after 1492: here 75 years after, 1567.
+    expect(aiTurn(s, 50)).toBe(turnOfYear(1567, calendarOf(s)));
     expect(aiTurn(s, 0)).toBe(492);
-    expect(aiTurn(s, 120)).toBe(606);
-    expect(aiTurn(s, 608)).toBe(850);
+    // Its turn 120 (1600 and twelve turns of spring and autumn) is 1606: here 1663.
+    expect(aiTurn(s, 120)).toBe(663);
+    // Its independence plans from turn 160 and 240 (1626, 1666): here 1693 and 1753.
+    expect(aiTurn(s, 160)).toBe(693);
+    expect(aiTurn(s, 240)).toBe(753);
   });
 
   it('wears and renews the land by the map’s own regions', () => {
