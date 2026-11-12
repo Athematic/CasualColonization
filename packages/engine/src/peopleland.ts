@@ -45,7 +45,7 @@ import type { PlayerId, TribeId } from './rules/nations.js';
 import { calendarOf, mechanicsOf, scenarioOf, settlementKindIn, turnAfterYears, yearValue } from './scenarios/index.js';
 import type { LandDealLevel, LandSaleRules } from './scenarios/types.js';
 import { track } from './telemetry.js';
-import type { Colony, GameState, PeopleRelation } from './types.js';
+import type { Colony, GameState } from './types.js';
 import { colonyList, setUnitLoc } from './unitindex.js';
 import { peopleProfileOf, type AiProfile } from './ai/profiles.js';
 import { startWar } from './diplomacy.js';
@@ -224,11 +224,6 @@ export function offerForLand(s: GameState, nation: PlayerId, x: number, y: numbe
   const text = `${capital(sideName(s, people))} will not sell this land.`;
   message(s, text, nation, { x, y });
   return text;
-}
-
-/** The pending offer `nation` made `people`, if any. */
-export function landOfferFrom(s: GameState, people: PlayerId, nation: PlayerId): PeopleRelation['landOffer'] {
-  return standingOf(s, nation, people)?.landOffer;
 }
 
 /** Every offer waiting for this people's answer, with the nation that made it. */
