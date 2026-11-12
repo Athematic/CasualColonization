@@ -449,7 +449,7 @@ registerVictory({
 
 registerVictory({
   id: 'continuity',
-  name: 'A people still on its homeland, as many as at the start, under its own council',
+  name: 'A people still on its homeland, and thriving',
   check(s, moment, params) {
     if (!atEnd(s, moment)) return null;
     const winners = peopleWinners(s, (id) => continuityStanding(s, id, params).fails.length === 0);
