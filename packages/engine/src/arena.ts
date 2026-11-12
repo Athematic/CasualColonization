@@ -93,6 +93,8 @@ export interface ArenaPeopleEntry {
   /** Homeland tiles it sold to European nations, and that they took from it, over the game (native-nations.md section 18). */
   landSold?: number;
   landTaken?: number;
+  /** Tiles of its land leased to European nations at the end (section 19). */
+  leased?: number;
   /** Treaties in force at the end (a league counted once) and whether it belonged to a league, with the league's years. */
   treaties: number;
   league?: number;
@@ -308,7 +310,31 @@ export interface ArenaEntry {
   events?: Record<string, EventTally>;
   /** On a game's first row, in games with playing peoples: the peoples and the game (`ArenaPeoplesGame`). */
   peoplesGame?: ArenaPeoplesGame;
+  /** In games with playing peoples: how the nation got a playing people's land (native-nations.md section 19). */
+  peopleLand?: PeopleLandTally;
 }
+
+/** A nation's dealings over a playing people's land in one game (section 19), counted from telemetry. */
+export interface PeopleLandTally {
+  /** Offers for a tile: accepted (sold), refused. */
+  bought: number;
+  refused: number;
+  /** Tiles taken. */
+  taken: number;
+  /** Land use the nation proposed; leases made (whoever proposed); land use the people refused. */
+  leaseProposed: number;
+  leased: number;
+  leaseRefused: number;
+}
+
+const LAND_TALLY: Record<string, keyof PeopleLandTally> = {
+  'natives:people land bought': 'bought',
+  'natives:people land refused': 'refused',
+  'natives:people land taken': 'taken',
+  'natives:people lease proposed': 'leaseProposed',
+  'natives:people land leased': 'leased',
+  'natives:people lease refused': 'leaseRefused',
+};
 
 export interface ArenaSummary {
   level: AiLevel;
@@ -366,6 +392,7 @@ export function playArenaGame(
   const counts = new Map<string, FeatureCounts>();
   const tallies = new Map<string, RelationsTally>();
   const eventTallies = new Map<string, Record<string, EventTally>>();
+  const landTallies = setup.peoples?.length ? new Map<string, PeopleLandTally>() : undefined;
   // The sink only counts; it never touches the game, so scores do not depend on it.
   const previous = setFeatureSink((nation, feature, n) => {
     if (feature.startsWith('event')) {
@@ -379,6 +406,12 @@ export function playArenaGame(
         else if (m[1] === 'eventvalue ') tally.value += n;
         else tally.fired += n;
       }
+    }
+    const land = landTallies && LAND_TALLY[feature];
+    if (land) {
+      let t = landTallies.get(nation);
+      if (!t) landTallies.set(nation, (t = { bought: 0, refused: 0, taken: 0, leaseProposed: 0, leased: 0, leaseRefused: 0 }));
+      t[land]++;
     }
     const key = TALLY[feature];
     if (key) {
@@ -408,7 +441,7 @@ export function playArenaGame(
     const fails = standingThen
       ? { prosperityFails: standingThen.fails, prosperityCounts: { met: standingThen.met.length, unpeaceful: standingThen.notAtPeace.length, partners: standingThen.partners.length, needed: standingThen.needed } }
       : {};
-    const e = { ...standing(s, seed, l.nation, l.level), relations: endRelations(s, l.nation, tallies.get(l.nation)), ...fails, ...(events ? { events: eventTallies.get(l.nation) ?? {} } : {}) };
+    const e = { ...standing(s, seed, l.nation, l.level), relations: endRelations(s, l.nation, tallies.get(l.nation)), ...fails, ...(events ? { events: eventTallies.get(l.nation) ?? {} } : {}), ...(landTallies ? { peopleLand: landTallies.get(l.nation) ?? { bought: 0, refused: 0, taken: 0, leaseProposed: 0, leased: 0, leaseRefused: 0 } } : {}) };
     return features ? { ...e, features: { ...counts.get(l.nation), ...endStateFeatures(s, l.nation) } } : e;
   });
   return { state: s, entries, ms: Date.now() - started };
@@ -455,7 +488,7 @@ function landDeals(s: GameState, id: PlayerId): { landSold?: number; landTaken?:
 }
 
 /** A playing people's homeland, land, treaties, league and gold at the end of a game. */
-function peopleEndState(s: GameState, id: PlayerId): Pick<ArenaPeopleEntry, 'kept' | 'health' | 'landSold' | 'landTaken' | 'treaties' | 'league' | 'gold' | 'sinceWar' | 'sinceHunger' | 'stores' | 'met' | 'partners'> {
+function peopleEndState(s: GameState, id: PlayerId): Pick<ArenaPeopleEntry, 'kept' | 'health' | 'landSold' | 'landTaken' | 'leased' | 'treaties' | 'league' | 'gold' | 'sinceWar' | 'sinceHunger' | 'stores' | 'met' | 'partners'> {
   const home = homelandKept(s, id);
   const live = (s.treaties ?? []).filter((t) => !t.end && t.parties.some((q) => q.id === id));
   const league = live.find((t) => t.kind === 'league');
@@ -466,6 +499,7 @@ function peopleEndState(s: GameState, id: PlayerId): Pick<ArenaPeopleEntry, 'kep
   return {
     kept: home.start ? home.kept / home.start : 0,
     ...landDeals(s, id),
+    leased: s.map.tiles.filter((t) => t.claim === id && t.use).length,
     health: homelandHealth(s, id),
     treaties: live.length,
     ...(league ? { league: yearValue(s.turn, cal) - yearValue(league.start, cal) } : {}),
@@ -740,10 +774,10 @@ export function formatPeoples(entries: ArenaEntry[]): string {
     const fails = new Map<string, number>();
     for (const p of list) for (const c of p.continuityFails) fails.set(c, (fails.get(c) ?? 0) + 1);
     const failText = [...fails].sort((a, b) => b[1] - a[1]).map(([c, k]) => `${c} ${k}`).join(', ') || 'none';
-    const land = `${Math.round(100 * avg(list.map((p) => p.kept)))}% | ${Math.round(avg(list.map((p) => p.health)))} | ${f1(avg(list.map((p) => p.landSold ?? 0)))} / ${f1(avg(list.map((p) => p.landTaken ?? 0)))}`;
+    const land = `${Math.round(100 * avg(list.map((p) => p.kept)))}% | ${Math.round(avg(list.map((p) => p.health)))} | ${f1(avg(list.map((p) => p.landSold ?? 0)))} / ${f1(avg(list.map((p) => p.landTaken ?? 0)))} / ${f1(avg(list.map((p) => p.leased ?? 0)))}`;
     return `| ${id} | ${list.length} | ${list.filter((p) => p.towns > 0).length} | ${f1(avg(list.map((p) => p.towns)))} | ${f1(avg(list.map((p) => p.start)))} → ${f1(avg(list.map((p) => p.population)))} | ${f1(avg(list.map((p) => p.members)))} | ${Math.round(avg(list.map((p) => p.score)))} | ${land} | ${wins.join(' | ')} | ${failText} |`;
   });
-  const table = [`| People | Games | Survived | Towns | People (start → end) | Council | Score | Homeland kept | Land health | Tiles sold / taken | ${kinds.join(' | ')} | Continuity failed on |`, `| --- |${' ---: |'.repeat(9 + kinds.length)} --- |`, ...rows].join('\n');
+  const table = [`| People | Games | Survived | Towns | People (start → end) | Council | Score | Homeland kept | Land health | Tiles sold / taken / leased at end | ${kinds.join(' | ')} | Continuity failed on |`, `| --- |${' ---: |'.repeat(9 + kinds.length)} --- |`, ...rows].join('\n');
   // The same by the computer level the peoples played at, with what the profiles change.
   const levels = AI_LEVELS.filter((l) => played.some((one) => one.peoples.some((p) => p.level === l)));
   const levelRows = levels.map((level) => {
@@ -774,6 +808,14 @@ export function formatPeoples(entries: ArenaEntry[]): string {
     })
     .join('; ');
   const ms = played.map((one) => one.ms);
+  // How the Europeans got a playing people's land, by their level (section 19), per nation and game.
+  const dealt = entries.filter((e) => e.peopleLand);
+  const landRows = AI_LEVELS.filter((l) => dealt.some((e) => e.level === l)).map((level) => {
+    const list = dealt.filter((e) => e.level === level);
+    const per = (k: keyof PeopleLandTally) => f1(avg(list.map((e) => e.peopleLand![k])));
+    return `| ${AI_LEVEL_INFO[level].name} | ${list.length} | ${per('bought')} | ${per('refused')} | ${per('taken')} | ${per('leaseProposed')} | ${per('leaseRefused')} | ${per('leased')} |`;
+  });
+  const landTable = landRows.length ? ['| European level | Nations | Tiles bought | Offers refused | Tiles taken | Land use proposed | Land use refused | Leases made |', `| --- |${' ---: |'.repeat(7)}`, ...landRows].join('\n') : '';
   return [
     `Playing peoples: ${total} played in ${n} games, ${survived} still in the game at the end (${Math.round((100 * survived) / Math.max(1, total))}%).`,
     '',
@@ -781,6 +823,7 @@ export function formatPeoples(entries: ArenaEntry[]): string {
     '',
     levelTable,
     '',
+    ...(landTable ? ['How the Europeans got a playing people\'s land, per nation and game (leases made counts those the peoples proposed too):', '', landTable, ''] : []),
     `Winners' ways per game (games in which someone won that way): ${ways}. Military victory: ${military} of ${n} games (${f1((100 * military) / n)} in 100).`,
     `Continuity failed at the end on: ${tally('continuityFails')}. A good life failed on: ${tally('goodLifeFails')}.`,
     `European colonies at the end, per nation and game: ${colonies}.`,
