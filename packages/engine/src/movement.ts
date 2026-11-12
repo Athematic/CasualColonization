@@ -28,7 +28,7 @@ import { TOOLS_PER_IMPROVEMENT, UNIT_TYPES } from './rules/units.js';
 import type { PlayerId, TribeId } from './rules/nations.js';
 import type { Colony, GameState, ImprovementKind, Player, Tile, Unit } from './types.js';
 import { mechanicsOf, nationTypeOf, term } from './scenarios/index.js';
-import { colonyTiles, setUnitLoc, unitTiles, colonyList, unitList } from './unitindex.js';
+import { colonyTiles, indexChecks, setUnitLoc, unitTiles, colonyList, unitList } from './unitindex.js';
 import { kindOfId, systemsOfId } from './playerkind.js';
 import { alliesOf, colonyOpenTo, isAllied } from './alliances.js';
 
@@ -210,7 +210,11 @@ export function placeOnMap(s: GameState, u: Unit, x: number, y: number): void {
 }
 
 export function moveUnit(s: GameState, unitId: string, dir: Direction): void {
-  const option = describeMove(s, unitId, dir);
+  moveAs(s, unitId, dir, describeMove(s, unitId, dir));
+}
+
+/** moveUnit with `option`, what describeMove has just said of the step, with nothing changed since. */
+function moveAs(s: GameState, unitId: string, dir: Direction, option: MoveOption): void {
   const u = s.units[unitId];
   if (option.kind !== 'blocked' && option.kind !== 'attack' && option.kind !== 'settlement') {
     track(u.owner, 'cmd:move');
@@ -326,44 +330,54 @@ export function buildMapIndex(s: GameState): MapIndex {
 interface PathIndex {
   /** The colony on each tile (its owner read live). */
   colonies: ReadonlyMap<number, Colony>;
-  settlements: Set<number>;
   /** Units standing on each tile. */
   units: ReadonlyMap<number, readonly Unit[]>;
-  /** Tribes whose braves stand on each tile. */
+  /**
+   * Tribes whose braves stand on each tile, of the tribes at war with the searching unit's owner
+   * (the only braves that block it); empty when none is at war with it.
+   */
   braves: Map<number, TribeId[]>;
-  /** Tiles with any of the above have `occupied[i] === gen`, tiles with a colony `colony[i] === gen`, so empty tiles skip the lookups. */
+  /**
+   * Tiles with any of the above or a settlement have `occupied[i] === gen`, tiles with a colony
+   * `colony[i] === gen`, tiles with a settlement `settlement[i] === gen`, so empty tiles skip the lookups.
+   */
   occupied: Uint32Array;
   colony: Uint32Array;
+  settlement: Uint32Array;
   gen: number;
 }
 
 // Stamps for PathIndex, reused between searches as the search buffers are.
 let occupiedStamp = new Uint32Array(0);
 let colonyStamp = new Uint32Array(0);
+let settlementStamp = new Uint32Array(0);
 let stampGen = 0;
 
-function pathIndex(s: GameState): PathIndex {
+/** The occupants a search for a unit needs; `war` is the tribes at war with its owner (searchContext). */
+function pathIndex(s: GameState, war: ReadonlySet<TribeId>): PathIndex {
   const w = s.map.width;
   const size = w * s.map.height;
   if (occupiedStamp.length !== size || stampGen >= 0xfffffff0) {
     occupiedStamp = new Uint32Array(size);
     colonyStamp = new Uint32Array(size);
+    settlementStamp = new Uint32Array(size);
     stampGen = 0;
   }
   const gen = ++stampGen;
   const occupied = occupiedStamp;
-  const settlements = new Set<number>();
   for (const id in s.settlements) {
     const st = s.settlements[id];
     const i = st.y * w + st.x;
-    settlements.add(i);
+    settlementStamp[i] = gen;
     occupied[i] = gen;
   }
+  // Only braves of a tribe at war with the unit's owner block it, so the others are left out.
   const braves = new Map<number, TribeId[]>();
   const all = s.braves;
-  if (all) {
+  if (all && war.size) {
     for (const id in all) {
       const b = all[id];
+      if (!war.has(b.tribe)) continue;
       const i = b.y * w + b.x;
       const list = braves.get(i);
       if (list) list.push(b.tribe);
@@ -378,7 +392,7 @@ function pathIndex(s: GameState): PathIndex {
   }
   const units = unitTiles(s);
   for (const i of units.keys()) occupied[i] = gen;
-  return { colonies, settlements, units, braves, occupied, colony: colonyStamp, gen };
+  return { colonies, units, braves, occupied, colony: colonyStamp, settlement: settlementStamp, gen };
 }
 
 function passable(s: GameState, ctx: SearchContext, x: number, y: number, isGoal: boolean, index: PathIndex): boolean {
@@ -425,7 +439,7 @@ function passableAt(s: GameState, ctx: SearchContext, i: number, isGoal: boolean
     // An ally's colony is open, as one's own.
     if (colonyOwner && ctx.allies?.has(colonyOwner)) colonyOwner = ctx.owner;
     if (colonyOwner && colonyOwner !== ctx.owner) return false;
-    if (index.settlements.has(i)) return false;
+    if (index.settlement[i] === index.gen) return false;
     // Any other nation's unit on the tile blocks it, but an ally's.
     const here = index.units.get(i);
     if (here) for (const v of here) if (v.owner !== ctx.owner && !ctx.allies?.has(v.owner)) return false;
@@ -474,6 +488,149 @@ function approachable(s: GameState, ctx: SearchContext, startIdx: number, tx: nu
   return false;
 }
 
+/**
+ * Land regions: the map's land tiles labelled by the region they belong to, two tiles sharing a
+ * label when land steps (the grid's neighbours) join them. A land unit's path search only ever
+ * enters land tiles, so it cannot reach a goal outside the regions of its own tile and the tiles
+ * around it (a unit aboard a ship lands on one of those).
+ *
+ * Kept beside the state for the last map seen. Terrain can change in place (tests do it), so the
+ * labels are trusted to say "unreachable" only after a check against the map as it is now: the
+ * start and the tiles around it have the water flags they were labelled with, and every water
+ * tile on the shore of the start's regions is still water. Then no land step leads out of those
+ * regions (a tile in them that has become water only makes them smaller), so a goal outside them
+ * cannot be reached. When the check fails the map is labelled again.
+ */
+interface LandRegions {
+  tiles: readonly Tile[];
+  grid: ReturnType<typeof gridOf>;
+  width: number;
+  height: number;
+  /** 1 for a water tile (or a missing one), as labelled. */
+  water: Uint8Array;
+  /** The region of each land tile, -1 for water. */
+  label: Int32Array;
+  /** The water tiles beside each region: `shore[shoreStart[r]]` up to `shore[shoreStart[r + 1]]`. */
+  shore: Int32Array;
+  shoreStart: Int32Array;
+}
+
+let landRegionsKept: LandRegions | null = null;
+
+const isWaterTile = (tile: Tile | undefined): boolean => !tile || TERRAIN[tile.t].water;
+
+function labelLandRegions(s: GameState, grid: ReturnType<typeof gridOf>): LandRegions {
+  const w = s.map.width;
+  const h = s.map.height;
+  const tiles = s.map.tiles;
+  const size = w * h;
+  const water = new Uint8Array(size);
+  const label = new Int32Array(size).fill(-1);
+  for (let i = 0; i < size; i++) water[i] = isWaterTile(tiles[i]) ? 1 : 0;
+  const stack = new Int32Array(size);
+  // A water tile is on region r's shore list once: shoreMark[n] === r + 1.
+  const shoreMark = new Int32Array(size);
+  const shore: number[] = [];
+  const shoreStart: number[] = [];
+  let next = 0;
+  for (let i = 0; i < size; i++) {
+    if (water[i] || label[i] >= 0) continue;
+    const region = next++;
+    shoreStart.push(shore.length);
+    label[i] = region;
+    let top = 0;
+    stack[top++] = i;
+    while (top > 0) {
+      const idx = stack[--top];
+      const cx = idx % w;
+      const cy = (idx - cx) / w;
+      const near = grid.neighbourOffsets(cx, cy);
+      for (let d = 0; d < near.length; d += 2) {
+        const nx = cx + near[d];
+        const ny = cy + near[d + 1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const n = ny * w + nx;
+        if (water[n]) {
+          if (shoreMark[n] !== region + 1) {
+            shoreMark[n] = region + 1;
+            shore.push(n);
+          }
+          continue;
+        }
+        if (label[n] >= 0) continue;
+        label[n] = region;
+        stack[top++] = n;
+      }
+    }
+  }
+  shoreStart.push(shore.length);
+  return { tiles, grid, width: w, height: h, water, label, shore: Int32Array.from(shore), shoreStart: Int32Array.from(shoreStart) };
+}
+
+/** Calls `visit` with the start and each tile around it on the map. */
+function startAndAround(r: LandRegions, startIdx: number, visit: (i: number) => boolean): boolean {
+  if (visit(startIdx)) return true;
+  const w = r.width;
+  const sx = startIdx % w;
+  const sy = (startIdx - sx) / w;
+  const near = r.grid.neighbourOffsets(sx, sy);
+  for (let d = 0; d < near.length; d += 2) {
+    const nx = sx + near[d];
+    const ny = sy + near[d + 1];
+    if (nx < 0 || ny < 0 || nx >= w || ny >= r.height) continue;
+    if (visit(ny * w + nx)) return true;
+  }
+  return false;
+}
+
+/** Whether a land region of the start tile or of a tile around it holds the goal, as labelled. */
+function sharesLandRegion(r: LandRegions, startIdx: number, goalIdx: number): boolean {
+  const label = r.label;
+  const goal = label[goalIdx];
+  if (goal < 0) return false;
+  // Most searches are from land to land in the same region: one comparison.
+  if (label[startIdx] === goal) return true;
+  const w = r.width;
+  const sx = startIdx % w;
+  const sy = (startIdx - sx) / w;
+  const near = r.grid.neighbourOffsets(sx, sy);
+  for (let d = 0; d < near.length; d += 2) {
+    const nx = sx + near[d];
+    const ny = sy + near[d + 1];
+    if (nx >= 0 && ny >= 0 && nx < w && ny < r.height && label[ny * w + nx] === goal) return true;
+  }
+  return false;
+}
+
+/** Whether the start's regions are as labelled, closed by water (see LandRegions). */
+function startRegionsCurrent(s: GameState, r: LandRegions, startIdx: number): boolean {
+  const tiles = s.map.tiles;
+  if (startAndAround(r, startIdx, (i) => (isWaterTile(tiles[i]) ? 1 : 0) !== r.water[i])) return false;
+  return !startAndAround(r, startIdx, (i) => {
+    const region = r.label[i];
+    if (region < 0) return false;
+    for (let k = r.shoreStart[region]; k < r.shoreStart[region + 1]; k++) if (!isWaterTile(tiles[r.shore[k]])) return true;
+    return false;
+  });
+}
+
+/**
+ * Whether a land unit's search from `startIdx` certainly cannot reach the land tile `goalIdx`: no
+ * land step joins them (LandRegions). False when unsure, and the search then finds out itself.
+ */
+function landUnreachable(s: GameState, grid: ReturnType<typeof gridOf>, startIdx: number, goalIdx: number): boolean {
+  let r = landRegionsKept;
+  if (!r || r.tiles !== s.map.tiles || r.grid !== grid || r.width !== s.map.width || r.height !== s.map.height) {
+    r = landRegionsKept = labelLandRegions(s, grid);
+  }
+  if (sharesLandRegion(r, startIdx, goalIdx)) return false;
+  if (!startRegionsCurrent(s, r, startIdx)) {
+    r = landRegionsKept = labelLandRegions(s, grid);
+    if (sharesLandRegion(r, startIdx, goalIdx)) return false;
+  }
+  return true;
+}
+
 // Search buffers, reused between path searches: a tile's cost and previous tile count only when
 // its stamp is the current search's, so nothing is cleared between searches.
 let searchSize = 0;
@@ -509,13 +666,18 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
   const start = unitPosition(s, u);
   if (!start) return null;
   if (start.x === tx && start.y === ty) return [];
-  const index = pathIndex(s);
   const ctx = searchContext(s, u);
+  const index = pathIndex(s, ctx.war);
   if (!passable(s, ctx, tx, ty, true, index)) return null;
   const w = s.map.width;
   const h = s.map.height;
   const grid = gridOf(s);
   if (!approachable(s, ctx, start.y * w + start.x, tx, ty, index)) return null;
+  // A land unit cannot reach land that no land step joins to it (an island across the water): the
+  // search would only find that out after visiting every tile it can reach.
+  // With CC_INDEX_CHECKS=1 (indexChecks) the search runs all the same and must find no route.
+  const unreachable = !ctx.ship && landUnreachable(s, grid, start.y * w + start.x, ty * w + tx);
+  if (unreachable && !indexChecks()) return null;
   const gen = searchBuffers(w * h);
   const cost = searchCost;
   const prev = searchPrev;
@@ -571,7 +733,12 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
       // Both tests only read the state, so the cheaper cost test goes first.
       const c = cost[idx] + stepCost(s, ctx, idx, nIdx, cx, cy, nx, ny, index);
       if (seen[nIdx] === gen && c >= cost[nIdx]) continue;
-      if (!passableAt(s, ctx, nIdx, nIdx === goalIdx, index)) continue;
+      // Nothing changes during a search, so a tile the unit cannot enter now never can: it is
+      // closed, and the next tiles beside it skip it at once (no step cost or test again).
+      if (!passableAt(s, ctx, nIdx, nIdx === goalIdx, index)) {
+        done[nIdx] = gen;
+        continue;
+      }
       {
         seen[nIdx] = gen;
         cost[nIdx] = c;
@@ -600,6 +767,7 @@ export function findPath(s: GameState, u: Unit, tx: number, ty: number): { x: nu
       }
     }
   }
+  if (unreachable && reached) throw new Error(`findPath: land regions ruled out (${tx}, ${ty}) for ${u.id}, but the search found a route.`);
   if (!reached) return null;
   const path: { x: number; y: number }[] = [];
   let cur = goalIdx;
@@ -615,8 +783,8 @@ export function nearestHighSeas(s: GameState, ship: Unit): { x: number; y: numbe
   const start = unitPosition(s, ship);
   if (!start) return null;
   const w = s.map.width;
-  const index = pathIndex(s);
   const ctx = searchContext(s, ship);
+  const index = pathIndex(s, ctx.war);
   const seen = new Set([start.y * w + start.x]);
   const queue = [start];
   while (queue.length) {
@@ -742,7 +910,8 @@ export function continueOrders(s: GameState, u: Unit, hint?: PathHint): void {
       continue;
     }
     fresh = false;
-    moveUnit(s, u.id, dir);
+    // The step as described just now: moveUnit would only describe it again.
+    moveAs(s, u.id, dir, option);
     step++;
     if ((u.loc as Unit['loc']).kind !== 'map' || u.loc.x !== next.x || u.loc.y !== next.y) path = null;
   }

@@ -1078,8 +1078,9 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
   const pos = unitPosition(s, u)!;
   const w = s.map.width;
   const known = (x: number, y: number) => p.explored[y * w + x] === 1;
+  const settlements = Object.values(s.settlements);
   for (const n of neighbours(s, pos.x, pos.y)) {
-    const st = Object.values(s.settlements).find((o) => o.x === n.x && o.y === n.y);
+    const st = settlements.find((o) => o.x === n.x && o.y === n.y);
     if (st && chiefWelcomes(s, st, p.id) && tensionOf(st, p.id) < 500 && u.moves > 0) {
       speakToChief(s, u.id, st.id);
       return;
@@ -1093,12 +1094,12 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
       if (t.lcr) targets.push({ x, y, d: grid.distance(x, y, pos.x, pos.y) });
     }
   }
-  for (const st of Object.values(s.settlements)) {
+  for (const st of settlements) {
     if (known(st.x, st.y) && chiefWelcomes(s, st, p.id) && tensionOf(st, p.id) < 500) targets.push({ x: st.x, y: st.y, d: grid.distance(st.x, st.y, pos.x, pos.y) + 2 });
   }
   targets.sort((a, b) => a.d - b.d);
   for (const t of targets.slice(0, 6)) {
-    const settlement = Object.values(s.settlements).some((st) => st.x === t.x && st.y === t.y);
+    const settlement = settlements.some((st) => st.x === t.x && st.y === t.y);
     const route: { path?: { x: number; y: number }[] } = {};
     let goal: { x: number; y: number } | null;
     if (settlement) goal = adjacentTileTowards(s, u, t.x, t.y, route);
@@ -1111,14 +1112,26 @@ function scoutTurn(s: GameState, p: Player, u: Unit): void {
       return;
     }
   }
-  // Frontier: a known land tile next to unknown land.
+  // Frontier: a known land tile next to unknown land, the first nearest one in row order. The
+  // distance is tested first: a tile no nearer than the one found cannot replace it.
   let frontier: { x: number; y: number; d: number } | null = null;
-  for (let y = 1; y < s.map.height - 1; y++) {
+  const h = s.map.height;
+  for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
-      if (!known(x, y) || isWater(s.map.tiles[y * w + x])) continue;
-      if (!neighbours(s, x, y).some((n) => !known(n.x, n.y))) continue;
       const d = grid.distance(x, y, pos.x, pos.y);
-      if (d > 0 && (!frontier || d < frontier.d)) frontier = { x, y, d };
+      if (d === 0 || (frontier && d >= frontier.d)) continue;
+      if (!known(x, y) || isWater(s.map.tiles[y * w + x])) continue;
+      const near = grid.neighbourOffsets(x, y);
+      let unknown = false;
+      for (let k = 0; k < near.length; k += 2) {
+        const nx = x + near[k];
+        const ny = y + near[k + 1];
+        if (nx >= 0 && ny >= 0 && nx < w && ny < h && !known(nx, ny)) {
+          unknown = true;
+          break;
+        }
+      }
+      if (unknown) frontier = { x, y, d };
     }
   }
   if (frontier && goTo(s, u, frontier.x, frontier.y)) {

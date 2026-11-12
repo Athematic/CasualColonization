@@ -122,13 +122,20 @@ export function noteProduction(s: GameState, nation: PlayerId, produced: Partial
 /** Figures shared by every nation's snapshot, gathered in one pass over the units. */
 export interface StatsCensus {
   land: number;
+  /** 1 for each water tile, 0 for land (the tiles `land` counts). */
+  water: Uint8Array;
   pop: Map<string, number>;
   forces: Map<PlayerId, { military: number; ships: number; holds: number }>;
 }
 
 function census(s: GameState): StatsCensus {
   let land = 0;
-  for (const t of s.map.tiles) if (!TERRAIN[t.t].water) land++;
+  const tiles = s.map.tiles;
+  const water = new Uint8Array(tiles.length);
+  for (let i = 0; i < tiles.length; i++) {
+    if (TERRAIN[tiles[i].t].water) water[i] = 1;
+    else land++;
+  }
   const pop = new Map<string, number>();
   const forces = new Map<PlayerId, { military: number; ships: number; holds: number }>();
   for (const u of unitList(s)) {
@@ -143,7 +150,7 @@ function census(s: GameState): StatsCensus {
       f.military += def.kind === 'colonist' ? ROLES[u.role].offence : def.offence;
     }
   }
-  return { land, pop, forces };
+  return { land, water, pop, forces };
 }
 
 /** The current values of every statistic for one nation (flows count since the last snapshot). */
@@ -167,8 +174,10 @@ export function statsSnapshot(s: GameState, nation: PlayerId, c: StatsCensus = c
     tension += st.tension[nation] ?? 0;
   }
   let explored = 0;
-  const tiles = s.map.tiles;
-  for (let i = 0; i < tiles.length; i++) if (p.explored[i] === 1 && !TERRAIN[tiles[i].t].water) explored++;
+  // The water flags of the census, gathered once for every nation's snapshot.
+  const water = c.water;
+  const seen = p.explored;
+  for (let i = 0; i < water.length; i++) if (seen[i] === 1 && !water[i]) explored++;
   const forces = c.forces.get(nation) ?? { military: 0, ships: 0, holds: 0 };
   const flows = s.stats?.flows?.[nation] ?? {};
   return {
