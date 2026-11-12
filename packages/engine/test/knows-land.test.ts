@@ -36,7 +36,7 @@ const LAND_GAME: Scenario = {
   name: 'Knowledge of the land test',
   hidden: true,
   peoples: { ...AMERICAS.peoples, playable: [{ id: 'iroquois', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga'] }] },
-  nationTypes: { people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS] } },
+  nationTypes: { ...AMERICAS.nationTypes, people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS], council: 'people' } },
 };
 registerScenario(LAND_GAME);
 
@@ -44,7 +44,7 @@ registerScenario(LAND_GAME);
 const UNKNOWING_GAME: Scenario = {
   ...LAND_GAME,
   id: 'test-knows-land-off',
-  nationTypes: { people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS], knowsLand: false } },
+  nationTypes: { ...AMERICAS.nationTypes, people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS], council: 'people', knowsLand: false } },
 };
 registerScenario(UNKNOWING_GAME);
 

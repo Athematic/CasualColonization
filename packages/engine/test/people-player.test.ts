@@ -110,7 +110,7 @@ const PEOPLE_GAME: Scenario = {
   hidden: true,
   peoples: { ...AMERICAS.peoples, playable: [{ id: 'iroquois', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga', 'Kanonwalohale'] }] },
   // Step 2: the people's own units and buildings (T6, T7), hard years and land health (T10).
-  nationTypes: { people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS] } },
+  nationTypes: { ...AMERICAS.nationTypes, people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS], council: 'people' } },
   mechanics: { ...AMERICAS.mechanics, hardYears: { chance: 1 / 8 }, landHealth: { regionSize: 8, renewal: 40, recovery: 5, floor: 0.2 } },
   // Step 7: the peoples' ways of winning beside the Europeans', both sides judged (T14).
   victory: [{ id: 'military' }, { id: 'independence-war' }, { id: 'confederacy' }, { id: 'concord' }, { id: 'prosperity' }, { id: 'continuity' }, { id: 'good-life' }, { id: 'time' }],
@@ -341,14 +341,14 @@ describe("a people's units and buildings (T6, T7)", () => {
     for (const t of PEOPLE_UNIT_TYPES) {
       expect(UNIT_TYPES[t].people).toBe(true);
       expect(UNIT_TYPES[t].price, t).toBeUndefined();
-      expect(AMERICAS.units).not.toContain(t);
-      expect(CARIBBEAN.units).not.toContain(t);
+      expect(AMERICAS.nationTypes.european.units).not.toContain(t);
+      expect(CARIBBEAN.nationTypes.european.units).not.toContain(t);
       expect(TRAINABLE).not.toContain(t);
       expect(PURCHASABLE).not.toContain(t);
     }
     for (const b of PEOPLE_BUILDINGS) {
-      expect(AMERICAS.buildings).not.toContain(b);
-      expect(CARIBBEAN.buildings).not.toContain(b);
+      expect(AMERICAS.nationTypes.european.buildings).not.toContain(b);
+      expect(CARIBBEAN.nationTypes.european.buildings).not.toContain(b);
       // No iron tools: they came only from Europeans.
       for (const l of BUILDINGS[b].levels) expect(l.tools, b).toBe(0);
     }

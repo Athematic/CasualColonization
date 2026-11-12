@@ -39,7 +39,7 @@ const ARRIVALS_GAME: Scenario = {
   hidden: true,
   nations: { ...AMERICAS.nations, sets: { alternative: AMERICAS.nations.sets.alternative.map(withArrivals) } },
   peoples: { ...AMERICAS.peoples, playable: [{ id: 'iroquois', name: 'the Haudenosaunee', adjective: 'Haudenosaunee', townNames: ['Onondaga'] }] },
-  nationTypes: { people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS] } },
+  nationTypes: { ...AMERICAS.nationTypes, people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS], council: 'people' } },
   // Step 7: the peoples' ways of winning beside the Europeans', both sides judged (T14).
   victory: [{ id: 'military' }, { id: 'independence-war' }, { id: 'confederacy' }, { id: 'concord' }, { id: 'prosperity' }, { id: 'continuity' }, { id: 'good-life' }, { id: 'time' }],
 };

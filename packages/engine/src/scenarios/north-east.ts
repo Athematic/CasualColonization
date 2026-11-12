@@ -276,9 +276,10 @@ export const NORTH_EAST: Scenario = {
     overrides: OVERRIDES,
   },
   goods: [...GOODS],
-  units: [...EUROPEAN_UNIT_TYPES],
-  buildings: [...EUROPEAN_BUILDINGS],
-  nationTypes: { people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS], council: 'people' } },
+  nationTypes: {
+    european: { units: [...EUROPEAN_UNIT_TYPES], buildings: [...EUROPEAN_BUILDINGS], council: 'congress' },
+    people: { units: [...PEOPLE_UNIT_TYPES], buildings: [...PEOPLE_BUILDINGS], council: 'people' },
+  },
   // Maize, beans and squash grew from the St. Lawrence valley and Huronia south (the map's plains
   // and prairie), not on the Shield, in the Maritimes' conifer forests or in Newfoundland (T6).
   peopleEconomy: { gardens: ['plains', 'prairie'] },

@@ -329,8 +329,10 @@ export const CARIBBEAN: Scenario = {
     overrides: { tupi: { wants: ['tradeGoods', 'tools', 'cloth'] } },
   },
   goods: GOODS_IN_PLAY,
-  units: without(EUROPEAN_UNIT_TYPES, 'expertFurTrapper', 'masterFurTrader'),
-  buildings: without(EUROPEAN_BUILDINGS, 'furTrader'),
+  // No furs in the islands, so no fur trappers, fur traders or fur trading house.
+  nationTypes: {
+    european: { units: without(EUROPEAN_UNIT_TYPES, 'expertFurTrapper', 'masterFurTrader'), buildings: without(EUROPEAN_BUILDINGS, 'furTrader'), council: 'congress' },
+  },
   // The Congress's rules with the period's members, named the Colonial Council by the terms below.
   councils: { congress: congress(COUNCIL) },
   events: 'caribbean',

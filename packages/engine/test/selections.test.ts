@@ -39,8 +39,9 @@ const NO_CIGARS: Scenario = {
   id: 'test-no-cigars',
   name: 'Test: no cigars, no Aztec',
   goods: without(AMERICAS.goods, 'cigars'),
-  units: without(AMERICAS.units, 'masterTobacconist'),
-  buildings: without(AMERICAS.buildings, 'tobacconist'),
+  nationTypes: {
+    european: { ...AMERICAS.nationTypes.european, units: without(AMERICAS.nationTypes.european.units, 'masterTobacconist'), buildings: without(AMERICAS.nationTypes.european.buildings, 'tobacconist') },
+  },
   peoples: { ...AMERICAS.peoples, ids: without(AMERICAS.peoples.ids, 'aztec') },
   ai: {
     goods: {
@@ -66,10 +67,10 @@ function checkState(s: GameState, sc: Scenario): void {
   for (const c of Object.values(s.colonies)) {
     expect(keys(c.goods)).toEqual(goods);
     for (const g of sc.goods) expect(Number.isFinite(c.goods[g])).toBe(true);
-    expect(keys(c.buildings)).toEqual([...sc.buildings].sort());
+    expect(keys(c.buildings)).toEqual([...sc.nationTypes.european.buildings].sort());
   }
   for (const u of Object.values(s.units)) {
-    expect(sc.units).toContain(u.type);
+    expect(sc.nationTypes.european.units).toContain(u.type);
     for (const g of Object.keys(u.cargo ?? {})) expect(sc.goods).toContain(g as GoodId);
   }
   expect(s.tribes.map((t) => t.id)).toEqual(sc.peoples.ids);
@@ -84,7 +85,7 @@ describe('selections: the Americas iterate as before', () => {
     const s = { config: {} };
     expect(goodsOf(s)).toEqual([...GOODS]);
     expect(peoplesOf(s)).toEqual(AMERICAS.peoples.ids);
-    expect(buildingsOf(s)).toEqual(AMERICAS.buildings);
+    expect(buildingsOf(s)).toEqual(AMERICAS.nationTypes.european.buildings);
     expect(nationSet(scenarioOf(s), undefined).map((e) => e.id)).toEqual(NATION_ORDER);
     expect(AMERICAS.ai.goods.export).toEqual(['sugar', 'tobacco', 'cotton', 'furs', 'ore', 'silver', 'rum', 'cigars', 'cloth', 'coats']);
   });
@@ -107,7 +108,7 @@ describe('selections: a scenario without cigars and the Aztec', () => {
     expect(colony).toBeDefined();
     for (const t of buildOptions(played.state, colony)) {
       if (t.kind === 'building') expect(t.id).not.toBe('tobacconist');
-      else expect(NO_CIGARS.units).toContain(t.id);
+      else expect(NO_CIGARS.nationTypes.european.units).toContain(t.id);
     }
   });
 
