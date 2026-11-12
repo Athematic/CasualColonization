@@ -147,8 +147,9 @@ export interface PeopleProfile {
   /** The towns' reserve as a share of the people's `storeYears` (T10: Combative keeps half). */
   stores: number;
   /**
-   * Land health under which its hunters are held within the region's renewal (T10: Creative and
-   * Competent 70, Combative 40); null follows the price and never holds back (Naive).
+   * Land health under which its hunters are held within the region's renewal: Creative and Competent
+   * 90, Combative 60 (T10 drafted 70 and 40; with those the levels' land ended alike, step 9); null
+   * follows the price and never holds back (Naive).
    */
   restraint: number | null;
   /** Sells food above its towns' reserve to Europeans on its trade visits (T10: Naive). */
@@ -180,7 +181,7 @@ export interface PeopleProfile {
 
 const competentPeople: PeopleProfile = {
   stores: 1,
-  restraint: 70,
+  restraint: 90,
   sellsFood: false,
   buys: ['tools', 'muskets', 'cloth'],
   offer: 1,
@@ -217,7 +218,7 @@ export const PEOPLE_PROFILES: Record<AiLevel, PeopleProfile> = {
   combative: {
     ...competentPeople,
     stores: 0.5,
-    restraint: 40,
+    restraint: 60,
     buys: ['muskets', 'horses', 'tools'],
     offer: 0.5,
     accept: 0.7,
