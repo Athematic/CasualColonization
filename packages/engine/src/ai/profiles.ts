@@ -174,8 +174,6 @@ export interface PeopleProfile {
   margin: number;
   /** Tiles of unclaimed land next to its own it claims a year. */
   claims: number;
-  /** How much its towns value work for the council (counsel) against other work: more council members sooner. */
-  counsel: number;
   /** What its towns build when nothing is set, in order (the first it can). */
   plan: BuildingKind[];
 }
@@ -195,7 +193,6 @@ const competentPeople: PeopleProfile = {
   peaceAfter: 8,
   margin: 1.2,
   claims: 1,
-  counsel: 1.5,
   plan: ['storagePits', 'longhouse', 'palisade', 'canoeLanding', 'workshop', 'dryingRacks'],
 };
 
@@ -213,7 +210,6 @@ export const PEOPLE_PROFILES: Record<AiLevel, PeopleProfile> = {
     barter: 0,
     peaceAfter: 12,
     claims: 0,
-    counsel: 1,
     plan: ['longhouse', 'storagePits', 'workshop', 'canoeLanding', 'dryingRacks', 'palisade'],
   },
   competent: competentPeople,
@@ -232,7 +228,6 @@ export const PEOPLE_PROFILES: Record<AiLevel, PeopleProfile> = {
     peaceAfter: 20,
     margin: 0.9,
     claims: 2,
-    counsel: 1,
     plan: ['palisade', 'storagePits', 'longhouse', 'workshop', 'canoeLanding', 'dryingRacks'],
   },
   // Trades and makes treaties: every kind with the nations, pacts and a league with the peoples.
