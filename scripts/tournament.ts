@@ -1,5 +1,5 @@
 // Plays computer-only games and compares AI levels.
-// Usage: npm run tournament -- [--games 8] [--turns 300] [--size medium] [--levels naive,competent,combative,creative] [--seed 1000] [--map id] [--difficulty conquistador] [--features] [--no-favoured] [--events] [--no-charter] [--scenario id] [--rivals real|alternative] [--play-on] [--jobs N] [--json]
+// Usage: npm run tournament -- [--games 8] [--turns 300] [--size medium] [--levels naive,competent,combative,creative] [--seed 1000] [--map id] [--difficulty conquistador] [--features] [--no-favoured] [--events] [--no-charter] [--scenario id] [--rivals real|alternative] [--play-on] [--peoples id,id|none] [--jobs N] [--json]
 // --difficulty plays every nation at that level's economics, as if each were a person (computer
 // players normally stay at Conquistador). Without it, games use the standard rules (Conquistador).
 // --features also counts how often each level uses each game feature and prints a table of
@@ -13,12 +13,16 @@
 // --play-on: a War of Independence won or lost does not end the game; that nation is finished with
 // the score it had then and the others play on, so every level is measured to --turns (use 609 for
 // the Americas' last turn, autumn 1850).
+// --peoples: native peoples playing as nations, all at the computer people's level (native-nations.md
+// T4); by default every playable people of the scenario (the North-east's four), none in the
+// Americas and the Caribbean, which have none. "none" plays without them. With peoples the run also
+// prints the peoples' table, the winners' ways per game, the Europeans' colonies and each game's time.
 // --jobs N: games played at once, each in a worker thread (default: the machine's cores less one).
 // --jobs 1 plays them one after the other in this process, as before. The games are the same either
 // way and the results are gathered in game order, so the tables are identical.
 import { availableParallelism } from 'node:os';
 import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads';
-import { AI_LEVELS, arenaGames, DEFAULT_SCENARIO, DIFFICULTY_LEVELS, formatArena, getScenario, listScenarios, formatCrown, formatEvents, formatFeatures, formatProsperity, formatRelations, formatScoreSplit, formatRelationsLine, playArenaRound, runArena, summarise, type AiLevel, type ArenaEntry, type ArenaOptions, type DifficultyId, type MapSize, type Rivals } from '../packages/engine/src/index.ts';
+import { AI_LEVELS, arenaGames, DEFAULT_SCENARIO, DIFFICULTY_LEVELS, formatArena, getScenario, listScenarios, formatCrown, formatEvents, formatFeatures, formatPeoples, formatProsperity, formatRelations, formatScoreSplit, formatRelationsLine, formatWays, playablePeoples, playArenaRound, runArena, summarise, type AiLevel, type ArenaEntry, type ArenaOptions, type DifficultyId, type MapSize, type Rivals, type TribeId } from '../packages/engine/src/index.ts';
 
 if (!isMainThread) {
   // A worker: plays the games it is sent (by number) and sends back their rows.
@@ -66,9 +70,17 @@ async function main(): Promise<void> {
   if (options.rivals && options.rivals !== 'real' && options.rivals !== 'alternative') throw new Error(`Unknown rivals "${options.rivals}". Use real or alternative.`);
   const scenario = getScenario(options.scenario ?? DEFAULT_SCENARIO);
   if (!scenario) throw new Error(`Unknown scenario "${options.scenario}". Use ${listScenarios().map((sc) => sc.id).join(', ')}.`);
+  // Playing peoples: the scenario's playable ones unless --peoples names others (or none).
+  const playable = playablePeoples(scenario).map((pp) => pp.id);
+  const peopleArg = args.includes('--peoples') ? opt('peoples', '') : undefined;
+  const peoples = (peopleArg === undefined ? playable : peopleArg === 'none' ? [] : (peopleArg.split(',') as TribeId[])) as TribeId[];
+  for (const pp of peoples) if (!playable.includes(pp)) throw new Error(`${scenario.name} has no playable people "${pp}". Use ${playable.join(', ') || 'none'}.`);
+  if (peoples.length) (options as ArenaOptions).peoples = peoples;
+  // A scenario with no generated maps (the North-east) plays on its default stored map.
+  if (!options.map && !scenario.map.generator) options.map = scenario.map.default;
 
   const started = Date.now();
-  console.error(`Playing ${options.games} games of ${options.turns} turns: ${levels.join(' vs ')} on a ${options.mapSize} map${scenario.id === DEFAULT_SCENARIO ? '' : ` in ${scenario.name}`}${difficulty ? ` at ${difficulty}` : ''}${options.noFavoured ? ', without Favoured Nation proposals' : ''}${options.events ? ', with events' : ''}${options.noCharter ? ', without the colony charter' : ''}${options.rivals === 'real' ? ', real rivals' : ''}${options.playOn ? ', playing on after independence' : ''}...`);
+  console.error(`Playing ${options.games} games of ${options.turns} turns: ${levels.join(' vs ')} on a ${options.mapSize} map${scenario.id === DEFAULT_SCENARIO ? '' : ` in ${scenario.name}`}${difficulty ? ` at ${difficulty}` : ''}${options.noFavoured ? ', without Favoured Nation proposals' : ''}${options.events ? ', with events' : ''}${options.noCharter ? ', without the colony charter' : ''}${options.rivals === 'real' ? ', real rivals' : ''}${options.playOn ? ', playing on after independence' : ''}${peoples.length ? `, with ${peoples.join(', ')} playing` : ''}...`);
   const jobs = Math.max(1, Math.min(options.games, args.includes('--jobs') ? Number(opt('jobs', '1')) : availableParallelism() - 1));
   if (!Number.isInteger(jobs)) throw new Error(`--jobs needs a whole number.`);
   const report = (rows: ArenaEntry[], g: number) => {
@@ -96,12 +108,17 @@ async function main(): Promise<void> {
     const defenceFights = rows.reduce((n, r) => n + (r.relations?.defenceFights ?? 0), 0);
     const pactWars = rows.reduce((n, r) => n + (r.relations?.pactWars ?? 0), 0);
     const last = Math.max(...rows.map((r) => r.lastTurn ?? 0));
-    console.error(`  game ${g + 1}/${options.games} (seed ${rows[0].seed}, to turn ${last}): ${line}  | agreements ${half('agreements')}, favoured ${half('favoured')}, wars ${wars} (royal ${royal}), alliances ${alliances}, companies ${companies}, people treaties ${peopleMade} (ended ${peopleEnded}, breaches ${breaches}), leases ${leases} (lapsed ${lapsed}), exchanges ${exchanges} (ended ${exchangesEnded}, taught again ${renewed}), defence pacts ${defences} (ended ${defencesEnded}, fights ${defenceFights}, wars ${pactWars})${declared ? `, independence: ${declared}` : ''}${confederation ? `, confederation: ${confederation}` : ''}${concord ? `, concord: ${concord}` : ''}${prosperity ? `, prosperity: ${prosperity}` : ''}${near ? `, prosperity missed on one condition: ${near}` : ''}`);
+    const pg = rows[0].peoplesGame;
+    const peopleLine = pg ? `  | peoples: ${pg.peoples.map((pp) => `${pp.people} ${pp.towns ? `${pp.towns} towns` : 'out'}${pp.way ? ` (${pp.way})` : ''}`).join(', ')}; colonies: ${Object.entries(pg.colonies).map(([id, c]) => `${id} ${c!.now}`).join(', ')}; ways: ${[...new Set(Object.values(pg.ways))].join(', ') || 'none'}; ${(pg.ms / 1000).toFixed(1)} s` : '';
+    console.error(`  game ${g + 1}/${options.games} (seed ${rows[0].seed}, to turn ${last}): ${line}  | agreements ${half('agreements')}, favoured ${half('favoured')}, wars ${wars} (royal ${royal}), alliances ${alliances}, companies ${companies}, people treaties ${peopleMade} (ended ${peopleEnded}, breaches ${breaches}), leases ${leases} (lapsed ${lapsed}), exchanges ${exchanges} (ended ${exchangesEnded}, taught again ${renewed}), defence pacts ${defences} (ended ${defencesEnded}, fights ${defenceFights}, wars ${pactWars})${declared ? `, independence: ${declared}` : ''}${confederation ? `, confederation: ${confederation}` : ''}${concord ? `, concord: ${concord}` : ''}${prosperity ? `, prosperity: ${prosperity}` : ''}${near ? `, prosperity missed on one condition: ${near}` : ''}${peopleLine}`);
   };
   const result = jobs === 1 ? runArena(options, report) : await runParallel(options, jobs, report);
   if (args.includes('--json')) console.log(JSON.stringify(result, null, 2));
   else {
     console.log(`\n${formatArena(result.summary)}\n`);
+    console.log(`${formatWays(result.entries)}\n`);
+    const peopleTable = formatPeoples(result.entries);
+    if (peopleTable) console.log(`${peopleTable}\n`);
     console.log(`Score by component, average points per nation:\n\n${formatScoreSplit(result.entries)}\n`);
     console.log(`Relations and trade between the Europeans, average per nation per game:\n\n${formatRelations(result.summary)}\n\n${formatRelationsLine(result.entries)}\n`);
     console.log(`The Crown: independence, the Royal Expeditionary Force (land units) against the old formula, demands and royal wars, average per nation per game:\n\n${formatCrown(result.entries)}\n`);

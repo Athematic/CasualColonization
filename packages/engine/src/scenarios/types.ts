@@ -10,11 +10,12 @@
  */
 import type { BuildingKind } from '../rules/buildings.js';
 import type { DifficultyId, DifficultyRules } from '../rules/difficulty.js';
-import type { FatherCategory, FatherId } from '../rules/fathers.js';
+import type { CouncilCost, FatherCategory, FatherId } from '../rules/fathers.js';
 import type { GoodId } from '../rules/goods.js';
+import type { PeopleEconomy } from '../rules/peoples.js';
 import type { Modifier, RumourOutcome } from '../rules/modifiers.js';
 import type { Effect } from '../events/types.js';
-import type { CompanyId, Lifeway, NationId, PeopleDef, Temperament, TribeId } from '../rules/nations.js';
+import type { CompanyId, Lifeway, NationId, PeopleDef, PlayerId, Temperament, TribeId } from '../rules/nations.js';
 import type { NativeRulesOverride, SettlementKindDef } from '../rules/natives.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { ScoreWeights } from '../rules/score.js';
@@ -56,17 +57,23 @@ export interface Scenario {
   /** Goods in play; the order is the order of keys in markets and warehouses. */
   goods: readonly GoodId[];
   /**
-   * Unit types in play, in catalogue order. Only units on this list are offered in Europe, built
-   * in colonies or arrive as immigrants; the engine's named slots (treasure, the REF's units, the
-   * starting ship) are expected to be on it.
+   * What each nation type uses from the global catalogues (native-nations.md T6, T7, T8): its unit
+   * types, its buildings and its council. `european` is the European nations' selection (companies
+   * and the Crown use it too); `people` is a playing people's, left out where the engine's
+   * `PEOPLE_SELECTION` serves (scenarios/index.ts `nationTypeOf`).
    */
-  units: readonly UnitTypeId[];
+  nationTypes: NationTypes;
   /**
-   * Buildings in play, in catalogue order (the order production runs in: tools are made before
-   * the armory uses them). Colonies only have these.
+   * A playing people's stores and gardens (native-nations.md T10; rules/peoples.ts), merged over
+   * the engine's PEOPLE_ECONOMY. Absent fields keep the engine's values.
    */
-  buildings: readonly BuildingKind[];
-  council: Council;
+  peopleEconomy?: Partial<PeopleEconomy>;
+  /**
+   * The scenario's councils, keyed by id (native-nations.md T8): the Americas' Continental Congress
+   * is `congress`. Each nation type names its council (`nationTypes`). A people's council the
+   * scenario does not define is the engine's `PEOPLE_COUNCIL` (rules/councils.ts).
+   */
+  councils: Record<CouncilId, Council>;
   /** What the computer players need to know about the scenario's content. */
   ai: ScenarioAi;
   /** Id of a registered event set (events/index.ts). `config.eventSet` overrides it (tests). */
@@ -176,6 +183,138 @@ export interface Mechanics {
    * `land-use`, step 3 `exchange`, step 4 `defence`).
    */
   peopleTreaties?: PeopleTreatyKind[];
+  /**
+   * Hard years (native-nations.md T10): each year, each region (land.ts) has a hard year with
+   * this chance, drawn from the game seed; food yields there are halved for everyone. Absent or
+   * false means off (the Americas and the Caribbean).
+   */
+  hardYears?: false | HardYearRules;
+  /**
+   * Land health per region (T10, land.ts): furs and game taken beyond a region's renewal wear it
+   * down, and its fur and game yields scale with its health. Absent or false means off.
+   */
+  landHealth?: false | LandHealthRules;
+  /**
+   * Epidemics after contact (native-nations.md T12, epidemics.ts): in each region each year, once
+   * Europeans and a people have met there, an epidemic with this chance, drawn from the game seed;
+   * it strikes every town and colony in the region alike. Absent or false means off (the Americas
+   * and the Caribbean).
+   */
+  epidemics?: false | EpidemicRules;
+  /**
+   * Knowledge of the land, explored and shared (native-nations.md section 16, Beta 3 step 10b): a
+   * playing people knows unclaimed land (T13) only once it has seen it, peoples share their maps
+   * when they meet, and computer peoples send their runners to explore. Absent or false means off
+   * (the Americas and the Caribbean).
+   */
+  mapKnowledge?: false | MapKnowledgeRules;
+  /**
+   * European nations offer to buy a playing people's claimed land, or take it (native-nations.md
+   * T5, section 18; peopleland.ts). Only a playing people's land: peoples nobody plays keep Beta
+   * 2's buying and taking. Absent or false means off (the Americas and the Caribbean).
+   */
+  landSales?: false | Partial<LandSaleRules>;
+}
+
+/** Offers for a playing people's land, and land taken (`Mechanics.landSales`; peopleland.ts `LAND_SALES` has the defaults). */
+export interface LandSaleRules {
+  /** How far from one of its colonies a nation may offer for (or take) a tile: 1 is the colony's work area. */
+  reach: number;
+  /** The asking price of a tile: the people's settlement kind's land price times this, times (2 − the share of its homeland it still keeps). */
+  price: number;
+  /** Chance a computer people accepts an offer at its asking price, times its profile's `sellsLand` (more for more gold, less without good relations). */
+  accept: number;
+  /** Years a computer nation waits, after it asked a people for land (or took some), before it asks it again. */
+  waitYears: number;
+  /** Years an offer waits for a person's answer before it lapses. */
+  offerYears: number;
+  /**
+   * How strongly a computer nation's choice of a new colony's site is drawn to a playing people's
+   * farmland (native-nations.md section 19): each tile a playing people claims within `reach` of the
+   * site adds this times its food. 0: not at all (section 18).
+   */
+  pull: number;
+  /**
+   * A computer people's willingness to sell or lease land to a nation (section 19) grows with the
+   * years of unbroken good relations with it, to its profile's full willingness after `peaceYears`,
+   * and with a trade treaty; `wary` is the share it starts from, with neither.
+   */
+  peaceYears: number;
+  wary: number;
+  /**
+   * How a computer nation gets a playing people's land, by its level (Naive never asks): `take` is
+   * the chance it takes the land rather than offering for it, only from the year `from` and only
+   * from a people that has refused its offers `refusals` times; with `lease` it proposes land use
+   * first, where the treaty ladder allows it.
+   */
+  levels: Record<'competent' | 'combative' | 'creative', LandDealLevel>;
+}
+
+/** How a computer nation of one level gets a playing people's land (`LandSaleRules.levels`). */
+export interface LandDealLevel {
+  take: number;
+  from?: number;
+  refusals?: number;
+  lease?: boolean;
+}
+
+/** Knowledge of the land (`Mechanics.mapKnowledge`). */
+export interface MapKnowledgeRules {
+  /**
+   * A playing people knows land nobody claims (moves on it as along a river, T13, movement.ts
+   * `knownLand`) only once it has explored it; its own claimed land it always knows.
+   */
+  seen: boolean;
+  /**
+   * Peoples share their maps when they meet (peoplemaps.ts): two playing peoples each give the other
+   * all they have explored, and a people nobody plays gives a playing people its homeland, the land
+   * within `homeland` tiles of its settlements. Not while either side is at war with the other or
+   * holds it hostile, is a Combative computer people (its profile's `shareMaps`), or is at war with
+   * one of the other's allies (a mutual defence pact, a league). Again every `every` years while
+   * they may (absent: once). False: no sharing.
+   */
+  share: false | { homeland: number; every?: number };
+  /**
+   * How far from its towns a computer people's runners explore, in tiles, times its profile's
+   * `explore` (ai/people.ts); 0 keeps them home.
+   */
+  range: number;
+}
+
+/** Epidemics (`Mechanics.epidemics`). */
+export interface EpidemicRules {
+  /** Chance of an epidemic in a region in contact, each year (1 in 25). */
+  chance: number;
+  /** Years without births in a town or colony an epidemic struck (3). */
+  years: number;
+  /** People a town or colony an epidemic struck loses, never its last (1). */
+  loss: number;
+  /**
+   * How near a European colony and a people's town (or a settlement of a people nobody plays) must
+   * be for a region to be in contact, in tiles (8): an epidemic strikes only where the two have met.
+   */
+  reach: number;
+}
+
+/** Hard years (`Mechanics.hardYears`). */
+export interface HardYearRules {
+  /** Chance of a hard year in each region each year (1 in 8). */
+  chance: number;
+}
+
+/** Land health (`Mechanics.landHealth`). */
+export interface LandHealthRules {
+  /**
+   * Side of a region in tiles, on maps without regions of their own: the map is cut into squares
+   * of this size (8). Step 8's stored map brings real regions.
+   */
+  regionSize: number;
+  /** Furs and game a region renews in a year: what can be taken without wearing it (40). */
+  renewal: number;
+  /** Health a region regains in a year while less than its renewal is taken (5). */
+  recovery: number;
+  /** The lowest share of fur and game yields a worn region still gives (0.2). */
+  floor: number;
 }
 
 /** A whole number of years from `base − spread` to `base + spread`, drawn from the game seed. */
@@ -451,6 +590,17 @@ export interface StoredMapEntry {
   id: string;
   /** Each people's regions and the number of settlements in each; only the scenario's peoples. */
   peoples: PeopleRegion[];
+  /**
+   * Land health (native-nations.md T10): furs and game each of the map's regions (`StoredMap.regions`,
+   * by id) gives back in a year without wearing. A region not listed has `landHealth.renewal`.
+   */
+  renewal?: Record<string, number>;
+  /**
+   * Where a nation's ships arrive on this map, by nation: a water tile [x, y] (native-nations.md
+   * T18, Beta 3 step 8: the North-east's nations each where their expeditions came). A nation not
+   * listed takes the map's spacing along its arrival edge, as before.
+   */
+  entries?: Partial<Record<NationId, [number, number]>>;
 }
 
 /** Where a people lives on a stored map: an inclusive tile rectangle and the number of settlements in it. */
@@ -459,6 +609,18 @@ export interface PeopleRegion {
   /** [x0, y0, x1, y1], inclusive. */
   region: [number, number, number, number];
   count: number;
+  /**
+   * The year the people comes to this region (native-nations.md T20: the Inuit reaching Labrador),
+   * if after the game's first: its settlements are placed at the start of that year
+   * (peoplemoves.ts). Missing means from the start.
+   */
+  from?: number;
+  /**
+   * The year the people is no longer found in this region (the Dorset in Labrador, the St. Lawrence
+   * Iroquoians): at the start of that year its settlements there leave the map, unless the people
+   * plays (its towns are its player's). Missing means it stays.
+   */
+  until?: number;
 }
 
 /** Bonus resources and Lost City Rumours scattered over a new map: the chance per tile. */
@@ -610,8 +772,24 @@ export interface NationIdentity {
  * The engine and the web game read it through `nationOf(s, id)`; the catalogue's NATIONS only
  * supplies the Americas' values.
  */
-export interface NationEntry extends NationIdentity {
+export interface NationEntry extends PlayerEntry {
   id: NationId;
+  /**
+   * The year the nation arrives (native-nations.md T18; arrivals.ts): until its first turn of that
+   * year it is not in the game (no player, units, colonies, turns or diplomacy); then its expedition
+   * arrives at its entry point, as at the start. Missing, or a year the game starts in or before,
+   * means it is there from the start. Not read for companies (they have `from`) or the Crown.
+   */
+  arrives?: number;
+}
+
+/**
+ * Any player as `nationOf(s, id)` shows it: a nation's entry, or a playing people's (native-nations.md
+ * T1: a people keeps its own id). A people has no home port: its `port` has no name or market and is
+ * never used (playerkind.ts `homePort`).
+ */
+export interface PlayerEntry extends NationIdentity {
+  id: PlayerId;
   /** The bonus: its shown text and the modifiers that make it work (rules/modifiers.ts). */
   bonus: { text: string; modifiers?: Modifier[] };
   colonyNames: string[];
@@ -619,9 +797,119 @@ export interface NationEntry extends NationIdentity {
   port: PortEntry;
 }
 
+/** A council's id in `Scenario.councils`. */
+export type CouncilId = string;
+
+/**
+ * The nation types (native-nations.md T1, T6): `european` for European nations, chartered companies
+ * and the Crown; `people` for a playing people.
+ */
+export type NationType = 'european' | 'people';
+
+/** Each nation type's selection from the global catalogues (`Scenario.nationTypes`). */
+export interface NationTypes {
+  european: NationTypeSelection;
+  /** Missing: the engine's `PEOPLE_SELECTION` (the catalogue's people's entries, the `people` council). */
+  people?: PeopleSelection;
+}
+
+/** What one nation type uses from the global catalogues (native-nations.md T6, T7, T8). */
+export interface NationTypeSelection {
+  /**
+   * Unit types in play for the type, in catalogue order. For the European nations only these are
+   * offered in Europe, built in colonies or arrive as immigrants, and the engine's named slots
+   * (treasure, the REF's units, the starting ship) are expected among them. For a playing people:
+   * what its towns build and its braves become; the first is the unit its towns grow by.
+   */
+  units: readonly UnitTypeId[];
+  /**
+   * Buildings in play for the type, in catalogue order (the order production runs in: tools are
+   * made before the armory uses them). Its colonies or towns have only these.
+   */
+  buildings: readonly BuildingKind[];
+  /** Its council in `Scenario.councils` (T8); an id the scenario does not define is the engine's (`ENGINE_COUNCILS`). */
+  council: CouncilId;
+}
+
+/** A playing people's selection: what it uses from the catalogues, and its traits. */
+export interface PeopleSelection extends NationTypeSelection {
+  /**
+   * Knowledge of the land (native-nations.md T13): its land units move at most at river cost on its
+   * own and unclaimed land, except on plowed tiles (movement.ts, `knowsLand`). Missing means on;
+   * false switches it off for the scenario.
+   */
+  knowsLand?: boolean;
+}
+
+/**
+ * A people the scenario lets setup play as a nation (native-nations.md T3, T4): `GameConfig.peoples`
+ * picks which of them play; the others stay settlements under Beta 2's rules. Its settlements
+ * become its towns (colonies) and its braves its first units.
+ */
+export interface PlayablePeople {
+  id: TribeId;
+  /** Its name as a player, in sentences ("the Haudenosaunee"); missing means the people's name. */
+  name?: string;
+  /** Missing means the people's name. */
+  adjective?: string;
+  /** Names for the towns it founds after its first (which keep their settlements' names). */
+  townNames: string[];
+}
+
+/**
+ * A people's own data in a scenario (`peoples.overrides[id]`): its name (the Americas call the
+ * Haudenosaunee the Iroquois), skills, wants and temperament where they differ from the catalogue,
+ * the key its seeded streams hash (`seedKey`), and, as a playing people (native-nations.md T14), its own
+ * score weights over the scenario's (`score`) and its own params for the peoples' victory kinds
+ * (`victory`, by kind id: `continuity`, `good-life`), over the scenario's victory entry.
+ */
+export type PeopleOverride = Partial<Pick<PeopleDef, 'name' | 'skills' | 'wants' | 'temperament' | 'storeYears' | 'seedKey'>> & {
+  score?: Partial<ScoreWeights>;
+  /**
+   * Its own thresholds for the peoples' ways that judge one people at a time (native-nations.md
+   * T14, section 18), over the scenario's victory entry's `params`, which are over the engine's
+   * defaults (peoplevictory.ts `CONTINUITY`, `GOOD_LIFE`). A confederacy is judged as a league, so it has none here.
+   */
+  victory?: PeopleVictoryOverride;
+};
+
+/** Continuity's thresholds (native-nations.md T14): the engine's defaults are peoplevictory.ts `CONTINUITY`. */
+export interface ContinuityParams {
+  /** Share of its starting homeland kept (claimed by it or by no one; leased land counts as kept). */
+  homelandShare: number;
+  /** Average health (0–100) of its homeland's regions, where land health is on. */
+  landHealth: number;
+  /** Its people now against its people at the start. */
+  peopleShare: number;
+  /** Council members. */
+  members: number;
+}
+
+/** A good life's thresholds (T14): the engine's defaults are peoplevictory.ts `GOOD_LIFE`. */
+export interface GoodLifeParams {
+  storeYears: number;
+  hungerYears: number;
+  landHealth: number;
+  peaceYears: number;
+  faithYears: number;
+  treatyShare: number;
+}
+
+/** A people's own thresholds, by victory kind (`peoples.overrides[id].victory`). */
+export interface PeopleVictoryOverride {
+  continuity?: Partial<ContinuityParams>;
+  'good-life'?: Partial<GoodLifeParams>;
+}
+
 export interface ScenarioPeoples {
   /** Peoples in play, north to south (the generator's band order). */
   ids: TribeId[];
+  /**
+   * Peoples setup may play as nations (native-nations.md T4), each also in `ids`. Missing means
+   * none: the Americas and the Caribbean list none in Beta 3.
+   */
+  playable?: PlayablePeople[];
+
   /** Goods native settlements produce for trade. */
   produce: GoodId[];
   /**
@@ -635,7 +923,7 @@ export interface ScenarioPeoples {
    * (TRIBES): goods and experts not in play (the Tupi want no coats in the Caribbean), and its
    * temperament towards treaties (N8). Read with `peopleOf(s, id)`.
    */
-  overrides?: Partial<Record<TribeId, Partial<Pick<PeopleDef, 'skills' | 'wants' | 'temperament'>>>>;
+  overrides?: Partial<Record<TribeId, PeopleOverride>>;
   /**
    * Changes to the engine's native rules (rules/natives.ts NATIVE_RULES): braves, tension
    * thresholds, demands, prices, burial grounds, surrender, missions and inciting. Absent fields
@@ -644,8 +932,13 @@ export interface ScenarioPeoples {
   rules?: NativeRulesOverride;
 }
 
-/** The scenario's council (the Americas: the Continental Congress's Founding Fathers). */
+/**
+ * A council (native-nations.md T8; the Americas: the Continental Congress's Founding Fathers). Its
+ * product pays for its members: liberty bells in the engine (`Player.bells`, `fatherBells`), named
+ * by the council's `text.product`.
+ */
 export interface Council {
+  /** Its categories, open strings: one candidate of each is offered at a time, in this order. */
   categories: FatherCategory[];
   /** Ids in the global catalogue (FATHERS), in catalogue order. */
   members: FatherId[];
@@ -654,7 +947,23 @@ export interface Council {
    * listed here has the catalogue's modifiers and joining effects.
    */
   effects?: Partial<Record<FatherId, MemberEffects>>;
+  /**
+   * Its words where they differ from the scenario's terms (`council`, `councilShort`, `member`,
+   * `members`, `product`): the Congress uses the scenario's terms, a people's council its own.
+   */
+  text?: Partial<Record<CouncilTextKey, string>>;
+  /** Members of a category become likelier late in the game (the Congress: political +2 after turn 120, scaled by `aiTurn`). */
+  late?: { category: FatherCategory; turn: number; add: number };
+  /** The order computer players choose candidates in (missing: the Congress's, `CONGRESS_AI_PREFERENCE`). */
+  aiPreference?: FatherId[];
+  /** What the next member costs (missing: the Congress's rule, `CONGRESS_COST`). */
+  cost?: CouncilCost;
+  /** The sprite id of its hall's backdrop; missing: the scenario's `art.councilHall`. */
+  hall?: string;
 }
+
+/** The words a council may name for itself (`councilText`). */
+export type CouncilTextKey = 'council' | 'councilShort' | 'member' | 'members' | 'product';
 
 /** What a council member does: passive modifiers while in the council, and effects once on joining. */
 export interface MemberEffects {
@@ -678,11 +987,31 @@ export interface ScenarioAi {
    */
   pace?: number;
   /**
+   * The thresholds are dates (Beta 3 step 8): a threshold tuned for the Americas is read as the
+   * Americas' year of that turn, and becomes the turn of the same year in this scenario's calendar
+   * (`aiTurn`), whatever its first year. For a game that starts long before the Europeans arrive
+   * (the North-east, from 1000), so their plans keep to the Americas' dates. `pace` is then not read.
+   */
+  dates?: boolean;
+  /**
+   * With `dates`: how much later than in the Americas the computer Europeans' plans come, as a
+   * stretch of the years since 1492 (absent: 1). Where they arrive late on poor land and take a turn
+   * a year (the North-east), an arc tuned for the Americas' half-year turns from 1492 has them reach
+   * for independence before their colonies are grown; 1.5 reads the Americas' 1666 as 1753.
+   */
+  stretch?: number;
+  /**
    * The land is islands: when no good site lies within walking distance, the advanced computer
    * players send a settler by ship to a site on another island (ai/advanced.ts). Absent: settlers
    * walk, as on the Americas' continents.
    */
   islands?: boolean;
+  /**
+   * Targets for computer peoples (native-nations.md T15, peoplevictory.ts PEOPLE_AI_TARGETS), as
+   * scenario-overridable defaults measured by tournaments: `militaryWins`, the ceiling on the
+   * share of computer-only games won by the military victory (0.01). Absent fields keep the engine's.
+   */
+  peoples?: { militaryWins?: number };
   /** How readily the computer players cooperate; absent fields keep the engine's values (alliances.ts COOPERATION). */
   cooperation?: Partial<Cooperation>;
   goods: {

@@ -31,7 +31,7 @@ function play(def: StoredMap, nations: number, seed = 7, humans = 1): GameState 
 
 describe('stored maps', () => {
   it('lists each map once with a name and description', () => {
-    expect(STORED_MAPS.map((m) => m.id)).toEqual(['north-america', 'south-america', 'americas', 'australia', 'caribbean']);
+    expect(STORED_MAPS.map((m) => m.id)).toEqual(['north-america', 'south-america', 'americas', 'australia', 'caribbean', 'north-east']);
     for (const def of STORED_MAPS) {
       expect(def.name).toBeTruthy();
       expect(def.description).toBeTruthy();
@@ -68,6 +68,9 @@ describe('stored maps', () => {
       // Land per settlement a region needs; the Caribbean's one-tile islands hold one settlement each.
       const landPer = def.id === 'caribbean' ? 1 : 4;
       const arrivalX = def.entrySide === 'west' ? 1 : map.width - 2;
+      // A map whose scenario plays native peoples, with nations arriving later and entry points of
+      // their own (the North-east), is played in its own tests (test/scenarios/north-east*.test.ts).
+      const games = !sc.peoples.playable?.length;
 
       it('parses with consistent rows at about the large size or bigger', () => {
         const lines = def.rows.trim().split('\n');
@@ -107,7 +110,7 @@ describe('stored maps', () => {
         }
       });
 
-      it('places settlements for every tribe it claims, spaced apart', () => {
+      if (games) it('places settlements for every tribe it claims, spaced apart', () => {
         for (const seed of [1, 2, 3]) {
           const s = play(def, 8, seed, 0);
           const settlements = Object.values(s.settlements);
@@ -130,7 +133,7 @@ describe('stored maps', () => {
         }
       });
 
-      it('starts games with 1 and 8 nations on the arrival-edge high seas', () => {
+      if (games) it('starts games with 1 and 8 nations on the arrival-edge high seas', () => {
         for (const n of [1, 8]) {
           const s = play(def, n);
           expect(s.map.width).toBe(map.width);
@@ -155,7 +158,7 @@ describe('stored maps', () => {
         expect(a.map.tiles.some((t) => t.lcr)).toBe(true);
       });
 
-      it('sails to Europe from the arrival point and back', () => {
+      if (games) it('sails to Europe from the arrival point and back', () => {
         const s = play(def, 1);
         const ship = Object.values(s.units).find((u) => u.owner === s.players[0].id && u.type === 'caravel')!;
         const entry = { ...s.players[0].entry };
@@ -168,7 +171,7 @@ describe('stored maps', () => {
         expect(ship.loc).toEqual({ kind: 'map', ...entry });
       });
 
-      it('plays 30 AI-only turns and colonies get founded', () => {
+      if (games) it('plays 30 AI-only turns and colonies get founded', () => {
         const s = play(def, 8, 99, 0);
         for (let i = 0; i < 30; i++) applyCommand(s, { type: 'endTurn' });
         expect(s.turn).toBeGreaterThanOrEqual(30);

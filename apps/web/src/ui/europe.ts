@@ -25,7 +25,7 @@ import {
   unitsAboard,
   unitsOf,
   type GoodId,
-  type NationId,
+  type PlayerId,
   type Player,
   type RoleId,
   type Unit,
@@ -42,7 +42,7 @@ export class EuropeScreen implements Screen {
   private tab: 'recruit' | 'train' | 'purchase' = 'recruit';
 
   /** The home port on view: the viewer's own, or a Favoured Nation partner's where it has ships. */
-  constructor(private app: App, private port?: NationId) {
+  constructor(private app: App, private port?: PlayerId) {
     this.body = h('div', { class: 'screen-body' });
     this.el = h('section', { class: 'screen europe-screen', role: 'dialog', 'aria-label': `${Term(this.app.state, 'homeland')}` }, this.body);
   }

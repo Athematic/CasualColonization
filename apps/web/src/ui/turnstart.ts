@@ -1,4 +1,4 @@
-import { aBrave, peopleTradeBenefits, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, TRIBES, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
+import { colonyBeside, homelandKept, independenceQuestion, landOffersFor, leagueProposalFor, sideName, councilText, CouncilText, aBrave, peopleTradeBenefits, allianceOf, calendarOf, demandPenalty, demandText, describeCompany, eventChoices, eventTitle, FATHERS, formatDate, GOOD_DEFS, nationOf, nationTitle, nextFatherCost, pendingDemands, pendingEvents, REF_ON_REFUSAL, term, Term, peopleName, withTerms, type FatherId, type GameMessage, type Relation } from '@cc/engine';
 import { icon } from '../styles.js';
 import type { App } from '../app.js';
 import { clear, h } from '../dom.js';
@@ -12,6 +12,8 @@ import { clear, h } from '../dom.js';
 const ROUTINE = [
   / begins\.$/,
   /has been born in/,
+  // A people's births (native-nations.md T10).
+  /^A child has been born in /,
   /spoiled in .*warehouse/,
   /has built an? /,
   /has completed the/,
@@ -30,6 +32,18 @@ const ROUTINE = [
   /has joined the .+ of /,
   /You decide in the turn-start briefing\.$/,
 ];
+
+/**
+ * The kind of a notable message the peoples' game brings (native-nations.md T12, T18, T10), for a
+ * tag beside it in the briefing: an epidemic, an arrival from across the sea, a hard year or hunger.
+ */
+export function noticeKind(m: GameMessage): { id: string; label: string } | null {
+  if (/^An epidemic has reached /.test(m.text)) return { id: 'epidemic', label: 'Epidemic' };
+  if (/^Ships of .+ have reached /.test(m.text)) return { id: 'arrival', label: 'Arrival' };
+  if (/^A hard year around /.test(m.text)) return { id: 'hard-year', label: 'Hard year' };
+  if (/^Hunger in |is hungry for a second year|stores have run out/.test(m.text)) return { id: 'hunger', label: 'Hunger' };
+  return null;
+}
 
 export function isRoutine(m: GameMessage): boolean {
   return ROUTINE.some((re) => re.test(m.text));
@@ -61,6 +75,27 @@ interface Decision {
 function decisions(app: App, opts: { father: boolean }): Decision[] {
   const me = app.me;
   const list: Decision[] = [];
+  // A War of Independence won while at war with a people (victory.ts, native-nations.md T14).
+  const question = independenceQuestion(app.state, me.id);
+  if (question) {
+    list.push({
+      id: 'independence',
+      required: true,
+      render: (done) =>
+        h('div', { class: 'decision-body' },
+          h('p', null, question),
+          h('div', { class: 'decision-actions' },
+            h('button', {
+              class: 'btn primary',
+              onclick: () => {
+                if (!app.dispatch({ type: 'answerIndependence', keepPlaying: false }, true)) return;
+                done('The victory stands.');
+                void app.showGameOver();
+              },
+            }, 'End with the victory'),
+            h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerIndependence', keepPlaying: true }, true) && done('You keep playing: peace or war is yours to choose.') }, 'Keep playing'))),
+    });
+  }
   const tax = me.pendingTax;
   if (tax) {
     const good = GOOD_DEFS[tax.good].name.toLowerCase();
@@ -110,7 +145,7 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
     const st = app.state.settlements[d.settlementId];
     const colony = app.state.colonies[d.colonyId];
     if (!st || !colony) continue;
-    const tribe = TRIBES[st.tribe].name;
+    const tribe = peopleName(app.state, st.tribe);
     const what = demandText(d);
     if (d.kind === 'treaty') {
       // A people's own offer of a treaty (native-partners.md N8, N13).
@@ -204,19 +239,56 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
             h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerProposal', nation: from, accept: false }, true) && done('Turned down.') }, 'Turn down'))),
     });
   }
+  // A league of peoples proposed to a playing people (peopleleague.ts, native-nations.md T14).
+  const league = leagueProposalFor(app.state, me.id);
+  if (league) {
+    const by = sideName(app.state, league.by).replace(/^the /, 'The ');
+    const others = [league.by, ...league.peoples].filter((id) => id !== me.id).map((id) => sideName(app.state, id)).join(', ');
+    list.push({
+      id: 'league',
+      title: 'A league of peoples',
+      required: false,
+      render: (done) =>
+        h('div', { class: 'decision-body' },
+          h('p', null, `${by} propose ${league.league ? 'that you join their league' : `a league with ${others}`}: its peoples keep the peace among themselves and settle their common affairs together. You can also answer later in Foreign Affairs.`),
+          h('div', { class: 'decision-actions' },
+            h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerLeague', by: league.by, accept: true }, true) && done('Agreed.') }, 'Accept'),
+            h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerLeague', by: league.by, accept: false }, true) && done('Turned down.') }, 'Turn down'))),
+    });
+  }
+  // A European nation's offer for a tile of a person's people's land (peopleland.ts, native-nations.md section 18).
+  for (const o of landOffersFor(app.state, me.id)) {
+    const by = sideName(app.state, o.nation).replace(/^the /, 'The ');
+    const beside = colonyBeside(app.state, o.nation, o.x, o.y);
+    const home = homelandKept(app.state, me.id);
+    list.push({
+      id: `land-${o.nation}`,
+      title: `${by} would buy your land`,
+      required: false,
+      render: (done) =>
+        h('div', { class: 'decision-body' },
+          h('p', null, `${by} offer ${o.gold} gold for a tile of your land${beside ? ` beside ${beside.name}` : ''} (${o.x}, ${o.y}). Sold, it is theirs: your towns no longer work it, and it is no longer part of your homeland (you keep ${home.kept} of its ${home.start} tiles). You have ${me.gold} gold. The offer lapses if you leave it unanswered.`),
+          h('div', { class: 'decision-actions' },
+            h('button', { class: 'btn', onclick: () => app.centerOn(o.x, o.y) }, 'Show on the map'),
+            h('button', { class: 'btn', onclick: () => app.dispatch({ type: 'answerLandOffer', nation: o.nation, accept: true }, true) && done(`Sold for ${o.gold} gold.`) }, `Sell for ${o.gold} gold`),
+            h('button', { class: 'btn primary', onclick: () => app.dispatch({ type: 'answerLandOffer', nation: o.nation, accept: false }, true) && done('You keep your land.') }, 'Keep the land'))),
+    });
+  }
   const offer = Object.values(me.fatherOffer) as FatherId[];
+  // The Congress's bells are liberty bells; a people's council names its own product (counsel).
+  const productWords = (id: typeof me.id) => (councilText(app.state, id, 'product') === 'bells' ? 'liberty bells' : councilText(app.state, id, 'product'));
   if (offer.length && (opts.father || (!me.currentFather && (me.fatherBells > 0 || me.fathers.length > 0)))) {
     list.push({
       id: 'father',
       required: false,
       render: (done) =>
         h('div', { class: 'decision-body' },
-          h('p', null, `Choose the next ${term(app.state, 'member')} to join ${term(app.state, 'councilShort')}. ${me.fatherBells}/${nextFatherCost(app.state, me)} liberty bells collected.${me.currentFather ? ` ${term(app.state, 'councilShort')} currently works towards ${FATHERS[me.currentFather].name}.` : ''} You can also decide later.`),
+          h('p', null, `Choose the next ${councilText(app.state, me.id, 'member')} to join ${councilText(app.state, me.id, 'councilShort')}. ${me.fatherBells}/${nextFatherCost(app.state, me)} ${productWords(me.id)} collected.${me.currentFather ? ` ${councilText(app.state, me.id, 'councilShort')} currently works towards ${FATHERS[me.currentFather].name}.` : ''} You can also decide later.`),
           h('div', { class: 'decision-actions father-choices' },
             offer.map((id) =>
               h('button', {
                 class: id === me.currentFather ? 'btn father primary' : 'btn father',
-                onclick: () => app.dispatch({ type: 'chooseFather', father: id }, true) && done(`${Term(app.state, 'councilShort')} will work towards ${FATHERS[id].name}.`),
+                onclick: () => app.dispatch({ type: 'chooseFather', father: id }, true) && done(`${CouncilText(app.state, me.id, 'councilShort')} will work towards ${FATHERS[id].name}.`),
               },
               icon({ kind: 'father', id, category: FATHERS[id].category, variant: 'figure' }, 160, FATHERS[id].name),
               h('span', { class: 'father-text' },
@@ -228,7 +300,7 @@ function decisions(app: App, opts: { father: boolean }): Decision[] {
 }
 
 /** Decision headings; `{…}` are the scenario's terms. */
-const TITLES: Record<string, string> = { tax: '{Crown} raises taxes', demand: '{King} demands gold', mercenaries: 'Mercenaries offer their services', father: '{council}' };
+const TITLES: Record<string, string> = { independence: 'The {independenceWar} is won', tax: '{Crown} raises taxes', demand: '{King} demands gold', mercenaries: 'Mercenaries offer their services', father: '{council}' };
 
 let open = false;
 
@@ -319,10 +391,12 @@ export function showTurnStart(app: App, news: TurnNews, opts: { father?: boolean
         body.append(
           h('section', { class: 'turn-section', 'aria-label': 'News' },
             h('h3', null, 'This turn'),
-            h('ul', { class: 'notices' }, news.notable.map((m) =>
-              h('li', null, m.text, m.at
+            h('ul', { class: 'notices' }, news.notable.map((m) => {
+              const kind = noticeKind(m);
+              return h('li', { 'data-kind': kind?.id }, kind ? h('span', { class: `pill notice-${kind.id}` }, kind.label) : null, kind ? ' ' : null, m.text, m.at
                 ? h('button', { class: 'btn tiny', title: 'Show on the map', onclick: () => { app.centerOn(m.at!.x, m.at!.y); close(); } }, 'Show')
-                : null)))));
+                : null);
+            }))));
       }
       if (news.routine.length) {
         body.append(

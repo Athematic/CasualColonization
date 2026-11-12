@@ -10,10 +10,10 @@
  */
 import { FATHERS, type FatherId } from '../rules/fathers.js';
 import type { Hook, Modifier, ModifierOf } from '../rules/modifiers.js';
-import type { NationId } from '../rules/nations.js';
+import type { PlayerId } from '../rules/nations.js';
 import type { GameState, Player } from '../types.js';
-import { nationEntry, scenarioOf } from './index.js';
-import type { MemberEffects, Scenario } from './types.js';
+import { councilOf, nationEntry, scenarioOf } from './index.js';
+import type { Council, MemberEffects } from './types.js';
 
 type ByHook = Partial<Record<Hook, Modifier[]>>;
 
@@ -26,27 +26,29 @@ interface Cached {
 const CACHE = new WeakMap<Player, Cached>();
 const NONE: readonly never[] = [];
 
-/** A council member's effects in a scenario: the scenario's own, or the catalogue's. */
-export function memberEffects(scenario: Scenario, id: FatherId): MemberEffects {
-  return scenario.council.effects?.[id] ?? FATHERS[id] ?? {};
+/** A council member's effects in a council: the council's own, or the catalogue's. */
+export function memberEffects(council: Council | undefined, id: FatherId): MemberEffects {
+  return council?.effects?.[id] ?? FATHERS[id] ?? {};
 }
 
-function collect(s: GameState, nation: NationId, fathers: readonly FatherId[]): ByHook {
+function collect(s: GameState, nation: PlayerId, fathers: readonly FatherId[]): ByHook {
   const scenario = scenarioOf(s);
   const all: Modifier[] = [];
   const entry = nation === 'crown' ? undefined : nationEntry(scenario, s.config.rivals, nation);
   if (entry?.bonus.modifiers) all.push(...entry.bonus.modifiers);
   if (fathers.length) {
-    const members = scenario.council.members;
+    // The player's own council (the Congress, or a people's council), in the council's order.
+    const council = councilOf(s, nation);
+    const members: readonly FatherId[] = council?.members ?? [];
     const ordered = [...members.filter((id) => fathers.includes(id)), ...fathers.filter((id) => !members.includes(id))];
-    for (const id of ordered) all.push(...(memberEffects(scenario, id).modifiers ?? []));
+    for (const id of ordered) all.push(...(memberEffects(council, id).modifiers ?? []));
   }
   const byHook: ByHook = {};
   for (const m of all) (byHook[m.hook] ??= []).push(m);
   return byHook;
 }
 
-function byHookOf(s: GameState, nation: NationId): ByHook {
+function byHookOf(s: GameState, nation: PlayerId): ByHook {
   const p = s.players.find((q) => q.id === nation);
   if (!p) return collect(s, nation, NONE);
   let c = CACHE.get(p);
@@ -58,12 +60,12 @@ function byHookOf(s: GameState, nation: NationId): ByHook {
 }
 
 /** The nation's modifiers at a hook, in order: its bonus, then its council members. */
-export function modifiers<H extends Hook>(s: GameState, nation: NationId, hook: H): readonly ModifierOf<H>[] {
+export function modifiers<H extends Hook>(s: GameState, nation: PlayerId, hook: H): readonly ModifierOf<H>[] {
   return (byHookOf(s, nation)[hook] as ModifierOf<H>[] | undefined) ?? NONE;
 }
 
 /** Whether the nation has any modifier at a hook (for hooks that are on or off). */
-export function hasModifier(s: GameState, nation: NationId, hook: Hook): boolean {
+export function hasModifier(s: GameState, nation: PlayerId, hook: Hook): boolean {
   return modifiers(s, nation, hook).length > 0;
 }
 

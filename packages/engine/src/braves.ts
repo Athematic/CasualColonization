@@ -8,6 +8,7 @@
  * deterministic.
  */
 import { gridOf } from './grid.js';
+import { settlementFurs } from './land.js';
 import { chooseDefender, defencePower, promote } from './combat.js';
 import { fail } from './errors.js';
 import { sellPrice } from './europe.js';
@@ -34,12 +35,13 @@ import { track } from './telemetry.js';
 import { BUILDINGS, type BuildingKind } from './rules/buildings.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
 import { UNIT_TYPES } from './rules/units.js';
-import { isCompanyIdent, TRIBES, type NationId } from './rules/nations.js';
+import { type PlayerId } from './rules/nations.js';
+import { systemsOfId } from './playerkind.js';
 import { braveCombat } from './rules/natives.js';
 import { landStepCost } from './movement.js';
 import { RIVER_MOVE_COST, ROAD_MOVE_COST, TERRAIN } from './rules/terrain.js';
 import type { Brave, Colony, GameState, NativeDemand, Settlement, Unit } from './types.js';
-import { difficultyOf, goodsOf, nativeProduceOf, nativeRulesOf, peopleOf, settlementKindOf } from './scenarios/index.js';
+import { difficultyOf, goodsOf, nativeProduceOf, nativeRulesOf, peopleOf, settlementKindOf , peopleName } from './scenarios/index.js';
 import type { SettlementKindDef } from './rules/natives.js';
 import { removeUnit, colonyList, unitList } from './unitindex.js';
 import { aiAcceptsPeopleOffer, answerPeopleOffer, defenceEnemy, defencePartner, hasPeopleTrade, notePeopleContact, peopleBraveTradeFactor, peopleBuyFactor, peopleGatherFactor, peopleHostile, peopleTreatyRules, peopleTreatyText, peopleWouldOffer } from './peopletreaties.js';
@@ -76,9 +78,9 @@ export function aBrave(tribe: string): string {
   return `${/^[AEIOU]/.test(tribe) ? 'An' : 'A'} ${tribe} brave`;
 }
 
-export function braveName(b: Brave): string {
+export function braveName(s: GameState, b: Brave): string {
   const kind = b.armed && b.mounted ? 'Mounted armed brave' : b.armed ? 'Armed brave' : b.mounted ? 'Mounted brave' : 'Brave';
-  return `${TRIBES[b.tribe].name} ${kind.toLowerCase()}`;
+  return `${peopleName(s, b.tribe)} ${kind.toLowerCase()}`;
 }
 
 function tribeOf(s: GameState, st: { tribe: Settlement['tribe'] }) {
@@ -86,7 +88,7 @@ function tribeOf(s: GameState, st: { tribe: Settlement['tribe'] }) {
 }
 
 /** Whether a tribe has submitted to a nation (no attacks or demands on it). */
-export function hasSubmitted(s: GameState, tribe: Settlement['tribe'], nation: NationId): boolean {
+export function hasSubmitted(s: GameState, tribe: Settlement['tribe'], nation: PlayerId): boolean {
   return !!s.tribes.find((t) => t.id === tribe)?.submitted?.includes(nation);
 }
 
@@ -94,7 +96,7 @@ export function hasSubmitted(s: GameState, tribe: Settlement['tribe'], nation: N
  * Removes a brave. With a killer, the tribe mourns: tension rises towards that nation, by a third
  * as much (and at home only) when the tribe was already at war with it, so wars can still end.
  */
-export function killBrave(s: GameState, b: Brave, killer?: NationId, atWar = false): void {
+export function killBrave(s: GameState, b: Brave, killer?: PlayerId, atWar = false): void {
   delete bravesOf(s)[b.id];
   s.nativeDemands = (s.nativeDemands ?? []).filter((d) => d.braveId !== b.id);
   const home = s.settlements[b.home];
@@ -149,7 +151,9 @@ function gatherGoods(s: GameState, st: Settlement): void {
     const n = produce[g];
     if (!n) continue;
     const goods = (st.goods = st.goods ?? {});
-    goods[g] = Math.min(cap, (goods[g] ?? 0) + n);
+    // Furs come from the land's health, and count against it (land.ts, T10).
+    const got = s.land?.taken && g === 'furs' ? settlementFurs(s, st.x, st.y, n) : n;
+    goods[g] = Math.min(cap, (goods[g] ?? 0) + got);
   }
 }
 
@@ -159,7 +163,7 @@ export function settlementForSale(s: GameState, st: Settlement): { good: GoodId;
 }
 
 /** Price per unit a settlement asks a nation for one of its goods: dearer when tense, cheaper when it has plenty, and with a trade treaty (N4). */
-export function nativeUnitPrice(s: GameState, st: Settlement, good: GoodId, nation: NationId): number {
+export function nativeUnitPrice(s: GameState, st: Settlement, good: GoodId, nation: PlayerId): number {
   const stock = st.goods?.[good] ?? 0;
   const plenty = stock >= settlementKind(s, st).produceCap * 0.75 ? nativeRulesOf(s).buyPricePlenty : 1;
   const mood = 1 + tensionOf(st, nation) / 1000;
@@ -309,7 +313,8 @@ function nearestColony(s: GameState, st: Settlement): Colony | undefined {
   let best: Colony | undefined;
   let bestD = Infinity;
   for (const c of colonyList(s)) {
-    if (c.owner === 'crown') continue;
+    // Not the Crown's colonies, nor a playing people's towns (playerkind.ts `visitedByBraves`).
+    if (!systemsOfId(c.owner).visitedByBraves) continue;
     const d = grid.distance(c.x, c.y, st.x, st.y);
     if (d <= range && d < bestD) {
       best = c;
@@ -331,7 +336,7 @@ function nearbyEnemy(s: GameState, st: Settlement, index: PhaseIndex): Unit | un
     const y = Math.floor(i / w);
     const d = grid.distance(x, y, st.x, st.y);
     if (d > 3 || d >= bestD || index.colonies.has(i)) continue;
-    const u = units.find((o) => o.owner !== 'crown' && !isCompanyIdent(o.owner) && tribe.stance[o.owner] === 'war' && !hasSubmitted(s, st.tribe, o.owner));
+    const u = units.find((o) => systemsOfId(o.owner).peoples && tribe.stance[o.owner] === 'war' && !hasSubmitted(s, st.tribe, o.owner));
     if (u) {
       best = u;
       bestD = d;
@@ -358,7 +363,7 @@ function chooseTask(s: GameState, b: Brave, st: Settlement, index: PhaseIndex): 
     const nation = c.owner;
     const t = tensionOf(st, nation);
     // A people that submitted, and every people towards a chartered company (fix c), neither attacks nor demands.
-    const hostile = !hasSubmitted(s, st.tribe, nation) && !isCompanyIdent(nation);
+    const hostile = !hasSubmitted(s, st.tribe, nation) && systemsOfId(nation).peoples;
     const raid = difficultyOf(s, player(s, nation)).raidChance;
     if (hostile && tribe.stance[nation] === 'war') {
       if (roll < rules.braveChances.attackAtWar * raid) b.task = { kind: 'attack', colonyId: c.id };
@@ -607,7 +612,7 @@ function wanderStep(s: GameState, b: Brave, st: Settlement, points: number, inde
 const NOT_FOR_SALE = new Set<GoodId>(['muskets', 'horses', 'tools']);
 
 function arrive(s: GameState, b: Brave, st: Settlement, c: Colony, purpose: 'gift' | 'trade' | 'demand'): void {
-  const tribe = TRIBES[st.tribe].name;
+  const tribe = peopleName(s, st.tribe);
   const nation = c.owner;
   const p = player(s, nation);
   delete b.task;
@@ -698,7 +703,7 @@ function buyOffer(s: GameState, st: Settlement, c: Colony, good: GoodId, amount:
   track(c.owner, 'natives:bought from visiting brave');
   track(c.owner, 'natives:gold spent buying', price);
   noteGoods(s, c.owner, 'fromNatives', good, amount);
-  message(s, `${c.name} buys ${amount} ${GOOD_DEFS[good].name.toLowerCase()} from the ${TRIBES[st.tribe].name} for ${price} gold.`, c.owner, c);
+  message(s, `${c.name} buys ${amount} ${GOOD_DEFS[good].name.toLowerCase()} from the ${peopleName(s, st.tribe)} for ${price} gold.`, c.owner, c);
 }
 
 function addDemand(s: GameState, d: Omit<NativeDemand, 'id' | 'turn'>): NativeDemand {
@@ -718,7 +723,7 @@ function demandFor(s: GameState, c: Colony): { good?: GoodId; amount: number } |
 
 function makeDemand(s: GameState, b: Brave, st: Settlement, c: Colony): void {
   const what = demandFor(s, c);
-  const tribe = TRIBES[st.tribe].name;
+  const tribe = peopleName(s, st.tribe);
   if (!what) return;
   const d = addDemand(s, { kind: 'demand', nation: c.owner, colonyId: c.id, settlementId: st.id, braveId: b.id, ...what });
   track(c.owner, 'natives:tribute demanded');
@@ -763,7 +768,7 @@ export function resolveDemand(s: GameState, d: NativeDemand, accept: boolean): s
   const b = bravesOf(s)[d.braveId];
   const st = s.settlements[d.settlementId];
   const c = s.colonies[d.colonyId];
-  const tribe = st ? TRIBES[st.tribe].name : 'natives';
+  const tribe = st ? peopleName(s, st.tribe) : 'natives';
   if (b) delete b.task;
   if (!st || !c || c.owner !== d.nation) return 'The natives have gone.';
   const p = player(s, d.nation);
@@ -808,7 +813,7 @@ export function resolveDemand(s: GameState, d: NativeDemand, accept: boolean): s
 }
 
 /** Answers a waiting demand or offer for a nation (the `answerNativeDemand` command). */
-export function answerNativeDemand(s: GameState, nation: NationId, demandId: string, accept: boolean): string {
+export function answerNativeDemand(s: GameState, nation: PlayerId, demandId: string, accept: boolean): string {
   const d = (s.nativeDemands ?? []).find((o) => o.id === demandId);
   if (!d || d.nation !== nation) fail('There is no such native demand.');
   track(nation, 'cmd:answerNativeDemand');
@@ -825,7 +830,7 @@ function expireDemands(s: GameState): void {
 }
 
 /** Demands and offers waiting for a nation's answer. */
-export function pendingDemands(s: GameState, nation: NationId): NativeDemand[] {
+export function pendingDemands(s: GameState, nation: PlayerId): NativeDemand[] {
   return (s.nativeDemands ?? []).filter((d) => d.nation === nation);
 }
 
@@ -877,7 +882,7 @@ export function attackColony(s: GameState, b: Brave, c: Colony): void {
   const defenders = unitsAt(s, c.x, c.y).filter((u) => u.owner === c.owner && !isShip(u));
   const defender = chooseDefender(s, defenders) ?? colonyWorkers(s, c)[0];
   if (!defender) return;
-  const tribe = TRIBES[b.tribe].name;
+  const tribe = peopleName(s, b.tribe);
   const st = s.settlements[b.home];
   meetPeople(s, c.owner, b.tribe, c);
   track(c.owner, 'natives:raid suffered');
@@ -887,7 +892,7 @@ export function attackColony(s: GameState, b: Brave, c: Colony): void {
     killBrave(s, b);
     if (st) addTension(st, c.owner, -30);
     track(c.owner, 'natives:brave killed');
-    message(s, `${c.name} beats off an attack by the ${tribe}: the ${braveName(b)} is killed.${promote(s, defender)}`, c.owner, c);
+    message(s, `${c.name} beats off an attack by the ${tribe}: the ${braveName(s, b)} is killed.${promote(s, defender)}`, c.owner, c);
     return;
   }
   if (isArmed(defender) && defender.loc.kind === 'map') {
@@ -903,7 +908,7 @@ export function attackColony(s: GameState, b: Brave, c: Colony): void {
 
 /** What a successful raid on an undefended colony does, as in the original. */
 function pillage(s: GameState, b: Brave, c: Colony): void {
-  const tribe = TRIBES[b.tribe].name;
+  const tribe = peopleName(s, b.tribe);
   const goods = goodsOf(s).filter((g) => g !== 'food' && c.goods[g] >= 20).sort((x, y) => c.goods[y] - c.goods[x]);
   const r = random(s);
   const workers = colonyWorkers(s, c);
@@ -952,12 +957,12 @@ function pillage(s: GameState, b: Brave, c: Colony): void {
  * to the brave (a King's regular, disarmed, is destroyed, as in combat). `defend`: the partner whose
  * colony the brave defends (N7), told of the fight.
  */
-function attackUnit(s: GameState, b: Brave, target: Unit, defend?: NationId): void {
+function attackUnit(s: GameState, b: Brave, target: Unit, defend?: PlayerId): void {
   if (target.loc.kind !== 'map') return;
   const units = unitsAt(s, target.loc.x, target.loc.y).filter((u) => u.owner === target.owner && !isShip(u));
   const defender = chooseDefender(s, units, b);
   if (!defender) return;
-  const tribe = TRIBES[b.tribe].name;
+  const tribe = peopleName(s, b.tribe);
   const at = { x: target.loc.x, y: target.loc.y };
   meetPeople(s, defender.owner, b.tribe, at);
   const off = braveCombat(b).offence * 1.5;
@@ -994,7 +999,7 @@ export function braveDefence(s: GameState, b: Brave): number {
 }
 
 /** Whether a tile holds a brave of a tribe at war with the nation. */
-export function hostileBraveAt(s: GameState, nation: NationId, x: number, y: number): Brave | undefined {
+export function hostileBraveAt(s: GameState, nation: PlayerId, x: number, y: number): Brave | undefined {
   // Usually no tribe is at war with the nation, and then no brave is hostile: the braves are not scanned.
   let war = false;
   for (const t of s.tribes) {

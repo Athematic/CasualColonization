@@ -1,13 +1,18 @@
 import { sellPrice } from './europe.js';
+import { nationsPresent } from './presence.js';
 import { sonsOfLiberty } from './production.js';
-import { AMERICAS_CALENDAR, buildingsOf, goodsOf, scoreWeightsOf, Term } from './scenarios/index.js';
+import { AMERICAS_CALENDAR, buildingsOf, CouncilText, goodsOf, mechanicsOf, scoreWeightsFor, Term } from './scenarios/index.js';
+import { homelandHealth, homelandKept, peopleCount, sidesMet } from './peoplevictory.js';
+import { pairStanding } from './peoplediplomacy.js';
+import { storeYearsHeld } from './peopleeconomy.js';
 import { hasTradeAgreement, isFavoured } from './relations.js';
 import { BUILDINGS } from './rules/buildings.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { recentProduction } from './stats.js';
 import type { ScoreWeights } from './rules/score.js';
 import type { GameState, Player } from './types.js';
-import { companyScoreShare, sharesIn } from './companies.js';
+import { companyScoreShare, isCompany, sharesIn } from './companies.js';
+import { systemsOf } from './playerkind.js';
 import { ownedUnitsView, colonyList } from './unitindex.js';
 import { bound, partyIsPeople } from './treaties.js';
 
@@ -29,7 +34,16 @@ export type ScoreComponent =
   /** Treaties with native peoples in force (Beta 2); only while the scenario weighs them. */
   | 'peoples'
   /** Shares in chartered companies (companies.ts): the holder's part of each company's score. Only for shareholders. */
-  | 'companies';
+  | 'companies'
+  // A playing people's lines (native-nations.md T14): its people, its homeland kept, the land's
+  // health there, its stores, its treaties, the sides that trust it and its council.
+  | 'people'
+  | 'homeland'
+  | 'land'
+  | 'stores'
+  | 'treaties'
+  | 'trust'
+  | 'council';
 
 export interface ScoreLine {
   key: ScoreComponent;
@@ -50,7 +64,8 @@ export interface ScoreBreakdown {
  * Each component of a nation's score: what is counted and the points it earns. The total is their
  * sum. The weights are the scenario's (SCORE_WEIGHTS with its overrides) unless given.
  */
-export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreWeightsOf(s)): ScoreBreakdown {
+export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreWeightsFor(s, p.id)): ScoreBreakdown {
+  if (p.kind === 'people') return peopleScore(s, p, w);
   let colonists = 0;
   let experts = 0;
   const workers = new Map<string, number>();
@@ -70,15 +85,17 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreW
   let halfColonies = 0;
   let fullColonies = 0;
   let goods = 0;
+  const homePort = systemsOf(p).homePort;
   for (const c of colonyList(s)) {
     if (c.owner !== p.id) continue;
-    for (const kind of buildingsOf(s)) levels += Math.max(0, (c.buildings[kind] ?? 0) - BUILDINGS[kind].initialLevel);
+    for (const kind of buildingsOf(s, c.owner)) levels += Math.max(0, (c.buildings[kind] ?? 0) - BUILDINGS[kind].initialLevel);
     const pop = workers.get(c.id) ?? 0;
     const sol = sonsOfLiberty(s, c, pop);
     rebels += Math.round((pop * sol) / 100);
     if (pop > 0 && sol >= 50) halfColonies++;
     if (pop > 0 && sol >= 100) fullColonies++;
-    for (const g of goodsOf(s)) if (g !== 'food') goods += (c.goods[g] ?? 0) * sellPrice(p, g);
+    // Goods are worth their home port's price; a playing people has none (its own score lines are step 7).
+    if (homePort) for (const g of goodsOf(s)) if (g !== 'food') goods += (c.goods[g] ?? 0) * sellPrice(p, g);
   }
 
   let agreements = 0;
@@ -114,11 +131,11 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreW
     lines.push(line('peoples', 'Treaties with native peoples', treaties, 'treaties', treaties * w.peopleTreaty));
   }
   // A company cannot win: its score counts for its shareholders, by their shares.
-  if (s.players.length > s.config.nations.length && p.kind !== 'company') {
+  if (s.players.length > nationsPresent(s) && systemsOf(p).ranked) {
     let held = 0;
     let points = 0;
     for (const co of s.players) {
-      if (co.kind !== 'company') continue;
+      if (!isCompany(co)) continue;
       const share = sharesIn(co, p.id);
       if (!share.held) continue;
       held += share.held;
@@ -129,7 +146,43 @@ export function scoreBreakdown(s: GameState, p: Player, w: ScoreWeights = scoreW
   return { lines, total: lines.reduce((sum, l) => sum + l.points, 0) };
 }
 
-export function score(s: GameState, p: Player, w: ScoreWeights = scoreWeightsOf(s)): number {
+/**
+ * A playing people's score (native-nations.md T14): its people, its homeland kept, the health of
+ * its homeland's regions (where land health is on), its stores (years of food held, town by town,
+ * capped), its treaties in force (a league included), the nations and peoples whose standing with
+ * it reads "Trusts you", and its council. No gold, buildings or production. Not compared with the
+ * Europeans' scores: it ranks peoples among themselves and shows their values.
+ */
+function peopleScore(s: GameState, p: Player, w: ScoreWeights): ScoreBreakdown {
+  const line = (key: ScoreComponent, label: string, value: number, unit: string, points: number): ScoreLine => ({
+    key, label, value: Math.round(value), unit, points: Math.round(points),
+  });
+  const people = peopleCount(s, p.id);
+  const home = homelandKept(s, p.id);
+  let stores = 0;
+  for (const c of colonyList(s)) if (c.owner === p.id) stores += Math.min(w.peopleStoreCap, storeYearsHeld(s, c));
+  let treaties = 0;
+  for (const t of s.treaties ?? []) if (!t.end && t.parties.some((q) => q.id === p.id)) treaties++;
+  let trust = 0;
+  for (const o of sidesMet(s, p.id)) if (pairStanding(s, p.id, o) === 'Trusts you') trust++;
+  const lines: ScoreLine[] = [
+    line('people', 'People', people, 'people', people * w.peoplePerson),
+    line('homeland', 'Homeland kept', home.kept, `of ${home.start} tiles`, home.kept * w.peopleHomeland),
+  ];
+  if (mechanicsOf(s).landHealth) {
+    const health = homelandHealth(s, p.id);
+    lines.push(line('land', 'Health of the land', health, 'average health', health * w.peopleLandHealth));
+  }
+  lines.push(
+    line('stores', 'Stores', stores, 'years of food in store', stores * w.peopleStoreYear),
+    line('treaties', 'Treaties', treaties, 'treaties', treaties * w.peopleTreaty),
+    line('trust', 'Trust', trust, 'nations and peoples that trust it', trust * w.peopleTrust),
+    line('council', CouncilText(s, p.id, 'council'), p.fathers.length, 'members', p.fathers.length * w.peopleCouncil),
+  );
+  return { lines, total: lines.reduce((sum, l) => sum + l.points, 0) };
+}
+
+export function score(s: GameState, p: Player, w: ScoreWeights = scoreWeightsFor(s, p.id)): number {
   return scoreBreakdown(s, p, w).total;
 }
 
@@ -139,6 +192,13 @@ export function score(s: GameState, p: Player, w: ScoreWeights = scoreWeightsOf(
  */
 export function finalScores(s: GameState): Partial<Record<Player['id'], number>> {
   const out: Partial<Record<Player['id'], number>> = {};
-  for (const p of s.players) if (p.id !== 'crown' && p.kind !== 'company') out[p.id] = p.finished ? p.finished.score : score(s, p);
+  for (const p of s.players) if (systemsOf(p).ranked) out[p.id] = p.finished ? p.finished.score : score(s, p);
+  return out;
+}
+
+/** Every playing people's score now (native-nations.md T14): compared only among peoples. */
+export function peopleScores(s: GameState): Partial<Record<Player['id'], number>> {
+  const out: Partial<Record<Player['id'], number>> = {};
+  for (const p of s.players) if (p.kind === 'people') out[p.id] = score(s, p);
   return out;
 }

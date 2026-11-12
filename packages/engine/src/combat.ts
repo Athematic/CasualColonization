@@ -1,9 +1,11 @@
+import { anyPlayingPeople, onPairWar, pactPlayersOf } from './peoplediplomacy.js';
+import { nationsPresent } from './presence.js';
 import { gridOf } from './grid.js';
 import { fail } from './errors.js';
 import { noteHistory } from './history.js';
 import { track } from './telemetry.js';
 import { hasModifier, modifiers, mulOf } from './scenarios/modifiers.js';
-import { mechanicsOf, nationOf, nationTitle, nativeRulesOf, settlementKindOf, term, Term } from './scenarios/index.js';
+import { mechanicsOf, nationOf, nationTitle, nativeRulesOf, settlementKindOf, term, Term , peopleName } from './scenarios/index.js';
 import { canAttack } from './movement.js';
 import { braveDefence, braveName, bravesOf, killBrave } from './braves.js';
 import { addTension, settlementName } from './natives.js';
@@ -31,10 +33,11 @@ import { random, randInt } from './rng.js';
 import { riverLinked } from './rivers.js';
 import { isFavoured, onWar } from './relations.js';
 import { pactAllies, sendOut, warOnFriend } from './alliances.js';
-import { isCompanyId } from './companies.js';
-import { STOCKADE_DEFENCE } from './rules/buildings.js';
+import { kindOfId, systemsOfId } from './playerkind.js';
+import { noteDefeat } from './peoplevictory.js';
+import { BUILDINGS, STOCKADE_DEFENCE } from './rules/buildings.js';
 import { AMBUSH_BONUS, BOMBARD_CHANCE, CAPTURE_CHANCE, REPAIR_COST, RIVER_DEFENCE } from './rules/combat.js';
-import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
+import { type PlayerId, type TribeId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
 import type { Colony, GameState, Unit } from './types.js';
@@ -52,6 +55,9 @@ function troopBonus(u: Unit, attacking: boolean): number {
       return 1.5;
     case 'continentalSoldier':
       return 2;
+    // A people's warrior armed with muskets fights as a veteran does (native-nations.md T6).
+    case 'warrior':
+      return 1.5;
     case 'kingsRegular':
       return attacking ? 1.5 : 1.75;
     default:
@@ -73,7 +79,8 @@ export function ambushBonus(s: GameState, attacker: { x: number; y: number }, de
 
 export function offencePower(s: GameState, u: Unit, target?: Unit): number {
   const def = UNIT_TYPES[u.type];
-  let power = def.kind === 'colonist' ? ROLES[u.role].offence : def.offence;
+  // A colonist fights by its role; a people's warrior has its bow (`def.offence`) without one.
+  let power = def.kind === 'colonist' ? Math.max(ROLES[u.role].offence, def.offence) : def.offence;
   power *= troopBonus(u, true);
   for (const m of modifiers(s, u.owner, 'unitOffence')) if (m.unit === u.type) power *= m.mul;
   const pos = target && !isShip(u) ? unitPosition(s, u) : undefined;
@@ -95,7 +102,7 @@ export function riverCrossing(s: GameState, from: { x: number; y: number }, to: 
 /** `attackFrom`: where the attack comes from, for the river defence bonus (a unit in the open defending against a crossing attacker). */
 export function defencePower(s: GameState, u: Unit, attackFrom?: { x: number; y: number }): number {
   const def = UNIT_TYPES[u.type];
-  let power = def.kind === 'colonist' ? ROLES[u.role].defence : def.defence;
+  let power = def.kind === 'colonist' ? Math.max(ROLES[u.role].defence, def.defence) : def.defence;
   power *= troopBonus(u, false);
   if (isShip(u)) return power;
   const pos = unitPosition(s, u);
@@ -105,6 +112,9 @@ export function defencePower(s: GameState, u: Unit, attackFrom?: { x: number; y:
   if (colony) {
     const level = colony.buildings.stockade;
     bonus = level > 0 ? STOCKADE_DEFENCE[level - 1] : 0;
+    // A people's palisade (native-nations.md T7).
+    const palisade = colony.buildings.palisade;
+    if (palisade) bonus = Math.max(bonus, BUILDINGS.palisade.defence![palisade - 1]);
     if (def.kind === 'artillery') bonus += 75;
     // Paul Revere: colonists take up stored muskets.
     if (def.kind === 'colonist' && !isArmed(u) && modifiers(s, colony.owner, 'armedFromStock').some((m) => colony.goods.muskets >= m.muskets)) power = ROLES.soldier.defence;
@@ -127,7 +137,7 @@ export function chooseDefender(s: GameState, units: Unit[], attackFrom?: { x: nu
  * The unit that defends a colony against `attacker`: the strongest land unit on its tile, the
  * owner's or, under a defensive pact, an ally's garrison (alliances.ts); otherwise a colonist.
  */
-function colonyDefender(s: GameState, colony: Colony, attacker: NationId): Unit | undefined {
+function colonyDefender(s: GameState, colony: Colony, attacker: PlayerId): Unit | undefined {
   const allies = s.treaties ? pactAllies(s, colony.owner, attacker) : [];
   const outside = unitsAt(s, colony.x, colony.y).filter((u) => !isShip(u) && (u.owner === colony.owner || allies.includes(u.owner)));
   return chooseDefender(s, outside) ?? colonyWorkers(s, colony)[0];
@@ -155,6 +165,8 @@ export function declareWar(s: GameState, a: string, b: string): void {
       message(s, `${nationOf(s, ally).name} stands by its ally ${nationOf(s, pb.id).name}.`);
       declareWar(s, pa.id, ally);
     }
+    // Treaties with a playing people end with the war, and its defence partners stand by it (peoplediplomacy.ts, Beta 3 step 4).
+    if (anyPlayingPeople(s)) for (const id of onPairWar(s, pa.id, pb.id)) if (pa.stance[id] !== 'war') declareWar(s, pa.id, id);
   }
 }
 
@@ -174,7 +186,7 @@ function damageShip(s: GameState, ship: Unit): string {
     ship.repair = 4;
     return `${name} is damaged and limps to ${drydock.name} for repairs`;
   }
-  if (player(s, ship.owner).independence === 'none' && ship.owner !== 'crown') {
+  if (player(s, ship.owner).independence === 'none' && ship.owner !== 'crown' && systemsOfId(ship.owner).homePort) {
     setUnitLoc(s, ship, { kind: 'europe' });
     ship.repair = 6;
     return `${name} is damaged and returns to ${term(s, 'homeland')} for repairs`;
@@ -212,6 +224,12 @@ function demote(s: GameState, u: Unit, winner: Unit): string {
         return `${name} is destroyed`;
       }
       return `${name} is disarmed`;
+    }
+    // No captives where a people plays (native-nations.md, out of scope for Beta 3): a beaten
+    // unarmed person of a people, or beaten by one, is lost.
+    if (systemsOfId(u.owner).ai === 'people' || systemsOfId(winner.owner).ai === 'people') {
+      removeUnit(s, u.id);
+      return `${name} is lost`;
     }
     // Unarmed colonists and treasure are captured.
     setUnitOwner(s, u, winner.owner);
@@ -262,7 +280,7 @@ function takeEquipment(s: GameState, winner: Unit, loser: Unit, before: Unit['ro
 }
 
 /** A damaged artillery piece in a colony with an armory (or in Europe) is mended for hammers and tools (or gold). */
-export function repairArtillery(s: GameState, nation: NationId, unitId: string): string {
+export function repairArtillery(s: GameState, nation: PlayerId, unitId: string): string {
   const u = s.units[unitId];
   if (!u || u.owner !== nation) fail('That is not your unit.');
   if (u.type !== 'damagedArtillery') fail('Only damaged artillery needs repairs.');
@@ -287,7 +305,7 @@ export function repairArtillery(s: GameState, nation: NationId, unitId: string):
  * At the start of a nation's turn, its coastal forts and fortresses fire on adjacent enemy ships
  * (nations at war with the owner; one seeded roll per ship). A hit damages the ship as in combat.
  */
-export function bombardShips(s: GameState, nation: NationId): void {
+export function bombardShips(s: GameState, nation: PlayerId): void {
   const me = player(s, nation);
   for (const colony of colonyList(s)) {
     const level = colony.buildings.stockade;
@@ -306,6 +324,14 @@ export function bombardShips(s: GameState, nation: NationId): void {
 
 /** Winning soldiers may become veterans; George Washington makes it certain. */
 export function promote(s: GameState, u: Unit): string {
+  // A people's townsperson who wins a fight may become a warrior, armed or not (native-nations.md T6).
+  const people = kindOfId(u.owner) === 'people';
+  if (people) {
+    // The War Leaders (a people's council) make it certain.
+    if (!s.units[u.id] || u.type !== 'townsperson' || (!hasModifier(s, u.owner, 'alwaysPromote') && random(s) >= 0.2)) return '';
+    u.type = 'warrior';
+    return ` The victors become ${UNIT_TYPES.warrior.name.toLowerCase()}s.`;
+  }
   if (!s.units[u.id] || !isArmed(u) || UNIT_TYPES[u.type].skill > 0 || u.type === 'nativeConvert') return '';
   if (!hasModifier(s, u.owner, 'alwaysPromote') && random(s) >= 0.2) return '';
   u.type = player(s, u.owner).independence === 'declared' ? 'continentalSoldier' : 'veteranSoldier';
@@ -347,9 +373,11 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
     defender = chooseDefender(s, unitsAt(s, tp.x, tp.y).filter((o) => o.owner === t.owner), pos);
   }
   if (!defender) fail('There is nothing to attack.');
+  // A people's town attacked has no birth this year (native-nations.md T10).
+  if (colony && kindOfId(colony.owner) === 'people') colony.foughtAt = s.turn;
   // The nation attacked: a colony's owner (its allies' garrison defends it), else the defender's.
   const enemy = colony ? colony.owner : defender.owner;
-  if (s.players.length > s.config.nations.length && (isCompanyId(s, enemy) || isCompanyId(s, u.owner))) fail('Chartered companies are neutral: they are not attacked and do not attack.');
+  if (s.players.length > nationsPresent(s) && (!systemsOfId(enemy).war || !systemsOfId(u.owner).war)) fail('Chartered companies are neutral: they are not attacked and do not attack.');
   if (!player(s, u.owner).human && (isFavoured(s, u.owner, enemy) || (s.treaties && warOnFriend(s, u.owner, enemy)))) fail('Computer players never attack a Favoured Nation or an ally.');
   // Privateers sail under no flag, so their attacks do not start wars.
   if (u.type !== 'privateer') declareWar(s, u.owner, enemy);
@@ -365,7 +393,9 @@ export function attack(s: GameState, unitId: string, target: { unitId?: string; 
   const attackerRole = u.role;
   let text: string;
   if (won) {
-    const unarmed = UNIT_TYPES[defender.type].kind === 'colonist' && !isArmed(defender);
+    const unarmed = UNIT_TYPES[defender.type].kind === 'colonist' && !isArmed(defender) && UNIT_TYPES[defender.type].offence === 0;
+    // A playing people's part in a military victory (peoplevictory.ts, T14).
+    if (kindOfId(u.owner) === 'people') noteDefeat(s, u.owner, defender.owner, !!colony && (unarmed || defender.loc.kind === 'colony'));
     if (colony && (unarmed || defender.loc.kind === 'colony')) {
       text = captureColony(s, u, colony);
     } else {
@@ -389,7 +419,8 @@ function captureColony(s: GameState, attacker: Unit, colony: Colony): string {
   track(previous, 'combat:colony lost');
   colony.owner = attacker.owner;
   colony.build = null;
-  if (attacker.owner === 'crown') colony.takenFrom = previous;
+  // A playing people's town taken is remembered too (continuity, peoplevictory.ts, T14).
+  if (attacker.owner === 'crown' || kindOfId(previous) === 'people') colony.takenFrom = previous;
   for (const w of colonyWorkers(s, colony)) {
     setUnitOwner(s, w, attacker.owner);
     delete w.teach;
@@ -415,27 +446,34 @@ function captureColony(s: GameState, attacker: Unit, colony: Colony): string {
  * it (its treaties end). An attack on a people with a mutual defence pact is war with its partner
  * (native-partners.md N7); a partner allied with the attacker sees it leave the alliance (N9).
  */
-function hostile(s: GameState, tribeId: TribeId, nation: NationId, at: { x: number; y: number }, cause: string): void {
+function hostile(s: GameState, tribeId: TribeId, nation: PlayerId, at: { x: number; y: number }, cause: string): void {
   const tribe = s.tribes.find((t) => t.id === tribeId)!;
   // Attacking a partner breaks faith with it (native-partners.md N8).
   breakFaith(s, nation, tribeId, 'attack');
   const partner = s.treaties ? defencePartner(s, tribeId) : undefined;
   if (partner && partner !== nation && nation !== 'crown' && player(s, nation).stance[partner] !== 'war') {
     track(partner, 'natives:pact war');
-    message(s, `${nationOf(s, partner).name} stands by its pact with the ${TRIBES[tribeId].name}: the attack on them is war.`);
-    noteHistory(s, 'war', [nation, partner], `${nationOf(s, partner).name} goes to war with ${nationOf(s, nation).name} to defend the ${TRIBES[tribeId].name}, its partners in a mutual defence pact.`);
+    message(s, `${nationOf(s, partner).name} stands by its pact with the ${peopleName(s, tribeId)}: the attack on them is war.`);
+    noteHistory(s, 'war', [nation, partner], `${nationOf(s, partner).name} goes to war with ${nationOf(s, nation).name} to defend the ${peopleName(s, tribeId)}, its partners in a mutual defence pact.`);
     declareWar(s, nation, partner);
+  }
+  // A playing people bound by a pact to the people attacked stands by it (Beta 3 step 4).
+  if (s.treaties && anyPlayingPeople(s)) {
+    for (const id of pactPlayersOf(s, tribeId, nation)) {
+      message(s, `${nationOf(s, id).name} stand by their pact with the ${peopleName(s, tribeId)}: the attack on them is war.`);
+      declareWar(s, nation, id);
+    }
   }
   if (tribe.submitted?.includes(nation)) tribe.submitted = tribe.submitted.filter((n) => n !== nation);
   if (tribe.stance[nation] !== 'war') {
     tribe.stance[nation] = 'war';
-    message(s, `The ${TRIBES[tribeId].name} now consider ${nationOf(s, nation).name} an enemy.`, nation, at);
-    noteHistory(s, 'tribe', [nation], `War with the ${TRIBES[tribeId].name}, after ${cause}.`, { secret: true, at });
+    message(s, `The ${peopleName(s, tribeId)} now consider ${nationOf(s, nation).name} an enemy.`, nation, at);
+    noteHistory(s, 'tribe', [nation], `War with the ${peopleName(s, tribeId)}, after ${cause}.`, { secret: true, at });
   }
 }
 
 /** Computer players never attack a people whose defence partner is their Favoured Nation or ally (N9, as for nations). */
-function noFriendsPeople(s: GameState, nation: NationId, people: TribeId): void {
+function noFriendsPeople(s: GameState, nation: PlayerId, people: TribeId): void {
   if (s.treaties && !player(s, nation).human && defendedByFriend(s, nation, people)) fail('Computer players never attack a people defended by a Favoured Nation or an ally.');
 }
 
@@ -453,7 +491,7 @@ function attackBrave(s: GameState, u: Unit, braveId: string): CombatResult {
   const def = braveDefence(s, b);
   const braveGear = { armed: !!b.armed, mounted: !!b.mounted };
   const won = random(s) < off / (off + def);
-  const name = braveName(b);
+  const name = braveName(s, b);
   let text: string;
   if (won) {
     killBrave(s, b, u.owner, atWar);
@@ -500,10 +538,10 @@ function attackSettlement(s: GameState, u: Unit, settlementId: string): CombatRe
   let text: string;
   if (won) {
     st.defenders--;
-    text = st.defenders <= 0 ? destroySettlement(s, u, settlementId) : `${unitName(u)} defeats a ${TRIBES[st.tribe].name} brave.`;
+    text = st.defenders <= 0 ? destroySettlement(s, u, settlementId) : `${unitName(u)} defeats a ${peopleName(s, st.tribe)} brave.`;
     text += promote(s, u);
   } else {
-    text = `${unitName(u)} is driven back by the ${TRIBES[st.tribe].name}: ${demote(s, u, u)}.`;
+    text = `${unitName(u)} is driven back by the ${peopleName(s, st.tribe)}: ${demote(s, u, u)}.`;
   }
   message(s, text, u.owner, st);
   return { attackerWon: won, text };
@@ -547,7 +585,7 @@ function destroySettlement(s: GameState, u: Unit, settlementId: string): string 
  * tribute, no longer attack or make demands, and give their land freely. Attacking the tribe
  * again ends it. Otherwise they fight on.
  */
-function surrender(s: GameState, tribeId: TribeId, nation: NationId, at: { x: number; y: number }): string {
+function surrender(s: GameState, tribeId: TribeId, nation: PlayerId, at: { x: number; y: number }): string {
   if (nation === 'crown' || !mechanicsOf(s).surrender) return '';
   const rules = nativeRulesOf(s);
   const tribe = s.tribes.find((t) => t.id === tribeId)!;
@@ -565,8 +603,8 @@ function surrender(s: GameState, tribeId: TribeId, nation: NationId, at: { x: nu
   }
   player(s, nation).gold += tribute;
   track(nation, 'natives:tribe surrendered');
-  noteHistory(s, 'tribe', [nation], `The ${TRIBES[tribeId].name} surrender to ${nationOf(s, nation).name} after losing their capital, and pay ${tribute} gold.`, { at });
-  return ` The remaining ${TRIBES[tribeId].name} settlements surrender and pay a tribute of ${tribute} gold; their land is now open to you.`;
+  noteHistory(s, 'tribe', [nation], `The ${peopleName(s, tribeId)} surrender to ${nationOf(s, nation).name} after losing their capital, and pay ${tribute} gold.`, { at });
+  return ` The remaining ${peopleName(s, tribeId)} settlements surrender and pay a tribute of ${tribute} gold; their land is now open to you.`;
 }
 
 /** The Crown carries a treasure home from a coastal colony, for a fee unless Cortés is in Congress. */

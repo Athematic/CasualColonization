@@ -12,8 +12,8 @@
  * (with `end` set) after those in force, in the order they were made. Lookups scan the list, which
  * stays short (a few dozen treaties in a long game).
  */
-import { TRIBES, type NationId, type TribeId } from './rules/nations.js';
-import { calendarOf, formatDate, nationOf } from './scenarios/index.js';
+import { type PlayerId, type TribeId } from './rules/nations.js';
+import { calendarOf, formatDate, nationOf , peopleName } from './scenarios/index.js';
 import type { GameState, Treaty, TreatyEnd, TreatyKind, TreatyParty, TreatyTerms } from './types.js';
 
 type NationParty = Extract<TreatyParty, { kind: 'nation' }>;
@@ -30,7 +30,7 @@ export function partyIsPeople(p: TreatyParty): p is PeopleParty {
 }
 
 /** A nation as a party. */
-export function nationParty(id: NationId): TreatyParty {
+export function nationParty(id: PlayerId): TreatyParty {
   return { kind: 'nation', id };
 }
 
@@ -46,11 +46,12 @@ export function sameParty(a: TreatyParty, b: TreatyParty): boolean {
 
 /** A party's name: the nation's ("France") or the people's, with its article ("the Kalinago"). */
 export function partyName(s: GameState, p: TreatyParty): string {
-  return partyIsPeople(p) ? `the ${TRIBES[p.id].name}` : nationOf(s, p.id).name;
+  // A playing people (Beta 3) is named as a player: "the Haudenosaunee".
+  return partyIsPeople(p) && !s.players.some((o) => o.id === p.id) ? `the ${peopleName(s, p.id)}` : nationOf(s, p.id).name;
 }
 
 /** Whether a nation is a party to the treaty. */
-export function bound(t: Treaty, nation: NationId): boolean {
+export function bound(t: Treaty, nation: PlayerId): boolean {
   for (const p of t.parties) if (p.kind === 'nation' && p.id === nation) return true;
   return false;
 }
@@ -62,8 +63,8 @@ export function boundPeople(t: Treaty, people: TribeId): boolean {
 }
 
 /** The nations that are parties to the treaty, in the order of its parties. */
-export function treatyNations(t: Treaty): NationId[] {
-  const out: NationId[] = [];
+export function treatyNations(t: Treaty): PlayerId[] {
+  const out: PlayerId[] = [];
   for (const p of t.parties) if (partyIsNation(p)) out.push(p.id);
   return out;
 }
@@ -91,7 +92,7 @@ export function inForce(t: Treaty): boolean {
 }
 
 /** The treaty of this kind in force between two nations, if any. */
-export function treatyBetween(s: GameState, kind: TreatyKind, a: NationId, b: NationId): Treaty | undefined {
+export function treatyBetween(s: GameState, kind: TreatyKind, a: PlayerId, b: PlayerId): Treaty | undefined {
   const list = s.treaties;
   if (!list) return undefined;
   for (const t of list) if (!t.end && t.kind === kind && bound(t, a) && bound(t, b)) return t;
@@ -99,12 +100,12 @@ export function treatyBetween(s: GameState, kind: TreatyKind, a: NationId, b: Na
 }
 
 /** The treaties in force that bind a nation (all of them without `nation`), in the order made. */
-export function treatiesInForce(s: GameState, nation?: NationId): Treaty[] {
+export function treatiesInForce(s: GameState, nation?: PlayerId): Treaty[] {
   return allTreaties(s).filter((t) => !t.end && (!nation || bound(t, nation)));
 }
 
 /** Makes a treaty in force from now. A party given as a bare id is a nation. */
-export function addTreaty(s: GameState, kind: TreatyKind, parties: readonly (NationId | TreatyParty)[], terms?: TreatyTerms): Treaty {
+export function addTreaty(s: GameState, kind: TreatyKind, parties: readonly (PlayerId | TreatyParty)[], terms?: TreatyTerms): Treaty {
   const list = (s.treaties = s.treaties ?? []);
   const t: Treaty = { id: `t${list.length + 1}`, kind, parties: parties.map((p) => (typeof p === 'string' ? nationParty(p) : { ...p })), start: s.turn };
   if (terms) t.terms = terms;
@@ -113,7 +114,7 @@ export function addTreaty(s: GameState, kind: TreatyKind, parties: readonly (Nat
 }
 
 /** The treaty of this kind in force between a nation and a people, if any. */
-export function peopleTreatyBetween(s: GameState, kind: TreatyKind, nation: NationId, people: TribeId): Treaty | undefined {
+export function peopleTreatyBetween(s: GameState, kind: TreatyKind, nation: PlayerId, people: TribeId): Treaty | undefined {
   const list = s.treaties;
   if (!list) return undefined;
   for (const t of list) if (!t.end && t.kind === kind && bound(t, nation) && boundPeople(t, people)) return t;
@@ -121,7 +122,7 @@ export function peopleTreatyBetween(s: GameState, kind: TreatyKind, nation: Nati
 }
 
 /** The treaties in force between a nation and a people, in the order made. */
-export function treatiesWithPeople(s: GameState, nation: NationId, people: TribeId): Treaty[] {
+export function treatiesWithPeople(s: GameState, nation: PlayerId, people: TribeId): Treaty[] {
   const list = s.treaties;
   if (!list) return [];
   return list.filter((t) => !t.end && bound(t, nation) && boundPeople(t, people));
@@ -131,7 +132,7 @@ export function treatiesWithPeople(s: GameState, nation: NationId, people: Tribe
  * Ends a treaty now. `by` is the party that ended it: a bare id is a nation (saved as the bare id,
  * as treaties between nations always were), a people is given as a party.
  */
-export function endTreaty(s: GameState, t: Treaty, why: TreatyEnd['why'], by?: NationId | TreatyParty): void {
+export function endTreaty(s: GameState, t: Treaty, why: TreatyEnd['why'], by?: PlayerId | TreatyParty): void {
   const who = by === undefined ? undefined : typeof by === 'string' ? by : partyIsNation(by) ? by.id : { ...by };
   t.end = who ? { turn: s.turn, why, by: who } : { turn: s.turn, why };
 }
@@ -152,6 +153,7 @@ const TREATY_NAME: Record<TreatyKind, string> = {
   'land-use': 'Land use',
   exchange: 'Cultural exchange',
   defence: 'Mutual defence',
+  league: 'League of peoples',
 };
 
 /** The treaty's name for the diplomacy screen ("Trade agreement"). */

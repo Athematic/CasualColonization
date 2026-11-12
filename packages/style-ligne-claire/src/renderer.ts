@@ -1,6 +1,9 @@
-import { colonyWorkers, nationOf, RIVER_DIRS, settlementKindOf, TERRAIN, type Colony, type GameState, type Settlement, type SettlementLook, type Tile } from '@cc/engine';
+import { colonyWorkers, kindOfId, nationOf, RIVER_DIRS, settlementKindOf, TERRAIN, TRIBES, type TribeId, type Colony, type GameState, type Settlement, type SettlementLook, type Tile } from '@cc/engine';
 import {
   braveMarkers,
+  drawClaimBorders,
+  drawLandLabels,
+  drawLandOverlay,
   hash2,
   isTileExplored,
   riverCourse,
@@ -22,7 +25,7 @@ import {
   type Scene,
 } from '@cc/render-api';
 import { FOREST, HIGHLIGHT, INK, LAND, PAPER, PAPER_WASH, RIVER, ROAD, WAVE, WHITE, shade } from './palette.js';
-import { FONT, braveSprite, colonySprite, hills, inked, mountains, ruins, settlementSprite, tree, unitSprite } from './sprites.js';
+import { FONT, braveSprite, colonySprite, peopleTownSprite, hills, inked, mountains, ruins, settlementSprite, tree, unitSprite } from './sprites.js';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -454,6 +457,9 @@ export class LigneClaireMapRenderer implements MapRenderer {
     }
     // A people's land leased to a nation (Beta 2, land use): a faint dashed frame in its colour.
     for (const t of tiles) if (t.tile.use) drawLease(ctx, nationOf(s, t.tile.use).color, t.px, t.py, z, lw);
+    // The land overlay (health by region) and the borders of claimed land (native-nations.md T5, T10).
+    drawLandOverlay(ctx, scene);
+    drawClaimBorders(ctx, scene, { width: Math.max(1.5, z * 0.045), ink: INK, dashed: true });
 
     // 4. A light paper wash over what we know but cannot currently see.
     // One path so overlapping edges are not washed twice.
@@ -573,6 +579,7 @@ export class LigneClaireMapRenderer implements MapRenderer {
     }
 
     for (const draw of labels) draw();
+    drawLandLabels(ctx, scene, FONT);
 
     if (scene.hover && isTileExplored(scene, scene.hover.x, scene.hover.y)) {
       const p = tileToScreen(scene, scene.hover.x, scene.hover.y);
@@ -686,6 +693,12 @@ export class LigneClaireMapRenderer implements MapRenderer {
 
   protected drawColony(c: Readonly<Colony>, size: number, px: number, py: number, z: number, lw: number, state: Readonly<GameState>): void {
     if (this.hooks.colony?.(this.ctx, c, size, px, py, z, state)) return;
+    // A playing people's town (native-nations.md T2): its people's homes, palisade and pennant.
+    if (kindOfId(c.owner) === 'people') {
+      const look: SettlementLook = TRIBES[c.owner as TribeId].lifeway === 'agricultural' ? 'village' : 'camp';
+      peopleTownSprite(this.ctx, px + z / 2, py + z / 2, z * 0.95, nationOf(state, c.owner).color, size, c.buildings.palisade ?? 0, lw, look);
+      return;
+    }
     colonySprite(this.ctx, px + z / 2, py + z / 2, z * 0.95, nationOf(state, c.owner).color, size, c.buildings.stockade, lw);
   }
 

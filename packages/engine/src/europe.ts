@@ -16,13 +16,14 @@ import {
 import { random, randInt, weightedPick } from './rng.js';
 import { noteTrade } from './stats.js';
 import { favouredPartners, isFavoured } from './relations.js';
-import type { NationId } from './rules/nations.js';
+import type { PlayerId } from './rules/nations.js';
 import { portBasePrice, portCharacter, portDepth, portPriceBand, type PortRef } from './rules/ports.js';
 import { GOOD_DEFS, GOODS, type GoodId } from './rules/goods.js';
 import { PIONEER_MAX_TOOLS, PURCHASABLE, ROLES, UNIT_TYPES, type RoleId, type UnitTypeId } from './rules/units.js';
 import type { GameState, MarketEntry, Player, Unit, UnitLocation } from './types.js';
 import { difficultyOf, goodsOf, mechanicsOf, nationOf, portMarketOf, term, Term, unitsOf, type ScenarioLike } from './scenarios/index.js';
 import { setUnitLoc, removeUnit, colonyList, unitList } from './unitindex.js';
+import { systemsOf } from './playerkind.js';
 
 export const SAIL_TURNS = 3;
 
@@ -45,8 +46,9 @@ export function initialMarket(port?: PortRef, goods: readonly GoodId[] = GOODS):
   return Object.fromEntries(goods.map((g) => [g, { price: port ? portBasePrice(port, g) : GOOD_DEFS[g].price, volume: 0 }])) as Record<GoodId, MarketEntry>;
 }
 
+/** A good's price in the player's home port; 0 for a player with no market (a playing people, playerkind.ts `homePort`). */
 export function sellPrice(p: Player, good: GoodId): number {
-  return p.market[good].price;
+  return p.market[good]?.price ?? 0;
 }
 
 export function buyPrice(s: GameState, p: Player, good: GoodId): number {
@@ -113,7 +115,7 @@ function requireInEurope(s: GameState, u: Unit | undefined): asserts u is Unit {
  * The home port a unit is in, or sailing to: its owner's own, or a Favoured Nation partner's.
  * Units on the docks are always in their own home port.
  */
-export function portOf(u: Unit): NationId {
+export function portOf(u: Unit): PlayerId {
   return (u.loc.kind === 'europe' || u.loc.kind === 'sailing') && u.loc.port ? u.loc.port : u.owner;
 }
 
@@ -123,17 +125,17 @@ export function inHomePort(u: Unit): boolean {
 }
 
 /** Name of a nation's home port in its game's scenario, e.g. "Amsterdam". */
-export function portName(s: ScenarioLike, nation: NationId): string {
+export function portName(s: ScenarioLike, nation: PlayerId): string {
   return nationOf(s, nation).port.name;
 }
 
 /** The ports a nation's ships may sail to: its own, then its Favoured Nation partners'. */
-export function portsFor(s: GameState, nation: NationId): NationId[] {
+export function portsFor(s: GameState, nation: PlayerId): PlayerId[] {
   return [nation, ...favouredPartners(s, nation)];
 }
 
 /** Why a nation's ships may not use a port, or null. */
-export function portProblem(s: GameState, nation: NationId, port: NationId): string | null {
+export function portProblem(s: GameState, nation: PlayerId, port: PlayerId): string | null {
   if (port === nation) return null;
   const host = s.players.find((p) => p.id === port);
   if (!host || port === 'crown') return 'There is no such port.';
@@ -160,8 +162,8 @@ export function sellToMarket(s: GameState, p: Player, good: GoodId, amount: numb
 
 function maybeRaiseTax(s: GameState, p: Player, gross: number, good: GoodId): void {
   const mechanics = mechanicsOf(s);
-  // A chartered company has no Crown to tax it (companies.ts).
-  if (!mechanics.taxes || p.kind === 'company') return;
+  // A chartered company has no Crown to tax it (companies.ts; playerkind.ts `taxes`).
+  if (!mechanics.taxes || !systemsOf(p).taxes) return;
   const rules = difficultyOf(s, p);
   if (p.tax >= rules.taxCeiling || gross < 100 || p.pendingTax) return;
   const chance = Math.min(0.12, 0.015 + s.turn / 3000) * rules.taxChance;
@@ -311,7 +313,7 @@ export function buyableInPartnerPort(type: UnitTypeId): boolean {
  * Trains an expert or buys a unit in Europe. With `port` set to a Favoured Nation partner, buys a
  * merchant ship in that partner's port at its prices; one of the nation's ships must be there.
  */
-export function train(s: GameState, nation: Player['id'], type: UnitTypeId, port?: NationId): Unit {
+export function train(s: GameState, nation: Player['id'], type: UnitTypeId, port?: PlayerId): Unit {
   const p = player(s, nation);
   const def = UNIT_TYPES[type];
   if (p.independence !== 'none') fail(`${Term(s, 'homeland')} does not trade with rebels.`);
@@ -340,8 +342,8 @@ export function train(s: GameState, nation: Player['id'], type: UnitTypeId, port
 
 /** Called each turn: crosses bring a new immigrant to the docks. */
 export function processImmigration(s: GameState, p: Player): void {
-  // The Crown (holding colonies it retook) has no docks to send immigrants to.
-  if (p.crosses < p.crossesRequired || p.independence !== 'none' || p.id === 'crown' || !p.recruitPool.length) return;
+  // The Crown (holding colonies it retook) has no docks to send immigrants to (playerkind.ts `immigration`).
+  if (p.crosses < p.crossesRequired || p.independence !== 'none' || !systemsOf(p).immigration || !p.recruitPool.length) return;
   p.crosses -= p.crossesRequired;
   p.crossesRequired += Math.round(setOr(modifiers(s, p.id, 'crossesStep'), 20) * difficultyOf(s, p).crosses);
   // Brewster lets the colony pick the best candidate; otherwise chance decides.
@@ -403,7 +405,7 @@ export function sailToAmerica(s: GameState, carrierId: string): void {
 }
 
 /** Sails a ship from the high seas to Europe: to its own home port, or to `port`, a Favoured Nation partner's. */
-export function sailToEurope(s: GameState, carrierId: string, port?: NationId): void {
+export function sailToEurope(s: GameState, carrierId: string, port?: PlayerId): void {
   const ship = s.units[carrierId];
   if (!ship || !isShip(ship)) fail(`Only ships can sail to ${term(s, 'homeland')}.`);
   if (ship.loc.kind !== 'map') fail('The ship must be at sea.');
@@ -411,6 +413,7 @@ export function sailToEurope(s: GameState, carrierId: string, port?: NationId): 
   if (tile.t !== 'highSeas') fail(`Ships can only sail to ${term(s, 'homeland')} from the high seas.`);
   if (colonyAt(s, ship.loc.x, ship.loc.y)) fail('The ship is in port.');
   if (player(s, ship.owner).independence !== 'none') fail(`Rebel ships are not welcome in ${term(s, 'homeland')}.`);
+  if (!systemsOf(player(s, ship.owner)).homePort) fail(`You have no port in ${term(s, 'homeland')}.`);
   const target = port ?? ship.owner;
   const problem = portProblem(s, ship.owner, target);
   if (problem) fail(problem);
@@ -475,6 +478,8 @@ export function priceRecoveryChance(s: GameState, p: Player): number {
 /** Drifts prices back toward their starting value in each home port (its own, rules/ports.ts). */
 export function recoverMarkets(s: GameState): void {
   for (const p of s.players) {
+    // A playing people has no market (playerkind.ts `homePort`).
+    if (!systemsOf(p).homePort) continue;
     const chance = priceRecoveryChance(s, p);
     const market = portMarketOf(s, p.id);
     for (const g of goodsOf(s)) {

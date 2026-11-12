@@ -20,9 +20,8 @@
  * The rule reads the state only and draws no random numbers.
  */
 import { peopleRelationOf } from './natives.js';
-import type { NationId, TribeId } from './rules/nations.js';
-import { TRIBES } from './rules/nations.js';
-import { calendarOf, scenarioOf, yearValue } from './scenarios/index.js';
+import type { PlayerId, TribeId } from './rules/nations.js';
+import { calendarOf, scenarioOf, yearValue , peopleName } from './scenarios/index.js';
 import { bound, treatyPeoples } from './treaties.js';
 import type { GameState, Tribe } from './types.js';
 
@@ -50,19 +49,19 @@ export function playsForProsperity(s: GameState): boolean {
 }
 
 /** Notes that a people's war with a nation has ended now (only while the scenario plays for prosperity). */
-export function notePeopleWarEnded(s: GameState, tribe: Tribe, nation: NationId): void {
+export function notePeopleWarEnded(s: GameState, tribe: Tribe, nation: PlayerId): void {
   if (nation === 'crown' || !playsForProsperity(s)) return;
   tribe.warEnded = { ...tribe.warEnded, [nation]: s.turn };
 }
 
 /** Notes that a nation burned one of the people's settlements (only while the scenario plays for prosperity). */
-export function noteSettlementBurned(s: GameState, tribe: Tribe, nation: NationId): void {
+export function noteSettlementBurned(s: GameState, tribe: Tribe, nation: PlayerId): void {
   if (nation === 'crown' || !playsForProsperity(s) || tribe.burned?.includes(nation)) return;
   tribe.burned = [...(tribe.burned ?? []), nation];
 }
 
 /** Whether the nation has met the people: its standing is written, or it has fought the people. */
-export function hasMetPeople(s: GameState, nation: NationId, tribe: Tribe): boolean {
+export function hasMetPeople(s: GameState, nation: PlayerId, tribe: Tribe): boolean {
   return (
     !!peopleRelationOf(s, nation, tribe.id) ||
     tribe.stance[nation] === 'war' ||
@@ -72,7 +71,7 @@ export function hasMetPeople(s: GameState, nation: NationId, tribe: Tribe): bool
 }
 
 /** The peoples a nation holds a treaty with (any kind with a people, in force), in the order the first was made. */
-export function treatyPeoplesOf(s: GameState, nation: NationId): TribeId[] {
+export function treatyPeoplesOf(s: GameState, nation: PlayerId): TribeId[] {
   const out: TribeId[] = [];
   for (const t of s.treaties ?? []) {
     if (t.end || !bound(t, nation)) continue;
@@ -86,7 +85,7 @@ export type ProsperityCondition = 'peace' | 'burned' | 'treaties' | 'score';
 
 /** How a nation stands against the rule now. */
 export interface ProsperityStanding {
-  nation: NationId;
+  nation: PlayerId;
   /** The peoples it has met, in the game's order. */
   met: TribeId[];
   /** Peoples met it is at war with, or was within the last `peaceYears`. */
@@ -104,7 +103,7 @@ export interface ProsperityStanding {
 }
 
 /** How a European nation stands against the rule, given every nation's score. */
-export function prosperityStanding(s: GameState, nation: NationId, scores: Partial<Record<NationId, number>>, params: ProsperityParams = PROSPERITY): ProsperityStanding {
+export function prosperityStanding(s: GameState, nation: PlayerId, scores: Partial<Record<PlayerId, number>>, params: ProsperityParams = PROSPERITY): ProsperityStanding {
   const cal = calendarOf(s);
   const now = yearValue(s.turn, cal);
   const living = new Set<TribeId>();
@@ -137,9 +136,9 @@ export function prosperityStanding(s: GameState, nation: NationId, scores: Parti
  * The nations that win by prosperity, best score first (ties in turn order), and their partner
  * peoples in the order their first treaty was made; null when none qualifies.
  */
-export function prosperityWinners(s: GameState, scores: Partial<Record<NationId, number>>, params: ProsperityParams = PROSPERITY): { winners: NationId[]; partners: TribeId[] } | null {
-  const order = s.config.nations;
-  const winners = (Object.keys(scores) as NationId[])
+export function prosperityWinners(s: GameState, scores: Partial<Record<PlayerId, number>>, params: ProsperityParams = PROSPERITY): { winners: PlayerId[]; partners: TribeId[] } | null {
+  const order: readonly PlayerId[] = s.config.nations;
+  const winners = (Object.keys(scores) as PlayerId[])
     .filter((n) => prosperityStanding(s, n, scores, params).fails.length === 0)
     .sort((a, b) => (scores[b] ?? 0) - (scores[a] ?? 0) || order.indexOf(a) - order.indexOf(b));
   if (!winners.length) return null;
@@ -152,7 +151,7 @@ export function prosperityWinners(s: GameState, scores: Partial<Record<NationId,
 }
 
 /** "the Kalinago and the Arawak", for the game-over texts. */
-export function peopleList(peoples: readonly TribeId[]): string {
-  const names = peoples.map((p) => `the ${TRIBES[p].name}`);
+export function peopleList(s: GameState, peoples: readonly TribeId[]): string {
+  const names = peoples.map((p) => `the ${peopleName(s, p)}`);
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? '');
 }

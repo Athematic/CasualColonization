@@ -1,7 +1,15 @@
 import type { Effect } from '../events/types.js';
 import type { Modifier } from './modifiers.js';
+import type { PlayerId } from './nations.js';
 
-export type FatherCategory = 'trade' | 'exploration' | 'military' | 'political' | 'religious';
+/**
+ * A council's categories are open (native-nations.md T8): each council names its own (scenarios/types.ts
+ * `Council.categories`). The Continental Congress's five are `CongressCategory`.
+ */
+export type FatherCategory = string;
+
+/** The Continental Congress's five categories (the Americas and the Caribbean). */
+export type CongressCategory = 'trade' | 'exploration' | 'military' | 'political' | 'religious';
 
 export type FatherId =
   | 'adamSmith'
@@ -32,7 +40,24 @@ export type FatherId =
   // The Caribbean, 1650–1750 (scenarios/caribbean.ts).
   | 'henryMorgan'
   | 'williamDampier'
-  | 'mariaSibyllaMerian';
+  | 'mariaSibyllaMerian'
+  // A playing people's council (rules/councils.ts PEOPLE_COUNCIL; native-nations.md T9).
+  | 'clanMothers'
+  | 'keepersOfTheStores'
+  | 'keepersOfTheFields'
+  | 'huntLeaders'
+  | 'weirBuilders'
+  | 'elders'
+  | 'toolmakers'
+  | 'canoeBuilders'
+  | 'runners'
+  | 'warLeaders'
+  | 'speakers'
+  | 'garakontie'
+  | 'thayendanegea'
+  // The North-east's people's council (scenarios/north-east.ts; native-nations.md section 13).
+  | 'membertou'
+  | 'kondiaronk';
 
 export interface FatherDef {
   id: FatherId;
@@ -45,6 +70,17 @@ export interface FatherDef {
   modifiers?: Modifier[];
   /** Applied once, in order, when the father joins (the events' effects, events/effects.ts). */
   onJoin?: Effect[];
+  /** The name is plural, a collective figure ("The Clan Mothers join the Council"). */
+  plural?: boolean;
+  /** Offered only to these players (a named person of one people sits only in that people's council). Absent: anyone. */
+  peoples?: PlayerId[];
+  /**
+   * How the member is shown: `emblem` draws a neutral emblem with its initials, never a face (native-nations.md
+   * T9: no invented likenesses). Absent: a portrait (the sprite pack's, else the procedural figure).
+   */
+  portrait?: 'emblem';
+  /** Where the member is documented (a work and its publisher), for the catalogue's readers. */
+  source?: string;
 }
 
 const f = (id: FatherId, name: string, category: FatherCategory, effect: string, weight = 5, more: Partial<FatherDef> = {}): FatherDef => ({ id, name, category, effect, weight, ...more });
@@ -159,6 +195,111 @@ Object.assign(FATHERS, {
   }),
 } satisfies Partial<Record<FatherId, FatherDef>>);
 
+/**
+ * Members of a playing people's council (rules/councils.ts PEOPLE_COUNCIL; native-nations.md T9;
+ * Beta 3 step 3). **Drafted for Simon's review.** Mostly roles and collective figures, with effects
+ * on the people's economy (stores, births, the land, teaching, defence, peace); two named people,
+ * documented, each offered only to its own people. No founding or spiritual figures of living
+ * nations, nothing sacred as an effect, no invented likenesses: every one is drawn as an emblem.
+ * Pocahontas stays in the European council (T9).
+ */
+const role = (id: FatherId, name: string, category: FatherCategory, effect: string, source: string, more: Partial<FatherDef> = {}): FatherDef =>
+  f(id, name, category, effect, 5, { plural: true, portrait: 'emblem', source, ...more });
+
+Object.assign(FATHERS, {
+  // ---- Household: births and stores ----
+  // The clan mothers headed the matrilineal clans' households in the longhouses, held the clans'
+  // fields, and named (and could remove) the clans' chiefs.
+  clanMothers: role('clanMothers', 'The Clan Mothers', 'household', 'A town needs 160 food above its reserve for a birth, not 200.',
+    'Dean R. Snow, The Iroquois (Blackwell, 1994); National Museum of the American Indian, Haudenosaunee Guide for Educators (Smithsonian Institution, 2009)', {
+      peoples: ['haudenosaunee'],
+      modifiers: [{ hook: 'foodToGrow', set: 160 }],
+    }),
+  // Food dried, smoked and put by in pits and bark-lined stores for winter and hard years (T10).
+  keepersOfTheStores: role('keepersOfTheStores', 'The Keepers of the Stores', 'household', 'Every town keeps 100 more food in store.',
+    'A role, not a named office. Storage pits on Iroquoian town sites: Dean R. Snow, The Iroquois (Blackwell, 1994); the role itself: to be sourced', {
+      modifiers: [{ hook: 'townStore', add: 100 }],
+    }),
+  // ---- Land: gardens, fishing, hunting and the land's health ----
+  // In Iroquoian towns the women grew the maize, beans and squash the towns lived on.
+  keepersOfTheFields: role('keepersOfTheFields', 'The Keepers of the Fields', 'land', 'Gardens yield 50% more.',
+    "Bruce G. Trigger, The Children of Aataentsic: A History of the Huron People to 1660 (McGill-Queen's University Press, 1976)", {
+      modifiers: [{ hook: 'wayYield', way: 'gardens', mul: 1.5 }],
+    }),
+  // Hunting parties led by experienced hunters; resting hunted land lets the game come back.
+  huntLeaders: role('huntLeaders', 'The Hunt Leaders', 'land', 'Land where your towns stand recovers 5 more health a year when it is not over-hunted.',
+    'A role. Hunting in the North-east: Bruce G. Trigger (ed.), Handbook of North American Indians, vol. 15: Northeast (Smithsonian Institution, 1978); resting hunted land: to be sourced', {
+      modifiers: [{ hook: 'landRecovery', add: 5 }],
+    }),
+  // Fish weirs of stakes and brush across rivers and tidal flats.
+  weirBuilders: role('weirBuilders', 'The Weir Builders', 'land', 'Fishing yields 50% more.',
+    'Bruce G. Trigger (ed.), Handbook of North American Indians, vol. 15: Northeast (Smithsonian Institution, 1978)', {
+      modifiers: [{ hook: 'wayYield', way: 'fishing', mul: 1.5 }],
+    }),
+  // ---- Knowledge: teaching and crafts ----
+  elders: role('elders', 'The Elders', 'knowledge', 'Elders teach a skill in 3 turns, not 4.',
+    'A collective role; to be sourced', {
+      modifiers: [{ hook: 'teachTurns', add: -1 }],
+    }),
+  toolmakers: role('toolmakers', 'The Toolmakers', 'knowledge', 'Workshops produce 50% more.',
+    'A role: tools of wood, stone and bone; to be sourced', {
+      modifiers: [{ hook: 'buildingOutput', building: 'workshop', mul: 1.5 }],
+    }),
+  canoeBuilders: role('canoeBuilders', 'The Canoe Builders', 'knowledge', 'Canoes gain one move.',
+    'Edwin Tappan Adney and Howard I. Chapelle, The Bark Canoes and Skin Boats of North America (Smithsonian Institution, 1964)', {
+      modifiers: [{ hook: 'shipMoves', add: 1 }],
+    }),
+  // ---- Defence ----
+  // Runners carried word between towns and nations.
+  runners: role('runners', 'The Runners', 'defence', 'Land units see one tile further.',
+    'A role; to be sourced', {
+      modifiers: [{ hook: 'sight', add: 1, land: true }],
+    }),
+  // War leaders, chosen for war apart from the civil chiefs.
+  warLeaders: role('warLeaders', 'The War Leaders', 'defence', 'A townsperson who wins a fight always becomes a warrior.',
+    'Daniel K. Richter, The Ordeal of the Longhouse (University of North Carolina Press, 1992)', {
+      modifiers: [{ hook: 'alwaysPromote' }],
+    }),
+  // ---- Peace ----
+  // The speakers who spoke for their councils at treaty councils, recorded in colonial treaty minutes.
+  speakers: role('speakers', 'The Speakers', 'peace', 'Players at war with you always accept peace.',
+    'Francis Jennings, William N. Fenton, Mary A. Druke and David R. Miller (eds.), The History and Culture of Iroquois Diplomacy (Syracuse University Press, 1985)', {
+      modifiers: [{ hook: 'peaceAccepted' }],
+    }),
+  // Garakontié (d. 1676), Onondaga leader who worked for peace between the Haudenosaunee and New
+  // France in the 1660s and 1670s.
+  garakontie: f('garakontie', 'Garakontié', 'peace', 'Every war you are in ends in peace.', 3, {
+    peoples: ['haudenosaunee'],
+    portrait: 'emblem',
+    source: 'Dictionary of Canadian Biography, vol. 1 (University of Toronto Press, 1966), "Garakontié, Daniel"',
+    onJoin: [{ kind: 'makePeace' }],
+  }),
+  // Thayendanegea (Joseph Brant, 1743–1807), Mohawk leader in the American Revolution and after.
+  thayendanegea: f('thayendanegea', 'Thayendanegea (Joseph Brant)', 'defence', 'Warriors fight 50% harder.', 3, {
+    peoples: ['haudenosaunee'],
+    portrait: 'emblem',
+    source: 'Isabel Thompson Kelsay, Joseph Brant, 1743–1807: Man of Two Worlds (Syracuse University Press, 1984)',
+    modifiers: [{ hook: 'unitOffence', unit: 'warrior', mul: 1.5 }],
+  }),
+  // ---- The North-east, 1000–1850 (Beta 3 step 8), each offered only to its own people ----
+  // Membertou (d. 1611), Mi'kmaw sakmow (chief) at Port-Royal, who welcomed the French settlement of
+  // 1605 and kept peace with it until his death.
+  membertou: f('membertou', 'Membertou', 'peace', 'Players at war with you always accept peace.', 3, {
+    peoples: ['mikmaq'],
+    portrait: 'emblem',
+    source: 'Dictionary of Canadian Biography, vol. 1 (University of Toronto Press, 1966), "Membertou"',
+    modifiers: [{ hook: 'peaceAccepted' }],
+  }),
+  // Kondiaronk (d. 1701), Wendat leader at Michilimackinac, who worked for the Great Peace of
+  // Montreal (1701) and died during its council.
+  kondiaronk: f('kondiaronk', 'Kondiaronk', 'peace', 'Every war you are in ends in peace.', 3, {
+    peoples: ['wendat'],
+    portrait: 'emblem',
+    source: 'Dictionary of Canadian Biography, vol. 2 (University of Toronto Press, 1969), "Kondiaronk"; Gilles Havard, The Great Peace of Montreal of 1701 (McGill-Queen\'s University Press, 2001)',
+    onJoin: [{ kind: 'makePeace' }],
+  }),
+} satisfies Partial<Record<FatherId, FatherDef>>);
+
 /** The Americas' Continental Congress: the 25 Founding Fathers, in catalogue order. */
 export const AMERICAS_FATHERS: FatherId[] = [
   'adamSmith', 'jakobFugger', 'peterMinuit', 'peterStuyvesant', 'janDeWitt', 'ferdinandMagellan', 'franciscoDeCoronado',
@@ -167,9 +308,31 @@ export const AMERICAS_FATHERS: FatherId[] = [
   'williamBrewster', 'williamPenn', 'jeanDeBrebeuf', 'juanDeSepulveda', 'bartolomeDeLasCasas',
 ];
 
-export const FATHER_CATEGORIES: FatherCategory[] = ['trade', 'exploration', 'military', 'political', 'religious'];
+export const FATHER_CATEGORIES: CongressCategory[] = ['trade', 'exploration', 'military', 'political', 'religious'];
 
-/** Liberty bells needed for the next father, given how many have joined. */
-export function fatherCost(joined: number, nations: number): number {
-  return Math.round((60 + 50 * joined + 12 * joined * joined) * (0.85 + nations * 0.03));
+/**
+ * The order computer players choose the Congress's candidates in; a candidate not on the list is
+ * taken only when nothing on it is offered (the first offered).
+ */
+export const CONGRESS_AI_PREFERENCE: FatherId[] = [
+  'thomasJefferson', 'williamBrewster', 'peterStuyvesant', 'pocahontas', 'thomasPaine', 'williamPenn', 'adamSmith',
+  'simonBolivar', 'hernandoDeSoto', 'ferdinandMagellan', 'laSalle', 'paulRevere', 'georgeWashington',
+];
+
+/**
+ * What the next member of a council costs in its product: `(base + step × joined + square ×
+ * joined²) × (0.85 + 0.03 × nations)`, rounded. The Congress's rule is 60, 50, 12.
+ */
+export interface CouncilCost {
+  base: number;
+  step: number;
+  square: number;
+}
+
+/** The Continental Congress's cost rule. */
+export const CONGRESS_COST: CouncilCost = { base: 60, step: 50, square: 12 };
+
+/** Liberty bells needed for the next father, given how many have joined (a council's own cost rule, else the Congress's). */
+export function fatherCost(joined: number, nations: number, rule: CouncilCost = CONGRESS_COST): number {
+  return Math.round((rule.base + rule.step * joined + rule.square * joined * joined) * (0.85 + nations * 0.03));
 }

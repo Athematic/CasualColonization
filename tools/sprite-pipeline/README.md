@@ -331,6 +331,40 @@ All pixel settings, with their defaults, are in [`lib/config.mjs`](lib/config.mj
 - **Tuning**: the axe, musket, cross and horse-and-telescope sprites rendered with variants of the pixel settings (palette snap off, core palette only, 8-neighbour outline, thin props as ink or outlined, no outline, no interior ink, plain OKLab distance, majority colour instead of average, dithering, ink grown before reducing, no pre-simplify). Variants live in `TUNING_VARIANTS` in `lib/config.mjs`.
 - **Settings**: every value used.
 
+## Renaming the Haudenosaunee's sprites (`rename-haudenosaunee.mjs`)
+
+The engine's id for the Haudenosaunee was `iroquois` until [native-nations.md](../../docs/design/native-nations.md) section 18, and their two settlement sprites still carry it: `settlements/iroquois` and `settlements/iroquois__capital`. The painted pack (`packages/style-sprites/src/pack.ts`, `DEFAULT_MAPPING.settlements.tribes.haudenosaunee`) looks for `settlements/haudenosaunee*` first and falls back to `settlements/iroquois*`, so the game draws them before, during and after the rename. `rename-haudenosaunee.mjs` renames every local copy in one go:
+
+```sh
+# from the repository root; see what it would do first
+node tools/sprite-pipeline/rename-haudenosaunee.mjs --dry-run
+node tools/sprite-pipeline/rename-haudenosaunee.mjs
+# the same through npm
+npm run sprites:rename-haudenosaunee -- --dry-run
+```
+
+What it changes (each folder only if it exists on the machine; all of them are gitignored):
+
+| Folder | What is in it |
+| --- | --- |
+| `tools/image-gen/output/` | the masters (`sprites/settlements/iroquois*.png`), thumbnails (`thumbs/`), redraws (`edited/<mode>/`), their `manifest.json` files (job keys, `output`, `fullKey`, source ids) and contact sheets |
+| `tools/sprite-pipeline/out/` | the runtime set (`settlements/iroquois@16.png` … `iroquois__capital@128.png`), `manifest.json` (sprite ids, `files`, `source.file`), the contact sheet and `_sheet/` |
+| `tools/sprite-pipeline/cache/` | masters downloaded from the server |
+| `apps/web/public/assets/sprites/`, `apps/web/public/assets/runtime/`, `apps/web/dist/assets/sprites/`, `site/assets/sprites/`, `site/assets/runtime/`, `$CC_RUNTIME_DIR` | runtime copies (`scripts/copy-runtime.mjs`, `npm run release`) |
+| `docs/SPRITE_PROMPTS.md` (committed) | the two rows' ids, once at least one folder above was found (or with `--prompts`) |
+
+- **Files:** a name starting `iroquois` in a `settlements` folder becomes `haudenosaunee…` (`iroquois__capital@32.png` → `haudenosaunee__capital@32.png`). If the new name already exists with the same bytes, the old file is removed; with different bytes both are kept, the run says so and exits with code 2.
+- **Manifests and contact sheets:** every mention of `settlements/iroquois` (with `/` or `\`) becomes `settlements/haudenosaunee`, as a plain text replacement that keeps each file's formatting. The generator's prompt hashes are of the size, background and prompt, not the id, so the renamed jobs stay `done` and `Generate-Images.ps1` makes nothing again.
+- **The prompt rows:** renamed together with the generator's manifest. Rename them only this way: a row renamed while `output/manifest.json` still has the old key would look like a new job to the generator, which would then pay to make the image again.
+- **Idempotent:** a second run prints "Nothing to do: already renamed." `--root DIR` (repeatable) adds a folder, for example a local mirror of the server's `assets/`; `--only-roots` treats only those.
+
+Afterwards:
+
+1. Check the output (`--dry-run` first), open `tools/sprite-pipeline/out/index.html` and the generator's contact sheet: the two Haudenosaunee settlements show under their new ids.
+2. Commit the change to `docs/SPRITE_PROMPTS.md`.
+3. Upload the renamed files to the server: the masters as `assets/sprites/settlements/haudenosaunee.png` and `haudenosaunee__capital.png` (and `assets/thumbs/` if there are thumbnails), and the runtime set with its new `manifest.json` (as in [Uploading to the game server](#uploading-to-the-game-server)). Keep the old `iroquois*` files on the server until every copy of the game in use has the new manifest; the fallback covers both.
+4. Once every set (local, the server, any pack that overrides the mapping with `extendPack`) has the new names, remove the fallback: drop `'settlements/iroquois'` and `'settlements/iroquois__capital'` from the Haudenosaunee's entry in `DEFAULT_MAPPING` (`packages/style-sprites/src/pack.ts`), then the old files on the server.
+
 ## Tests
 
 ```sh
@@ -355,5 +389,6 @@ lib/grid.mjs       pixel-grid redraws: phase, cell mode, alpha majority, fidelit
 lib/process.mjs    one sprite end to end
 lib/source.mjs     local folder or remote server with a download cache
 lib/sheet.mjs      contact sheet
+rename-haudenosaunee.mjs  one-off: settlements/iroquois* renamed settlements/haudenosaunee* in every local copy
 test/              node:test suites
 ```

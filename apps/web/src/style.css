@@ -2319,3 +2319,97 @@ button.report-chip {
 .hall-next {
   flex-basis: 100%;
 }
+
+/* ---- Native peoples (native-nations.md, Beta 3 step 10) ---- */
+
+/* The New game screen's peoples, and a long list of ways to win. */
+.people-slots h3 {
+  margin: 0.9rem 0 0.2rem;
+}
+
+.field select {
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
+
+.menu-card .field {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* A people's town: stores, growth, housing and land. */
+.town-card {
+  border-bottom: 1px dashed var(--line);
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.town-line {
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+}
+
+.town-line.held {
+  color: var(--accent);
+}
+
+.town-line .pill {
+  margin-left: 0.4rem;
+}
+
+.store-bar {
+  position: relative;
+  overflow: visible;
+}
+
+.store-bar span {
+  border-radius: 999px;
+  background: #5e9c3d;
+}
+
+.store-bar span.short {
+  background: #d0453a;
+}
+
+.store-bar .mark {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--ink);
+}
+
+.trade-card {
+  margin-top: 0.5rem;
+}
+
+.trade-row + .trade-row {
+  border-top: 1px dashed var(--line);
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+}
+
+.btn.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Tags for the peoples' game's news: epidemics, arrivals, hard years, hunger. */
+.pill.notice-epidemic {
+  background: #7a3b6b;
+  color: #fff;
+  border-color: #7a3b6b;
+}
+
+.pill.notice-arrival {
+  background: #2c4f8a;
+  color: #fff;
+  border-color: #2c4f8a;
+}
+
+.pill.notice-hard-year,
+.pill.notice-hunger {
+  background: #b5761f;
+  color: #fff;
+  border-color: #b5761f;
+}

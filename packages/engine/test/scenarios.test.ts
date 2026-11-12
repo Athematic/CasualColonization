@@ -9,6 +9,9 @@ import {
   deserialize,
   DIFFICULTY,
   FATHER_CATEGORIES,
+  councilById,
+  councilIdOf,
+  nationTypeIn,
   FATHERS,
   getScenario,
   GOODS,
@@ -67,16 +70,22 @@ describe('the Americas scenario is today’s tables', () => {
     expect(AMERICAS.peoples.ids).toEqual(TRIBE_ORDER);
     // The catalogue's first eight peoples; the Kalinago belong to the Caribbean.
     expect(AMERICAS.peoples.ids).toEqual(Object.keys(TRIBES).slice(0, 8));
-    expect(AMERICAS.peoples.overrides).toBeUndefined();
+    // Only the Haudenosaunee's Americas name and seeded key (native-nations.md section 18).
+    expect(AMERICAS.peoples.overrides).toEqual({ haudenosaunee: { name: 'Iroquois', seedKey: 'iroquois' } });
+    expect(peopleIn(AMERICAS, 'haudenosaunee').name).toBe('Iroquois');
+    expect(peopleIn(getScenario('north-east')!, 'haudenosaunee').name).toBe('Haudenosaunee');
     expect(AMERICAS.peoples.produce).toEqual(NATIVE_PRODUCE);
-    expect(AMERICAS.council.members).toEqual(Object.keys(FATHERS).slice(0, 25));
-    expect(AMERICAS.council.members).toHaveLength(25);
-    expect(AMERICAS.council.categories).toEqual(FATHER_CATEGORIES);
+    expect(AMERICAS.councils.congress.members).toEqual(Object.keys(FATHERS).slice(0, 25));
+    expect(AMERICAS.councils.congress.members).toHaveLength(25);
+    expect(AMERICAS.councils.congress.categories).toEqual(FATHER_CATEGORIES);
   });
 
   it('units and buildings: all of them, in catalogue order', () => {
-    expect(AMERICAS.units).toEqual(Object.keys(UNIT_TYPES));
-    expect(AMERICAS.buildings).toEqual(BUILDING_ORDER);
+    // Every European entry; a native people's own (Beta 3 step 2) come after them in the catalogue.
+    expect(AMERICAS.nationTypes.european.units).toEqual(Object.keys(UNIT_TYPES).slice(0, AMERICAS.nationTypes.european.units.length));
+    expect(AMERICAS.nationTypes.european.units).toEqual(Object.keys(UNIT_TYPES).filter((t) => !UNIT_TYPES[t as keyof typeof UNIT_TYPES].people));
+    expect(AMERICAS.nationTypes.european.buildings).toEqual(BUILDING_ORDER.slice(0, AMERICAS.nationTypes.european.buildings.length));
+    expect(AMERICAS.nationTypes.european.buildings).toEqual(BUILDING_ORDER.filter((b) => !BUILDINGS[b].people));
   });
 
   it('nations: all eight as alternative history (the default), the original four as real rivals', () => {
@@ -98,10 +107,10 @@ describe('the Americas scenario is today’s tables', () => {
 
   it('events, maps, difficulty and score', () => {
     expect(AMERICAS.events).toBe('americas');
-    // Every stored map but the Caribbean's, which belongs to the Caribbean scenario: the Americas'
+    // Every stored map but the Caribbean's and the North-east's, which belong to their scenarios: the Americas'
     // New game screen offers what it always has.
     expect(AMERICAS.map.stored.map((e) => e.id)).toEqual(['north-america', 'south-america', 'americas', 'australia']);
-    expect(STORED_MAPS.map((m) => m.id)).toEqual([...AMERICAS.map.stored.map((e) => e.id), 'caribbean']);
+    expect(STORED_MAPS.map((m) => m.id)).toEqual([...AMERICAS.map.stored.map((e) => e.id), 'caribbean', 'north-east']);
     expect(AMERICAS.map.generator).toBe(AMERICAS_GENERATOR);
     expect(AMERICAS_GENERATOR.sizes).toBe(MAP_SIZES);
     expect(AMERICAS.map.crown).toBe('entry');
@@ -120,15 +129,18 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
     const unique = (ids: readonly string[]) => expect(new Set(ids).size).toBe(ids.length);
     unique(sc.goods);
     unique(sc.peoples.ids);
-    unique(sc.council.members);
-    unique(sc.units);
-    unique(sc.buildings);
-    for (const u of sc.units) expect(UNIT_TYPES[u]).toBeDefined();
-    for (const b of sc.buildings) expect(BUILDINGS[b]).toBeDefined();
+    for (const c of Object.values(sc.councils)) unique(c.members);
+    for (const type of ['european', 'people'] as const) {
+      const sel = nationTypeIn(sc, type);
+      unique(sel.units);
+      unique(sel.buildings);
+      for (const u of sel.units) expect(UNIT_TYPES[u], `${type} ${u}`).toBeDefined();
+      for (const b of sel.buildings) expect(BUILDINGS[b], `${type} ${b}`).toBeDefined();
+    }
     for (const g of sc.goods) expect(GOODS).toContain(g);
     for (const t of sc.peoples.ids) expect(TRIBES[t]).toBeDefined();
     for (const t of sc.peoples.ids) expect(sc.peoples.settlements[TRIBES[t].lifeway], `a settlement kind for the ${TRIBES[t].lifeway} ${t}`).toBeDefined();
-    for (const f of sc.council.members) expect(FATHERS[f]).toBeDefined();
+    for (const c of Object.values(sc.councils)) for (const f of c.members) expect(FATHERS[f]).toBeDefined();
     unique(sc.terrain);
     unique(sc.map.stored.map((e) => e.id));
     for (const t of sc.terrain) expect(TERRAIN[t]).toBeDefined();
@@ -186,25 +198,31 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
       // As the scenario has the people (its overrides of the catalogue's skills and wants).
       const people = peopleIn(sc, t);
       for (const g of people.wants) expect(sc.goods, `${t} want ${g}`).toContain(g);
-      for (const u of people.skills) expect(sc.units, `${t} teach ${u}`).toContain(u);
+      for (const u of people.skills) expect(sc.nationTypes.european.units, `${t} teach ${u}`).toContain(u);
     }
     for (const t of Object.keys(sc.peoples.overrides ?? {})) expect(sc.peoples.ids).toContain(t);
     const isGood = (g: string) => (GOODS as readonly string[]).includes(g);
-    for (const b of sc.buildings) {
+    for (const b of sc.nationTypes.european.buildings) {
       const { input, output } = BUILDINGS[b];
       if (input) expect(sc.goods).toContain(input);
       if (output && isGood(output)) expect(sc.goods).toContain(output);
     }
-    for (const u of sc.units) {
+    for (const u of sc.nationTypes.european.units) {
       const g = UNIT_TYPES[u].expertFor;
       if (g && isGood(g)) expect(sc.goods).toContain(g);
     }
     for (const list of Object.values(sc.ai.goods)) for (const g of list) expect(sc.goods).toContain(g);
   });
 
-  it('has a council with members in its categories', () => {
-    expect(sc.council.categories.length).toBeGreaterThan(0);
-    for (const f of sc.council.members) expect(sc.council.categories).toContain(FATHERS[f].category);
+  it('has a council for each nation type, with members in its categories', () => {
+    // The European nations' council is the scenario's; a people's may be the engine's (rules/councils.ts).
+    expect(Object.hasOwn(sc.councils, councilIdOf(sc, 'european'))).toBe(true);
+    for (const type of ['european', 'people'] as const) {
+      const council = councilById(sc, councilIdOf(sc, type))!;
+      expect(council, type).toBeDefined();
+      expect(council.categories.length).toBeGreaterThan(0);
+      for (const f of council.members) expect(council.categories).toContain(FATHERS[f].category);
+    }
   });
 
   it('switches mechanics on consistently', () => {
@@ -214,15 +232,15 @@ describe.each(listScenarios().map((sc) => [sc.id, sc] as const))('conformance: %
     if (m.boycotts) expect(m.taxes).toBe(true);
     if (m.charter) expect(m.charter.base).toBeGreaterThan(0);
     // Units the mechanics need are in play.
-    if (m.ref) for (const u of ['kingsRegular', 'artillery', 'manOfWar'] as const) expect(sc.units).toContain(u);
-    if (m.customHouse) expect(sc.buildings).toContain('customHouse');
+    if (m.ref) for (const u of ['kingsRegular', 'artillery', 'manOfWar'] as const) expect(sc.nationTypes.european.units).toContain(u);
+    if (m.customHouse) expect(sc.nationTypes.european.buildings).toContain('customHouse');
   });
 
   it('has a rumour table with odds', () => {
     expect(sc.rumours.length).toBeGreaterThan(0);
     expect(sc.rumours.some((r) => !r.tribal && r.weight > 0)).toBe(true);
     for (const r of sc.rumours) for (const w of [r.weight, r.scout, r.expert]) if (w !== undefined) expect(w).toBeGreaterThanOrEqual(0);
-    if (sc.rumours.some((r) => r.outcome === 'colonist' || r.outcome === 'fountain')) expect(sc.units).toContain('freeColonist');
+    if (sc.rumours.some((r) => r.outcome === 'colonist' || r.outcome === 'fountain')) expect(sc.nationTypes.european.units).toContain('freeColonist');
   });
 });
 

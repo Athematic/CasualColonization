@@ -5,7 +5,7 @@
  * that any rule module can call it without import cycles.
  */
 import type { GoodId } from './rules/goods.js';
-import type { NationId } from './rules/nations.js';
+import type { PlayerId } from './rules/nations.js';
 import type { GameState, GoodsTally, HistoryEntry, HistoryKind, Ledger } from './types.js';
 
 /** The oldest entries are dropped beyond this many (about 80 bytes each in a save). */
@@ -18,7 +18,7 @@ export const MAX_HISTORY = 800;
 export function noteHistory(
   s: GameState,
   kind: HistoryKind,
-  nations: NationId[],
+  nations: PlayerId[],
   text: string,
   opts: { secret?: boolean; at?: { x: number; y: number } } = {},
 ): void {
@@ -31,7 +31,7 @@ export function noteHistory(
 }
 
 /** The history a nation knows of, oldest first; without a nation, everything (observers). */
-export function historyFor(s: GameState, nation?: NationId): HistoryEntry[] {
+export function historyFor(s: GameState, nation?: PlayerId): HistoryEntry[] {
   const list = s.history ?? [];
   if (!nation) return [...list];
   return list.filter((e) => !e.secret || e.nations.includes(nation));
@@ -43,7 +43,7 @@ function emptyTally(): GoodsTally {
   return { europe: {}, custom: {}, route: {}, foreign: {} };
 }
 
-function ledgerOf(s: GameState, nation: NationId): Ledger {
+function ledgerOf(s: GameState, nation: PlayerId): Ledger {
   const all = (s.ledger ??= {});
   const l = (all[nation] ??= { total: emptyTally(), turn: s.turn, now: emptyTally(), last: emptyTally() });
   if (l.turn !== s.turn) {
@@ -60,7 +60,7 @@ function ledgerOf(s: GameState, nation: NationId): Ledger {
  * sales included), `custom` for the custom house share of those, `route` for goods trade routes
  * unloaded in the nation's own colonies, `foreign` for goods sold at a trade partner's colony.
  */
-export function noteGoods(s: GameState, nation: NationId, channel: LedgerChannel, good: GoodId, amount: number): void {
+export function noteGoods(s: GameState, nation: PlayerId, channel: LedgerChannel, good: GoodId, amount: number): void {
   if (amount <= 0 || nation === 'crown') return;
   const l = ledgerOf(s, nation);
   for (const t of [l.total, l.now]) {
@@ -70,7 +70,7 @@ export function noteGoods(s: GameState, nation: NationId, channel: LedgerChannel
 }
 
 /** A nation's tallies: over the game, this turn and last turn. Empty when nothing was recorded. */
-export function ledgerFor(s: GameState, nation: NationId): { total: GoodsTally; now: GoodsTally; last: GoodsTally } {
+export function ledgerFor(s: GameState, nation: PlayerId): { total: GoodsTally; now: GoodsTally; last: GoodsTally } {
   const l = s.ledger?.[nation];
   if (!l) return { total: emptyTally(), now: emptyTally(), last: emptyTally() };
   if (l.turn === s.turn) return { total: l.total, now: l.now, last: l.last };

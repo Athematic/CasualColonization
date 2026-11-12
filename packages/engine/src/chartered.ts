@@ -9,14 +9,14 @@ import { newPlayer } from './game.js';
 import { noteHistory } from './history.js';
 import { placeOnMap } from './movement.js';
 import { colonyWorkers, createUnit, message, player } from './queries.js';
-import type { NationId } from './rules/nations.js';
+import type { PlayerId } from './rules/nations.js';
 import { calendarOf, nationOf, nationTitle, term, yearOf } from './scenarios/index.js';
 import { track } from './telemetry.js';
 import type { GameState, Player } from './types.js';
 import { ownedUnitsView, colonyList } from './unitindex.js';
 
 /** Why `nation` cannot found the company now, or null. */
-export function foundProblem(s: GameState, nation: NationId, id: NationId): string | null {
+export function foundProblem(s: GameState, nation: PlayerId, id: PlayerId): string | null {
   if (!companiesOn(s)) return 'There are no chartered companies in this scenario.';
   const entry = companyCharters(s).find((c) => c.id === id);
   if (!entry) return 'There is no such company.';
@@ -26,7 +26,7 @@ export function foundProblem(s: GameState, nation: NationId, id: NationId): stri
   if (p.independence !== 'none') return `Companies are chartered by a Crown; ${nationOf(s, nation).name} has declared independence.`;
   // The nations that historically chartered it; when none of them takes part, any nation may.
   const founders = entry.founders.filter((n) => s.players.some((o) => o.id === n));
-  if (founders.length && !founders.includes(nation)) return `Only ${founders.map((n) => nationOf(s, n).name).join(' or ')} may charter ${entry.name}.`;
+  if (founders.length && !(founders as readonly PlayerId[]).includes(nation)) return `Only ${founders.map((n) => nationOf(s, n).name).join(' or ')} may charter ${entry.name}.`;
   if (entry.from !== undefined && yearOf(s.turn, calendarOf(s)).year < entry.from) return `${nationTitle(s, id)} cannot be chartered before ${entry.from}.`;
   const capital = companyRules(s).capital;
   if (p.gold < capital) return `Founding ${entry.name} needs ${capital} gold.`;
@@ -38,7 +38,7 @@ export function foundProblem(s: GameState, nation: NationId, id: NationId): stri
  * founding shares. The company arrives with a caravel, two colonists and a soldier at the founder's
  * point of arrival, knows what the founder has explored, and settles on its own.
  */
-export function foundCompany(s: GameState, nation: NationId, id: NationId): string {
+export function foundCompany(s: GameState, nation: PlayerId, id: PlayerId): string {
   const problem = foundProblem(s, nation, id);
   if (problem) fail(problem);
   const rules = companyRules(s);
@@ -81,7 +81,7 @@ export function sharePrice(s: GameState, co: Player): number {
 }
 
 /** Why `nation` cannot buy `count` shares in the company now, or null. */
-export function sharesProblem(s: GameState, nation: NationId, id: NationId, count: number): string | null {
+export function sharesProblem(s: GameState, nation: PlayerId, id: PlayerId, count: number): string | null {
   if (!companiesOn(s)) return 'There are no chartered companies in this scenario.';
   const co = s.players.find((p) => p.id === id);
   if (!co || !isCompany(co)) return 'There is no such company.';
@@ -94,7 +94,7 @@ export function sharesProblem(s: GameState, nation: NationId, id: NationId, coun
 }
 
 /** `nation` buys new shares in a company; the gold goes into the company's treasury. */
-export function buyShares(s: GameState, nation: NationId, id: NationId, count: number): string {
+export function buyShares(s: GameState, nation: PlayerId, id: PlayerId, count: number): string {
   const problem = sharesProblem(s, nation, id, count);
   if (problem) fail(problem);
   const co = player(s, id);
@@ -125,7 +125,7 @@ export function processCompanies(s: GameState): void {
     if (pool <= 0) continue;
     const { total } = sharesIn(co, co.id);
     let paid = 0;
-    for (const [nation, n] of Object.entries(book.shares) as [NationId, number][]) {
+    for (const [nation, n] of Object.entries(book.shares) as [PlayerId, number][]) {
       const holder = s.players.find((p) => p.id === nation);
       if (!holder || !n) continue;
       const gold = Math.floor((pool * n) / total);

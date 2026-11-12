@@ -20,6 +20,7 @@ import {
   unitsAt,
 } from '../queries.js';
 import type { Brave, Colony, GameState, Player, Tile, Unit } from '../types.js';
+import type { PlayerId } from '../rules/nations.js';
 import { goodsOf } from '../scenarios/index.js';
 import { ownedUnitsView, colonyList } from '../unitindex.js';
 
@@ -158,8 +159,16 @@ export function keenSiteScore(s: GameState, x: number, y: number): number {
   return score;
 }
 
-function workKeenSiteScore(s: GameState, x: number, y: number): number {
-  if (colonySiteProblem(s, x, y)) return -Infinity;
+/**
+ * keenSiteScore of a site that only a playing people's claim keeps colonies off (`people`, the
+ * claimant): the site as it would be once bought or taken (peopleland.ts). Not memoised.
+ */
+export function claimedSiteScore(s: GameState, x: number, y: number, people: PlayerId): number {
+  return workKeenSiteScore(s, x, y, people);
+}
+
+function workKeenSiteScore(s: GameState, x: number, y: number, founder?: PlayerId): number {
+  if (colonySiteProblem(s, x, y, founder)) return -Infinity;
   const near = neighbourColonies(s, x, y);
   const base = plainSiteScore(s, x, y, near);
   const grid = gridOf(s);

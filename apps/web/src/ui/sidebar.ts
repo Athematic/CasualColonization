@@ -9,6 +9,8 @@ import {
   colonyWorkers,
   describeSeed,
   DIFFICULTY,
+  councilText,
+  CouncilText,
   FATHERS,
   formatDate,
   GOOD_DEFS,
@@ -35,10 +37,24 @@ import {
   unitsAboard,
   unitsAwaitingOrders,
   type GameState,
-  type NationId,
+  type PlayerId,
   type Unit,
   colonyOpenTo,
   FOREIGN_KEEP,
+  isPeoplePlayer,
+  kindOfId,
+  landDealProblem,
+  playingPeopleLand,
+  pairAtWar,
+  pairPrice,
+  sideName,
+  townTeaches,
+  gridOf,
+  settlementName,
+  playingPeople,
+  type Colony,
+  type GoodId,
+  type Settlement,
 } from '@cc/engine';
 import { riverCourse, traceStrand } from '@cc/render-api';
 import type { App } from '../app.js';
@@ -47,6 +63,7 @@ import { downloadSave, saveManual } from '../save.js';
 import { activeStyle, availableStyles, icon, setStyle } from '../styles.js';
 import { toast } from './dialogs.js';
 import { shareDialog } from './share.js';
+import { townLand } from './town.js';
 
 function movesText(u: Unit, s: GameState): string {
   const m = u.moves / 3;
@@ -87,6 +104,8 @@ export class Sidebar {
     }
     const myTurn = app.isMyTurn();
     const awaiting = unitsAwaitingOrders(s, app.viewer).length;
+    // A playing people (native-nations.md T1, T22) has no home port, Crown, taxes or immigration.
+    const people = isPeoplePlayer(me);
 
     this.body.append(
       h('div', { class: 'title-row' },
@@ -94,13 +113,19 @@ export class Sidebar {
         h('span', { class: 'flag', style: `background:${nationOf(app.state, app.viewer).color}`, title: nationOf(app.state, app.viewer).name })),
       h('div', { class: 'stats' },
         h('div', null, h('strong', null, formatDate(s.turn, calendarOf(s))), ' · ', nationTitle(app.state, app.viewer)),
-        h('div', null, `Gold ${me.gold.toLocaleString()} · Tax ${me.tax}%`),
-        h('div', { class: 'muted' }, `Crosses ${me.crosses}/${me.crossesRequired} · Recruit ${recruitPrice(s, me)}`),
+        people
+          ? h('div', { title: 'A people’s gold is only what Europeans pay in trade, and buys only their goods.' }, `Gold ${me.gold.toLocaleString()} (from trade)`)
+          : h('div', null, `Gold ${me.gold.toLocaleString()} · Tax ${me.tax}%`),
+        people ? null : h('div', { class: 'muted' }, `Crosses ${me.crosses}/${me.crossesRequired} · Recruit ${recruitPrice(s, me)}`),
         h('div', { class: 'muted' },
           h('button', { class: 'link', onclick: () => void app.chooseFather() },
-            me.currentFather ? `${Term(s, 'councilShort')}: ${FATHERS[me.currentFather].name} ${me.fatherBells}/${nextFatherCost(s, me)}` : `${Term(s, 'councilShort')}: choose a ${term(s, 'member')} (${me.fatherBells} bells)`),
+            me.currentFather
+              ? `${CouncilText(s, me.id, 'councilShort')}: ${FATHERS[me.currentFather].name} ${me.fatherBells}/${nextFatherCost(s, me)}`
+              : !Object.values(me.fatherOffer ?? {}).some(Boolean) && me.fathers.length
+                ? `${CouncilText(s, me.id, 'councilShort')}: every seat is filled (${me.fathers.length} ${councilText(s, me.id, 'members')})`
+                : `${CouncilText(s, me.id, 'councilShort')}: choose a ${councilText(s, me.id, 'member')} (${me.fatherBells} ${councilText(s, me.id, 'product')})`),
           ' · ',
-          h('button', { class: 'link', title: 'The Congress hall (K)', onclick: () => app.openCongress() }, 'Hall')),
+          h('button', { class: 'link', title: `The ${councilText(s, me.id, 'councilShort')} hall (K)`, onclick: () => app.openCongress() }, 'Hall')),
         me.independence === 'declared' ? h('div', null, h('span', { class: 'pill bad' }, `${Term(app.state, 'independenceWar')}`)) : null,
         me.independence === 'won' ? h('div', null, h('span', { class: 'pill good' }, 'Independent')) : null,
         Object.values(me.stance).includes('war') && me.independence !== 'declared' ? h('div', null, h('span', { class: 'pill bad' }, 'At war')) : null,
@@ -111,12 +136,16 @@ export class Sidebar {
 
     this.body.append(
       h('div', { class: 'row wrap nav-row' },
-        h('button', { class: 'btn', onclick: () => app.openEurope(), title: `${Term(app.state, 'homeland')} (E)` }, `${Term(app.state, 'homeland')}`),
+        people ? null : h('button', { class: 'btn', onclick: () => app.openEurope(), title: `${Term(app.state, 'homeland')} (E)` }, `${Term(app.state, 'homeland')}`),
         h('button', { class: 'btn', onclick: () => app.openDiplomacy(), title: 'Foreign affairs (D)' }, 'Affairs'),
         h('button', { class: 'btn', onclick: () => app.openRoutes(), title: 'Trade routes (T)' }, 'Routes'),
         h('button', { class: 'btn', onclick: () => app.openProgress(), title: 'Progress graphs (H)' }, 'Progress'),
         h('button', { class: 'btn', onclick: () => app.openReports(), title: 'Advisor reports (A, or F1–F8)' }, 'Reports'),
         h('button', { class: 'btn', onclick: () => app.selectNext(), title: 'Next unit (W)', disabled: !awaiting }, `Next unit${awaiting ? ` (${awaiting})` : ''}`),
+        // Claimed land and the land's health on the map (native-nations.md T5, T10), where the game has them.
+        s.land || people
+          ? h('button', { class: `btn${app.overlay ? ' active' : ''}`, 'aria-pressed': app.overlay ? 'true' : 'false', onclick: () => app.toggleOverlay(), title: 'Show who claims the land and its health (L)' }, app.overlay ? 'Hide land' : 'Land')
+          : null,
       ),
       h('button', {
         class: `btn primary end-turn${myTurn && !awaiting ? ' pulse' : ''}`,
@@ -149,7 +178,7 @@ export class Sidebar {
         };
       })
       .sort((a, b) => b.score - a.score);
-    const watch = h('select', { 'aria-label': 'Whose view to show', onchange: (e: Event) => app.setWatch((e.target as HTMLSelectElement).value as NationId | 'all') },
+    const watch = h('select', { 'aria-label': 'Whose view to show', onchange: (e: Event) => app.setWatch((e.target as HTMLSelectElement).value as PlayerId | 'all') },
       h('option', { value: 'all', selected: app.watch === 'all' || undefined }, 'Everything'),
       rows.map((r) => h('option', { value: r.p.id, selected: app.watch === r.p.id || undefined }, `${nationTitle(app.state, r.p.id)}'s view`)));
     const head = s.config.headStart;
@@ -205,7 +234,12 @@ export class Sidebar {
     const btn = (label: string, key: string, onclick: () => void, enabled = true) =>
       actions.push(h('button', { class: 'btn small', onclick, disabled: !enabled, title: key ? `Shortcut: ${key}` : undefined }, label, key ? h('kbd', null, key) : null));
     if (mine && u.loc.kind === 'map') {
-      if (def.kind === 'colonist') btn(charterCost(s, u.owner) > 0 ? `Found colony (${charterCost(s, u.owner)} gold)` : 'Found colony', 'B', () => void app.foundColony(), can(() => canFoundColony(s, u)));
+      const peopleUnit = kindOfId(u.owner) === 'people';
+      // On a playing people's land a European colonist may buy or take the site first (native-nations.md section 18).
+      const landDeal = !peopleUnit && !!pos && !!playingPeopleLand(s, pos.x, pos.y) && !landDealProblem(s, u.owner, pos.x, pos.y, true);
+      if (def.kind === 'colonist') btn(peopleUnit ? 'Found town' : landDeal ? 'Found colony (buy or take the land)' : charterCost(s, u.owner) > 0 ? `Found colony (${charterCost(s, u.owner)} gold)` : 'Found colony', 'B', () => void app.foundColony(), can(() => (landDeal ? null : canFoundColony(s, u))));
+      // A people claims unclaimed land next to its own, near its towns (T5).
+      if (peopleUnit && pos && tile && tile.claim !== u.owner && !isShip(u)) btn('Claim this land', '', () => { if (app.dispatch({ type: 'claimLand', x: pos.x, y: pos.y })) app.requestRender(); }, mine && app.isMyTurn() && !tile.claim);
       if (u.role === 'pioneer') {
         btn(terrain === 'clear' ? 'Clear forest' : 'Plow', 'P', () => app.improve(), can(() => canImprove(s, u, terrain)));
         btn('Build road', 'R', () => app.buildRoad(), can(() => canImprove(s, u, 'road')));
@@ -216,7 +250,7 @@ export class Sidebar {
         toast('Click where the unit should go.');
       });
       if (canUseRoutes(u)) btn(u.route ? 'Change route…' : 'Trade route…', 'T', () => app.openRoutes(u.id));
-      if (isShip(u)) btn(`Sail to ${term(app.state, 'homeland')}`, '', () => app.unitCommand('gotoEurope'));
+      if (isShip(u) && kindOfId(u.owner) !== 'people') btn(`Sail to ${term(app.state, 'homeland')}`, '', () => app.unitCommand('gotoEurope'));
       if (u.type === 'treasure') btn('Ship treasure home', '', () => { if (app.dispatch({ type: 'cashTreasure', unitId: u.id })) app.afterUnitAction(); });
       if (u.type === 'damagedArtillery') btn('Repair (colony armory)', '', () => { if (app.dispatch({ type: 'repairArtillery', unitId: u.id })) app.afterUnitAction(); });
       btn('Fortify', 'F', () => app.unitCommand('fortify'), !isShip(u));
@@ -224,7 +258,7 @@ export class Sidebar {
       btn('Skip', 'Space', () => app.unitCommand('skip'));
       if (u.state !== 'active' || u.dest || u.roadTo || u.work || u.route) btn('Clear orders', '', () => app.unitCommand('clearOrders'));
       const colony = pos && colonyAt(s, pos.x, pos.y);
-      if (colony && colony.owner === app.viewer) btn('Open colony', '', () => app.openColony(colony.id));
+      if (colony && colony.owner === app.viewer) btn(kindOfId(colony.owner) === 'people' ? 'Open town' : 'Open colony', '', () => app.openColony(colony.id));
       btn('Disband', '', () => app.unitCommand('disband'));
     }
     // A carrier in an ally's colony trades with it (open colonies, the engine's alliances).
@@ -248,7 +282,12 @@ export class Sidebar {
           h('div', { class: 'unit-name' }, unitName(u)),
           h('div', { class: 'muted' }, `Moves ${movesText(u, s)}${u.role === 'pioneer' ? ` · Tools ${u.tools}` : ''}`),
           h('div', { class: 'muted' }, orders),
-          tile ? h('div', { class: 'muted' }, tileDescription(tile)) : null)),
+          tile ? h('div', { class: 'muted' }, tileDescription(tile)) : null,
+          (() => {
+            // The land's health where the unit stands (native-nations.md T10).
+            const land = pos && townLand(s, pos.x, pos.y);
+            return land?.words ? h('div', { class: 'muted small' }, `${land.region}: ${land.words} (${land.health})${land.hard ? ', a hard year' : ''}`) : null;
+          })())),
       aboard.length || cargo.length
         ? h('div', { class: 'cargo' },
             aboard.map((p) => h('button', { class: 'chip', title: `Select ${unitName(p)}`, onclick: () => app.select(p.id) }, icon({ kind: 'unit', type: p.type, role: p.role, color: nationOf(app.state, p.owner).color }, 28), unitName(p))),
@@ -256,7 +295,67 @@ export class Sidebar {
         : null,
       actions.length ? h('div', { class: 'actions' }, actions) : null,
       trade,
+      mine && u.loc.kind === 'map' && pos ? this.peopleDealings(u, pos) : null,
     );
+  }
+
+  /**
+   * What a unit can do beside the other side's towns, colonies and settlements (native-nations.md
+   * T10, T11; Beta 3 step 4's commands): a carrier trades for gold between a European nation and a
+   * playing people, a people's carrier barters with another people, and a nation's colonist learns
+   * at a people's town under a cultural exchange.
+   */
+  private peopleDealings(u: Unit, pos: { x: number; y: number }): HTMLElement | null {
+    const app = this.app;
+    const s = app.state;
+    const grid = gridOf(s);
+    const near = <T extends { x: number; y: number }>(list: T[]) => list.filter((c) => grid.distance(c.x, c.y, pos.x, pos.y) === 1);
+    const myKind = kindOfId(u.owner);
+    const def = UNIT_TYPES[u.type];
+    const rows: HTMLElement[] = [];
+    const go = !app.isMyTurn();
+    const cargo = goodsOf(s).filter((g) => (u.cargo?.[g] ?? 0) > 0);
+    const name = (g: GoodId) => GOOD_DEFS[g].name.toLowerCase();
+    if (def.cargo > 0) {
+      for (const c of near(Object.values(s.colonies)) as Colony[]) {
+        const other = c.owner;
+        // Trade for gold: a European nation and a playing people, either side's carrier.
+        if ((myKind === 'people') !== (kindOfId(other) === 'people') && (myKind === 'people' || playingPeople(s, other))) {
+          if (pairAtWar(s, u.owner, other)) continue;
+          const sell = cargo.map((g) => h('button', { class: 'btn small', disabled: go, title: `${Math.round(pairPrice(s, u.owner, other, g, u.owner) * 10) / 10} gold a unit`, onclick: () => app.dispatch({ type: 'tradeWithPeople', unitId: u.id, colonyId: c.id, good: g, amount: u.cargo![g]!, load: false }) }, `Sell ${name(g)}`));
+          const buy = goodsOf(s).filter((g) => c.goods[g] > 0).map((g) => h('button', { class: 'btn small', disabled: go, title: `${Math.round(pairPrice(s, other, u.owner, g, u.owner) * 10) / 10} gold a unit`, onclick: () => app.dispatch({ type: 'tradeWithPeople', unitId: u.id, colonyId: c.id, good: g, amount: 100, load: true }) }, `Buy ${name(g)}`));
+          if (sell.length || buy.length) rows.push(h('div', { class: 'allied-trade' }, h('div', { class: 'muted small' }, `Trade at ${c.name} (${sideName(s, other)})`), h('div', { class: 'actions' }, sell, buy)));
+        } else if (myKind === 'people' && kindOfId(other) === 'people' && other !== u.owner) {
+          rows.push(this.barterRow(u, { colonyId: c.id }, c.name, c.goods, other));
+        }
+      }
+      if (myKind === 'people') {
+        for (const st of near(Object.values(s.settlements)) as Settlement[]) rows.push(this.barterRow(u, { settlementId: st.id }, settlementName(s, st), st.goods ?? {}, st.tribe));
+      }
+    }
+    // Learning at a people's town under a cultural exchange (T11).
+    if (myKind !== 'people' && def.kind === 'colonist' && def.skill === 0 && u.role === 'none') {
+      for (const c of near(Object.values(s.colonies)) as Colony[]) {
+        if (kindOfId(c.owner) !== 'people') continue;
+        const skill = townTeaches(s, c, u.owner);
+        if (skill) rows.push(h('div', { class: 'allied-trade' }, h('button', { class: 'btn small', disabled: go || u.moves <= 0, onclick: () => app.dispatch({ type: 'learnAtTown', unitId: u.id, colonyId: c.id }) && app.afterUnitAction() }, `Learn at ${c.name} (${UNIT_TYPES[skill].name.toLowerCase()})`)));
+      }
+    }
+    return rows.length ? h('div', null, rows) : null;
+  }
+
+  /** Barter between peoples (T11): goods aboard for goods of the same worth the other side can spare. */
+  private barterRow(u: Unit, at: { colonyId?: string; settlementId?: string }, where: string, stock: Partial<Record<GoodId, number>>, other: string): HTMLElement {
+    const app = this.app;
+    const s = app.state;
+    const cargo = goodsOf(s).filter((g) => (u.cargo?.[g] ?? 0) > 0);
+    const wanted = goodsOf(s).filter((g) => (stock[g] ?? 0) > 0);
+    const buttons = cargo.flatMap((give) => wanted.filter((take) => take !== give).map((take) =>
+      h('button', { class: 'btn small', disabled: !app.isMyTurn() || pairAtWar(s, u.owner, other as never), onclick: () => app.dispatch({ type: 'barter', unitId: u.id, ...at, give, amount: u.cargo![give]!, take }) },
+        `${GOOD_DEFS[give].name} for ${GOOD_DEFS[take].name.toLowerCase()}`)));
+    return h('div', { class: 'allied-trade' },
+      h('div', { class: 'muted small' }, `Barter at ${where}${buttons.length ? '' : ': bring goods to give, and they must have goods to spare'}`),
+      buttons.length ? h('div', { class: 'actions' }, buttons) : null);
   }
 
   private reports(): HTMLElement {

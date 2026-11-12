@@ -32,6 +32,9 @@ export class SpriteIds {
     if (typeRole && role in typeRole) return fill(typeRole[role], vars);
     const colonistRole = UNIT_TYPES[type].kind === 'colonist' && role !== 'none';
     if (m.types && type in m.types && !colonistRole) return fill(m.types[type], vars);
+    // A people's unit (native-nations.md T6) never borrows a European colonist's or soldier's
+    // sprite: unmapped, it is drawn by the style underneath.
+    if (UNIT_TYPES[type].people) return [];
     return fill(colonistRole ? m.role : m.plain, vars);
   }
 

@@ -1,4 +1,5 @@
 import {
+  waysOf,
   braveName,
   bravesAt,
   buildMapIndex,
@@ -46,10 +47,28 @@ import {
   type Direction,
   type GameMessage,
   type GameState,
-  type NationId,
+  type PlayerId,
   type SettlementAction,
   type Unit,
+  isPeoplePlayer,
+  landDealProblem,
+  pairTreatyProblem,
+  peopleLandPrice,
+  peopleLeasableTiles,
+  peopleLeaseRent,
+  playingPeopleLand,
+  sideName,
 } from '@cc/engine';
+
+/** Who claims a tile and its region's health, for the map's hover text (native-nations.md T5, T10). */
+function landWords(s: GameState, x: number, y: number): string[] {
+  const out: string[] = [];
+  const claim = tileAt(s, x, y)?.claim;
+  if (claim) out.push(`land of ${nationOf(s, claim).name}`);
+  const land = townLand(s, x, y);
+  if (land) out.push(`${land.region}${land.words ? `: ${land.words} (${land.health})` : ''}${land.hard ? ', a hard year' : ''}`);
+  return out;
+}
 import { computeVisibility, screenToTile, type Camera, type MapRenderer, type Point, type Scene } from '@cc/render-api';
 import { h } from './dom.js';
 import { saveAuto } from './save.js';
@@ -66,6 +85,7 @@ import { REPORT_TABS, ReportsScreen } from './ui/reports.js';
 import { RoutesScreen } from './ui/routes.js';
 import { Sidebar } from './ui/sidebar.js';
 import { showTurnStart, sortNews } from './ui/turnstart.js';
+import { townLand } from './ui/town.js';
 import { defenceLine, exchangeLine, inciteDialog, leaseLine, nativeTradeDialog, speakLabel } from './ui/natives.js';
 
 /**
@@ -156,7 +176,7 @@ export class App {
   private frame = 0;
   private panelsDirty = true;
   camera: Camera = { x: 0, y: 0, zoom: 56 };
-  viewer: NationId;
+  viewer: PlayerId;
   selected?: string;
   hover?: Point;
   gotoMode = false;
@@ -165,8 +185,10 @@ export class App {
   /** No people play: the computers play each other and the user watches. */
   observer: boolean;
   /** In observer mode, whose view of the world is shown ('all' reveals everything). */
-  watch: NationId | 'all' = 'all';
+  watch: PlayerId | 'all' = 'all';
   autoplay = false;
+  /** The land overlay (claims and the land's health, native-nations.md T5, T10) is shown on the map. */
+  overlay = false;
   /** Milliseconds between turns while autoplaying. */
   speed = 400;
   private autoplayTimer = 0;
@@ -224,7 +246,9 @@ export class App {
       // A watched head start: follow the nation the player will take over.
       this.speed = HEAD_START_MIN_MS;
       this.camera.zoom = 40;
-      this.setWatch(head.humans[0]);
+      // A nation yet to arrive (native-nations.md T18) has no view yet: show everything until it does.
+      const present = head.humans.find((id) => this.state.players.some((p) => p.id === id));
+      this.setWatch(present ?? 'all');
       this.centerOnStart();
       this.setAutoplay(true);
     } else if (this.observer) {
@@ -257,7 +281,7 @@ export class App {
     return player(this.state, this.viewer);
   }
 
-  private humanViewer(): NationId {
+  private humanViewer(): PlayerId {
     const cur = this.game.current;
     if (cur.human) return cur.id;
     return this.state.players.find((p) => p.human)?.id ?? cur.id;
@@ -279,7 +303,7 @@ export class App {
 
   // ---- Observer mode ----
 
-  setWatch(watch: NationId | 'all'): void {
+  setWatch(watch: PlayerId | 'all'): void {
     this.watch = watch;
     this.viewer = watch === 'all' ? this.state.players[0].id : watch;
     this.requestRender();
@@ -304,7 +328,7 @@ export class App {
   }
 
   /** Keeps the watched nation's latest activity in view: its newest colony, or its ships before it has one. */
-  private follow(nation: NationId): void {
+  private follow(nation: PlayerId): void {
     const newest = Object.values(this.state.colonies)
       .filter((c) => c.owner === nation)
       .sort((a, b) => b.founded - a.founded)[0];
@@ -408,7 +432,14 @@ export class App {
       pathTurns: u && path?.length ? (pathKind === 'road' ? roadToTurns(this.state, u, path) : pathTurns(this.state, u, path)) : undefined,
       visible: computeVisibility(this.state, this.viewer),
       revealAll: this.revealAll(),
+      ...(this.overlay ? { overlay: 'land' as const } : {}),
     };
+  }
+
+  /** Shows or hides the land overlay. */
+  toggleOverlay(): void {
+    this.overlay = !this.overlay;
+    this.requestRender();
   }
 
   private hoverIsFar(): boolean {
@@ -474,7 +505,7 @@ export class App {
   private asking = false;
 
   /** The last message each nation had seen when it ended its turn, to tell what is new since. */
-  private lastSeen = new Map<NationId, GameMessage>();
+  private lastSeen = new Map<PlayerId, GameMessage>();
 
   /** Messages for the viewer since it last ended its turn. */
   private newsSinceLastTurn(): GameMessage[] {
@@ -503,7 +534,7 @@ export class App {
 
   /** Asks about decisions the rules left waiting mid-turn (a tax raise after a sale, a royal demand). */
   async answerPending(): Promise<void> {
-    if (this.me.pendingTax || this.me.pendingDemand || pendingDemands(this.state, this.me.id).some((d) => d.kind === 'demand' || d.kind === 'treaty') || pendingEvents(this.state, this.me.id).length) await this.turnStart();
+    if (this.me.independenceChoice || this.me.pendingTax || this.me.pendingDemand || pendingDemands(this.state, this.me.id).some((d) => d.kind === 'demand' || d.kind === 'treaty') || pendingEvents(this.state, this.me.id).length) await this.turnStart();
   }
 
   /** Opens the Congress choice in the briefing modal. */
@@ -527,7 +558,7 @@ export class App {
     if (!over || this.shownGameOver) return;
     this.shownGameOver = true;
     // The final scores open on the Progress Graphs, so the whole game can be looked back on.
-    this.showScreen(new ProgressScreen(this, { ...over, viewer: this.observer ? undefined : this.viewer, onMenu: () => this.exitToMenu() }));
+    this.showScreen(new ProgressScreen(this, { ...over, ways: waysOf(this.state), viewer: this.observer ? undefined : this.viewer, onMenu: () => this.exitToMenu() }));
   }
 
   /** After a unit acts, move on to the next one that needs orders. */
@@ -574,7 +605,7 @@ export class App {
         return;
       case 'attack': {
         const brave = opt.braveId ? this.state.braves?.[opt.braveId] : undefined;
-        const target = opt.colonyId ? this.state.colonies[opt.colonyId]?.name : brave ? `the ${braveName(brave)}` : 'the enemy unit';
+        const target = opt.colonyId ? this.state.colonies[opt.colonyId]?.name : brave ? `the ${braveName(this.state, brave)}` : 'the enemy unit';
         const ok = await confirmDialog('Attack?', `Attack ${target}? This is an act of war.`, 'Attack', 'Hold back');
         if (ok && this.dispatch({ type: 'attack', unitId: u.id, target: { unitId: opt.targetUnitId, colonyId: opt.colonyId, braveId: opt.braveId } })) this.afterUnitAction();
         return;
@@ -623,13 +654,61 @@ export class App {
     if (ok) this.afterUnitAction();
   }
 
+  /**
+   * A tile of a playing people's land, near your colony or under your colonist (native-nations.md
+   * section 18): offer to buy it (the asking price, or half as much again), lease the people's land
+   * beside your colonies (from a colony), or take it. Resolves whether the tile is now yours; an
+   * offer to a person's people waits for their answer.
+   */
+  async dealForPeopleLand(x: number, y: number, lease: boolean): Promise<boolean> {
+    const s = this.state;
+    const people = playingPeopleLand(s, x, y);
+    if (!people) return false;
+    const why = landDealProblem(s, this.viewer, x, y, true);
+    if (why) {
+      toast(why, 'error');
+      return false;
+    }
+    const name = sideName(s, people);
+    const Name = name.replace(/^the /, 'The ');
+    const price = peopleLandPrice(s, people);
+    const more = Math.round(price * 1.5);
+    const gold = this.me.gold;
+    const atWar = !!landDealProblem(s, this.viewer, x, y);
+    const leaseWhy = lease ? pairTreatyProblem(s, this.viewer, people, 'land-use') : null;
+    const rent = lease && !leaseWhy ? peopleLeaseRent(s, people) * peopleLeasableTiles(s, this.viewer, people).length : 0;
+    const choice = await choose(`Land of ${name}`,
+      `${Name} claim this land. They may sell it: they ask about ${price} gold, and decide for themselves${player(s, people).human ? ' (their answer comes on their turn)' : ''}. ${lease ? 'A lease lets your colonies work their land beside them for a yearly rent, and the land stays theirs. ' : ''}Taking it breaks faith with them: every treaty between you ends, they refuse new ones for years, and they may go to war over it.`,
+      [
+        { label: `Offer ${price} gold`, value: 'offer' as const, primary: true, disabled: atWar || gold < price, hint: atWar ? `You are at war with ${name}.` : gold < price ? `You have ${gold} gold.` : undefined },
+        { label: `Offer ${more} gold`, value: 'more' as const, disabled: atWar || gold < more },
+        ...(lease ? [{ label: rent ? `Lease their land beside your colonies (${rent} gold a year)` : 'Lease their land beside your colonies', value: 'lease' as const, disabled: !!leaseWhy || !this.isMyTurn(), hint: leaseWhy ?? undefined }] : []),
+        { label: 'Take it', value: 'take' as const },
+        { label: 'Leave it', value: null },
+      ]);
+    if (!choice) return false;
+    const ok = choice === 'lease'
+      ? this.dispatch({ type: 'proposePairTreaty', to: people, kind: 'land-use' })
+      : choice === 'take'
+        ? this.dispatch({ type: 'takePeopleLand', x, y })
+        : this.dispatch({ type: 'offerForLand', x, y, gold: choice === 'more' ? more : price });
+    this.requestRender();
+    return ok && tileAt(this.state, x, y)?.claim === this.viewer;
+  }
+
   async foundColony(): Promise<void> {
     const u = this.selectedUnit();
     if (!u) return;
+    const at = unitPosition(this.state, u);
+    // On a playing people's land, the site is bought or taken first (native-nations.md section 18).
+    if (at && playingPeopleLand(this.state, at.x, at.y) && playingPeopleLand(this.state, at.x, at.y) !== u.owner && !landDealProblem(this.state, u.owner, at.x, at.y, true)) {
+      if (!(await this.dealForPeopleLand(at.x, at.y, false))) return;
+    }
     const reason = canFoundColony(this.state, u);
     if (reason) return toast(reason, 'error');
     const cost = charterCost(this.state, u.owner);
-    const name = await promptDialog(cost > 0 ? `Found a colony (charter: ${cost} gold)` : 'Found a colony', 'Name of the new colony', this.suggestedName());
+    const town = isPeoplePlayer(this.me);
+    const name = await promptDialog(town ? 'Found a town' : cost > 0 ? `Found a colony (charter: ${cost} gold)` : 'Found a colony', town ? 'Name of the new town' : 'Name of the new colony', this.suggestedName());
     if (name === null) return;
     if (this.dispatch({ type: 'foundColony', unitId: u.id, name })) {
       const c = colonyAt(this.state, ...(this.posOf(u) as [number, number]));
@@ -683,9 +762,9 @@ export class App {
   /** Sends a ship to Europe; with Favoured Nation partners, first asks which home port. */
   private async sailForEurope(u: Unit, type: 'gotoEurope' | 'sailToEurope'): Promise<void> {
     const ports = portsFor(this.state, u.owner);
-    let port: NationId | undefined;
+    let port: PlayerId | undefined;
     if (ports.length > 1) {
-      const choice = await choose<NationId>('Sail to which port?', `${unitName(u)} can sail to your own home port or to a Favoured Nation's. In a partner's port you trade at its prices and tax and can buy merchant ships; colonists are recruited and go ashore only at home.`,
+      const choice = await choose<PlayerId>('Sail to which port?', `${unitName(u)} can sail to your own home port or to a Favoured Nation's. In a partner's port you trade at its prices and tax and can buy merchant ships; colonists are recruited and go ashore only at home.`,
         ports.map((p, i) => ({ label: `${portName(this.state, p)}${i === 0 ? ' (home)' : ` (${nationOf(this.state, p).adjective})`}`, value: p, primary: i === 0 })));
       if (!choice) return;
       port = choice === u.owner ? undefined : choice;
@@ -820,7 +899,7 @@ export class App {
     this.game.emit();
   }
 
-  private handoff(nation: NationId): Promise<void> {
+  private handoff(nation: PlayerId): Promise<void> {
     return new Promise((resolve) => {
       const veil = h(
         'div',
@@ -840,7 +919,7 @@ export class App {
   }
 
   /** Europe; `port` opens a Favoured Nation partner's port where the viewer has ships. */
-  openEurope(port?: NationId): void {
+  openEurope(port?: PlayerId): void {
     this.showScreen(new EuropeScreen(this, port));
   }
 
@@ -945,8 +1024,8 @@ export class App {
           this.hover = t;
           // Tile info on hover: terrain, river, road.
           const tile = tileAt(this.state, t.x, t.y);
-          const braves = bravesAt(this.state, t.x, t.y).map((b) => braveName(b));
-          c.title = tile && this.knows(t.y * this.state.map.width + t.x) ? [tileDescription(tile), ...braves].join(' · ') : '';
+          const braves = bravesAt(this.state, t.x, t.y).map((b) => braveName(this.state, b));
+          c.title = tile && this.knows(t.y * this.state.map.width + t.x) ? [tileDescription(tile), ...braves, ...landWords(this.state, t.x, t.y)].join(' · ') : '';
           this.requestRender(true);
         }
       }
@@ -1117,7 +1196,8 @@ export class App {
         const p = u && unitPosition(this.state, u);
         if (p) this.centerOn(p.x, p.y);
       },
-      e: () => this.openEurope(),
+      e: () => (isPeoplePlayer(this.me) ? toast('A native people has no home port: its trade is with the Europeans who come.') : this.openEurope()),
+      l: () => this.toggleOverlay(),
       d: () => this.openDiplomacy(),
       t: () => {
         const u = this.selectedUnit();

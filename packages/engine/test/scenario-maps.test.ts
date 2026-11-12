@@ -65,7 +65,7 @@ const INCA_NORTH: Scenario = {
     ...AMERICAS.map,
     stored: [
       { id: 'north-america', peoples: [{ tribe: 'inca', region: [0, 0, 200, 200], count: 9 }] },
-      { id: 'australia', peoples: [{ tribe: 'iroquois', region: [0, 0, 200, 200], count: 6 }] },
+      { id: 'australia', peoples: [{ tribe: 'haudenosaunee', region: [0, 0, 200, 200], count: 6 }] },
     ],
     generator: undefined,
     default: 'north-america',

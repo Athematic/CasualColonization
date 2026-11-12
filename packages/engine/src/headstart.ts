@@ -5,10 +5,11 @@
 import type { AiLevel } from './ai/profiles.js';
 import { applyCommand } from './commands.js';
 import { player } from './queries.js';
+import { yetToArrive } from './presence.js';
 import { revealRoutes } from './routes.js';
 import { runAiUntilHuman } from './turn.js';
 import type { GameConfig, GameState } from './types.js';
-import type { NationId } from './rules/nations.js';
+import type { PlayerId } from './rules/nations.js';
 
 /** The level that plays for people during a head start (the strongest in tournaments). */
 export const HEAD_START_LEVEL: AiLevel = 'creative';
@@ -33,9 +34,13 @@ export function playUntil(s: GameState, turn: number, maxRounds = Infinity): boo
   return s.turn >= turn || !!s.gameOver;
 }
 
-/** Gives the nations back to the people who chose them, and moves play on to the first of them. */
-export function handOver(s: GameState, nations: NationId[] = s.config.headStart?.humans ?? []): void {
+/**
+ * Gives the nations back to the people who chose them, and moves play on to the first of them. A
+ * nation yet to arrive (arrivals.ts) arrives with its person; until then the computer plays on.
+ */
+export function handOver(s: GameState, nations: PlayerId[] = s.config.headStart?.humans ?? []): void {
   for (const nation of nations) {
+    if (yetToArrive(s, nation)) continue;
     const p = player(s, nation);
     // The computer's trade routes stay in place and keep running for the person.
     revealRoutes(s, nation);

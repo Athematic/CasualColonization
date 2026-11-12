@@ -33,9 +33,10 @@ import {
   settlementName,
   nativeRulesOf,
   tensionLabel,
-  TRIBES,
+  systemsOf,
+  peopleName,
   type GoodId,
-  type NationId,
+  type PlayerId,
   type TribeId,
   type Unit,
 } from '@cc/engine';
@@ -49,7 +50,7 @@ type Deal = { kind: 'sell' | 'buy'; good: GoodId };
  * The nation's lease of a people's land (land use, N5), in one paragraph: since when, the tiles
  * beside its colonies, the rent set when it was made and when the next is due. Null without one.
  */
-export function leaseLine(app: App, nation: NationId, people: TribeId): HTMLElement | null {
+export function leaseLine(app: App, nation: PlayerId, people: TribeId): HTMLElement | null {
   const s = app.state;
   const t = landUseTreaty(s, nation, people);
   const terms = t && leaseTerms(t);
@@ -57,7 +58,7 @@ export function leaseLine(app: App, nation: NationId, people: TribeId): HTMLElem
   const cal = calendarOf(s);
   const n = leasedTiles(s, nation, people).length;
   return h('p', { class: 'small', 'data-lease': t.id },
-    `Land use with the ${TRIBES[people].name} since ${formatDate(t.start, cal)}: your colonies work ${n} ${n === 1 ? 'tile' : 'tiles'} of their land for ${terms.rent} gold a tile a year (${terms.rent * n} gold, next due ${formatDate(terms.due, cal)}). The land stays theirs.`);
+    `Land use with the ${peopleName(s, people)} since ${formatDate(t.start, cal)}: your colonies work ${n} ${n === 1 ? 'tile' : 'tiles'} of their land for ${terms.rent} gold a tile a year (${terms.rent * n} gold, next due ${formatDate(terms.due, cal)}). The land stays theirs.`);
 }
 
 /** Whole years from now to a turn, at least 1. */
@@ -74,7 +75,7 @@ function yearsText(n: number): string {
  * When a settlement teaches the nation again under a cultural exchange (N7), in words: "teaches
  * again in n years", or the skill it teaches now. Null without an exchange with its people.
  */
-export function teachingLine(s: GameState, nation: NationId, st: Settlement): string | null {
+export function teachingLine(s: GameState, nation: PlayerId, st: Settlement): string | null {
   if (!exchangeTreaty(s, nation, st.tribe)) return null;
   const skill = settlementTeaches(s, st, nation);
   if (!skill) {
@@ -91,23 +92,23 @@ export function teachingLine(s: GameState, nation: NationId, st: Settlement): st
  * when the settlement teaches again and when its chief welcomes the nation's scouts again. Null
  * without one.
  */
-export function exchangeLine(app: App, nation: NationId, st: Settlement): HTMLElement | null {
+export function exchangeLine(app: App, nation: PlayerId, st: Settlement): HTMLElement | null {
   const s = app.state;
   const t = exchangeTreaty(s, nation, st.tribe);
   if (!t) return null;
   const chief = chiefAgainTurn(s, st, nation);
   const chiefText = chief === undefined ? '' : chief <= s.turn ? ' Its chief welcomes your scouts again.' : ` Its chief welcomes your scouts again in ${yearsText(yearsUntil(s, chief))}.`;
   return h('p', { class: 'small', 'data-exchange': t.id },
-    `Cultural exchange with the ${TRIBES[st.tribe].name} since ${formatDate(t.start, calendarOf(s))}. ${teachingLine(s, nation, st)}${chiefText}`);
+    `Cultural exchange with the ${peopleName(s, st.tribe)} since ${formatDate(t.start, calendarOf(s))}. ${teachingLine(s, nation, st)}${chiefText}`);
 }
 
 /**
  * The mutual defence pact of a settlement's people (N7), in one paragraph: the nation's own pact,
  * since when and what it does, or the nation the people is bound to instead. Null without one.
  */
-export function defenceLine(app: App, nation: NationId, st: Settlement): HTMLElement | null {
+export function defenceLine(app: App, nation: PlayerId, st: Settlement): HTMLElement | null {
   const s = app.state;
-  const name = TRIBES[st.tribe].name;
+  const name = peopleName(s, st.tribe);
   const t = defenceTreaty(s, nation, st.tribe);
   if (t) return h('p', { class: 'small', 'data-defence': t.id }, `Mutual defence pact with the ${name} since ${formatDate(t.start, calendarOf(s))}: ${defenceBenefits(s)}.`);
   const other = defencePartner(s, st.tribe);
@@ -115,7 +116,7 @@ export function defenceLine(app: App, nation: NationId, st: Settlement): HTMLEle
 }
 
 /** The label of "Speak with the chief" for a scout: again under a cultural exchange, or when the chief has spoken already. */
-export function speakLabel(s: GameState, nation: NationId, st: Settlement): string {
+export function speakLabel(s: GameState, nation: PlayerId, st: Settlement): string {
   if (!st.visited.includes(nation)) return 'Speak with the chief';
   const at = chiefAgainTurn(s, st, nation);
   if (at === undefined) return 'Speak with the chief (he has spoken with your scouts)';
@@ -165,8 +166,8 @@ export async function nativeTradeDialog(app: App, u: Unit, settlementId: string)
     const standing = peopleTreatiesOn(s) && !treaty ? peopleStanding(s, unit.owner, st.tribe) : null;
     const text = h('div', null,
       h('p', null, `The people here are ${mood}. They pay ${st.gold} gold at most, and want ${peopleOf(s, st.tribe).wants.map((g) => GOOD_DEFS[g].name.toLowerCase()).join(', ')}.`),
-      treaty ? h('p', { class: 'small', 'data-treaty': treaty.id }, `Trade treaty with the ${TRIBES[st.tribe].name} since ${formatDate(treaty.start, calendarOf(s))}: ${peopleTradeBenefits(s)}.`) : null,
-      standing ? h('p', { class: 'muted small' }, `The ${TRIBES[st.tribe].name}: ${standing.toLowerCase()}. No trade treaty yet (Foreign Affairs).`) : null,
+      treaty ? h('p', { class: 'small', 'data-treaty': treaty.id }, `Trade treaty with the ${peopleName(s, st.tribe)} since ${formatDate(treaty.start, calendarOf(s))}: ${peopleTradeBenefits(s)}.`) : null,
+      standing ? h('p', { class: 'muted small' }, `The ${peopleName(s, st.tribe)}: ${standing.toLowerCase()}. No trade treaty yet (Foreign Affairs).`) : null,
       leaseLine(app, unit.owner, st.tribe),
       exchangeLine(app, unit.owner, st),
       defenceLine(app, unit.owner, st),
@@ -186,13 +187,13 @@ export async function inciteDialog(app: App, u: Unit, settlementId: string): Pro
   const s = app.state;
   const st = s.settlements[settlementId];
   const price = incitePrice(s, st);
-  const rivals = s.players.filter((p) => p.id !== u.owner && p.id !== 'crown' && p.kind !== 'company').map((p) => p.id as NationId);
+  const rivals = s.players.filter((p) => p.id !== u.owner && systemsOf(p).peoples).map((p) => p.id as PlayerId);
   const nation = await choose(
     'Incite the natives',
-    `For ${price} gold the ${TRIBES[st.tribe].name} will turn against a rival nation: their anger with it rises sharply, and they may go to war. You have ${app.me.gold} gold.`,
+    `For ${price} gold the ${peopleName(s, st.tribe)} will turn against a rival nation: their anger with it rises sharply, and they may go to war. You have ${app.me.gold} gold.`,
     [
       ...rivals.map((n) => ({ label: `Against ${nationTitle(app.state, n)}`, value: n, disabled: app.me.gold < price || s.tribes.find((t) => t.id === st.tribe)?.stance[n] === 'war', hint: nationOf(app.state, n).name })),
-      { label: 'Never mind', value: null as unknown as NationId },
+      { label: 'Never mind', value: null as unknown as PlayerId },
     ],
   );
   if (!nation) return false;

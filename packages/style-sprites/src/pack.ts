@@ -245,6 +245,15 @@ export const DEFAULT_MAPPING: SpriteMapping = {
   settlements: {
     camp: 'settlements/{tribe}',
     capital: ['settlements/{tribe}__capital', 'settlements/{tribe}'],
+    // The Haudenosaunee's id was `iroquois` until native-nations.md section 18, and their sprites
+    // were made under it: the old ids stay as fallbacks until every set is renamed
+    // (tools/sprite-pipeline/rename-haudenosaunee.mjs; its README says when to drop them).
+    tribes: {
+      haudenosaunee: {
+        camp: ['settlements/haudenosaunee', 'settlements/iroquois'],
+        capital: ['settlements/haudenosaunee__capital', 'settlements/iroquois__capital', 'settlements/haudenosaunee', 'settlements/iroquois'],
+      },
+    },
   },
   buildings: 'buildings/{building}__{level}',
   goods: 'goods/{product}',

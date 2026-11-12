@@ -4,7 +4,7 @@
  */
 import { fail } from './errors.js';
 import { message, player } from './queries.js';
-import { type NationId } from './rules/nations.js';
+import { type PlayerId } from './rules/nations.js';
 import { onPeace } from './relations.js';
 import type { GameState } from './types.js';
 import { goodsOf, nationOf, term } from './scenarios/index.js';
@@ -53,7 +53,7 @@ export function yieldMultiplier(s: GameState): number {
 }
 
 /** Whether the reveal-map cheat is on for a nation's view. */
-export function mapRevealed(s: GameState, nation: NationId): boolean {
+export function mapRevealed(s: GameState, nation: PlayerId): boolean {
   return !!s.modifiers?.reveal?.includes(nation);
 }
 
@@ -66,7 +66,7 @@ function markCheated(s: GameState, cheat: CheatId): void {
  * Applies a cheat. `nation` is the nation a per-nation cheat acts on. For a toggle, `on` sets it;
  * leaving it out flips it.
  */
-export function applyCheat(s: GameState, cheat: CheatId, nation: NationId, on?: boolean): string {
+export function applyCheat(s: GameState, cheat: CheatId, nation: PlayerId, on?: boolean): string {
   const def = CHEATS[cheat];
   if (!def) fail(`Unknown cheat ${cheat}.`);
   if (def.perNation) {
