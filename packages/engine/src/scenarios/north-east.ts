@@ -32,7 +32,6 @@ import { AMERICAS } from './americas.js';
 import type { Calendar } from './calendar.js';
 import type { NationEntry, PeopleOverride, PlayablePeople, Scenario } from './types.js';
 import { HUDSONS_BAY, WEST_INDIA } from './companies.js';
-import { flag, knob } from '../tune.js';
 
 const without = <T>(list: readonly T[], ...drop: T[]): T[] => list.filter((x) => !drop.includes(x));
 
@@ -290,9 +289,11 @@ export const NORTH_EAST: Scenario = {
   },
   events: 'north-east',
   ai: {
-    // The computer Europeans keep to the Americas' dates, though the game starts in 1000.
+    // The computer Europeans keep to the Americas' dates, though the game starts in 1000, and half as
+    // late again (Beta 3 step 9): they arrive from 1497 on poor land and play a turn a year, so the
+    // Americas' arc (an independence plan from the 1620s–1660s) came before their colonies were grown.
     dates: true,
-    stretch: knob('CC_STRETCH', 1.5),
+    stretch: 1.5,
     goods: AMERICAS.ai.goods,
   },
   mechanics: {
@@ -313,19 +314,26 @@ export const NORTH_EAST: Scenario = {
     confederation: true,
     peopleTreaties: ['people-trade', 'land-use', 'exchange', 'defence'],
     // The peoples' economy (T10, T12): hard years, the land's health by region, epidemics after contact.
-    ...(flag('CC_OFF', 'h') ? {} : { hardYears: { chance: 1 / 8 } }),
-    ...(flag('CC_OFF', 'l') ? {} : { landHealth: { regionSize: 8, renewal: 40, recovery: 5, floor: 0.2 } }),
-    ...(flag('CC_OFF', 'e') ? {} : { epidemics: { chance: 1 / knob('CC_EPI', 75), years: knob('CC_EPY', 3), loss: 1, reach: knob('CC_EPR', 8) } }),
+    hardYears: { chance: 1 / 8 },
+    landHealth: { regionSize: 8, renewal: 40, recovery: 5, floor: 0.2 },
+    // 1 in 75 a year for a region in contact (step 4 drafted 1 in 25; Beta 3 step 9): at 1 in 25 every
+    // colony and town was struck about every 25 years, and the Europeans' small colonies, among
+    // settlements everywhere, lost more colonists to it than they gained.
+    epidemics: { chance: 1 / 75, years: 3, loss: 1, reach: 8 },
   },
-  // Both sides judged at the end year, in the decided order (T14).
+  // Both sides judged at the end year, in the decided order (T14). The peoples' peaceful ways are
+  // tuned so that a people wins in about 1 game in 5 (T15; Beta 3 step 9, native-nations.md section
+  // 14): the computer peoples are seldom pressed off their land here (their claimed land is closed
+  // to colonies), so continuity asks for a homeland whose land is all but untouched, and a good life
+  // for land kept whole, a century without hunger and treaties with three in four of those met.
   victory: [
     { id: 'military' },
     { id: 'independence-war' },
     { id: 'confederacy' },
     { id: 'concord' },
     { id: 'prosperity' },
-    { id: 'continuity', params: { landHealth: knob('CC_CL', 97.5) } },
-    { id: 'good-life', params: { landHealth: knob('CC_GL', 93), hungerYears: knob('CC_GY', 100), treatyShare: knob('CC_GT', 0.75) } },
+    { id: 'continuity', params: { landHealth: 97.5 } },
+    { id: 'good-life', params: { landHealth: 93, hungerYears: 100, treatyShare: 0.75 } },
     { id: 'time' },
   ],
   rumours: AMERICAS.rumours,
