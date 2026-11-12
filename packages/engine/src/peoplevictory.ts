@@ -174,8 +174,8 @@ export function noteDefeat(s: GameState, winner: PlayerId, loser: PlayerId, colo
 
 export type ContinuityCondition = 'town' | 'homeland' | 'land' | 'people' | 'submitted' | 'towns taken' | 'council';
 
-/** How a playing people stands against continuity now; `fails` is empty when it qualifies. */
-export function continuityStanding(s: GameState, id: PlayerId, params: Record<string, unknown> = {}): { fails: ContinuityCondition[]; kept: number; people: number; start: number } {
+/** How a playing people stands against continuity now; `fails` is empty when it qualifies. `needed`: the people it must number (`peopleShare` times its people at the start). */
+export function continuityStanding(s: GameState, id: PlayerId, params: Record<string, unknown> = {}): { fails: ContinuityCondition[]; kept: number; people: number; start: number; needed: number } {
   const w = victoryParams(s, 'continuity', CONTINUITY, params, id);
   const p = s.players.find((o) => o.id === id)!;
   const fails: ContinuityCondition[] = [];
@@ -188,11 +188,12 @@ export function continuityStanding(s: GameState, id: PlayerId, params: Record<st
   if (homelandHealth(s, id) < w.landHealth) fails.push('land');
   const people = peopleCount(s, id);
   const start = s.homelands?.[id as TribeId]?.people ?? 0;
+  const needed = Math.ceil(w.peopleShare * start);
   if (people < w.peopleShare * start) fails.push('people');
   if (s.tribes.find((t) => t.id === id)?.submitted?.length) fails.push('submitted');
   if (colonyList(s).some((c) => c.takenFrom === id && c.owner !== id)) fails.push('towns taken');
   if (p.fathers.length < w.members) fails.push('council');
-  return { fails, kept, people, start };
+  return { fails, kept, people, start, needed };
 }
 
 // ---------------------------------------------------------------------------

@@ -212,7 +212,10 @@ describe('continuity (T14)', () => {
     // One person fewer than at the start.
     const u = unitList(s).find((o) => o.owner === 'haudenosaunee' && o.loc.kind === 'map')!;
     removeUnit(s, u.id);
-    expect(continuityStanding(s, 'haudenosaunee').fails).toEqual(['people']);
+    const short = continuityStanding(s, 'haudenosaunee');
+    expect(short.fails).toEqual(['people']);
+    expect(short.people).toBe(short.start - 1);
+    expect(short.needed).toBe(short.start);
     // Its homeland claimed by a nation.
     for (const i of s.homelands!.haudenosaunee!.tiles) s.map.tiles[i].claim = 'england';
     expect(continuityStanding(s, 'haudenosaunee').fails).toEqual(expect.arrayContaining(['homeland', 'people']));

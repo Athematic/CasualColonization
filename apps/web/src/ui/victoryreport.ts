@@ -30,7 +30,7 @@ const CONTINUITY_WORDS: Record<ContinuityCondition, string> = {
   town: 'no town stands on your homeland',
   homeland: 'too little of your homeland is kept',
   land: 'the land of your homeland is not whole enough',
-  people: 'your people are fewer than at the start',
+  people: 'your people have not yet grown to the number needed',
   submitted: 'you have submitted to a nation',
   'towns taken': 'a town of yours is held by another',
   council: 'your council has too few members',
@@ -60,7 +60,7 @@ function standing(ctx: ReportContext, id: string, params: Record<string, unknown
     case 'continuity': {
       if (!people) return null;
       const c = continuityStanding(s, me.id, params);
-      const detail = `${Math.round(c.kept * 100)}% of your homeland kept; ${c.people} people against ${c.start} at the start.`;
+      const detail = `${Math.round(c.kept * 100)}% of your homeland kept; ${c.people} people, ${c.start} at the start${c.needed !== c.start ? `, ${c.needed} needed` : ''}.`;
       return c.fails.length ? { ok: false, text: `Not yet: ${because(c.fails.map((f) => CONTINUITY_WORDS[f]))}. ${detail}` } : { ok: true, text: `You would win this way now. ${detail}` };
     }
     case 'good-life': {
