@@ -160,16 +160,20 @@ function defend(s: GameState, p: Player, prof: PeopleProfile): void {
   }
 }
 
+/** How close a European colony must stand to one of a raiding people's towns for it to go to war (tiles). */
+export const RAID_REACH = 5;
+
 /**
- * A raiding profile (Combative), at peace for a generation (30 years) and with armed units to spare
- * (more than its towns), goes to war with the European nation whose colony stands closest to its
- * towns, within three tiles, unless a treaty binds the two (it does not break faith to raid).
+ * A raiding profile (Combative), at peace for a generation (30 years) and with an armed unit for
+ * each of its towns, goes to war with the European nation whose colony stands closest to its
+ * towns, within `RAID_REACH` tiles, unless a treaty binds the two (it does not break faith to raid).
  */
+
 function startRaid(s: GameState, p: Player, prof: PeopleProfile): void {
   if (!prof.raids || Object.values(p.stance).includes('war')) return;
   if (p.lastWar !== undefined && yearsSince(s, p.lastWar) < 30) return;
   const towns = colonyList(s).filter((c) => c.owner === p.id);
-  if (armed(s, p).length <= towns.length) return;
+  if (armed(s, p).length < towns.length) return;
   const grid = gridOf(s);
   let rival: Player['id'] | undefined;
   let best = Infinity;
@@ -178,7 +182,7 @@ function startRaid(s: GameState, p: Player, prof: PeopleProfile): void {
     if (pairTreaties(s, p.id, c.owner).length) continue;
     for (const t of towns) {
       const d = grid.distance(c.x, c.y, t.x, t.y);
-      if (d <= 3 && d < best) {
+      if (d <= RAID_REACH && d < best) {
         best = d;
         rival = c.owner;
       }
