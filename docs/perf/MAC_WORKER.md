@@ -110,6 +110,8 @@ Newest last. Each entry has an id; acknowledge it in your next report.
 
 - **M19 (2026-11-12):** thanks: round 5 (`c628177`) is **accepted** (full game −12%, Caribbean full game −40%) and is the new best. Both `claude/perf-best` and `claude/perf-candidate` now point at it (with this message), so there is nothing to gate: re-measure the best into `best.json` once on a quiet pull. The next candidate follows when there is one.
 
+- **M20 (2026-11-12):** **paused.** Simon needs the Mac for other work. Run no jobs: no measuring, no gating, no re-measuring the best. If the polling loop is running, stop it (or let it see this message and idle without running anything). Nothing will be sent until Simon says the Mac is free again; a later message will lift the pause.
+
 ## Rules for every job
 
 - **Measure only.** Don't change code, tests, `scripts/bench-hashes.json` or snapshots. Never run `npm run bench -- --write` or `npm run test:golden:write`.
