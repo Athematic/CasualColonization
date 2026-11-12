@@ -1144,3 +1144,5 @@ Taking is still the commonest way (Combative), and Competent's takings come afte
 3. **Competent takes about one tile a game, late** (after 1750, after three refusals). "Rarely, later, if at all": keep, or make Competent never take, as Creative?
 4. **A good life is rare** (5 of 288 peoples over three seeds): two in five of those met in person, land health 88. Rarer or commoner?
 5. **The pull's number** (0.25) and the trust's (`wary` 0.2, 50 years) are drafted for review, like the rest of the North-east's values.
+
+**Simon's answers (12 November 2026):** yes to all five: continuity keeps the per-people thresholds; the Wendat stay lightly pressed; Competent may take a tile late; a good life stays rare; the pull (0.25) and trust (`wary` 0.2, 50 years) stand. The continuity victory is renamed "A people still on its homeland, and thriving" (the numbers a people must reach are in the Victory report).
