@@ -246,6 +246,75 @@ export function settlementSprite(ctx: Ctx, x: number, y: number, s: number, trib
   if (capital) flag(ctx, x + s * 0.3, base, s * 0.55, def.color, lw);
 }
 
+/**
+ * A playing people's town (native-nations.md T2, T22): its homes as its people's settlements look
+ * (bark longhouses for a farming people, wigwams for a people of camps), more of them as it grows,
+ * a palisade of one to three rows once built, and a pennant in the people's colour.
+ */
+export function peopleTownSprite(ctx: Ctx, x: number, y: number, s: number, color: string, size: number, palisade: number, lw: number, look: SettlementLook): void {
+  const base = y + s * 0.3;
+  if (palisade > 0) {
+    for (let row = Math.min(palisade, 3) - 1; row >= 0; row--) {
+      const lift = row * s * 0.05;
+      for (let i = -4; i <= 4; i++) {
+        inked(ctx, shade(WOOD, -0.08 * row), lw * 0.7, () => {
+          const px = x + i * s * 0.1 + (row % 2) * s * 0.05;
+          ctx.moveTo(px - s * 0.035, base - lift);
+          ctx.lineTo(px - s * 0.035, base - lift - s * 0.36);
+          ctx.lineTo(px, base - lift - s * 0.43);
+          ctx.lineTo(px + s * 0.035, base - lift - s * 0.36);
+          ctx.lineTo(px + s * 0.035, base - lift);
+          ctx.closePath();
+        });
+      }
+    }
+  }
+  flag(ctx, x + s * 0.3, base - s * 0.28, s * 0.46, color, lw);
+  const count = size >= 10 ? 4 : size >= 5 ? 3 : 2;
+  const spots: [number, number, number][] = [
+    [-0.18, -0.08, 0.36],
+    [0.16, -0.03, 0.32],
+    [-0.02, 0.08, 0.4],
+    [-0.32, 0.1, 0.26],
+  ];
+  const order = spots.slice(0, count).sort((a, b) => a[1] - b[1]);
+  for (const [dx, dy, w] of order) {
+    const hx = x + dx * s;
+    const hy = base + dy * s - s * 0.04;
+    const hw = w * s;
+    if (look === 'camp') {
+      // A wigwam: a low dome of bark over bent poles.
+      inked(ctx, '#c9a874', lw, () => {
+        ctx.ellipse(hx, hy, hw * 0.42, hw * 0.5, 0, Math.PI, 0);
+        ctx.closePath();
+      });
+      inked(ctx, null, lw * 0.6, () => {
+        ctx.moveTo(hx - hw * 0.3, hy - hw * 0.3);
+        ctx.lineTo(hx + hw * 0.3, hy - hw * 0.3);
+      });
+      inked(ctx, '#5a3f26', lw * 0.7, () => ctx.rect(hx - hw * 0.08, hy - hw * 0.2, hw * 0.16, hw * 0.2));
+    } else {
+      // A longhouse: a long barrel roof of elm bark, with a door at the end.
+      inked(ctx, '#b38a58', lw, () => {
+        ctx.moveTo(hx - hw * 0.6, hy);
+        ctx.lineTo(hx - hw * 0.6, hy - hw * 0.22);
+        ctx.quadraticCurveTo(hx - hw * 0.6, hy - hw * 0.52, hx - hw * 0.3, hy - hw * 0.52);
+        ctx.lineTo(hx + hw * 0.3, hy - hw * 0.52);
+        ctx.quadraticCurveTo(hx + hw * 0.6, hy - hw * 0.52, hx + hw * 0.6, hy - hw * 0.22);
+        ctx.lineTo(hx + hw * 0.6, hy);
+        ctx.closePath();
+      });
+      for (const k of [-0.3, 0, 0.3]) {
+        inked(ctx, null, lw * 0.5, () => {
+          ctx.moveTo(hx + k * hw, hy - hw * 0.5);
+          ctx.lineTo(hx + k * hw, hy - hw * 0.06);
+        });
+      }
+      inked(ctx, '#5a3f26', lw * 0.7, () => ctx.rect(hx - hw * 0.58, hy - hw * 0.22, hw * 0.12, hw * 0.22));
+    }
+  }
+}
+
 // ---- Units ----
 
 const COATS: Partial<Record<UnitTypeId, string>> = {
@@ -417,9 +486,107 @@ function chest(ctx: Ctx, x: number, y: number, s: number, lw: number): void {
   for (const [dx, dy] of [[-0.12, -0.2], [0.05, -0.24], [0.16, -0.17]]) inked(ctx, '#ffd23f', lw * 0.7, () => ctx.arc(x + dx * s, y + dy * s, s * 0.05, 0, Math.PI * 2));
 }
 
+/** A birchbark canoe (T6) with a paddler, in a box of size s. */
+function canoe(ctx: Ctx, x: number, y: number, s: number, color: string, lw: number): void {
+  const deck = y + s * 0.12;
+  person(ctx, x + s * 0.02, deck - s * 0.2, s * 0.6, color, 'none', lw);
+  line(ctx, lw * 0.7, WOOD, [[x + s * 0.18, deck - s * 0.36], [x + s * 0.3, deck + s * 0.2]]);
+  inked(ctx, '#e8dcc0', lw, () => {
+    ctx.moveTo(x - s * 0.44, deck - s * 0.1);
+    ctx.quadraticCurveTo(x - s * 0.36, deck + s * 0.14, x, deck + s * 0.14);
+    ctx.quadraticCurveTo(x + s * 0.36, deck + s * 0.14, x + s * 0.44, deck - s * 0.1);
+    ctx.quadraticCurveTo(x + s * 0.3, deck, x, deck);
+    ctx.quadraticCurveTo(x - s * 0.3, deck, x - s * 0.44, deck - s * 0.1);
+    ctx.closePath();
+  });
+  inked(ctx, null, lw * 0.6, () => {
+    for (const k of [-0.2, 0, 0.2]) {
+      ctx.moveTo(x + k * s, deck + s * 0.01);
+      ctx.lineTo(x + k * s, deck + s * 0.12);
+    }
+  });
+}
+
+/** A feather in the hair, as the braves wear it. */
+function feather(ctx: Ctx, px: number, py: number, ps: number, lw: number): void {
+  inked(ctx, WHITE, lw * 0.8, () => {
+    ctx.moveTo(px + ps * 0.02, py - ps * 0.24);
+    ctx.quadraticCurveTo(px + ps * 0.12, py - ps * 0.42, px + ps * 0.06, py - ps * 0.5);
+    ctx.quadraticCurveTo(px - ps * 0.02, py - ps * 0.38, px + ps * 0.02, py - ps * 0.24);
+  });
+}
+
+function bow(ctx: Ctx, px: number, py: number, ps: number, lw: number): void {
+  inked(ctx, null, lw, () => {
+    ctx.moveTo(px - ps * 0.26, py - ps * 0.26);
+    ctx.quadraticCurveTo(px - ps * 0.44, py + ps * 0.04, px - ps * 0.26, py + ps * 0.32);
+  });
+  ctx.beginPath();
+  ctx.moveTo(px - ps * 0.26, py - ps * 0.26);
+  ctx.lineTo(px - ps * 0.26, py + ps * 0.32);
+  ctx.lineWidth = lw * 0.5;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+}
+
+/**
+ * A people's unit (T6), drawn by silhouette as the braves are: a figure in its people's colour with
+ * what its work needs in hand (a bow, a fish spear, a hoe, an axe, an elder's staff), a musket
+ * and a horse when it takes the soldier's or dragoon's role by trade.
+ */
+function peopleUnit(ctx: Ctx, x: number, y: number, s: number, type: UnitTypeId, role: RoleId, color: string, lw: number): void {
+  let px = x;
+  let py = y;
+  let ps = s;
+  if (role === 'dragoon' || role === 'scout') {
+    horse(ctx, x, y + s * 0.02, s, lw);
+    px = x - s * 0.04;
+    py = y - s * 0.18;
+    ps = s * 0.78;
+  }
+  person(ctx, px, py, ps, color, 'none', lw);
+  if (type === 'elder') {
+    // White hair and a staff.
+    inked(ctx, WHITE, lw * 0.7, () => ctx.arc(px, py - ps * 0.2, ps * 0.09, Math.PI, 0));
+    line(ctx, lw * 0.8, WOOD, [[px + ps * 0.24, py + ps * 0.34], [px + ps * 0.24, py - ps * 0.3]]);
+    return;
+  }
+  feather(ctx, px, py, ps, lw);
+  if (role === 'soldier' || role === 'dragoon') {
+    line(ctx, lw * 0.8, WOOD, [[px + ps * 0.24, py + ps * 0.3], [px + ps * 0.3, py - ps * 0.34]]);
+    return;
+  }
+  if (type === 'warrior' || type === 'hunter') return bow(ctx, px, py, ps, lw);
+  if (type === 'fisher') {
+    line(ctx, lw * 0.7, WOOD, [[px + ps * 0.3, py + ps * 0.34], [px + ps * 0.3, py - ps * 0.4]]);
+    inked(ctx, '#9aa0a6', lw * 0.6, () => {
+      ctx.moveTo(px + ps * 0.24, py - ps * 0.32);
+      ctx.lineTo(px + ps * 0.3, py - ps * 0.46);
+      ctx.lineTo(px + ps * 0.36, py - ps * 0.32);
+    });
+    return;
+  }
+  if (type === 'gardener') {
+    line(ctx, lw * 0.7, WOOD, [[px + ps * 0.2, py + ps * 0.34], [px + ps * 0.3, py - ps * 0.3]]);
+    inked(ctx, '#d8c8a0', lw * 0.6, () => ctx.ellipse(px + ps * 0.21, py + ps * 0.34, ps * 0.07, ps * 0.04, 0, 0, Math.PI * 2));
+    return;
+  }
+  if (type === 'crafter') {
+    line(ctx, lw * 0.7, WOOD, [[px + ps * 0.18, py + ps * 0.3], [px + ps * 0.3, py - ps * 0.1]]);
+    inked(ctx, '#8d8f94', lw * 0.6, () => ctx.rect(px + ps * 0.26, py - ps * 0.18, ps * 0.1, ps * 0.08));
+    return;
+  }
+  if (type === 'runner') {
+    // A runner's carrying strap.
+    line(ctx, lw * 0.6, '#c99a5b', [[px - ps * 0.12, py], [px + ps * 0.14, py + ps * 0.3]]);
+  }
+}
+
 /** Draws a unit centred at (x, y) inside a box of size s; `color` is its owner's (flags, soldiers' coats). */
 export function unitSprite(ctx: Ctx, x: number, y: number, s: number, type: UnitTypeId, role: RoleId, color: string, lw: number): void {
   const def = UNIT_TYPES[type];
+  if (type === 'birchbarkCanoe') return canoe(ctx, x, y, s, color, lw);
+  if (def.people) return peopleUnit(ctx, x, y, s, type, role, color, lw);
   if (def.kind === 'ship') return ship(ctx, x, y, s, type, color, lw);
   if (def.kind === 'wagon') return wagon(ctx, x, y, s, lw);
   if (def.kind === 'artillery') return cannon(ctx, x, y, s, lw, type === 'damagedArtillery');

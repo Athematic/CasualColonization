@@ -76,6 +76,11 @@ export interface Scene {
   revealAll?: boolean;
   /** Draw name captions (default true); close-up views turn them off. */
   labels?: boolean;
+  /**
+   * A map overlay the person asked for: 'land' shows who claims the land and the land's health by
+   * region (native-nations.md T5, T10; `drawLandOverlay`). Optional; missing means none.
+   */
+  overlay?: 'land';
 }
 
 export interface MapRenderer {
@@ -657,3 +662,5 @@ export function drawFatherFigure(ctx: CanvasRenderingContext2D, id: FatherId, ca
   ctx.fillText(text, cx, py + 0.3 * u);
   ctx.restore();
 }
+
+export { drawClaimBorders, drawLandLabels, drawLandOverlay, healthColor } from './land.js';

@@ -2,9 +2,12 @@
  * A deliberately plain board-game style. It exists to show (and test) that the game
  * shell works with any style plugin, and is a starting point for new styles.
  */
-import { nationOf, RIVER_DIRS, TERRAIN, TRIBES, UNIT_TYPES, colonyWorkers, type GameState, type Tile, type TerrainId } from '@cc/engine';
+import { kindOfId, nationOf, RIVER_DIRS, TERRAIN, TRIBES, UNIT_TYPES, colonyWorkers, type GameState, type Tile, type TerrainId } from '@cc/engine';
 import {
   braveMarkers,
+  drawClaimBorders,
+  drawLandLabels,
+  drawLandOverlay,
   isTileExplored,
   isTileVisible,
   drawFatherCameo,
@@ -53,9 +56,28 @@ function mix(a: string, b: string): string {
 
 const UNIT_LETTERS: Record<string, string> = { ship: '⛵', wagon: 'W', artillery: 'A', treasure: '$' };
 
+/** A people's units by their work (native-nations.md T6): plain letters, as the colonists'. */
+const PEOPLE_LETTERS: Partial<Record<keyof typeof UNIT_TYPES, string>> = {
+  townsperson: 'T',
+  hunter: 'H',
+  fisher: 'Fi',
+  gardener: 'G',
+  crafter: 'Cr',
+  runner: 'R',
+  warrior: 'W',
+  elder: 'E',
+  birchbarkCanoe: 'Ca',
+};
+
 function unitLabel(type: keyof typeof UNIT_TYPES, role: string): string {
   const kind = UNIT_TYPES[type].kind;
   if (type === 'damagedArtillery') return 'a';
+  if (UNIT_TYPES[type].people) {
+    if (role === 'soldier') return 'W+';
+    if (role === 'dragoon') return 'WM';
+    if (role === 'scout') return 'RM';
+    return PEOPLE_LETTERS[type] ?? 'P';
+  }
   if (kind !== 'colonist') return UNIT_LETTERS[kind];
   return { soldier: 'S', dragoon: 'D', pioneer: 'P', scout: 'Sc', missionary: 'M' }[role] ?? 'C';
 }
@@ -101,6 +123,9 @@ class SchematicRenderer implements MapRenderer {
         }
       }
     }
+    // The land overlay and the borders of claimed land (native-nations.md T5, T10).
+    drawLandOverlay(ctx, scene);
+    drawClaimBorders(ctx, scene, { width: Math.max(2, z * 0.06) });
     // Rivers: plain blue lines from each tile's centre towards the neighbours the river links,
     // meandering a little (the shared curves of @cc/render-api, so every style agrees on them).
     ctx.lineCap = 'round';
@@ -173,6 +198,34 @@ class SchematicRenderer implements MapRenderer {
       if (!isTileExplored(scene, c.x, c.y)) continue;
       const p = tileToScreen(scene, c.x, c.y);
       ctx.fillStyle = nationOf(s, c.owner).color;
+      if (kindOfId(c.owner) === 'people') {
+        // A playing people's town: a round-cornered square with a roof line, and a palisade ring.
+        ctx.beginPath();
+        ctx.roundRect(p.x + z * 0.12, p.y + z * 0.12, z * 0.76, z * 0.76, z * 0.22);
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = Math.max(1, z * 0.03);
+        ctx.beginPath();
+        ctx.moveTo(p.x + z * 0.24, p.y + z * 0.3);
+        ctx.lineTo(p.x + z * 0.5, p.y + z * 0.18);
+        ctx.lineTo(p.x + z * 0.76, p.y + z * 0.3);
+        ctx.stroke();
+        const rows = c.buildings.palisade ?? 0;
+        if (rows > 0) {
+          ctx.strokeStyle = '#e8e0c8';
+          ctx.lineWidth = Math.max(1, z * 0.04);
+          ctx.setLineDash([z * 0.06, z * 0.04]);
+          for (let i = 0; i < Math.min(rows, 2); i++) {
+            ctx.beginPath();
+            ctx.roundRect(p.x + z * (0.06 - i * 0.04), p.y + z * (0.06 - i * 0.04), z * (0.88 + i * 0.08), z * (0.88 + i * 0.08), z * 0.26);
+            ctx.stroke();
+          }
+          ctx.setLineDash([]);
+        }
+        this.text(String(colonyWorkers(s, c).length), p.x + z / 2, p.y + z * 0.56, z * 0.36, '#fff');
+        if (scene.labels !== false) this.text(c.name, p.x + z / 2, p.y + z * 1.1, Math.max(10, z * 0.22), '#fff');
+        continue;
+      }
       ctx.fillRect(p.x + z * 0.12, p.y + z * 0.12, z * 0.76, z * 0.76);
       // Walls: one frame for a stockade, a thicker one for a fort, a double frame for a fortress.
       const walls = c.buildings.stockade;
@@ -241,6 +294,7 @@ class SchematicRenderer implements MapRenderer {
       ctx.fill();
       this.text(String(scene.pathTurns), p.x + z * 0.8, p.y + z * 0.2 + 0.5, r * 1.3, '#000');
     }
+    drawLandLabels(ctx, scene, FONT);
   }
 
   private text(t: string, x: number, y: number, size: number, color: string): void {
