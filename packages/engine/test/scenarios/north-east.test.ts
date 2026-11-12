@@ -220,9 +220,12 @@ describe('the North-east scenario', () => {
     expect(text).toContain('Playing peoples: 4 played in 1 games');
     expect(text).toContain('| haudenosaunee | 1 | 1 |');
     expect(text).toContain('Military victory: 0 of 1 games');
+    // Each people at one of the run's levels, rotating (Beta 3 step 9), and a table by level.
+    expect(game.peoples.map((p) => p.level)).toEqual(['creative', 'competent', 'creative', 'competent']);
+    expect(text).toContain('| Creative | 2 | 2 |');
     // Without peoples the arena reports nothing more (the Americas' tournaments).
     expect(formatPeoples(rows.map(({ peoplesGame: _, ...r }) => r))).toBe('');
-  });
+  }, 120_000);
 });
 
 describe('a computer game in the North-east', () => {
