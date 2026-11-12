@@ -68,6 +68,7 @@ export { STORED_MAPS, storedMap, storedMapEntry, parseStoredMap, mapRegionGrid, 
 export { createWorld, crownSideOf, entrySideOf } from './world.js';
 export { RuleError } from './errors.js';
 export { siteScore } from './ai/common.js';
+export { runPeopleAi } from './ai/people.js';
 export * from './ai/profiles.js';
 export * from './arena.js';
 export * from './setup.js';
