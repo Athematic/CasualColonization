@@ -1049,3 +1049,98 @@ As designed above (`peopleland.ts`), with these numbers: `LAND_SALES` = `reach` 
 3. **A good life still fails on treaties everywhere** (section 16's question 1); not changed, as asked.
 4. **Rename the sprite files** to `settlements/haudenosaunee*` on the Mac (above), or keep the old file ids with the fallback.
 5. **The continuity numbers per people** are measured, not historical: each people's land health and growth threshold is where its own computer games put it. Review them with the rest of the North-east's drafted values.
+
+## 19. Land, second round: Simon's answers to section 18 (November 2026)
+
+Built on branch `beta3/land2`. Simon answered section 18's questions: (1) the Europeans press on the homelands "yes, gently"; (2) "mostly taking seems fine for combative nations, but more advanced should be more interested in trade and peace at least initially. Peoples should become more open to leasing and selling after prolonged peace, but it makes sense that they are overall not very likely to give up their land"; (3) a good life counts as met only the peoples met in person, not those known from a shared map; (4) the sprite files are renamed on his Mac, with a script. Two small additions came during the round: computer peoples rebuild a lost runner, cheaply; and a people sharing its homeland's map with a friendly European nation is deferred (below).
+
+Code: `peopleland.ts` (`landTrust`, `computerTakes`, the levels in `computerLandDeal`, `computerMayAsk` and `computerAcquire`, a lease proposed first, `farmlandPull`, `PULL_FADE`), `scenarios/types.ts` (`LandSaleRules.pull`, `peaceYears`, `wary`, `levels`; `LandDealLevel`), `ai/advanced.ts` (`expansionScore` adds the pull), `ai/natives.ts` (`playingPeopleTrade`), `peoplediplomacy.ts` (a computer people's land use weighed by its trust; `noteMeetings` once a round), `peoplemaps.ts` (`noteMeetings`, `metInPerson`), `peoplevictory.ts` (a good life's "met"), `types.ts` (`PeopleRelation.landRefused`, `metInPerson`), `ai/people.ts` (`newRunner`, `RUNNER_FOOD`), `arena.ts` (`PeopleLandTally`, the land table by level, land leased per people), `scenarios/north-east.ts` (the tuning), the web game's Victory report (its words for "met"), `tools/sprite-pipeline/rename-haudenosaunee.mjs` and the npm script `sprites:rename-haudenosaunee`. Tests: `test/people-land-pressure.test.ts` (8 tests: trust, each level's way, refusals counted, the pull, meetings in person and the good life, save and load, the new runner).
+
+### What changed
+
+- **The pull (answer 1).** A computer European's choice of a new colony's site (`expansionScore`, used by Competent, Combative and Creative; Naive and every first colony are as before) adds `pull` times the food of every tile a playing people claims within `reach` (3) of the site, fading out over `PULL_FADE` (4) more tiles, so a colony a little further off is drawn closer, step by step (settlers still walk at most 8 tiles from their colony). Not a town's tile, not land leased to another nation. Scenario data: `landSales.pull`, 0 in the engine, **0.25 in the North-east**. A site on the people's claimed land is still scored as in section 18 (as it would be once acquired, a fifth less), now plus the pull.
+- **Each level's way (answer 2)**, `landSales.levels` (engine defaults, drafted for review):
+
+| European level | Takes | Leases | Offers | Trade treaties with the playing peoples |
+| --- | --- | --- | --- | --- |
+| Naive | never | no | never | never (as for the peoples nobody plays) |
+| Competent | rarely: chance 0.05 an attempt, only from 1750, only from a people that has refused it 3 times | proposes land use first, where the ladder allows (a trade treaty, years of good relations, land beside its colonies, five years' rent and 1,000 gold in hand) | the asking price | proposes them (Beta 2's chance, 0.5 × 0.8) |
+| Combative | always (`take: 1`), as in section 18 | no | no | only where it has traded 300 gold with the people (Beta 2's rule) |
+| Creative | never | first, as Competent | the asking price | proposes them (0.5 × 1) |
+
+  Each attempt still waits `waitYears` (5) after the last one with that people. A refused offer is counted on the pair's record (`PeopleRelation.landRefused`). Before this round no computer nation proposed any treaty to a playing people (Beta 2's proposals only went to the peoples nobody plays): only the computer peoples proposed.
+- **Trust grown in peace (answer 2).** A computer people's willingness to sell, and to lend its land (its answer to land use and its own proposals of it), is its profile's times `landTrust`: `wary` (0.2) with no years of good relations and no trade treaty, rising with the years of unbroken good relations with that nation (all of it after `peaceYears`, 50) and a trade treaty (a quarter of the way), to 1. Good relations are Beta 2's run (`goodSince`, broken by war, by a broken treaty and by land taken). Section 18 had 1 with a trade treaty, 0.5 without. The profiles' `sellsLand` and `keepsHomeland` are unchanged, so it stays low overall: at best 0.6 × `sellsLand` (Naive 1, Competent 0.5, Creative 0.3, Combative 0) at the asking price.
+- **Meetings in person (answer 3).** Once a round, where the scenario has `mechanics.mapKnowledge` (the North-east), a pair with a playing people whose standing record is written meet in person when a unit, town, colony or settlement of one stands within sight of one of the other's (a unit's sight radius, 2 for a place). The turn is kept as `PeopleRelation.metInPerson` (plain JSON, on the pair's record; a shared map never writes it). A good life then counts as met the sides met in person and its treaty partners (a treaty is a meeting). Without `mapKnowledge` every side with a standing record counts, as before. The Victory report says "met in person or hold a treaty with".
+- **A new runner** (addition 1). Once a year a computer people with no runner, where runners explore (`mapKnowledge.range`), sends a new one from the first town holding its reserve and `RUNNER_FOOD` (30) food more; no worker leaves the town. A person's people is not touched.
+- **Map sharing with a friendly European nation** (addition 2): deferred to after Beta 3, a line on the roadmap (section 16's question 2). It would change what the Europeans know of the map and needs its own tuning.
+- **The North-east's good life** asks land health 88 (was 93) and treaties with two in five (was three in four) of the sides met: with meetings in person the peoples meet 4.5–8.5 sides and hold treaties with 1.3–2.2, so three in four was out of reach for every people.
+
+### Rates (North-east, step 9's targets)
+
+`npm run tournament -- --scenario north-east --games 24 --turns 851 --play-on --events --seed 3000` and `--seed 4000` (48 games, 192 computer peoples, four levels for both sides), base (section 18's code, run again first on this machine) against now; and seed 5000 (24 games, not tuned on).
+
+| Target (T15, T14) | Base (3000 / 4000) | Now (3000 / 4000) | Together | Seed 5000 |
+| --- | --- | --- | --- | --- |
+| A people wins in about 1 game in 5 | 6 / 5 games | 7 / 2 games | **9 of 48 (19%)**; base 11 of 48 | 8 of 24 |
+| Each computer people survives in ≥ 3 games of 4 | 96 / 96 | 96 / 96 | **100% for each** | 96 of 96 |
+| Leagues and confederacy sometimes | confederacy 3 / 2 games | confederacy 4 / 1 games; a league at the end in 4 / 2 | **confederacy 5 of 48** | 2 |
+| Military victory ≤ 1 in 100 | 0 / 0 | 0 / 0 | **0 of 48** | 0 |
+| Europeans still grow (colonists per nation at the end) | Competent 33.3 / 33.0, Combative 33.4 / 35.0, Creative 25.6 / 28.1, Naive 13.8 / 13.1 | Competent 32.4 / 28.3, Combative 30.7 / 33.3, Creative 24.8 / 29.5, Naive 13.3 / 12.4 | Competent 30.4, Combative 32.0, Creative 27.2, Naive 12.8 | 29.8, 35.9, 27.7, 15.4 |
+
+**Wins by people** (3000 and 4000; seed 5000 in brackets):
+- Continuity: the Haudenosaunee 1, the Wendat 1, the Mi'kmaq 1, the Innu 1 (the Wendat 3, the Innu 1). Base: the Innu 3, the Wendat 2, the Haudenosaunee 1, the Mi'kmaq 1. Fewer, because homelands now shrink: continuity failed at the end on land 175, people 112 and homeland 39 of 192 (base: homeland 25).
+- A good life: the Mi'kmaq 1 (the Haudenosaunee 2, the Mi'kmaq 2): possible now, and rare, 5 of 288 peoples over the three seeds (none in section 16 or 18). It fails on treaties for 142 of 192 (base 192), land 116, hunger 100, stores 66, peace 36.
+- Confederacy: the Haudenosaunee 3, the Mi'kmaq 2 (each won by a Creative people).
+
+**Land lost per people** (homeland kept at the end; tiles sold / taken a game; tiles leased to Europeans at the end):
+
+| People | Base (3000 / 4000) | Now (3000 and 4000) | Seed 5000 |
+| --- | --- | --- | --- |
+| Haudenosaunee | 98% / 97%; 0.5 / 1.5–2.0 | **95%**; 0.4 / 3.4; leased 1.4 | 92%; 0.5 / 5.4 |
+| Wendat | 100% / 100%; 0 / 0–0.2 | **99%**; 0.1 / 0.5; leased 0.1 | 97%; 0.2 / 1.7 |
+| Mi'kmaq | 93% / 91%; 1.3–2.3 / 4.5–4.8 | **90%**; 1.8 / 5.7; leased 1.1 | 92%; 1.7 / 5.3 |
+| Innu | 98% / 99%; 1.0–1.3 / 1.5–1.6 | **97%**; 1.4 / 3.5; leased 1.7 | 96%; 1.7 / 4.6 |
+
+Every people now loses some land; the Wendat least, as Huronia lies furthest from where the Europeans arrive (the Dutch on the Hudson reach it in some games).
+
+**How land changes hands**, per European nation and game, by level (3000 and 4000):
+
+| European level | Tiles bought | Offers refused | Tiles taken | Land use proposed | Land use refused (whoever proposed) | Leases made (whoever proposed) | Colonists |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Naive | 0 | 0 | 0 | 0 | 0.9 | 0 | 12.8 |
+| Competent | 1.8 | 10.8 | 1.0 | 1.2 | 0.3 | 1.3 | 30.4 |
+| Combative | 0 | 0 | 12.1 | 0 | 0.9 | 0 | 32.0 |
+| Creative | 1.9 | 11.1 | 0 | 0.8 | 0.4 | 1.7 | 27.2 |
+
+Taking is still the commonest way (Combative), and Competent's takings come after 1750 from peoples that refused it again and again; Competent and Creative buy about two tiles a game and are refused five times as often, and lease one or two. A Naive nation's "land use refused" is the computer peoples' own proposals it turned down.
+
+**Tried and dropped:** `pull` 0.5 without the fade (the Haudenosaunee kept 92%, the Innu 95%, but Creative fell to 25 colonists and Competent to 30) and 0.35 with the fade (Competent 28.0, Creative 23.8, below step 9's 30 for Competent); 0.2 without the fade left the Wendat untouched. Competent taking at 0.1 from 1700 after one refusal took 2.8 tiles a game, too many for "rarely". A good life at land 93 and three in four: none in 192; at 88 and one in two: 1.
+
+**Speed:** 8.9 and 9.5 seconds a game (base 10.7 and 11.1 here; the machine's load varies).
+
+### Checks
+
+- `npx tsc -b` clean; `npm test` passes (79 files, 943 tests, 1 skipped).
+- `npm run bench -- --verify` and `--verify --scenario caribbean`: "same" for all eight games; the golden tests unchanged.
+- The 24-game Americas tournament (`npm run tournament -- --games 24 --turns 609 --play-on --events --seed 1000 --json`), run on the base first, is byte-identical to the base's output. Every change runs only with `landSales`, `mapKnowledge` or a playing people, none of which the Americas or the Caribbean have; the arena's new fields are written only in games with playing peoples.
+
+### The sprite rename (answer 4)
+
+`node tools/sprite-pipeline/rename-haudenosaunee.mjs --dry-run`, then without `--dry-run` (or `npm run sprites:rename-haudenosaunee -- --dry-run`), on the Mac, from the repository root. It renames `settlements/iroquois*` to `settlements/haudenosaunee*` in every local copy (the generator's masters, thumbnails, redraws and manifests, the pipeline's runtime set, manifest, cache and contact sheet, the runtime copies in the web app and the built site) and the two rows of `docs/SPRITE_PROMPTS.md`, idempotently. The rows are renamed only by the script, together with the generator's manifest: a row renamed while the manifest still has the old key would look like a new job, and the generator would pay to make the image again (the prompt hashes do not include the id, so the renamed jobs stay done). No committed manifest names the sprites (the manifests are all in gitignored folders), so nothing else in the repository was renamed now. The painted pack keeps its fallback; the pipeline's README says what to do after (commit the rows, upload the renamed files, then drop the two `iroquois` fallbacks from `DEFAULT_MAPPING` once every set has the new names).
+
+### For Beta 4 (the hex maps), merging this branch
+
+- **The pull reads distances:** `farmlandPull` uses `gridOf(s).withinOffsets` and `distance` over `reach + PULL_FADE` (7) tiles, and `noteMeetings` reads `withinOffsets` for sight; on hexes both cover fewer tiles than on squares, so measure the pull (and the Wendat's and the Haudenosaunee's land) again on the hex North-east.
+- **New state** (optional fields, plain JSON): `PeopleRelation.landRefused` and `metInPerson`. Saves from before load; meetings are written from the first round after loading.
+- **New scenario fields:** `LandSaleRules.pull`, `peaceYears`, `wary`, `levels` (`LandDealLevel`); a scenario's `landSales` merges over `LAND_SALES` shallowly, so a scenario that gives `levels` gives all three.
+- **The good life reads `mechanics.mapKnowledge`** to decide what "met" means; a hex Vinland with map sharing gets meetings in person too.
+- **Computer nations now propose trade treaties to playing peoples** (where `landSales` is on): a scenario with playing peoples and land sales gets more treaties than before.
+- **The arena's JSON** adds `peopleLand` per nation and `leased` per people in games with playing peoples; the Americas' JSON is unchanged.
+
+### Questions for Simon
+
+1. **Continuity is rarer** now that homelands shrink (4 of 192 peoples at seeds 3000 and 4000, against 7): the per-people thresholds of section 18 (95% of the homeland kept) were measured before the pull. The overall rate holds (19%, with a good life and the confederacy). Keep them (continuity as "still here, despite the pressure"), or lower `homelandShare` to 0.9 for the Mi'kmaq and the Haudenosaunee, who are pressed most?
+2. **The Wendat are pressed least** (99% kept): Huronia is far from every European entry. Pressing them as the others would need a European entry up the St. Lawrence (France, historically Champlain's allies and trade partners) or a stronger pull, which costs the Europeans' growth. Leave it?
+3. **Competent takes about one tile a game, late** (after 1750, after three refusals). "Rarely, later, if at all": keep, or make Competent never take, as Creative?
+4. **A good life is rare** (5 of 288 peoples over three seeds): two in five of those met in person, land health 88. Rarer or commoner?
+5. **The pull's number** (0.25) and the trust's (`wary` 0.2, 50 years) are drafted for review, like the rest of the North-east's values.
