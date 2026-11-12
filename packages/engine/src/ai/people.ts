@@ -59,7 +59,7 @@ export function runPeopleAi(s: GameState, p: Player): void {
     if (prof.raids) startRaid(s, p, prof);
   }
   peopleProposals(s, p, prof);
-  armWarriors(s, p);
+  armWarriors(s, p, prof);
   defend(s, p, prof);
 }
 
@@ -85,9 +85,13 @@ function armed(s: GameState, p: Player): Unit[] {
   return ownedUnitsView(s, p.id).filter((u) => u.loc.kind === 'map' && !isShip(u) && (UNIT_TYPES[u.type].offence > 0 || u.role === 'soldier' || u.role === 'dragoon'));
 }
 
-/** Warriors standing in a town take up the muskets, then the horses, the town holds. */
-function armWarriors(s: GameState, p: Player): void {
-  for (const u of armed(s, p)) {
+/**
+ * Warriors standing in a town take up the muskets, then the horses, the town holds; a raiding
+ * profile (Combative) also arms the townspeople standing idle there (no work left in the town).
+ */
+function armWarriors(s: GameState, p: Player, prof: PeopleProfile): void {
+  const idle = prof.raids ? ownedUnitsView(s, p.id).filter((u) => u.loc.kind === 'map' && u.role === 'none' && UNIT_TYPES[u.type].kind === 'colonist' && UNIT_TYPES[u.type].offence === 0) : [];
+  for (const u of [...armed(s, p), ...idle]) {
     if (u.loc.kind !== 'map' || UNIT_TYPES[u.type].kind !== 'colonist') continue;
     const town = colonyAt(s, u.loc.x, u.loc.y);
     if (!town || town.owner !== p.id) continue;

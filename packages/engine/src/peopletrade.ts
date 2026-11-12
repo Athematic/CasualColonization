@@ -206,7 +206,7 @@ export const TRADE_VISIT_FOOD = 50;
 const WANTS: Partial<Record<GoodId, number>> = { muskets: 100, horses: 50, tools: 100, cloth: 50, tradeGoods: 50 };
 
 /** What a computer European colony keeps of a good before it sells any to a people (its own builds and soldiers). */
-const KEEP: Partial<Record<GoodId, number>> = { muskets: 50, horses: 50, tools: 50 };
+const KEEP: Partial<Record<GoodId, number>> = { muskets: 25, horses: 50, tools: 50 };
 
 /**
  * A computer people trades as the braves of Beta 2 do, once a year (ai/people.ts): each of its

@@ -13,6 +13,7 @@ import type { NationId, PlayerId, TribeId } from './rules/nations.js';
 import { calendarOf, nationSet, scenarioOf, yearValue, type Rivals } from './scenarios/index.js';
 import { finalScores, peopleScores, scoreBreakdown, type ScoreComponent } from './score.js';
 import { continuityStanding, goodLifeStanding, homelandHealth, homelandKept, peopleCount } from './peoplevictory.js';
+import { storeCapacity, yearlyNeed } from './peopleeconomy.js';
 import { colonyList as allColonies } from './unitindex.js';
 import { prosperityParams, prosperityStanding, type ProsperityCondition } from './prosperity.js';
 import { setFeatureSink } from './telemetry.js';
@@ -94,6 +95,12 @@ export interface ArenaPeopleEntry {
   league?: number;
   /** Gold in hand at the end (gold only from trade with Europeans, T10). */
   gold: number;
+  /** For tuning the good life: years since its last war and its last hungry year (absent: none in the game), the least share of its reserve a town held, sides met and sides with a treaty. */
+  sinceWar?: number;
+  sinceHunger?: number;
+  stores: number;
+  met: number;
+  partners: number;
 }
 
 /** What an arena game with playing peoples adds to its first row: the peoples, the Europeans' colonies and the game's time. */
@@ -433,17 +440,25 @@ export function peoplesGame(s: GameState, ms: number): ArenaPeoplesGame {
 }
 
 /** A playing people's homeland, land, treaties, league and gold at the end of a game. */
-function peopleEndState(s: GameState, id: PlayerId): Pick<ArenaPeopleEntry, 'kept' | 'health' | 'treaties' | 'league' | 'gold'> {
+function peopleEndState(s: GameState, id: PlayerId): Pick<ArenaPeopleEntry, 'kept' | 'health' | 'treaties' | 'league' | 'gold' | 'sinceWar' | 'sinceHunger' | 'stores' | 'met' | 'partners'> {
   const home = homelandKept(s, id);
   const live = (s.treaties ?? []).filter((t) => !t.end && t.parties.some((q) => q.id === id));
   const league = live.find((t) => t.kind === 'league');
   const cal = calendarOf(s);
+  const p = s.players.find((q) => q.id === id);
+  const towns = allColonies(s).filter((c) => c.owner === id);
+  const good = goodLifeStanding(s, id);
   return {
     kept: home.start ? home.kept / home.start : 0,
     health: homelandHealth(s, id),
     treaties: live.length,
     ...(league ? { league: yearValue(s.turn, cal) - yearValue(league.start, cal) } : {}),
-    gold: s.players.find((q) => q.id === id)?.gold ?? 0,
+    gold: p?.gold ?? 0,
+    ...(p?.lastWar !== undefined ? { sinceWar: yearValue(s.turn, cal) - yearValue(p.lastWar, cal) } : {}),
+    ...(p?.lastHunger !== undefined ? { sinceHunger: yearValue(s.turn, cal) - yearValue(p.lastHunger, cal) } : {}),
+    stores: Math.min(Infinity, ...towns.map((c) => c.goods.food / Math.max(1, Math.min(storeCapacity(s, c), yearlyNeed(s, c))))),
+    met: good.met,
+    partners: good.partners,
   };
 }
 
