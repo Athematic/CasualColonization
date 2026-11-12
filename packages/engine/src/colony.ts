@@ -63,6 +63,8 @@ export function charterCost(s: GameState, nation: PlayerId): number {
   if (!charter) return 0;
   const p = s.players.find((o) => o.id === nation);
   if (!p || p.independence !== 'none') return 0;
+  // A playing people has no Crown to charter its towns (native-nations.md section 15).
+  if (p.kind === 'people') return 0;
   const held = colonyList(s).filter((c) => c.owner === nation).length;
   if (held === 0) return 0;
   return Math.round(Math.min(charter.cap, charter.base * held) * difficultyOf(s, p).colonyCharter);
