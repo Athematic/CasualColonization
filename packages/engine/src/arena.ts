@@ -90,6 +90,9 @@ export interface ArenaPeopleEntry {
   /** Share of its starting homeland kept, and the homeland's average land health (100 without land health). */
   kept: number;
   health: number;
+  /** Homeland tiles it sold to European nations, and that they took from it, over the game (native-nations.md section 18). */
+  landSold?: number;
+  landTaken?: number;
   /** Treaties in force at the end (a league counted once) and whether it belonged to a league, with the league's years. */
   treaties: number;
   league?: number;
@@ -439,8 +442,20 @@ export function peoplesGame(s: GameState, ms: number): ArenaPeoplesGame {
   return { peoples, colonies, ms, ways };
 }
 
+/** Tiles a playing people sold to European nations and they took from it (peopleland.ts), when any. */
+function landDeals(s: GameState, id: PlayerId): { landSold?: number; landTaken?: number } {
+  let sold = 0;
+  let taken = 0;
+  for (const rel of Object.values(s.peopleRelations ?? {})) {
+    if (rel.people !== id) continue;
+    sold += rel.landSold ?? 0;
+    taken += rel.landTaken ?? 0;
+  }
+  return { ...(sold ? { landSold: sold } : {}), ...(taken ? { landTaken: taken } : {}) };
+}
+
 /** A playing people's homeland, land, treaties, league and gold at the end of a game. */
-function peopleEndState(s: GameState, id: PlayerId): Pick<ArenaPeopleEntry, 'kept' | 'health' | 'treaties' | 'league' | 'gold' | 'sinceWar' | 'sinceHunger' | 'stores' | 'met' | 'partners'> {
+function peopleEndState(s: GameState, id: PlayerId): Pick<ArenaPeopleEntry, 'kept' | 'health' | 'landSold' | 'landTaken' | 'treaties' | 'league' | 'gold' | 'sinceWar' | 'sinceHunger' | 'stores' | 'met' | 'partners'> {
   const home = homelandKept(s, id);
   const live = (s.treaties ?? []).filter((t) => !t.end && t.parties.some((q) => q.id === id));
   const league = live.find((t) => t.kind === 'league');
@@ -450,6 +465,7 @@ function peopleEndState(s: GameState, id: PlayerId): Pick<ArenaPeopleEntry, 'kep
   const good = goodLifeStanding(s, id);
   return {
     kept: home.start ? home.kept / home.start : 0,
+    ...landDeals(s, id),
     health: homelandHealth(s, id),
     treaties: live.length,
     ...(league ? { league: yearValue(s.turn, cal) - yearValue(league.start, cal) } : {}),
@@ -720,9 +736,14 @@ export function formatPeoples(entries: ArenaEntry[]): string {
   const rows = ids.map((id) => {
     const list = played.flatMap((one) => one.peoples.filter((p) => p.people === id));
     const wins = kinds.map((k) => list.filter((p) => p.way === k).length);
-    return `| ${id} | ${list.length} | ${list.filter((p) => p.towns > 0).length} | ${f1(avg(list.map((p) => p.towns)))} | ${f1(avg(list.map((p) => p.start)))} → ${f1(avg(list.map((p) => p.population)))} | ${f1(avg(list.map((p) => p.members)))} | ${Math.round(avg(list.map((p) => p.score)))} | ${wins.join(' | ')} |`;
+    // Continuity per people (native-nations.md section 18): its homeland kept, the land's health, and what it failed on.
+    const fails = new Map<string, number>();
+    for (const p of list) for (const c of p.continuityFails) fails.set(c, (fails.get(c) ?? 0) + 1);
+    const failText = [...fails].sort((a, b) => b[1] - a[1]).map(([c, k]) => `${c} ${k}`).join(', ') || 'none';
+    const land = `${Math.round(100 * avg(list.map((p) => p.kept)))}% | ${Math.round(avg(list.map((p) => p.health)))} | ${f1(avg(list.map((p) => p.landSold ?? 0)))} / ${f1(avg(list.map((p) => p.landTaken ?? 0)))}`;
+    return `| ${id} | ${list.length} | ${list.filter((p) => p.towns > 0).length} | ${f1(avg(list.map((p) => p.towns)))} | ${f1(avg(list.map((p) => p.start)))} → ${f1(avg(list.map((p) => p.population)))} | ${f1(avg(list.map((p) => p.members)))} | ${Math.round(avg(list.map((p) => p.score)))} | ${land} | ${wins.join(' | ')} | ${failText} |`;
   });
-  const table = [`| People | Games | Survived | Towns | People (start → end) | Council | Score | ${kinds.join(' | ')} |`, `| --- |${' ---: |'.repeat(6 + kinds.length)}`, ...rows].join('\n');
+  const table = [`| People | Games | Survived | Towns | People (start → end) | Council | Score | Homeland kept | Land health | Tiles sold / taken | ${kinds.join(' | ')} | Continuity failed on |`, `| --- |${' ---: |'.repeat(9 + kinds.length)} --- |`, ...rows].join('\n');
   // The same by the computer level the peoples played at, with what the profiles change.
   const levels = AI_LEVELS.filter((l) => played.some((one) => one.peoples.some((p) => p.level === l)));
   const levelRows = levels.map((level) => {

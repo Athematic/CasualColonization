@@ -20,6 +20,7 @@ import { boardShip, leaveShip, moveUnit, setDestination, setRoadTo, startImprove
 import { answerNativeDemand } from './braves.js';
 import { proposePeopleTreaty } from './peopletreaties.js';
 import { answerPairProposal, endPairTreaty, learnAtTown, proposePairTreaty } from './peoplediplomacy.js';
+import { answerLandOffer, offerForLand, takePeopleLand } from './peopleland.js';
 import { answerLeague, leaveLeague, proposeLeague } from './peopleleague.js';
 import { answerIndependence } from './victory.js';
 import { barter, tradeWithPeople } from './peopletrade.js';
@@ -140,6 +141,12 @@ export type Command =
   | { type: 'proposePairTreaty'; to: PlayerId; kind?: PeopleTreatyKind }
   /** Answers the treaty proposal `from` made (a pair with a playing people). */
   | { type: 'answerPairProposal'; from: PlayerId; accept: boolean }
+  /** A European nation offers gold (the asking price when missing) for a tile of a playing people's land beside its colony (peopleland.ts). */
+  | { type: 'offerForLand'; x: number; y: number; gold?: number }
+  /** A European nation takes a tile of a playing people's land beside its colony, breaking faith with it. */
+  | { type: 'takePeopleLand'; x: number; y: number }
+  /** A playing people answers `nation`'s offer for its land. */
+  | { type: 'answerLandOffer'; nation: PlayerId; accept: boolean }
   /** A playing people proposes a league to `peoples` (a new league, or, as a member, invites them into its own; peopleleague.ts). */
   | { type: 'proposeLeague'; peoples: PlayerId[] }
   /** Answers the league `by` proposed. */
@@ -483,6 +490,15 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'proposePairTreaty':
         text = proposePairTreaty(s, nation, cmd.to, cmd.kind ?? 'people-trade');
+        break;
+      case 'offerForLand':
+        text = offerForLand(s, nation, cmd.x, cmd.y, cmd.gold);
+        break;
+      case 'takePeopleLand':
+        text = takePeopleLand(s, nation, cmd.x, cmd.y);
+        break;
+      case 'answerLandOffer':
+        text = answerLandOffer(s, nation, cmd.nation, cmd.accept);
         break;
       case 'answerPairProposal':
         text = answerPairProposal(s, nation, cmd.from, cmd.accept);

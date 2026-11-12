@@ -28,6 +28,7 @@ import { canDeclareIndependence, declareIndependence, rebelShare } from '../inde
 import { abandonColony } from '../leaving.js';
 import { boardShip, canImprove, findPath, goTo, setDestination, startImprovement } from '../movement.js';
 import { buyLand, establishMission, giftToTribe, landPrice, learnSkill, nativeLandOwner, speakToChief, takeLand, tensionOf } from '../natives.js';
+import { computerAcquire, computerLandDeal, computerMayAsk, landSalesOf, playingPeopleLand } from '../peopleland.js';
 import { buildingCapacityPerWorker, landYield, workerTileYield, type ColonyReport } from '../production.js';
 import { landAdjusted } from '../land.js';
 import { aiColonyReport } from './reports.js';
@@ -53,7 +54,7 @@ import { BUILDINGS, SCHOOL_TEACHERS, type BuildingKind } from '../rules/building
 import type { GoodId, ProductId } from '../rules/goods.js';
 import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import type { BuildTarget, Colony, GameState, Job, Player, Unit } from '../types.js';
-import { aiFight, bestColonySite, boardRescue, countUnits, disembarkAll, fetchStranded, keenSiteScore, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
+import { aiFight, bestColonySite, boardRescue, claimedSiteScore, countUnits, disembarkAll, fetchStranded, keenSiteScore, landingSpot, nearestColony, ownColonies, safely, siteScore } from './common.js';
 import { buyShips, shipToBuild } from './fleet.js';
 import { bestWarTarget, choosePort, declareWithAlly, foreignAffairs, noteSale, sellHere, triangleBuy } from './foreign.js';
 import { manageLogistics, overflowSoon, wantsWagon } from './logistics.js';
@@ -242,6 +243,22 @@ const nativeCrowding = (s: GameState) => {
   return (x: number, y: number) => villages.filter((st) => grid.distance(st.x, st.y, x, y) <= 2).length * 4;
 };
 
+/**
+ * How a later colony's site is scored (keenSiteScore). Where Europeans buy or take a playing
+ * people's land (peopleland.ts, native-nations.md section 18), a site on it that the nation may ask
+ * for now counts as the land would be once acquired, a fifth less for the asking.
+ */
+function expansionScore(s: GameState, p: Player, prof: AiProfile): (x: number, y: number) => number {
+  if (!landSalesOf(s)) return (x, y) => keenSiteScore(s, x, y);
+  const spare = p.gold - prof.reserve - turnSaving;
+  return (x, y) => {
+    const v = keenSiteScore(s, x, y);
+    if (v !== -Infinity) return v;
+    const people = computerMayAsk(s, p.id, prof, x, y, spare);
+    return people ? claimedSiteScore(s, x, y, people) * 0.8 : v;
+  };
+}
+
 /** The colonists sent out to found colonies, while they are on their way (forgetting the others). */
 function settlersOnTheWay(s: GameState, p: Player): Unit[] {
   const memory = p.aiMemory;
@@ -273,7 +290,7 @@ function sendSettler(s: GameState, p: Player, prof: AiProfile): void {
     .filter((e) => e.workers.length > keep)
     .sort((a, b) => b.workers.length - a.workers.length || (a.c.id < b.c.id ? -1 : 1))[0];
   if (!from) return;
-  const site = bestColonySite(s, from.c.x, from.c.y, { radius: 8, score: (x, y) => keenSiteScore(s, x, y), perTile: 1.1, stay: false, overLand: true, penalty: nativeCrowding(s) });
+  const site = bestColonySite(s, from.c.x, from.c.y, { radius: 8, score: expansionScore(s, p, prof), perTile: 1.1, stay: false, overLand: true, penalty: nativeCrowding(s) });
   if (site.score <= 14) {
     if (scenarioOf(s).ai.islands) sendSeaSettler(s, p, colonies, keep);
     return;
@@ -836,6 +853,9 @@ function mountTroops(s: GameState, p: Player, c: Colony): void {
 /** Buys (or takes) good native land next to a growing colony. */
 function acquireLand(s: GameState, p: Player, c: Colony, prof: AiProfile): void {
   if (prof.land === 'avoid') return;
+  // A playing people's land beside the colony: offered for, or taken (peopleland.ts, native-nations.md
+  // section 18), once the colony has grown; only where the scenario has `mechanics.landSales`.
+  if (landSalesOf(s) && colonyWorkers(s, c).length >= 3 && computerLandDeal(s, p.id, c, prof, p.gold - prof.reserve - turnSaving)) return;
   // Native land next to the colony before its people: most colonies have none left to acquire.
   if (!workArea(s, c.x, c.y).some((n) => nativeLandOwner(s, n.x, n.y)) || colonyWorkers(s, c).length < 3) return;
   for (const n of workArea(s, c.x, c.y)) {
@@ -1212,10 +1232,11 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
       ? charterInHand && paced
       : (sent.length < prof.expansion.settlers && expansionReady(s, p, prof, colonies)) || (!here && charterInHand && !reachableColonies().length));
   if (expand) {
+    const keen = expansionScore(s, p, prof);
     const best = bestColonySite(s, pos.x, pos.y, {
       radius: here ? 8 : 5,
       // The first colony is placed as it always was; later ones chase the best land, away from other colonies.
-      score: colonies.length ? (x, y) => keenSiteScore(s, x, y) : (x, y) => siteScore(s, x, y),
+      score: colonies.length ? keen : (x, y) => siteScore(s, x, y),
       perTile: 1.1,
       stay: !here,
       // Later colonies only where the colonist can walk (an unreachable site would leave it idle).
@@ -1224,14 +1245,16 @@ function colonistTurn(s: GameState, p: Player, u: Unit, prof: AiProfile): void {
       penalty: nativeCrowding(s),
     });
     if (best.score > 14) {
+      // On a playing people's land, the colonist first offers for the site or takes it.
+      const ready = (x: number, y: number) => !playingPeopleLand(s, x, y) || computerAcquire(s, p.id, prof, x, y);
       if (best.x === pos.x && best.y === pos.y) {
-        foundColony(s, u.id);
+        if (ready(pos.x, pos.y)) foundColony(s, u.id);
         return;
       }
       if (goTo(s, u, best.x, best.y)) {
         if (colonies.length) markSettler(p, u);
         const now = unitPosition(s, u)!;
-        if (now.x === best.x && now.y === best.y && u.moves > 0) foundColony(s, u.id);
+        if (now.x === best.x && now.y === best.y && u.moves > 0 && ready(now.x, now.y)) foundColony(s, u.id);
         return;
       }
     }

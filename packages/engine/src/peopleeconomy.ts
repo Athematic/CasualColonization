@@ -260,6 +260,17 @@ export function peopleLandClosedTo(s: GameState, nation: PlayerId, x: number, y:
   return claim;
 }
 
+/**
+ * The European nation whose land a tile beside a people's town now is (bought from or taken from a
+ * people, peopleland.ts and natives.ts), if that keeps the town off it. Only for a people's towns:
+ * European colonies keep their rules.
+ */
+export function landLostTo(s: GameState, town: Colony, x: number, y: number): PlayerId | undefined {
+  if (kindOfId(town.owner) !== 'people') return undefined;
+  const claim = tileAt(s, x, y)?.claim;
+  return claim && claim !== town.owner && kindOfId(claim) !== 'people' ? claim : undefined;
+}
+
 /** Whether a tile is a playing people's own land: claimed by it, or in the work area of one of its towns. */
 export function isPeopleLand(s: GameState, people: PlayerId, x: number, y: number): boolean {
   if (tileAt(s, x, y)?.claim === people) return true;

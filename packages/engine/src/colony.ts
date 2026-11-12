@@ -7,7 +7,7 @@ import { track } from './telemetry.js';
 import { buildingCapacityPerWorker, centreProduction, colonyReport, foodToGrow, libertyBonus, tileYield, type ColonyReport } from './production.js';
 import { kindOfId, systemsOf } from './playerkind.js';
 import { noteTaken } from './land.js';
-import { claimTownLand, foodCapacity, growPeopleTown, housingOf, isPeopleTown, townDwellers, peopleLandClosedTo, planTownBuild, schoolOf, skillOfWork, useTools } from './peopleeconomy.js';
+import { claimTownLand, foodCapacity, growPeopleTown, housingOf, isPeopleTown, townDwellers, peopleLandClosedTo, landLostTo, planTownBuild, schoolOf, skillOfWork, useTools } from './peopleeconomy.js';
 import {
   colonyAt,
   colonyPopulation,
@@ -199,7 +199,7 @@ export function colonyOccupancy(s: GameState, colony: Colony): ColonyOccupancy {
   const worked = new Map<number, Unit>();
   for (const p of tiles) {
     const i = p.y * w + p.x;
-    if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y) || nativeLandClosedTo(s, colony.owner, p.x, p.y) || peopleLandClosedTo(s, colony.owner, p.x, p.y)) closed.add(i);
+    if (settlementAt(s, p.x, p.y) || colonyAt(s, p.x, p.y) || nativeLandClosedTo(s, colony.owner, p.x, p.y) || peopleLandClosedTo(s, colony.owner, p.x, p.y) || landLostTo(s, colony, p.x, p.y)) closed.add(i);
     const v = tileWorkedBy(s, p.x, p.y);
     if (v) worked.set(i, v);
   }
@@ -333,6 +333,8 @@ function validateJob(s: GameState, colony: Colony, u: Unit, job: Job): void {
     if (owner) fail(`This land belongs to the ${peopleName(s, owner.tribe)}. ${mechanicsOf(s).peopleTreaties?.includes('land-use') ? 'Buy it, take it or lease it' : 'Buy it or take it'} first.`);
     const people = peopleLandClosedTo(s, colony.owner, job.x, job.y);
     if (people) fail(`This land belongs to ${nationOf(s, people).name}.`);
+    const lost = landLostTo(s, colony, job.x, job.y);
+    if (lost) fail(`This land is ${nationOf(s, lost).name}'s now.`);
     if (colonyAt(s, job.x, job.y)) fail('Another colony stands on that tile.');
     if (isWater(tileAt(s, job.x, job.y)) && colony.buildings.docks === 0 && !colony.buildings.canoeLanding) fail(isPeopleTown(colony) ? 'Fishing needs a Canoe Landing.' : 'Fishing needs Docks.');
     if (tileYield(s, colony, job.x, job.y, job.good, u.type) <= 0) fail('That tile produces none of that.');

@@ -61,6 +61,7 @@ import { gridOf } from './grid.js';
 import { computerLeague, leagueWar, processLeagues } from './peopleleague.js';
 import { peopleProfileOf, type PeopleProfile } from './ai/profiles.js';
 import { shareMaps } from './peoplemaps.js';
+import { processLandOffers } from './peopleland.js';
 
 // ---------------------------------------------------------------------------
 // Who is who
@@ -622,14 +623,14 @@ export function pactPlayersOf(s: GameState, people: TribeId, attacker: PlayerId)
   return pactDefenders(s, people, attacker).filter((id) => playingPeople(s, id) && systemsOfId(attacker).war && player(s, id).stance[attacker] !== 'war');
 }
 
-const BREACH_WORDS = { war: 'going to war with', ended: 'ending a treaty with' } as const;
+const BREACH_WORDS = { war: 'going to war with', ended: 'ending a treaty with', land: 'taking land from' } as const;
 
 /**
  * `by` breaks faith with `other`: every treaty between them ends (broken by `by`), and the two make
  * no new treaty for the waiting years, `other` treating `by` as hostile for longer (drawn from the
  * pair's own stream), as Beta 2's breach; only the treaties `only` names, when given.
  */
-function breakPairFaith(s: GameState, by: PlayerId, other: PlayerId, why: keyof typeof BREACH_WORDS, only?: Treaty): void {
+export function breakPairFaith(s: GameState, by: PlayerId, other: PlayerId, why: keyof typeof BREACH_WORDS, only?: Treaty): void {
   const treaties = only ? [only] : pairTreaties(s, by, other);
   if (!treaties.length) return;
   const rules = peopleTreatyRules(s);
@@ -705,6 +706,8 @@ export function processPeopleDiplomacy(s: GameState): void {
     }
   }
   if (s.treaties || s.leagueProposals) processLeagues(s);
+  // Offers for a playing people's land that a person left unanswered lapse (peopleland.ts, section 18).
+  processLandOffers(s);
 }
 
 // ---------------------------------------------------------------------------

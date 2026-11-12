@@ -49,6 +49,7 @@ export * from './land.js';
 export * from './peoplediplomacy.js';
 export * from './peoplemaps.js';
 export * from './peopleleague.js';
+export * from './peopleland.js';
 export * from './peoplevictory.js';
 export * from './peopletrade.js';
 export * from './epidemics.js';

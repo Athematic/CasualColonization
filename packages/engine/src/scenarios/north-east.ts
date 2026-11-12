@@ -345,6 +345,9 @@ export const NORTH_EAST: Scenario = {
     // within 3 tiles of its settlements, again every 50 years), and computer peoples' runners explore
     // up to 12 tiles from their towns (times their profile's reach).
     mapKnowledge: { seen: true, share: { homeland: 3, every: 50 }, range: 12 },
+    // Europeans offer to buy a playing people's land near their colonies, or take it (native-nations.md
+    // T5, section 18): the engine's rules (peopleland.ts LAND_SALES).
+    landSales: {},
   },
   // Both sides judged at the end year, in the decided order (T14). The peoples' peaceful ways are
   // tuned so that a people wins in about 1 game in 5 (T15; Beta 3 step 9, native-nations.md sections

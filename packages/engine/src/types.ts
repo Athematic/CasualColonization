@@ -605,6 +605,16 @@ export interface PeopleRelation {
    * people and the scenario's `mechanics.mapKnowledge.share`. Missing until they first do.
    */
   maps?: number;
+  /**
+   * A nation's offer for a tile of a playing person's people's land, waiting for the person's answer
+   * (peopleland.ts, native-nations.md section 18). One at a time per pair.
+   */
+  landOffer?: { x: number; y: number; gold: number; turn: number };
+  /** Turn a computer nation last asked the people for land or took some (it waits `landSales.waitYears` before asking again). */
+  landAsked?: number;
+  /** Tiles of its land the people sold to the nation, and the nation took from it, over the game. */
+  landSold?: number;
+  landTaken?: number;
 }
 
 /**

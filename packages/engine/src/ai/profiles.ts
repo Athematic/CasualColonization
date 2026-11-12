@@ -187,6 +187,15 @@ export interface PeopleProfile {
    * (ai/people.ts `explore`). Creative goes farthest to meet partners, Naive keeps near home.
    */
   explore: number;
+  /**
+   * Its answer to a European nation's offer for its land (peopleland.ts, native-nations.md section
+   * 18): times the scenario's `landSales.accept`; 0 never sells. It never sells a town's tile or a
+   * tile its towns work, nor below `keepsHomeland` of its starting homeland.
+   */
+  sellsLand: number;
+  keepsHomeland: number;
+  /** Chance it goes to war with a nation that takes its land. */
+  warOnTaking: number;
 }
 
 const competentPeople: PeopleProfile = {
@@ -207,6 +216,9 @@ const competentPeople: PeopleProfile = {
   plan: ['storagePits', 'longhouse', 'palisade', 'canoeLanding', 'workshop', 'dryingRacks'],
   shareMaps: true,
   explore: 1,
+  sellsLand: 0.5,
+  keepsHomeland: 0.8,
+  warOnTaking: 0.5,
 };
 
 export const PEOPLE_PROFILES: Record<AiLevel, PeopleProfile> = {
@@ -225,6 +237,10 @@ export const PEOPLE_PROFILES: Record<AiLevel, PeopleProfile> = {
     claims: 0,
     plan: ['longhouse', 'storagePits', 'workshop', 'canoeLanding', 'dryingRacks', 'palisade'],
     explore: 0.5,
+    // Follows the price for its land too, down to half its homeland, and seldom fights for it.
+    sellsLand: 1,
+    keepsHomeland: 0.5,
+    warOnTaking: 0.25,
   },
   competent: competentPeople,
   // Defends hard and raids rivals: walls first, muskets and horses, a smaller store, slow to make peace.
@@ -245,6 +261,10 @@ export const PEOPLE_PROFILES: Record<AiLevel, PeopleProfile> = {
     plan: ['palisade', 'storagePits', 'longhouse', 'workshop', 'canoeLanding', 'dryingRacks'],
     shareMaps: false,
     explore: 0.75,
+    // Sells none of its land, and fights for what is taken.
+    sellsLand: 0,
+    keepsHomeland: 1,
+    warOnTaking: 1,
   },
   // Trades and makes treaties: every kind with the nations, pacts and a league with the peoples.
   creative: {
@@ -258,6 +278,10 @@ export const PEOPLE_PROFILES: Record<AiLevel, PeopleProfile> = {
     peaceAfter: 5,
     plan: ['storagePits', 'longhouse', 'canoeLanding', 'workshop', 'dryingRacks', 'palisade'],
     explore: 1.5,
+    // Leases rather than sells (its treaties include land use), and seeks peace rather than war.
+    sellsLand: 0.3,
+    keepsHomeland: 0.85,
+    warOnTaking: 0.25,
   },
 };
 

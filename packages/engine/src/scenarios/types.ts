@@ -208,6 +208,26 @@ export interface Mechanics {
    * (the Americas and the Caribbean).
    */
   mapKnowledge?: false | MapKnowledgeRules;
+  /**
+   * European nations offer to buy a playing people's claimed land, or take it (native-nations.md
+   * T5, section 18; peopleland.ts). Only a playing people's land: peoples nobody plays keep Beta
+   * 2's buying and taking. Absent or false means off (the Americas and the Caribbean).
+   */
+  landSales?: false | Partial<LandSaleRules>;
+}
+
+/** Offers for a playing people's land, and land taken (`Mechanics.landSales`; peopleland.ts `LAND_SALES` has the defaults). */
+export interface LandSaleRules {
+  /** How far from one of its colonies a nation may offer for (or take) a tile: 1 is the colony's work area. */
+  reach: number;
+  /** The asking price of a tile: the people's settlement kind's land price times this, times (2 − the share of its homeland it still keeps). */
+  price: number;
+  /** Chance a computer people accepts an offer at its asking price, times its profile's `sellsLand` (more for more gold, less without good relations). */
+  accept: number;
+  /** Years a computer nation waits, after it asked a people for land (or took some), before it asks it again. */
+  waitYears: number;
+  /** Years an offer waits for a person's answer before it lapses. */
+  offerYears: number;
 }
 
 /** Knowledge of the land (`Mechanics.mapKnowledge`). */
