@@ -22,7 +22,7 @@ export function healthColor(health: number): string {
  * Borders of claimed land: an edge in the claimant's colour wherever a tile it claims meets a tile
  * it does not. Always for a playing people's land; with the land overlay, every claim.
  */
-export function drawClaimBorders(ctx: Ctx2D, scene: Scene, opts: { width?: number; ink?: string } = {}): void {
+export function drawClaimBorders(ctx: Ctx2D, scene: Scene, opts: { width?: number; ink?: string; dashed?: boolean } = {}): void {
   const s = scene.state as GameState;
   const all = scene.overlay === 'land';
   const z = scene.camera.zoom;
@@ -33,6 +33,8 @@ export function drawClaimBorders(ctx: Ctx2D, scene: Scene, opts: { width?: numbe
   const inset = lw / 2 + 1;
   ctx.save();
   ctx.lineCap = 'round';
+  // Dashed where a style's roads are lines of the same colour.
+  if (opts.dashed) ctx.setLineDash([lw * 2.5, lw * 2]);
   for (let y = r.y0; y <= r.y1; y++) {
     for (let x = r.x0; x <= r.x1; x++) {
       const claim = claimOf(x, y);

@@ -459,7 +459,7 @@ export class LigneClaireMapRenderer implements MapRenderer {
     for (const t of tiles) if (t.tile.use) drawLease(ctx, nationOf(s, t.tile.use).color, t.px, t.py, z, lw);
     // The land overlay (health by region) and the borders of claimed land (native-nations.md T5, T10).
     drawLandOverlay(ctx, scene);
-    drawClaimBorders(ctx, scene, { width: Math.max(1.5, z * 0.045), ink: INK });
+    drawClaimBorders(ctx, scene, { width: Math.max(1.5, z * 0.045), ink: INK, dashed: true });
 
     // 4. A light paper wash over what we know but cannot currently see.
     // One path so overlapping edges are not washed twice.
