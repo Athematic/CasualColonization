@@ -35,14 +35,14 @@ import { proposePeace, startWar } from '../diplomacy.js';
 import { gridOf } from '../grid.js';
 import { regionHealth, regionOf, regionRenewal, turnsInYear } from '../land.js';
 import { goTo, setDestination } from '../movement.js';
-import { claimLand } from '../peopleeconomy.js';
+import { claimLand, reserveOf } from '../peopleeconomy.js';
 import { pairTreaties, peopleProposals } from '../peoplediplomacy.js';
 import { computerBarter, computerTradeVisits } from '../peopletrade.js';
 import { kindOfId, systemsOfId } from '../playerkind.js';
-import { colonyAt, colonyWorkers, isShip, isWater, neighbours, tileAt } from '../queries.js';
+import { colonyAt, colonyWorkers, createUnit, isShip, isWater, neighbours, tileAt } from '../queries.js';
 import { wayOf } from '../rules/peoples.js';
 import { UNIT_TYPES } from '../rules/units.js';
-import { calendarOf, mechanicsOf, peopleEconomyOf, yearOf, yearValue } from '../scenarios/index.js';
+import { calendarOf, mechanicsOf, nationTypeOf, peopleEconomyOf, yearOf, yearValue } from '../scenarios/index.js';
 import type { Colony, GameState, Job, Player, Unit } from '../types.js';
 import { colonyList, ownedUnitsView, unitList } from '../unitindex.js';
 import { safely } from './common.js';
@@ -60,6 +60,7 @@ export function runPeopleAi(s: GameState, p: Player): void {
     feedTowns(s, p);
     claimAround(s, p, prof);
     if (prof.raids) startRaid(s, p, prof);
+    newRunner(s, p);
   }
   peopleProposals(s, p, prof);
   armWarriors(s, p, prof);
@@ -289,6 +290,25 @@ function claimAround(s: GameState, p: Player, prof: PeopleProfile): void {
 
 // ---------------------------------------------------------------------------
 // Exploring (Beta 3 step 10b)
+
+/** Food a computer people's town gives to send out a new runner (native-nations.md section 19: "cheaply"). */
+export const RUNNER_FOOD = 30;
+
+/**
+ * A computer people that has lost its runner (setup gives it one) sends out a new one, once a year,
+ * where the scenario has explorers (`mechanics.mapKnowledge.range`; native-nations.md section 19,
+ * Simon): the first of its towns holding its reserve and `RUNNER_FOOD` more gives that food, and the
+ * runner starts there. No worker leaves the town.
+ */
+function newRunner(s: GameState, p: Player): void {
+  const rules = mechanicsOf(s).mapKnowledge;
+  if (!rules || !rules.range || !nationTypeOf(s, 'people').units.includes('runner')) return;
+  if (ownedUnitsView(s, p.id).some((u) => u.type === 'runner')) return;
+  const town = colonyList(s).find((c) => c.owner === p.id && c.goods.food >= reserveOf(s, c) + RUNNER_FOOD);
+  if (!town) return;
+  town.goods.food -= RUNNER_FOOD;
+  createUnit(s, p.id, 'runner', { kind: 'map', x: town.x, y: town.y });
+}
 
 /**
  * Its runners on the map with no orders go to the nearest land tile it has seen beside land it has
