@@ -10,9 +10,9 @@
  * members, the arrivals, the events, the words) is drafted for Simon's review, with its sources in
  * the note (section 13). The numbers are a first tuning; computer players are step 9.
  *
- * Registered hidden until its drafted history is reviewed: the New game screen offers its peoples
- * since step 10 (every European nation arrives after 1000, so a game needs a playing people at its
- * start, arrivals.ts), and the web game opens it with `?scenario=north-east`.
+ * A scenario of the New game screen since Beta 3 step 10b (Simon's decision; registered hidden until
+ * then): the screen offers its peoples (every European nation arrives after 1000, so a game needs a
+ * playing people at its start, arrivals.ts), and `?scenario=north-east` opens it.
  *
  * Imports only the leaf rule tables, like the Americas and the Caribbean, so any engine module can
  * import the registry.
@@ -191,7 +191,8 @@ const PEOPLES: NorthEastPeopleId[] = [
 /**
  * The peoples setup may play (T4): two farming confederacies of the Great Lakes and two peoples of
  * the coast and the north, so the ways of life the region knew are all playable. Their towns start
- * with their settlements' places; later towns take these names, places the sources record.
+ * at their settlements' places and take these names, places the sources record, in order (the
+ * capital first; Beta 3 step 10b, Simon's decision); towns founded later take the next ones.
  */
 const PLAYABLE: PlayablePeople[] = [
   {
@@ -246,8 +247,6 @@ export const NORTH_EAST: Scenario = {
   name: 'The North-east, 1000–1850',
   description:
     "The peoples of the North-east as nations: the Haudenosaunee, the Wendat, the Mi'kmaq and the Innu among their neighbours, from the year 1000, with the Europeans arriving one by one from 1497.",
-  // Until its drafted history is reviewed (native-nations.md section 15); `?scenario=north-east` opens it.
-  hidden: true,
   calendar: NORTH_EAST_CALENDAR,
   map: {
     stored: [{ id: 'north-east', peoples: NORTH_EAST_PEOPLES, renewal: NORTH_EAST_RENEWAL, entries: ENTRIES }],

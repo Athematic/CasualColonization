@@ -223,8 +223,10 @@ describe('a people playing as a nation (Beta 3 step 1)', () => {
     const towns = colonyList(s).filter((c) => c.owner === 'iroquois');
     expect(towns.length).toBeGreaterThan(0);
     expect(p.coloniesFounded).toBe(towns.length);
+    // The people's own town names, the capital first, then the settlements' names (step 10b).
+    expect(towns[0].name).toBe('Onondaga');
+    towns.forEach((c, i) => expect(c.name).toMatch(i < 2 ? /^(Onondaga|Kanonwalohale)$/ : /^Iroquois /));
     for (const c of towns) {
-      expect(c.name).toMatch(/^Iroquois /);
       // Its own buildings (step 2: the people's selection), the European ones at level 0.
       expect(c.buildings.longhouse).toBe(1);
       expect(c.buildings.workshop).toBe(1);

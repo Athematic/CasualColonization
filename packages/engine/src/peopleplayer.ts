@@ -3,8 +3,9 @@
  *
  * At setup (T3: only at setup in Beta 3) each people the game's `config.peoples` names, from the
  * scenario's `peoples.playable` (T4), becomes a player of `kind: 'people'` with its own people id
- * (T1). Its settlements become its towns: colonies it owns (T2), keeping their places and names,
- * each peopled with one unit of the people's selection (T6) at work and one standing in the town for
+ * (T1). Its settlements become its towns: colonies it owns (T2), keeping their places; they take the
+ * people's `townNames` in order, the capital first (Beta 3 step 10b), and the settlements' names
+ * once the list runs out. Each is peopled with one unit of the people's selection (T6) at work and one standing in the town for
  * the braves the settlement would have sent out. Its `Tribe` record stays (the treaty party, `met`,
  * `burned`); the settlements' records go. The peoples the game does not play stay settlements under
  * Beta 2's rules.
@@ -56,11 +57,13 @@ export function addPeoplePlayer(s: GameState, id: TribeId, human: boolean): Play
   // The town's first worker follows its people's lifeway: gardens for a farming people, hunting otherwise (T6).
   const worker = pick(peopleOf(s, id).lifeway === 'nomadic' ? 'hunter' : 'gardener');
   const towns: Colony[] = [];
-  for (const st of settlements) {
+  // The people's own names for its towns, the capital first (Beta 3 step 10b), as later towns take them (nextColonyName).
+  const names = nationOf(s, id).colonyNames;
+  for (const [i, st] of settlements.entries()) {
     const colony: Colony = {
       id: newId(s, 'c'),
       owner: id,
-      name: settlementName(s, st),
+      name: names[i] ?? settlementName(s, st),
       x: st.x,
       y: st.y,
       goods: emptyGoods(goodsOf(s)),

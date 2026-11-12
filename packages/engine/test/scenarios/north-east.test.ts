@@ -69,11 +69,11 @@ function play(s: GameState, rounds: number): GameState {
 }
 
 describe('the North-east scenario', () => {
-  it('is registered, hidden until the New game screen can offer a people', () => {
+  it('is registered and offered on the New game screen (step 10b)', () => {
     expect(getScenario('north-east')).toBe(NORTH_EAST);
     expect(listScenarios()).toContain(NORTH_EAST);
-    expect(NORTH_EAST.hidden).toBe(true);
-    expect(playableScenarios()).not.toContain(NORTH_EAST);
+    expect(NORTH_EAST.hidden).toBeFalsy();
+    expect(playableScenarios()).toContain(NORTH_EAST);
     // Without a playing people nobody is there in 1000: every nation arrives later.
     expect(() => createGame(config({ peoples: [] }))).toThrow(/Nobody is in the game/);
   });

@@ -52,6 +52,17 @@ describe('New game options for the North-east', () => {
     expect(a.peoplesFirst).toBe(false);
   });
 
+  it("names a people's first towns from its own list, the capital first (step 10b)", () => {
+    const s = createGame(config());
+    const own = (id: string) => Object.values(s.colonies).filter((c) => c.owner === id).map((c) => c.name);
+    const haudenosaunee = NORTH_EAST.peoples!.playable!.find((p) => p.id === 'haudenosaunee')!.townNames;
+    const wendat = NORTH_EAST.peoples!.playable!.find((p) => p.id === 'wendat')!.townNames;
+    expect(own('haudenosaunee')[0]).toBe('Onondaga');
+    expect(own('wendat')[0]).toBe('Ossossané');
+    for (const n of own('haudenosaunee')) expect(haudenosaunee).toContain(n);
+    for (const n of own('wendat')) expect(wendat).toContain(n);
+  });
+
   it('knows when each nation arrives', () => {
     expect(arrivalYear(NORTH_EAST, 'real', 'england')).toBe(1497);
     expect(arrivalYear(NORTH_EAST, 'real', 'netherlands')).toBe(1614);
