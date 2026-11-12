@@ -1,3 +1,4 @@
+import { peopleProfileOf } from './ai/profiles.js';
 import { isSick } from './epidemics.js';
 import { exchangeTeachBonus } from './peoplediplomacy.js';
 import { gridOf } from './grid.js';
@@ -297,7 +298,8 @@ export function townJobValue(s: GameState, colony: Colony, job: Job, amount: num
     return amount * (full ? 1 : 5);
   }
   if (product === 'hammers') return amount * (colony.build ? 4 : 1);
-  if (product === 'bells') return amount * 2;
+  // Counsel for the council, weighed by a computer people's profile (ai/profiles.ts `counsel`).
+  if (product === 'bells') return amount * 2 * (peopleProfileOf(s.players, colony.owner)?.counsel ?? 1);
   if (product === 'crosses') return 0;
   const good = product as GoodId;
   // Goods with no room left are worth little; furs and the rest are for trade (step 4) and the town's own use.
