@@ -66,8 +66,8 @@ Design: [design/scenarios.md](design/scenarios.md) and [design/australia.md](des
 
 | Item | Size | Prio | Status |
 | --- | --- | --- | --- |
-| Convict transport mechanic (Australia; late game for British colonies in the Americas) | M | P2 | idea, agreed |
-| Australia, 1788–1901: map, Aboriginal nations and Country, wool, wheat, gold and whaling, convict colonists, the long sea route, drought, Federation | XL | P1 | idea |
+| Convict transport mechanic (Australia; late game for British colonies in the Americas) | M | P2 | design: A11 in [design/australia.md](design/australia.md) (in the Americas a setup option, off by default) |
+| Australia, 1788–1901: map, Aboriginal nations and Country, wool, wheat, gold and whaling, convict colonists, the long sea route, drought, Federation | XL | P1 | design: [design/australia.md](design/australia.md) (decisions A1–A23, a phased plan, seven questions for Simon); research in [research/australia.md](research/australia.md), with community consultation before release |
 | Vinland, around 1000: Norse survival from Greenland with scarce resources and a fragile supply line | L | P3 | moved to Beta 4, built on hexes with the Norse (Vinland is hex-only; the Norse wait for it, T17 in [design/native-nations.md](design/native-nations.md)) |
 | Before the year 1000: native peoples as full nations before any European arrives, which would rebuild many mechanics. A potential scenario, not part of the core game | XL? | P3 | idea; Simon, 11 November 2026 |
 | Specialised councils per scenario: each scenario has its own Founding Fathers counterpart (Australia: Legislative Council and Federation figures; Vinland: the Thing, with saga figures), with effects suited to the scenario and portraits in the same cameo prompt style (see design/scenarios.md, Specialised councils) | M | P1 | moved to Beta 3 (the general council system, T8 in [design/native-nations.md](design/native-nations.md)); the councils' members come with each scenario |

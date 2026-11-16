@@ -26,7 +26,7 @@ Every setting the game can be played in is a **scenario**: a data package the en
 | --- | --- |
 | **The Americas, 1492–1850** | The current game. Real rivals or alternative history; dedicated or generated map. Built: the first scenario. |
 | **The Caribbean, 1650–1750** | The lesser powers among the sugar islands. Built in 0.9 as the proof that the framework works; a stored map of the real Caribbean, drawn from coordinates, is its default. |
-| **Australia, 1788–1901** | Convicts, distance, drought, wool and gold; Federation by negotiation. See [australia.md](australia.md). |
+| **Australia, 1788–1901** | Convicts, distance, drought, wool and gold; Federation by negotiation. Design: [australia.md](australia.md); research: [../research/australia.md](../research/australia.md). |
 | **Vinland, around 1000** | Norse settlers sailing from Greenland. Survival with poor resources and a fragile supply line, not competition between nations. Few colonists, long winters, iron and timber scarce, relations with the Skrælings decide the outcome. Winning means a colony that still stands after N years. |
 
 ## Convict transport (a shared mechanic)
@@ -52,7 +52,7 @@ Each scenario brings its own counterpart to the Continental Congress, with figur
 | Scenario | Council | Example figures (to be researched and agreed) | Effects fitting the scenario |
 | --- | --- | --- | --- |
 | **The Americas** | Continental Congress | The 25 Founding Fathers today | As today |
-| **Australia** | Legislative Council, then the Federation conventions | Governors and reformers (for example Lachlan Macquarie), explorers, wool and wheat pioneers (for example Elizabeth Macarthur), advocates for free settlers and emigrants (for example Caroline Chisholm), Aboriginal intermediaries and leaders shown with respect and consulted on (for example Bennelong), gold-rush and Eureka-era reformers, and Federation figures | Convict reform and emancipation, free-settler immigration, water and drought, wool and wheat, exploring the interior, relations with Aboriginal nations, Federation by negotiation |
+| **Australia** | Legislative Council, then the Federation conventions | Governors and reformers (for example Lachlan Macquarie), explorers, wool and wheat pioneers (for example Elizabeth Macarthur), advocates for free settlers and emigrants (for example Caroline Chisholm), Aboriginal intermediaries and leaders shown with respect and consulted on (for example Bennelong; [australia.md](australia.md) A19 now proposes them for the peoples' own council instead), gold-rush and Eureka-era reformers, and Federation figures | Convict reform and emancipation, free-settler immigration, water and drought, wool and wheat, exploring the interior, relations with Aboriginal nations, Federation by negotiation |
 | **Vinland** | The Thing (assembly) | Figures from the sagas: Leif Eriksson, Gudrid Thorbjarnardóttir, Thorfinn Karlsefni, Bjarni Herjólfsson, and others. Saga figures are part legend, so dress follows archaeology (Greenland and L'Anse aux Meadows finds) rather than portraits | Survival and food stores, iron and timber, the supply line to Greenland, seafaring, keeping the peace with the local people |
 
 Rules: a scenario lists its figures with their category and effect, and the game shows that scenario's council and portraits. Portraits of real people follow what is documented; legendary figures get period-accurate dress, and the prompt says so.
