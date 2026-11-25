@@ -288,6 +288,20 @@ python3 tools/image-gen/letter_comic.py a-landfall --pages 1-6 --width 1280
 
 Outputs go to `tools/image-gen/output/comics/<slug>/lettered/` (`page-01__lettered.png` ... plus `reader.html`). Edit any line in the Markdown script and re-run to re-letter without regenerating the art.
 
+### Uploading generated art to the server (`scripts/upload-assets.sh`)
+
+Large master PNGs stay out of Git. Upload `sprites`, `thumbs`, `boxart`, `comics`, or `runtime` straight from your Mac/Linux machine over FTPS/SFTP with [`scripts/upload-assets.sh`](../../scripts/upload-assets.sh) (uses `lftp`, supports `~/.netrc` or hidden password prompt, and never deletes remote files unless you pass `--delete`):
+
+```bash
+# one-time local config outside the repo (~/.config/casual-colonization/deploy.env)
+# DEPLOY_HOST=ftp.example.com
+# DEPLOY_USER=youruser
+# DEPLOY_PATH=/site/wwwroot
+scripts/upload-assets.sh comics --comic a-landfall --dry-run
+scripts/upload-assets.sh thumbs --dry-run
+scripts/upload-assets.sh runtime
+```
+
 ### Limits
 
 - No reference images on the OpenAI generations endpoint: consistency comes from the cast text only, so faces and clothes will still drift somewhat between pages. Fix the Cast section of the script if a look is read wrongly.
