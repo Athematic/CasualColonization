@@ -168,6 +168,7 @@ python3 -m unittest discover -s tools/image-gen/tests -p "test_*.py" -v
 | `-Doc sprites\|boxart\|comics\|all` | `all` | Which document(s) to read. `all` is sprites + box art, as before; comics only with `-Doc comics` or `-IncludeComics`. |
 | `-Comic <pattern>[,...]` | | Comics only: slug patterns such as `a-landfall` or `'n-*'` (a pattern without `*` matches anywhere in the slug). |
 | `-ComicUnit page\|panel\|cast` | `page` | Comics only: one image per page, per panel, or one character model sheet per comic. |
+| `-ComicPageSize WxH` | `1024x1536` | Comics only (`-ComicUnit page`): override portrait page size, e.g. `2160x3240` for print-resolution lossless PNG on `gpt-image-2.5-*`. |
 | `-IncludeComics` | | Add the comics to `-Doc all`. |
 | `-ComicPromptDoc`, `-ComicsDir` | `docs/COMIC_PROMPTS.md`, `docs/comics` | Read other comic prompt blocks or scripts. |
 | `-Only <pattern>[,...]` | | Wildcards matched against the job id (`units/caravel__none`) or key (`sprites/units/caravel__none`). A pattern without `*` or `?` matches anywhere in the id. |
@@ -275,11 +276,23 @@ Resume, `-Variants`, `-Force`, `-KeepChanged` and the contact sheet work as for 
 
 Non-square images cost about 1.5 times a square one in the estimate. At the default medium quality that is roughly $0.06 per page or cast sheet (about $12 for the 195 images) and $0.04 to $0.06 per panel (about $40 for the 919). At low quality divide by about four. Check <https://openai.com/api/pricing/>. Draw the cast sheets and one comic first, and look at them before running the rest.
 
+### Lettering below each panel (`letter_comic.py`)
+
+In classic *Prince Valiant* / *Illustrated Classics* style, [`letter_comic.py`](letter_comic.py) slices each silent comic page along its gutters (or loads individual `-ComicUnit panel` PNGs), typesets every panel's captions, dialogue and sound effects cleanly underneath it straight from `docs/comics/<slug>.md`, and writes an interactive `reader.html`:
+
+```bash
+python3 tools/image-gen/letter_comic.py a-landfall
+# subset of pages or custom width
+python3 tools/image-gen/letter_comic.py a-landfall --pages 1-6 --width 1280
+```
+
+Outputs go to `tools/image-gen/output/comics/<slug>/lettered/` (`page-01__lettered.png` ... plus `reader.html`). Edit any line in the Markdown script and re-run to re-letter without regenerating the art.
+
 ### Limits
 
-- No reference images: consistency comes from the cast text only, so faces and clothes will still drift somewhat between pages. Fix the Cast section of the script if a look is read wrongly.
+- No reference images on the OpenAI generations endpoint: consistency comes from the cast text only, so faces and clothes will still drift somewhat between pages. Fix the Cast section of the script if a look is read wrongly.
 - The model lays out the page grid itself; panel counts and order can come out wrong. Use `-ComicUnit panel` where a page matters.
-- The generations endpoint has no way to guarantee blank balloon space or the absence of stray text; check each page.
+- Even with the hardened silent-art prompt in `docs/COMIC_PROMPTS.md`, check each page for stray balloons before running `letter_comic.py`.
 
 ## Thumbnails: `-Variant thumb`
 

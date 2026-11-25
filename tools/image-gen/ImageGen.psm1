@@ -259,6 +259,7 @@ function Get-ImageJobs {
         [string]$ComicsDir,
         [string[]]$Comic,
         [ValidateSet('page', 'panel', 'cast')][string]$ComicUnit = 'page',
+        [ValidatePattern('^\d+x\d+$')][string]$ComicPageSize = '1024x1536',
         [switch]$IncludeComics
     )
     $jobs = @()
@@ -266,7 +267,7 @@ function Get-ImageJobs {
     if ($Doc -in 'boxart', 'all') { $jobs += Get-BoxArtJobs -Path $BoxArtDoc -IncludeTitle:$IncludeTitle }
     if ($Doc -eq 'comics' -or ($Doc -eq 'all' -and $IncludeComics)) {
         if (-not $ComicPromptDoc -or -not $ComicsDir) { throw 'Comics need -ComicPromptDoc and -ComicsDir.' }
-        $jobs += Get-ComicJobs -PromptDoc $ComicPromptDoc -ComicsDir $ComicsDir -Unit $ComicUnit -Comic $Comic
+        $jobs += Get-ComicJobs -PromptDoc $ComicPromptDoc -ComicsDir $ComicsDir -Unit $ComicUnit -Comic $Comic -PageSize $ComicPageSize
     }
     if ($Variant -ne 'full') {
         if (-not $ThumbPrompts) { throw "-Variant $Variant needs the thumbnail prompts (Read-ThumbPrompts thumb-prompts.md)." }

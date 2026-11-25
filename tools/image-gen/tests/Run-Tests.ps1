@@ -662,6 +662,10 @@ Dim Dan points at a small whale.
         Assert-Equal 24 $f.Count '-Comic patterns'
         $none = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Doc comics -ComicPromptDoc $comicDocReal -ComicsDir $comicsDirReal -Comic 'a-landfall' -Only 'page-03'
         Assert-Equal 'comics/a-landfall/page-03' ($none.Key -join ',') '-Only works on comic ids'
+        $hi = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Doc comics -ComicPromptDoc $comicDocReal -ComicsDir $comicsDirReal -Comic 'a-landfall' -Only 'page-01' -ComicPageSize '2160x3240'
+        Assert-Equal '2160x3240' $hi[0].Size '-ComicPageSize overrides comic page job size'
+        Assert-Equal '2160x3240' (Resolve-ImageSize $hi[0].Size 'gpt-image-2.5-flare') '2160x3240 sent directly to gpt-image-2.5'
+        Assert-Equal '1024x1536' (Resolve-ImageSize $hi[0].Size 'gpt-image-1.5') 'falls back to 1024x1536 on gpt-image-1.5'
     }
 
     Test 'comics: the prompt is style + setting + only the page cast + page block + visuals, with no dialogue' {

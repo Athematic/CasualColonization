@@ -36,9 +36,11 @@ param(
     [ValidateSet('sprites', 'boxart', 'comics', 'all')][string]$Doc = 'all',
     # Comics (-Doc comics): slug patterns, e.g. 'a-landfall' or 'n-*' (no wildcard = matches anywhere in the slug).
     [string[]]$Comic,
-    # page: one 1024x1536 album page per script page (default). panel: one image per panel (about 900 in all).
+    # page: one portrait album page per script page (default). panel: one image per panel (about 900 in all).
     # cast: one 1536x1024 character model sheet per comic.
     [ValidateSet('page', 'panel', 'cast')][string]$ComicUnit = 'page',
+    # Target WxH for -ComicUnit page (default 1024x1536; e.g. 2160x3240 for print-resolution lossless PNG on gpt-image-2.5-*).
+    [ValidatePattern('^\d+x\d+$')][string]$ComicPageSize = '1024x1536',
     # Add the comics to -Doc all.
     [switch]$IncludeComics,
     # Wildcard patterns matched against the job id ("units/caravel__none") or key ("sprites/units/caravel__none").
@@ -142,7 +144,7 @@ if ($Variant -ne 'full') {
 }
 $jobs = Get-ImageJobs -SpriteDoc $SpriteDoc -BoxArtDoc $BoxArtDoc -Doc $Doc -Only $Only -Variants $Variants -IncludeTitle:$IncludeTitle `
     -Variant $Variant -ThumbPrompts $thumbPrompts -DocumentOrder:$DocumentOrder `
-    -ComicPromptDoc $ComicPromptDoc -ComicsDir $ComicsDir -Comic $Comic -ComicUnit $ComicUnit -IncludeComics:$IncludeComics
+    -ComicPromptDoc $ComicPromptDoc -ComicsDir $ComicsDir -Comic $Comic -ComicUnit $ComicUnit -ComicPageSize $ComicPageSize -IncludeComics:$IncludeComics
 $byDoc = foreach ($d in 'sprites', 'boxart', 'thumbs', 'comics') {
     $n = @($jobs | Where-Object Doc -eq $d).Count
     if ($n) { "${d}: $n" }
@@ -174,7 +176,7 @@ if ($jobs.Count -eq 0) {
 }
 
 if ($OutputPrompts) {
-    $selNames = 'Doc', 'Only', 'Variant', 'Variants', 'IncludeTitle', 'Comic', 'ComicUnit', 'IncludeComics', 'DocumentOrder', 'ChromaKey', 'Model', 'Quality'
+    $selNames = 'Doc', 'Only', 'Variant', 'Variants', 'IncludeTitle', 'Comic', 'ComicUnit', 'ComicPageSize', 'IncludeComics', 'DocumentOrder', 'ChromaKey', 'Model', 'Quality'
     $selParts = foreach ($n in $selNames) {
         if (-not $PSBoundParameters.ContainsKey($n)) { continue }
         $v = $PSBoundParameters[$n]
