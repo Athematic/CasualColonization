@@ -58,6 +58,9 @@ param(
     # Write the fully assembled prompts as Markdown files (one per job, plus index.md) for pasting into an image
     # chat, and exit. Never calls the API: no key, no manifest, no cost confirmation. Works with every selection option.
     [switch]$OutputPrompts,
+    # With -OutputPrompts or -DryRun: rewrite transparent-background prompts to request a flat bright magenta (#ff00ff)
+    # chroma-key backdrop for opaque-only image generators (then extract real alpha with tools/image-gen/chroma_key.py).
+    [switch]$ChromaKey,
     # Folder for -OutputPrompts. Default: tools/image-gen/output/prompts
     [string]$PromptsDir,
     # Output folder for PNGs, manifest.json and index.html. Default: tools/image-gen/output
@@ -171,7 +174,7 @@ if ($jobs.Count -eq 0) {
 }
 
 if ($OutputPrompts) {
-    $selNames = 'Doc', 'Only', 'Variant', 'Variants', 'IncludeTitle', 'Comic', 'ComicUnit', 'IncludeComics', 'DocumentOrder', 'Model', 'Quality'
+    $selNames = 'Doc', 'Only', 'Variant', 'Variants', 'IncludeTitle', 'Comic', 'ComicUnit', 'IncludeComics', 'DocumentOrder', 'ChromaKey', 'Model', 'Quality'
     $selParts = foreach ($n in $selNames) {
         if (-not $PSBoundParameters.ContainsKey($n)) { continue }
         $v = $PSBoundParameters[$n]
@@ -179,7 +182,7 @@ if ($OutputPrompts) {
     }
     $selText = '`' + ((@("-Doc $Doc") + @($selParts | Where-Object { $_ -notlike '-Doc *' })) -join ' ') + '`'
     $pset = [pscustomobject]@{ Model = $Model; Quality = $Quality }
-    $pr = Write-PromptFiles -Jobs $jobs -PromptsDir $PromptsDir -Settings $pset -SelectionText $selText
+    $pr = Write-PromptFiles -Jobs $jobs -PromptsDir $PromptsDir -Settings $pset -SelectionText $selText -ChromaKey:$ChromaKey
     Write-Host "Wrote $($pr.Count) prompt files and index.md to $PromptsDir. No request was sent; the manifest was not touched." -ForegroundColor Green
     exit 0
 }
@@ -199,6 +202,7 @@ if ($DryRun) {
     foreach ($p in $plan) {
         $j = $p.Job
         $body = New-ImageRequestBody -Job $j -Settings $settings
+        $promptOut = if ($ChromaKey) { ConvertTo-ChromaKeyPrompt -Prompt $j.Prompt -Background $j.Background } else { $j.Prompt }
         $runs = $runKeys.Contains($j.Key)
         Write-Output ('=' * 100)
         Write-Output "$($j.Key)   [$(if ($runs) { 'would run' } else { 'skip' }): $($p.Reason)]"
@@ -208,8 +212,8 @@ if ($DryRun) {
         Write-Output "output:  $(Join-Path $OutDir $j.OutputRel)"
         Write-Output "request: POST $($ApiBase.TrimEnd('/'))/images/generations model=$($body.model) size=$($body.size) quality=$($body.quality) background=$($body.background) output_format=$($body.output_format) n=$($body.n) moderation=$($body.moderation)"
         if ($j.Notes) { Write-Output "note:    $($j.Notes)" }
-        Write-Output "prompt ($($j.Prompt.Length) chars):"
-        Write-Output $j.Prompt
+        Write-Output "prompt ($($promptOut.Length) chars):"
+        Write-Output $promptOut
     }
     Write-Output ('=' * 100)
     Write-Output "Dry run: $($jobs.Count) jobs ($countText); $($toRun.Count) would call the API. No request was sent."

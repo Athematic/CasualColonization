@@ -391,6 +391,22 @@ try {
         } finally { $env:OPENAI_API_KEY = $saved; Stop-FakeOpenAIServer $srvP }
     }
 
+    Test '-OutputPrompts -ChromaKey rewrites transparent prompts to #ff00ff and leaves opaque jobs unchanged' {
+        $out = Join-Path $scratch 'op-ck-out'
+        $pdir = Join-Path $scratch 'op-ck-prompts'
+        $r = Invoke-Tool @{ OutputPrompts = $true; ChromaKey = $true; OutDir = $out; PromptsDir = $pdir; Doc = 'sprites'; Only = 'units/expert-lumberjack__none,terrain/plains'; Variant = 'both' }
+        Assert-Equal 0 $r.Exit
+        $fullUnit = [IO.File]::ReadAllText((Join-Path $pdir 'sprites/units/expert-lumberjack__none.md'))
+        $thumbUnit = [IO.File]::ReadAllText((Join-Path $pdir 'thumbs/units/expert-lumberjack__none.md'))
+        $terrain = [IO.File]::ReadAllText((Join-Path $pdir 'sprites/terrain/plains.md'))
+        $ix = [IO.File]::ReadAllText((Join-Path $pdir 'index.md'))
+        Assert-Match $fullUnit '#ff00ff' 'full transparent unit uses magenta chroma-key'
+        Assert-Match $fullUnit 'chroma_key\.py' 'note points to chroma_key.py'
+        Assert-Match $thumbUnit '#ff00ff' 'thumb transparent unit uses magenta chroma-key'
+        Assert-True (-not $terrain.Contains('#ff00ff')) 'opaque terrain left unchanged'
+        Assert-Match $ix '-ChromaKey' 'selection records -ChromaKey'
+    }
+
     # ------------------------------------------------------------------ helpers
     Test 'size mapping' {
         Assert-Equal '1024x1536' (Resolve-ImageSize '1024x1536' 'gpt-image-1')

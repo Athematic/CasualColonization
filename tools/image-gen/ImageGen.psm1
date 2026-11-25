@@ -1637,6 +1637,62 @@ function Write-EditContactSheet {
     return $path
 }
 
+function ConvertTo-ChromaKeyPrompt {
+    <#
+    .SYNOPSIS
+    Rewrites transparent-background instructions in an assembled prompt to request a flat bright
+    magenta (#ff00ff) chroma-key backdrop instead, for image generators that only output opaque RGB
+    images (converted to real RGBA PNGs afterwards with tools/image-gen/chroma_key.py). Opaque jobs
+    are returned unchanged.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Prompt,
+        [Parameter(Mandatory)][string]$Background
+    )
+    if ($Background -ne 'transparent') { return $Prompt }
+    $p = $Prompt
+    $p = $p.Replace(
+        'Transparent background unless told otherwise: no ground plane, no scenery, no backdrop, no frame or border.',
+        'Solid, completely flat bright magenta (#ff00ff) chroma-key background everywhere outside the subject and its ink outline: no ground plane, no scenery, no checkerboard, no gradient, no shadow, no halo, no frame or border.'
+    )
+    $p = $p.Replace(
+        'Fully transparent background: NO frame, no border, no oval, no pedestal, plinth or step, no floor, no ground line, no cast shadow and no shadow ellipse under the feet, no furniture, no scenery, no backdrop colour.',
+        'Solid, completely flat bright magenta (#ff00ff) chroma-key background: NO frame, no border, no oval, no pedestal, plinth or step, no floor, no ground line, no cast shadow and no shadow ellipse under the feet, no furniture, no scenery, no checkerboard, no gradient, no halo.'
+    )
+    $p = $p.Replace(
+        'BACKGROUND: fully transparent, with real alpha: everything outside the silhouette and its thick outline is transparent. No painted checkerboard, no white or coloured backdrop, no ground plane, no ground shadow, no glow, no halo, no frame.',
+        'BACKGROUND: solid, completely flat bright magenta (#ff00ff) chroma-key backdrop everywhere outside the silhouette and its thick outline. No painted checkerboard, no gradient, no shading, no ground plane, no ground shadow, no glow, no halo, no frame.'
+    )
+    $p = $p.Replace(
+        'Transparent background, no ground plane except where described.',
+        'Solid, completely flat bright magenta (#ff00ff) chroma-key background, no ground plane except where described, no checkerboard, no shadow, no halo.'
+    )
+    $p = $p.Replace(
+        'transparent background outside the shape.',
+        'solid, completely flat bright magenta (#ff00ff) chroma-key background outside the shape (no checkerboard, no shadow, no halo).'
+    )
+    $p = $p.Replace(
+        'A transparent square overlay for a top-down map tile',
+        'A chroma-keyed square overlay on a flat bright magenta (#ff00ff) backdrop for a top-down map tile'
+    )
+    $p = $p.Replace(
+        'Everything not described is fully transparent.',
+        'Everything not described is solid flat bright magenta (#ff00ff) with no checkerboard, gradient or halo.'
+    )
+    $p = $p.Replace(
+        'everything else is fully transparent.',
+        'everything else is solid flat bright magenta (#ff00ff) with no checkerboard, gradient or halo.'
+    )
+    $p = $p.Replace(
+        'OVERLAY TILE: everything not described stays fully transparent.',
+        'OVERLAY TILE: everything not described stays solid flat bright magenta (#ff00ff) with no checkerboard, gradient or halo.'
+    )
+    if ($p -notmatch '#ff00ff') {
+        $p += "`n`nBACKGROUND OVERRIDE: Render all transparent areas outside the subject as a solid, completely flat bright magenta (#ff00ff) chroma-key backdrop, with no painted checkerboard, no gradient, no shadow and no halo."
+    }
+    return $p
+}
+
 function Write-PromptFiles {
     <#
     .SYNOPSIS
@@ -1648,7 +1704,8 @@ function Write-PromptFiles {
         [Parameter(Mandatory)][object[]]$Jobs,
         [Parameter(Mandatory)][string]$PromptsDir,
         [Parameter(Mandatory)]$Settings,
-        [string]$SelectionText = ''
+        [string]$SelectionText = '',
+        [switch]$ChromaKey
     )
     $nl = "`n"
     $null = New-Item -ItemType Directory -Path $PromptsDir -Force
@@ -1659,13 +1716,25 @@ function Write-PromptFiles {
         $null = New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force
         $apiSize = Resolve-ImageSize -Size $j.Size -Model $Settings.Model
         $transparent = ($j.Background -eq 'transparent')
-        $bgText = if ($transparent) { 'transparent (a real alpha channel, no painted checkerboard)' } else { 'opaque' }
+        $promptText = if ($ChromaKey) { ConvertTo-ChromaKeyPrompt -Prompt $j.Prompt -Background $j.Background } else { $j.Prompt }
+        $bgText = if ($transparent -and $ChromaKey) {
+            'chroma-key magenta (#ff00ff) -> convert to RGBA PNG with tools/image-gen/chroma_key.py'
+        } elseif ($transparent) {
+            'transparent (a real alpha channel, no painted checkerboard)'
+        } else {
+            'opaque'
+        }
         $pngName = Split-Path -Leaf $j.OutputRel
-        $note = "Paste the prompt below into an image chat; ask for a $apiSize PNG" +
-            $(if ($transparent) { ' with a real transparent background (not a painted checkerboard).' } else { ' with an opaque background.' })
+        $note = if ($transparent -and $ChromaKey) {
+            $resizeFlag = if ($j.Size -ne '1024x1024') { " --resize $($j.Size)" } else { '' }
+            "Paste the prompt below into an image generator; ask for a $apiSize image on a flat #ff00ff magenta backdrop, then extract real transparency with: ``python3 tools/image-gen/chroma_key.py <input> tools/image-gen/output/$($j.OutputRel)$resizeFlag``."
+        } else {
+            "Paste the prompt below into an image chat; ask for a $apiSize PNG" +
+                $(if ($transparent) { ' with a real transparent background (not a painted checkerboard).' } else { ' with an opaque background.' })
+        }
         if ($j.PSObject.Properties['Kind'] -and $j.Kind -eq 'thumb') { $note += ' This is the thumbnail version; it is meant to be read at 16 to 48 px.' }
         $fence = '```'
-        while ($j.Prompt.Contains($fence)) { $fence += '`' }
+        while ($promptText.Contains($fence)) { $fence += '`' }
         $sb = [System.Text.StringBuilder]::new()
         $null = $sb.Append("# $($j.Key)$nl$nl")
         $null = $sb.Append("- Doc: $($j.Doc)$nl")
@@ -1677,13 +1746,18 @@ function Write-PromptFiles {
         $null = $sb.Append("- Output file name in a batch run: $pngName ($($j.OutputRel))$nl")
         $null = $sb.Append("- Prompt hash: $(Get-PromptHash -Job $j)$nl$nl")
         $null = $sb.Append("$note$nl$nl")
-        $null = $sb.Append("${fence}text$nl$($j.Prompt)$nl${fence}$nl")
+        $null = $sb.Append("${fence}text$nl$promptText$nl${fence}$nl")
         [IO.File]::WriteAllText($file, $sb.ToString(), $script:Utf8NoBom)
         $written.Add([pscustomobject]@{ Job = $j; Rel = $rel; Path = $file })
     }
     $ix = [System.Text.StringBuilder]::new()
     $null = $ix.Append("# Prompts for manual use$nl$nl")
-    $null = $ix.Append("$($written.Count) prompt files. Each holds one assembled prompt, exactly as the batch run would send it, with its size and background.$nl$nl")
+    $modeDesc = if ($ChromaKey) {
+        'Each holds one assembled prompt with transparent backgrounds rewritten to flat #ff00ff magenta chroma-key for opaque-only image generators (convert outputs with `tools/image-gen/chroma_key.py`).'
+    } else {
+        'Each holds one assembled prompt, exactly as the batch run would send it, with its size and background.'
+    }
+    $null = $ix.Append("$($written.Count) prompt files. $modeDesc$nl$nl")
     $null = $ix.Append("## Selection$nl$nl")
     $null = $ix.Append("$(if ($SelectionText) { $SelectionText } else { '(defaults)' })$nl$nl")
     $null = $ix.Append("- Suggested model: $($Settings.Model)$nl- Suggested quality: $($Settings.Quality)$nl$nl")
@@ -1692,7 +1766,7 @@ function Write-PromptFiles {
         foreach ($c in ($d.Group | Group-Object { "$($_.Job.Category)" })) {
             $null = $ix.Append("### $(if ($c.Name) { $c.Name } else { '(no category)' }) ($($c.Count))$nl$nl")
             foreach ($w in $c.Group) {
-                $bg = if ($w.Job.Background -eq 'transparent') { 'transparent' } else { 'opaque' }
+                $bg = if ($w.Job.Background -eq 'transparent' -and $ChromaKey) { 'chroma-key #ff00ff' } elseif ($w.Job.Background -eq 'transparent') { 'transparent' } else { 'opaque' }
                 $null = $ix.Append("- [$($w.Job.Key)]($($w.Rel)) - $($w.Job.Size), $bg$nl")
             }
             $null = $ix.Append($nl)
@@ -1707,7 +1781,7 @@ Export-ModuleMember -Function ConvertTo-Slug, Get-SpriteJobs, Invoke-GenerationO
     Get-PromptHash, Get-Sha256Hex, Get-FileSha256, Get-UtcStamp, New-Manifest, Read-Manifest, Save-Manifest, Get-JobPlan, Resolve-ImageSize,
     New-ImageRequestBody, Test-InputFidelitySupport, New-ImageEditForm, New-MultipartContent, Invoke-ImageRequest, Get-ErrorClass,
     ConvertFrom-RateLimitDuration, Get-RetryDelaySeconds, Invoke-JobGeneration, Test-ImageResult, Save-BytesAtomic,
-    Test-EditJob, Get-ResumeCommand, Get-ApiKeySecure, Add-PlanToManifest, Invoke-ImageJobRun, Get-CostEstimate, Write-ContactSheet, Write-PromptFiles,
+    Test-EditJob, Get-ResumeCommand, Get-ApiKeySecure, Add-PlanToManifest, Invoke-ImageJobRun, Get-CostEstimate, Write-ContactSheet, ConvertTo-ChromaKeyPrompt, Write-PromptFiles,
     Read-EditPrompts, Get-PixelGridSize, Expand-EditPlaceholders, Get-EditJobs, Write-EditContactSheet,
     Read-ThumbPrompts, Get-ThumbOutline, ConvertTo-ThumbJobs,
     Read-ComicPrompts, Read-ComicScript, Select-ComicCast, Get-ComicPanelHint, Get-ComicScriptPaths, Get-ComicJobs

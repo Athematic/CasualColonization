@@ -142,6 +142,25 @@ pwsh .\tools\image-gen\Generate-Images.ps1 -OutputPrompts -Only 'fathers/*'
 pwsh .\tools\image-gen\Generate-Images.ps1 -OutputPrompts -Doc comics -Comic a-landfall -PromptsDir C:\temp\prompts
 ```
 
+### Opaque-only image generators: `-ChromaKey` + `chroma_key.py`
+
+Image generators that only return opaque RGB JPEGs/PNGs paint a fake grey-and-white checkerboard when asked for a transparent background. Pass `-ChromaKey` with `-OutputPrompts` (or `-DryRun`) to rewrite transparent-background prompts to request a flat bright magenta (`#ff00ff`) backdrop instead (opaque jobs such as covers, comics and terrain are left unchanged):
+
+```bash
+pwsh ./tools/image-gen/Generate-Images.ps1 -OutputPrompts -ChromaKey -Variant thumb -Only 'units/expert-lumberjack*'
+```
+
+Then convert the generated image(s) into real RGBA PNGs with [`chroma_key.py`](chroma_key.py) (requires Python 3 + Pillow; removes exterior and enclosed magenta holes while preserving interior sprite colours and decontaminating anti-aliased edges):
+
+```bash
+# single file (add --resize 1024x1536 for 2:3 Founding Fathers if the generator outputs 848x1264)
+python3 tools/image-gen/chroma_key.py raw.jpg tools/image-gen/output/thumbs/units/expert-lumberjack__none.png
+# whole folder (--auto passes non-magenta opaque images through as RGB PNGs)
+python3 tools/image-gen/chroma_key.py --in-dir raw/ --out-dir tools/image-gen/output/sprites --auto
+# run unit tests
+python3 -m unittest discover -s tools/image-gen/tests -p "test_*.py" -v
+```
+
 ## Options
 
 | Option | Default | Meaning |
