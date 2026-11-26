@@ -391,6 +391,22 @@ try {
         } finally { $env:OPENAI_API_KEY = $saved; Stop-FakeOpenAIServer $srvP }
     }
 
+    Test '-OutputPrompts -ChromaKey rewrites transparent prompts to #ff00ff and leaves opaque jobs unchanged' {
+        $out = Join-Path $scratch 'op-ck-out'
+        $pdir = Join-Path $scratch 'op-ck-prompts'
+        $r = Invoke-Tool @{ OutputPrompts = $true; ChromaKey = $true; OutDir = $out; PromptsDir = $pdir; Doc = 'sprites'; Only = 'units/expert-lumberjack__none,terrain/plains'; Variant = 'both' }
+        Assert-Equal 0 $r.Exit
+        $fullUnit = [IO.File]::ReadAllText((Join-Path $pdir 'sprites/units/expert-lumberjack__none.md'))
+        $thumbUnit = [IO.File]::ReadAllText((Join-Path $pdir 'thumbs/units/expert-lumberjack__none.md'))
+        $terrain = [IO.File]::ReadAllText((Join-Path $pdir 'sprites/terrain/plains.md'))
+        $ix = [IO.File]::ReadAllText((Join-Path $pdir 'index.md'))
+        Assert-Match $fullUnit '#ff00ff' 'full transparent unit uses magenta chroma-key'
+        Assert-Match $fullUnit 'chroma_key\.py' 'note points to chroma_key.py'
+        Assert-Match $thumbUnit '#ff00ff' 'thumb transparent unit uses magenta chroma-key'
+        Assert-True (-not $terrain.Contains('#ff00ff')) 'opaque terrain left unchanged'
+        Assert-Match $ix '-ChromaKey' 'selection records -ChromaKey'
+    }
+
     # ------------------------------------------------------------------ helpers
     Test 'size mapping' {
         Assert-Equal '1024x1536' (Resolve-ImageSize '1024x1536' 'gpt-image-1')
@@ -646,6 +662,10 @@ Dim Dan points at a small whale.
         Assert-Equal 24 $f.Count '-Comic patterns'
         $none = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Doc comics -ComicPromptDoc $comicDocReal -ComicsDir $comicsDirReal -Comic 'a-landfall' -Only 'page-03'
         Assert-Equal 'comics/a-landfall/page-03' ($none.Key -join ',') '-Only works on comic ids'
+        $hi = Get-ImageJobs -SpriteDoc $spriteDocReal -BoxArtDoc $boxDocReal -Doc comics -ComicPromptDoc $comicDocReal -ComicsDir $comicsDirReal -Comic 'a-landfall' -Only 'page-01' -ComicPageSize '2160x3240'
+        Assert-Equal '2160x3240' $hi[0].Size '-ComicPageSize overrides comic page job size'
+        Assert-Equal '2160x3240' (Resolve-ImageSize $hi[0].Size 'gpt-image-2.5-flare') '2160x3240 sent directly to gpt-image-2.5'
+        Assert-Equal '1024x1536' (Resolve-ImageSize $hi[0].Size 'gpt-image-1.5') 'falls back to 1024x1536 on gpt-image-1.5'
     }
 
     Test 'comics: the prompt is style + setting + only the page cast + page block + visuals, with no dialogue' {

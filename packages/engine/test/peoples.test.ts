@@ -64,7 +64,7 @@ describe('lifeways and the settlement-kind table', () => {
   it('the Americas: nomadic peoples in camps, agricultural in villages, urban in cities, as before', () => {
     const kind = (t: keyof typeof TRIBES) => AMERICAS.peoples.settlements[TRIBES[t].lifeway]!.id;
     expect(['sioux', 'apache', 'tupi'].map((t) => kind(t as never))).toEqual(['camp', 'camp', 'camp']);
-    expect(['iroquois', 'cherokee', 'arawak'].map((t) => kind(t as never))).toEqual(['village', 'village', 'village']);
+    expect(['haudenosaunee', 'cherokee', 'arawak'].map((t) => kind(t as never))).toEqual(['village', 'village', 'village']);
     expect(['aztec', 'inca'].map((t) => kind(t as never))).toEqual(['city', 'city']);
     // The old tables, row by row.
     const { camp, village, city } = SETTLEMENT_KINDS;

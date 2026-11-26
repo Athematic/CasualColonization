@@ -7,8 +7,8 @@ import { randInt, weightedPick } from './rng.js';
 import { randomImmigrant } from './europe.js';
 import { modifiers } from './scenarios/modifiers.js';
 import type { RumourOutcome } from './rules/modifiers.js';
-import { difficultyOf, mechanicsOf, nationOf, nativeRulesOf, rumoursOf, term } from './scenarios/index.js';
-import { isCompanyIdent, TRIBES } from './rules/nations.js';
+import { difficultyOf, mechanicsOf, nationOf, nativeRulesOf, rumoursOf, term , peopleName } from './scenarios/index.js';
+import { systemsOfId } from './playerkind.js';
 import type { GameState, Settlement, Unit } from './types.js';
 import { removeUnit } from './unitindex.js';
 
@@ -62,7 +62,7 @@ export function resolveRumour(s: GameState, u: Unit): void {
   const p = player(s, u.owner);
   // Only on tribal land can a rumour turn out to be a burial ground, and only with `mechanics.burialGrounds`;
   // never for the Crown, or for a chartered company, which the peoples leave alone (fix c).
-  const tribal = u.owner === 'crown' || isCompanyIdent(u.owner) || !mechanicsOf(s).burialGrounds ? undefined : tribalLandOwner(s, pos.x, pos.y);
+  const tribal = !systemsOfId(u.owner).peoples || !mechanicsOf(s).burialGrounds ? undefined : tribalLandOwner(s, pos.x, pos.y);
   const outcome = weightedPick<Outcome>(s, rumourOdds(s, u, tribal));
   track(u.owner, 'explore:rumour explored');
   if (outcome === 'lost') track(u.owner, 'explore:expedition lost');
@@ -110,7 +110,7 @@ export function resolveRumour(s: GameState, u: Unit): void {
       tribe.stance[u.owner] = 'war';
       for (const st of Object.values(s.settlements)) if (st.tribe === tribeId) st.tension[u.owner] = 1000;
       track(u.owner, 'natives:burial ground disturbed');
-      const vars = { tribe: TRIBES[tribeId].name, nation: nationOf(s, u.owner).name, adjective: nationOf(s, u.owner).adjective };
+      const vars = { tribe: peopleName(s, tribeId), nation: nationOf(s, u.owner).name, adjective: nationOf(s, u.owner).adjective };
       noteHistory(s, 'tribe', [u.owner], term(s, 'rumour.burial.history', vars), { at: pos });
       track(u.owner, 'natives:tribe went to war');
       message(s, term(s, 'rumour.burial', vars), u.owner, pos);

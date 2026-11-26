@@ -5,7 +5,7 @@
  */
 import { sonsOfLiberty } from './production.js';
 import type { GoodId } from './rules/goods.js';
-import type { NationId } from './rules/nations.js';
+import type { PlayerId } from './rules/nations.js';
 import { TERRAIN } from './rules/terrain.js';
 import { ROLES, UNIT_TYPES } from './rules/units.js';
 import { score } from './score.js';
@@ -88,7 +88,7 @@ function ensureStats(s: GameState): StatsHistory {
   if (st.keys.length !== STAT_KEYS.length || st.keys.some((k, i) => k !== STAT_KEYS[i])) {
     // A save from a version with other metrics: move each known metric to its new column.
     const map = STAT_KEYS.map((k) => st.keys.indexOf(k));
-    for (const [nation, flat] of Object.entries(st.data) as [NationId, number[]][]) {
+    for (const [nation, flat] of Object.entries(st.data) as [PlayerId, number[]][]) {
       const rows = decode(flat, st.keys.length, st.turns.length);
       st.data[nation] = encode(rows.map((row) => map.map((j) => (j < 0 ? 0 : row[j]))));
     }
@@ -99,7 +99,7 @@ function ensureStats(s: GameState): StatsHistory {
 
 type Flow = 'trade' | 'production' | 'crosses';
 
-function note(s: GameState, nation: NationId, flow: Flow, amount: number): void {
+function note(s: GameState, nation: PlayerId, flow: Flow, amount: number): void {
   if (amount <= 0) return;
   const acc = (ensureStats(s).flows ??= {});
   const row = (acc[nation] ??= {});
@@ -107,12 +107,12 @@ function note(s: GameState, nation: NationId, flow: Flow, amount: number): void 
 }
 
 /** Notes gold a nation earned by trade; counted into the next snapshot. */
-export function noteTrade(s: GameState, nation: NationId, gold: number): void {
+export function noteTrade(s: GameState, nation: PlayerId, gold: number): void {
   note(s, nation, 'trade', gold);
 }
 
 /** Notes a colony's production for the turn (goods except food, and crosses). */
-export function noteProduction(s: GameState, nation: NationId, produced: Partial<Record<GoodId | 'crosses', number>>): void {
+export function noteProduction(s: GameState, nation: PlayerId, produced: Partial<Record<GoodId | 'crosses', number>>): void {
   let goods = 0;
   for (const g of goodsOf(s)) if (g !== 'food') goods += produced[g] ?? 0;
   note(s, nation, 'production', goods);
@@ -122,15 +122,22 @@ export function noteProduction(s: GameState, nation: NationId, produced: Partial
 /** Figures shared by every nation's snapshot, gathered in one pass over the units. */
 export interface StatsCensus {
   land: number;
+  /** 1 for each water tile, 0 for land (the tiles `land` counts). */
+  water: Uint8Array;
   pop: Map<string, number>;
-  forces: Map<NationId, { military: number; ships: number; holds: number }>;
+  forces: Map<PlayerId, { military: number; ships: number; holds: number }>;
 }
 
 function census(s: GameState): StatsCensus {
   let land = 0;
-  for (const t of s.map.tiles) if (!TERRAIN[t.t].water) land++;
+  const tiles = s.map.tiles;
+  const water = new Uint8Array(tiles.length);
+  for (let i = 0; i < tiles.length; i++) {
+    if (TERRAIN[tiles[i].t].water) water[i] = 1;
+    else land++;
+  }
   const pop = new Map<string, number>();
-  const forces = new Map<NationId, { military: number; ships: number; holds: number }>();
+  const forces = new Map<PlayerId, { military: number; ships: number; holds: number }>();
   for (const u of unitList(s)) {
     if (u.loc.kind === 'colony') pop.set(u.loc.colonyId, (pop.get(u.loc.colonyId) ?? 0) + 1);
     let f = forces.get(u.owner);
@@ -143,11 +150,11 @@ function census(s: GameState): StatsCensus {
       f.military += def.kind === 'colonist' ? ROLES[u.role].offence : def.offence;
     }
   }
-  return { land, pop, forces };
+  return { land, water, pop, forces };
 }
 
 /** The current values of every statistic for one nation (flows count since the last snapshot). */
-export function statsSnapshot(s: GameState, nation: NationId, c: StatsCensus = census(s)): Record<StatKey, number> {
+export function statsSnapshot(s: GameState, nation: PlayerId, c: StatsCensus = census(s)): Record<StatKey, number> {
   const p = s.players.find((x) => x.id === nation)!;
   let colonies = 0;
   let population = 0;
@@ -167,8 +174,10 @@ export function statsSnapshot(s: GameState, nation: NationId, c: StatsCensus = c
     tension += st.tension[nation] ?? 0;
   }
   let explored = 0;
-  const tiles = s.map.tiles;
-  for (let i = 0; i < tiles.length; i++) if (p.explored[i] === 1 && !TERRAIN[tiles[i].t].water) explored++;
+  // The water flags of the census, gathered once for every nation's snapshot.
+  const water = c.water;
+  const seen = p.explored;
+  for (let i = 0; i < water.length; i++) if (seen[i] === 1 && !water[i]) explored++;
   const forces = c.forces.get(nation) ?? { military: 0, ships: 0, holds: 0 };
   const flows = s.stats?.flows?.[nation] ?? {};
   return {
@@ -195,7 +204,7 @@ export function statsSnapshot(s: GameState, nation: NationId, c: StatsCensus = c
  * Average goods produced per turn (food excluded) over the last `turns` recorded snapshots plus
  * the turn in progress; 0 before anything is recorded. Used by the score.
  */
-export function recentProduction(s: GameState, nation: NationId, turns: number): number {
+export function recentProduction(s: GameState, nation: PlayerId, turns: number): number {
   const st = s.stats;
   const j = st ? st.keys.indexOf('production') : -1;
   const samples: number[] = [];
@@ -259,7 +268,7 @@ export function recordStats(s: GameState): void {
 
 function thin(st: StatsHistory): void {
   const keep = (_: unknown, i: number) => i % 2 === 0 || i === st.turns.length - 1;
-  for (const [nation, flat] of Object.entries(st.data) as [NationId, number[]][]) {
+  for (const [nation, flat] of Object.entries(st.data) as [PlayerId, number[]][]) {
     st.data[nation] = encode(decode(flat, STAT_KEYS.length, st.turns.length).filter(keep));
   }
   st.turns = st.turns.filter(keep);
@@ -269,9 +278,9 @@ export interface StatsSeries {
   /** Turn of each snapshot (see formatDate). */
   turns: number[];
   /** Nations with a history, in turn order. */
-  nations: NationId[];
+  nations: PlayerId[];
   /** Values per nation and statistic, aligned with turns. */
-  series: Partial<Record<NationId, Record<StatKey, number[]>>>;
+  series: Partial<Record<PlayerId, Record<StatKey, number[]>>>;
 }
 
 /** The recorded history, decoded into one array per nation and statistic. Empty for old saves. */

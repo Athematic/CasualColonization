@@ -18,17 +18,16 @@ import { continueOrders, findPath, pathHint } from './movement.js';
 import { cargoFree, cargoRoomFor, isCoastal, isShip, isWater, message, neighbours, newId, player, reveal, tileAt, unitName, unitPosition, unitsAboard, warehouseCapacity } from './queries.js';
 import { atPeace, besideColony, closedRoutePorts, hasTradeAgreement, inWaitingPeriod, tradeAtForeignColony } from './relations.js';
 import { GOOD_DEFS, type GoodId } from './rules/goods.js';
-import { type NationId } from './rules/nations.js';
+import { type PlayerId } from './rules/nations.js';
 import { UNIT_TYPES } from './rules/units.js';
 import { track } from './telemetry.js';
 import type { GameState, RouteCargo, RouteStop, TradeRoute, Unit } from './types.js';
-import { goodsOf, nationOf, term, Term } from './scenarios/index.js';
+import { goodsOf, nationOf, term, Term , peopleName } from './scenarios/index.js';
 import { indexedUnitsOf, setUnitLoc, colonyList, unitList } from './unitindex.js';
 import { gridOf } from './grid.js';
 import { buyFromSettlement, nativeOffer, settlementName, tradeWithSettlement } from './natives.js';
 import { settlementForSale } from './braves.js';
 import { settlementStopOpen } from './peopletreaties.js';
-import { TRIBES } from './rules/nations.js';
 
 export const EUROPE_STOP = 'europe';
 export const MAX_ROUTE_STOPS = 12;
@@ -36,7 +35,7 @@ export const ROUTE_NAME_MAX = 40;
 /** Units bought in Europe when a load rule gives no amount. */
 export const DEFAULT_EUROPE_LOAD = 100;
 
-export function routesOf(s: GameState, nation: NationId): TradeRoute[] {
+export function routesOf(s: GameState, nation: PlayerId): TradeRoute[] {
   return Object.values(s.routes ?? {}).filter((r) => r.owner === nation);
 }
 
@@ -49,7 +48,7 @@ export function routeUnits(s: GameState, routeId: string): Unit[] {
 }
 
 /** A stop's name; with `owner` (the route's owner), a foreign colony's name carries its nation, e.g. "Québec (French)". */
-export function routeStopName(s: GameState, stop: RouteStop, owner?: NationId): string {
+export function routeStopName(s: GameState, stop: RouteStop, owner?: PlayerId): string {
   if (stop.at === EUROPE_STOP) return stop.port && stop.port !== owner ? `${Term(s, 'homeland')} (${portName(s, stop.port)})` : `${Term(s, 'homeland')}`;
   const st = s.settlements[stop.at];
   if (st) return settlementName(s, st);
@@ -62,12 +61,12 @@ export function routeStopName(s: GameState, stop: RouteStop, owner?: NationId): 
  * The home port a Europe stop calls at: the partner's it names while that port is open to the
  * route's owner, otherwise the owner's own.
  */
-export function stopPort(s: GameState, owner: NationId, stop: RouteStop): NationId {
+export function stopPort(s: GameState, owner: PlayerId, stop: RouteStop): PlayerId {
   return stop.port && stop.port !== owner && !portProblem(s, owner, stop.port) ? stop.port : owner;
 }
 
 /** Whether a stop is at a colony of another nation (a trade partner's). */
-export function isForeignStop(s: GameState, stop: RouteStop, owner: NationId): boolean {
+export function isForeignStop(s: GameState, stop: RouteStop, owner: PlayerId): boolean {
   const c = stop.at === EUROPE_STOP ? undefined : s.colonies[stop.at];
   return !!c && c.owner !== owner;
 }
@@ -78,7 +77,7 @@ export function isSettlementStop(s: GameState, stop: RouteStop): boolean {
 }
 
 /** Colonies of other nations a nation's routes may stop at: those of its trade partners. */
-export function foreignStopColonies(s: GameState, nation: NationId) {
+export function foreignStopColonies(s: GameState, nation: PlayerId) {
   return colonyList(s).filter((c) => c.owner !== nation && c.owner !== 'crown' && hasTradeAgreement(s, nation, c.owner) && atPeace(s, nation, c.owner));
 }
 
@@ -105,14 +104,14 @@ function cleanCargo(s: GameState, list: RouteCargo[] | undefined): RouteCargo[] 
 }
 
 /** Checks stops from a command and returns a clean copy. */
-function cleanStops(s: GameState, nation: NationId, stops: RouteStop[] | undefined): RouteStop[] {
+function cleanStops(s: GameState, nation: PlayerId, stops: RouteStop[] | undefined): RouteStop[] {
   const list = stops ?? [];
   if (!Array.isArray(list)) fail('Route stops must be a list.');
   if (list.length > MAX_ROUTE_STOPS) fail(`A route can have at most ${MAX_ROUTE_STOPS} stops.`);
   return list.map((stop) => {
     const settlement = stop.at !== EUROPE_STOP && !s.colonies[stop.at] ? s.settlements[stop.at] : undefined;
     if (settlement) {
-      if (!settlementStopOpen(s, nation, settlement.id)) fail(`Route stops at a native settlement need a trade treaty with the ${TRIBES[settlement.tribe].name}.`);
+      if (!settlementStopOpen(s, nation, settlement.id)) fail(`Route stops at a native settlement need a trade treaty with the ${peopleName(s, settlement.tribe)}.`);
     } else if (stop.at !== EUROPE_STOP) {
       const c = s.colonies[stop.at];
       if (!c) fail('No such colony.');
@@ -140,14 +139,14 @@ function cleanName(name: string | undefined): string {
   return n;
 }
 
-function ownRoute(s: GameState, nation: NationId, routeId: string): TradeRoute {
+function ownRoute(s: GameState, nation: PlayerId, routeId: string): TradeRoute {
   const r = s.routes?.[routeId];
   if (!r) fail('No such trade route.');
   if (r.owner !== nation) fail('That is not your trade route.');
   return r;
 }
 
-export function createRoute(s: GameState, nation: NationId, name: string, stops?: RouteStop[]): TradeRoute {
+export function createRoute(s: GameState, nation: PlayerId, name: string, stops?: RouteStop[]): TradeRoute {
   const route: TradeRoute = { id: newId(s, 'r'), owner: nation, name: cleanName(name), stops: cleanStops(s, nation, stops) };
   s.routes = s.routes ?? {};
   s.routes[route.id] = route;
@@ -155,7 +154,7 @@ export function createRoute(s: GameState, nation: NationId, name: string, stops?
   return route;
 }
 
-export function editRoute(s: GameState, nation: NationId, routeId: string, changes: { name?: string; stops?: RouteStop[] }): TradeRoute {
+export function editRoute(s: GameState, nation: PlayerId, routeId: string, changes: { name?: string; stops?: RouteStop[] }): TradeRoute {
   const route = ownRoute(s, nation, routeId);
   const name = changes.name !== undefined ? cleanName(changes.name) : route.name;
   const stops = changes.stops !== undefined ? cleanStops(s, nation, changes.stops) : route.stops;
@@ -173,7 +172,7 @@ export function editRoute(s: GameState, nation: NationId, routeId: string, chang
   return route;
 }
 
-export function deleteRoute(s: GameState, nation: NationId, routeId: string): void {
+export function deleteRoute(s: GameState, nation: PlayerId, routeId: string): void {
   ownRoute(s, nation, routeId);
   for (const u of routeUnits(s, routeId)) {
     delete u.route;
@@ -265,7 +264,7 @@ function stopProblem(s: GameState, u: Unit, stop: RouteStop): string | null {
   if (!c) {
     const st = s.settlements[stop.at];
     if (!st) return 'the colony is gone';
-    if (!settlementStopOpen(s, u.owner, st.id)) return `we have no trade treaty with the ${TRIBES[st.tribe].name}`;
+    if (!settlementStopOpen(s, u.owner, st.id)) return `we have no trade treaty with the ${peopleName(s, st.tribe)}`;
     if (isShip(u) && !isCoastal(s, st.x, st.y)) return `the ${settlementName(s, st)} is not on the coast`;
     return null;
   }
@@ -498,7 +497,7 @@ export function runRoute(s: GameState, u: Unit): void {
 }
 
 /** Runs every routed unit of a player; called at the start of the player's turn. */
-export function processRoutes(s: GameState, nation: NationId): void {
+export function processRoutes(s: GameState, nation: PlayerId): void {
   if (!s.routes) return;
   // Europe stops at a port that has closed (the partnership ended) fall back to the home port.
   closedRoutePorts(s, nation);
@@ -512,7 +511,7 @@ export function processRoutes(s: GameState, nation: NationId): void {
  * Makes sure a nation knows the land and sea its routes cross, so a route the computer set up
  * keeps working once a person takes over (people only path through explored tiles).
  */
-export function revealRoutes(s: GameState, nation: NationId): void {
+export function revealRoutes(s: GameState, nation: PlayerId): void {
   for (const route of routesOf(s, nation)) {
     const users = routeUnits(s, route.id);
     for (const kind of [true, false]) {

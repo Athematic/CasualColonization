@@ -2,19 +2,23 @@
  * Computer-only games for measuring AI levels against each other. Games are seeded and the
  * engine is deterministic, so a tournament always gives the same result for the same options.
  */
-import { AI_LEVEL_INFO, type AiLevel } from './ai/profiles.js';
+import { AI_LEVEL_INFO, AI_LEVELS, type AiLevel } from './ai/profiles.js';
 import { isCheated } from './cheats.js';
 import { applyCommand } from './commands.js';
 import { endStateFeatures, type FeatureCounts } from './features.js';
 import { createGame } from './game.js';
 import { colonyWorkers } from './queries.js';
 import type { DifficultyId } from './rules/difficulty.js';
-import type { NationId } from './rules/nations.js';
-import { nationSet, scenarioOf, type Rivals } from './scenarios/index.js';
-import { finalScores, scoreBreakdown, type ScoreComponent } from './score.js';
+import type { NationId, PlayerId, TribeId } from './rules/nations.js';
+import { calendarOf, nationSet, scenarioOf, yearValue, type Rivals } from './scenarios/index.js';
+import { finalScores, peopleScores, scoreBreakdown, type ScoreComponent } from './score.js';
+import { continuityStanding, goodLifeStanding, homelandHealth, homelandKept, peopleCount } from './peoplevictory.js';
+import { storeCapacity, yearlyNeed } from './peopleeconomy.js';
+import { colonyList as allColonies } from './unitindex.js';
 import { prosperityParams, prosperityStanding, type ProsperityCondition } from './prosperity.js';
 import { setFeatureSink } from './telemetry.js';
 import { royalForce } from './independence.js';
+import { VICTORY_ORDER, waysOf } from './victory.js';
 import { isFavoured } from './relations.js';
 import { alliesOf } from './alliances.js';
 import { bound, withPeople } from './treaties.js';
@@ -55,6 +59,64 @@ export interface ArenaOptions {
    * the calendar. Without it the first war won (or lost by every nation) ends the game.
    */
   playOn?: boolean;
+  /**
+   * Native peoples playing as nations (`GameConfig.peoples`, native-nations.md T4), each at one of
+   * the run's levels, rotating as the nations' do (`--peoples`; Beta 3 step 9's people profiles).
+   * Missing means none, as before; the tournament passes the scenario's playable peoples when it
+   * has some.
+   */
+  peoples?: TribeId[];
+}
+
+/** A playing people's standing at the end of an arena game (only in games with playing peoples). */
+export interface ArenaPeopleEntry {
+  people: TribeId;
+  /** The computer level it played at. */
+  level: AiLevel;
+  /** Towns at the end; 0 when the people is out of the game. */
+  towns: number;
+  /** Its people (units and town folk) at the end, and at the start. */
+  population: number;
+  start: number;
+  /** Its score (the people's lines, score.ts), not compared with the Europeans'. */
+  score: number;
+  /** Council members. */
+  members: number;
+  /** Its way of winning, if it won. */
+  way?: string;
+  /** The continuity and good-life conditions it failed at the end (each empty when it qualified). */
+  continuityFails: string[];
+  goodLifeFails: string[];
+  /** Share of its starting homeland kept, and the homeland's average land health (100 without land health). */
+  kept: number;
+  health: number;
+  /** Homeland tiles it sold to European nations, and that they took from it, over the game (native-nations.md section 18). */
+  landSold?: number;
+  landTaken?: number;
+  /** Tiles of its land leased to European nations at the end (section 19). */
+  leased?: number;
+  /** Treaties in force at the end (a league counted once) and whether it belonged to a league, with the league's years. */
+  treaties: number;
+  league?: number;
+  /** Gold in hand at the end (gold only from trade with Europeans, T10). */
+  gold: number;
+  /** For tuning the good life: years since its last war and its last hungry year (absent: none in the game), the least share of its reserve a town held, sides met and sides with a treaty. */
+  sinceWar?: number;
+  sinceHunger?: number;
+  stores: number;
+  met: number;
+  partners: number;
+}
+
+/** What an arena game with playing peoples adds to its first row: the peoples, the Europeans' colonies and the game's time. */
+export interface ArenaPeoplesGame {
+  peoples: ArenaPeopleEntry[];
+  /** Every European nation's colonies at the end and founded over the game, by nation. */
+  colonies: Partial<Record<PlayerId, { now: number; founded: number }>>;
+  /** Milliseconds the game took to play. */
+  ms: number;
+  /** The game's winners' ways, by winner. */
+  ways: Partial<Record<PlayerId, string>>;
 }
 
 /**
@@ -193,7 +255,7 @@ export interface EventTally {
 export interface ArenaEntry {
   game: number;
   seed: number;
-  nation: NationId;
+  nation: PlayerId;
   level: AiLevel;
   score: number;
   /** Points per score component (see scoreBreakdown). */
@@ -227,6 +289,8 @@ export interface ArenaEntry {
   concord?: boolean;
   /** Won by prosperity (native-partners.md N10), alone or with others. */
   prosperity?: boolean;
+  /** For a winner of a game that ended: its way (victory.ts `waysOf`: `time`, `independence-war`, `concord`, `prosperity`, …). */
+  way?: string;
   /**
    * Where the scenario plays for prosperity: the rule's conditions the nation failed at the end
    * (empty when it qualified), whether or not the game ended that way.
@@ -244,7 +308,33 @@ export interface ArenaEntry {
   relations?: RelationsTally;
   /** Events that struck the nation, by event id (only with events on). */
   events?: Record<string, EventTally>;
+  /** On a game's first row, in games with playing peoples: the peoples and the game (`ArenaPeoplesGame`). */
+  peoplesGame?: ArenaPeoplesGame;
+  /** In games with playing peoples: how the nation got a playing people's land (native-nations.md section 19). */
+  peopleLand?: PeopleLandTally;
 }
+
+/** A nation's dealings over a playing people's land in one game (section 19), counted from telemetry. */
+export interface PeopleLandTally {
+  /** Offers for a tile: accepted (sold), refused. */
+  bought: number;
+  refused: number;
+  /** Tiles taken. */
+  taken: number;
+  /** Land use the nation proposed; leases made (whoever proposed); land use the people refused. */
+  leaseProposed: number;
+  leased: number;
+  leaseRefused: number;
+}
+
+const LAND_TALLY: Record<string, keyof PeopleLandTally> = {
+  'natives:people land bought': 'bought',
+  'natives:people land refused': 'refused',
+  'natives:people land taken': 'taken',
+  'natives:people lease proposed': 'leaseProposed',
+  'natives:people land leased': 'leased',
+  'natives:people lease refused': 'leaseRefused',
+};
 
 export interface ArenaSummary {
   level: AiLevel;
@@ -278,9 +368,10 @@ export function playArenaGame(
   noFavoured = false,
   events = false,
   charter = true,
-  setup: { scenario?: string; rivals?: Rivals; playOn?: boolean } = {},
-): { state: GameState; entries: Omit<ArenaEntry, 'game' | 'won'>[] } {
-  const ai = Object.fromEntries(line.map((l) => [l.nation, l.level]));
+  setup: { scenario?: string; rivals?: Rivals; playOn?: boolean; peoples?: TribeId[]; peopleLevels?: AiLevel[] } = {},
+): { state: GameState; entries: Omit<ArenaEntry, 'game' | 'won'>[]; ms: number } {
+  // Playing peoples at their levels (`peopleLevels`, in the order of `peoples`), when given.
+  const ai = Object.fromEntries([...line.map((l) => [l.nation, l.level]), ...(setup.peopleLevels ? (setup.peoples ?? []).map((id, i) => [id, setup.peopleLevels![i]]) : [])]);
   const config = {
     seed,
     mapSize,
@@ -295,10 +386,13 @@ export function playArenaGame(
     ...(setup.scenario ? { scenario: setup.scenario } : {}),
     ...(setup.rivals ? { rivals: setup.rivals } : {}),
     ...(setup.playOn ? { playOn: true } : {}),
+    ...(setup.peoples?.length ? { peoples: setup.peoples } : {}),
   };
+  const started = Date.now();
   const counts = new Map<string, FeatureCounts>();
   const tallies = new Map<string, RelationsTally>();
   const eventTallies = new Map<string, Record<string, EventTally>>();
+  const landTallies = setup.peoples?.length ? new Map<string, PeopleLandTally>() : undefined;
   // The sink only counts; it never touches the game, so scores do not depend on it.
   const previous = setFeatureSink((nation, feature, n) => {
     if (feature.startsWith('event')) {
@@ -312,6 +406,12 @@ export function playArenaGame(
         else if (m[1] === 'eventvalue ') tally.value += n;
         else tally.fired += n;
       }
+    }
+    const land = landTallies && LAND_TALLY[feature];
+    if (land) {
+      let t = landTallies.get(nation);
+      if (!t) landTallies.set(nation, (t = { bought: 0, refused: 0, taken: 0, leaseProposed: 0, leased: 0, leaseRefused: 0 }));
+      t[land]++;
     }
     const key = TALLY[feature];
     if (key) {
@@ -335,19 +435,85 @@ export function playArenaGame(
   const rule = scenarioOf(s).victory.find((v) => v.id === 'prosperity');
   // Judged on the scores the game ended with (the round's next turn has begun since), as the victory was.
   const finals = rule ? (s.gameOver?.scores ?? finalScores(s)) : undefined;
-  const entries = line.map((l) => {
+  // A nation that had not arrived when the game stopped (arrivals.ts) has no standing to report.
+  const entries = line.filter((l) => s.players.some((p) => p.id === l.nation)).map((l) => {
     const standingThen = rule ? prosperityStanding(s, l.nation, finals!, prosperityParams(rule.params)) : undefined;
     const fails = standingThen
       ? { prosperityFails: standingThen.fails, prosperityCounts: { met: standingThen.met.length, unpeaceful: standingThen.notAtPeace.length, partners: standingThen.partners.length, needed: standingThen.needed } }
       : {};
-    const e = { ...standing(s, seed, l.nation, l.level), relations: endRelations(s, l.nation, tallies.get(l.nation)), ...fails, ...(events ? { events: eventTallies.get(l.nation) ?? {} } : {}) };
+    const e = { ...standing(s, seed, l.nation, l.level), relations: endRelations(s, l.nation, tallies.get(l.nation)), ...fails, ...(events ? { events: eventTallies.get(l.nation) ?? {} } : {}), ...(landTallies ? { peopleLand: landTallies.get(l.nation) ?? { bought: 0, refused: 0, taken: 0, leaseProposed: 0, leased: 0, leaseRefused: 0 } } : {}) };
     return features ? { ...e, features: { ...counts.get(l.nation), ...endStateFeatures(s, l.nation) } } : e;
   });
-  return { state: s, entries };
+  return { state: s, entries, ms: Date.now() - started };
+}
+
+/** The playing peoples' standings and the Europeans' colonies at the end of a game (only with playing peoples). */
+export function peoplesGame(s: GameState, ms: number): ArenaPeoplesGame {
+  const ways = waysOf(s);
+  const towns = new Map<PlayerId, number>();
+  for (const c of allColonies(s)) towns.set(c.owner, (towns.get(c.owner) ?? 0) + 1);
+  const scores = peopleScores(s);
+  const victory = scenarioOf(s).victory;
+  const params = (kind: string) => victory.find((v) => v.id === kind)?.params ?? {};
+  const peoples = s.players
+    .filter((p) => p.kind === 'people')
+    .map((p) => ({
+      people: p.id as TribeId,
+      level: p.ai ?? 'naive',
+      towns: towns.get(p.id) ?? 0,
+      population: peopleCount(s, p.id),
+      start: s.homelands?.[p.id as TribeId]?.people ?? 0,
+      score: scores[p.id] ?? 0,
+      members: p.fathers.length,
+      ...(ways[p.id] ? { way: ways[p.id] } : {}),
+      continuityFails: continuityStanding(s, p.id, params('continuity')).fails,
+      goodLifeFails: goodLifeStanding(s, p.id, params('good-life')).fails,
+      ...peopleEndState(s, p.id),
+    }));
+  const colonies: ArenaPeoplesGame['colonies'] = {};
+  for (const p of s.players) if (p.kind !== 'people' && p.id !== 'crown') colonies[p.id] = { now: towns.get(p.id) ?? 0, founded: p.coloniesFounded };
+  return { peoples, colonies, ms, ways };
+}
+
+/** Tiles a playing people sold to European nations and they took from it (peopleland.ts), when any. */
+function landDeals(s: GameState, id: PlayerId): { landSold?: number; landTaken?: number } {
+  let sold = 0;
+  let taken = 0;
+  for (const rel of Object.values(s.peopleRelations ?? {})) {
+    if (rel.people !== id) continue;
+    sold += rel.landSold ?? 0;
+    taken += rel.landTaken ?? 0;
+  }
+  return { ...(sold ? { landSold: sold } : {}), ...(taken ? { landTaken: taken } : {}) };
+}
+
+/** A playing people's homeland, land, treaties, league and gold at the end of a game. */
+function peopleEndState(s: GameState, id: PlayerId): Pick<ArenaPeopleEntry, 'kept' | 'health' | 'landSold' | 'landTaken' | 'leased' | 'treaties' | 'league' | 'gold' | 'sinceWar' | 'sinceHunger' | 'stores' | 'met' | 'partners'> {
+  const home = homelandKept(s, id);
+  const live = (s.treaties ?? []).filter((t) => !t.end && t.parties.some((q) => q.id === id));
+  const league = live.find((t) => t.kind === 'league');
+  const cal = calendarOf(s);
+  const p = s.players.find((q) => q.id === id);
+  const towns = allColonies(s).filter((c) => c.owner === id);
+  const good = goodLifeStanding(s, id);
+  return {
+    kept: home.start ? home.kept / home.start : 0,
+    ...landDeals(s, id),
+    leased: s.map.tiles.filter((t) => t.claim === id && t.use).length,
+    health: homelandHealth(s, id),
+    treaties: live.length,
+    ...(league ? { league: yearValue(s.turn, cal) - yearValue(league.start, cal) } : {}),
+    gold: p?.gold ?? 0,
+    ...(p?.lastWar !== undefined ? { sinceWar: yearValue(s.turn, cal) - yearValue(p.lastWar, cal) } : {}),
+    ...(p?.lastHunger !== undefined ? { sinceHunger: yearValue(s.turn, cal) - yearValue(p.lastHunger, cal) } : {}),
+    stores: Math.min(Infinity, ...towns.map((c) => c.goods.food / Math.max(1, Math.min(storeCapacity(s, c), yearlyNeed(s, c))))),
+    met: good.met,
+    partners: good.partners,
+  };
 }
 
 /** A nation's relations tally, completed with the end state: Favoured Nation partners and trade volume. */
-function endRelations(s: GameState, nation: NationId, counted?: RelationsTally): RelationsTally {
+function endRelations(s: GameState, nation: PlayerId, counted?: RelationsTally): RelationsTally {
   const r = { ...(counted ?? emptyTally()) };
   for (const rel of Object.values(s.relations ?? {})) {
     if (rel.a !== nation && rel.b !== nation) continue;
@@ -359,7 +525,7 @@ function endRelations(s: GameState, nation: NationId, counted?: RelationsTally):
   return r;
 }
 
-export function standing(s: GameState, seed: number, nation: NationId, level: AiLevel): Omit<ArenaEntry, 'game' | 'won'> {
+export function standing(s: GameState, seed: number, nation: PlayerId, level: AiLevel): Omit<ArenaEntry, 'game' | 'won'> {
   const p = s.players.find((x) => x.id === nation)!;
   const colonies = colonyList(s).filter((c) => c.owner === nation);
   const breakdown = scoreBreakdown(s, p);
@@ -432,20 +598,27 @@ export function arenaGames(opts: ArenaOptions): ArenaGame[] {
 
 /** Plays one game of an arena run and gives its rows, the winners marked. */
 export function playArenaRound(opts: ArenaOptions, game: ArenaGame): ArenaEntry[] {
-  const setup = { scenario: opts.scenario, rivals: opts.rivals, playOn: opts.playOn };
-  const { state, entries } = playArenaGame(game.seed, game.line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured, opts.events, !opts.noCharter, setup);
+  const n = opts.levels.length;
+  // Each playing people at a level, rotating with the games as the nations' levels do.
+  const peopleLevels = opts.peoples?.map((_, i) => opts.levels[(i + game.game) % n]);
+  const setup = { scenario: opts.scenario, rivals: opts.rivals, playOn: opts.playOn, peoples: opts.peoples, peopleLevels };
+  const { state, entries, ms } = playArenaGame(game.seed, game.line, opts.turns, opts.mapSize, opts.map, opts.features, opts.difficulty, opts.noFavoured, opts.events, !opts.noCharter, setup);
   const best = Math.max(...entries.map((e) => e.score));
   // A game that ended names its winners (several after a concord victory); one stopped early: the best score.
   // A prosperity victory names the winners' partner peoples; several winners otherwise won together (concord).
   const winners = state.gameOver?.winners;
   const prosperity = !!state.gameOver?.partners?.length;
   const together = !!winners && winners.length > 1 && !prosperity;
-  return entries.map((e) => ({
+  const ways = waysOf(state);
+  const withPeoples = opts.peoples?.length ? peoplesGame(state, ms) : undefined;
+  return entries.map((e, i) => ({
     ...e,
+    ...(withPeoples && i === 0 ? { peoplesGame: withPeoples } : {}),
     game: game.game,
     won: winners?.length ? winners.includes(e.nation) : e.score === best,
     ...(together && winners!.includes(e.nation) ? { concord: true } : {}),
     ...(prosperity && winners!.includes(e.nation) ? { prosperity: true } : {}),
+    ...(ways[e.nation] ? { way: ways[e.nation] } : {}),
   }));
 }
 
@@ -564,6 +737,98 @@ export function prosperityLine(entries: ArenaEntry[]): string {
   const alone = conditions.map((c) => `${c} ${judged.filter((e) => e.prosperityFails!.length === 1 && e.prosperityFails![0] === c).length}`).join(', ');
   const qualified = judged.filter((e) => !e.prosperityFails!.length).length;
   return `Prosperity: ${won.length} of ${games} games won by prosperity${winners ? ` (${winners})` : ''}; at the end ${qualified} of ${judged.length} nations qualified; failing each condition: ${failing}; failing only that one: ${alone}. `;
+}
+
+/**
+ * The winners' ways over a run (native-nations.md T14): how many winners won each way, in the
+ * victory order, and the games stopped before they ended (won by the best score, no way).
+ */
+export function formatWays(entries: ArenaEntry[]): string {
+  const count = new Map<string, number>();
+  for (const e of entries) if (e.won && e.way) count.set(e.way, (count.get(e.way) ?? 0) + 1);
+  const order = [...VICTORY_ORDER, 'retired'];
+  const ways = [...count.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  const games = new Set(entries.map((e) => e.game)).size;
+  const open = new Set(entries.filter((e) => e.won && !e.way).map((e) => e.game)).size;
+  return `Winners' ways: ${ways.map((w) => `${w} ${count.get(w)}`).join(', ') || 'none'}${open ? `; ${open} of ${games} games stopped before they ended` : ''}.`;
+}
+
+/**
+ * The playing peoples over a run (only in games with playing peoples, `ArenaOptions.peoples`): per
+ * people its games, how often it was still in the game at the end, its towns, people and score,
+ * and its wins by way; then the winners' ways per game (each way counted once a game), how many
+ * games the military victory ended, the conditions continuity and a good life failed on, the
+ * Europeans' colonies and each game's time. Empty without playing peoples.
+ */
+export function formatPeoples(entries: ArenaEntry[]): string {
+  const played = entries.flatMap((e) => (e.peoplesGame ? [e.peoplesGame] : []));
+  if (!played.length) return '';
+  const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+  const f1 = (n: number) => n.toFixed(1);
+  const ids = [...new Set(played.flatMap((one) => one.peoples.map((p) => p.people)))];
+  const kinds = ['military', 'confederacy', 'continuity', 'good-life'];
+  const rows = ids.map((id) => {
+    const list = played.flatMap((one) => one.peoples.filter((p) => p.people === id));
+    const wins = kinds.map((k) => list.filter((p) => p.way === k).length);
+    // Continuity per people (native-nations.md section 18): its homeland kept, the land's health, and what it failed on.
+    const fails = new Map<string, number>();
+    for (const p of list) for (const c of p.continuityFails) fails.set(c, (fails.get(c) ?? 0) + 1);
+    const failText = [...fails].sort((a, b) => b[1] - a[1]).map(([c, k]) => `${c} ${k}`).join(', ') || 'none';
+    const land = `${Math.round(100 * avg(list.map((p) => p.kept)))}% | ${Math.round(avg(list.map((p) => p.health)))} | ${f1(avg(list.map((p) => p.landSold ?? 0)))} / ${f1(avg(list.map((p) => p.landTaken ?? 0)))} / ${f1(avg(list.map((p) => p.leased ?? 0)))}`;
+    return `| ${id} | ${list.length} | ${list.filter((p) => p.towns > 0).length} | ${f1(avg(list.map((p) => p.towns)))} | ${f1(avg(list.map((p) => p.start)))} → ${f1(avg(list.map((p) => p.population)))} | ${f1(avg(list.map((p) => p.members)))} | ${Math.round(avg(list.map((p) => p.score)))} | ${land} | ${wins.join(' | ')} | ${failText} |`;
+  });
+  const table = [`| People | Games | Survived | Towns | People (start → end) | Council | Score | Homeland kept | Land health | Tiles sold / taken / leased at end | ${kinds.join(' | ')} | Continuity failed on |`, `| --- |${' ---: |'.repeat(9 + kinds.length)} --- |`, ...rows].join('\n');
+  // The same by the computer level the peoples played at, with what the profiles change.
+  const levels = AI_LEVELS.filter((l) => played.some((one) => one.peoples.some((p) => p.level === l)));
+  const levelRows = levels.map((level) => {
+    const list = played.flatMap((one) => one.peoples.filter((p) => p.level === level));
+    const wins = kinds.map((k) => list.filter((p) => p.way === k).length);
+    const pct = (xs: number[]) => `${Math.round(100 * avg(xs))}%`;
+    return `| ${AI_LEVEL_INFO[level].name} | ${list.length} | ${list.filter((p) => p.towns > 0).length} | ${f1(avg(list.map((p) => p.population)))} | ${Math.round(avg(list.map((p) => p.score)))} | ${f1(avg(list.map((p) => p.treaties ?? 0)))} | ${list.filter((p) => p.league !== undefined).length} | ${pct(list.map((p) => p.kept ?? 0))} | ${Math.round(avg(list.map((p) => p.health ?? 100)))} | ${Math.round(avg(list.map((p) => p.gold ?? 0)))} | ${wins.join(' | ')} |`;
+  });
+  const levelTable = [`| Level | Peoples | Survived | People | Score | Treaties | In a league | Homeland kept | Land health | Gold | ${kinds.join(' | ')} |`, `| --- |${' ---: |'.repeat(9 + kinds.length)}`, ...levelRows].join('\n');
+  const n = played.length;
+  const wayGames = new Map<string, number>();
+  for (const one of played) for (const w of new Set(Object.values(one.ways))) if (w) wayGames.set(w, (wayGames.get(w) ?? 0) + 1);
+  const order = [...VICTORY_ORDER, 'retired'];
+  const ways = [...wayGames.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b)).map((w) => `${w} ${wayGames.get(w)}`).join(', ') || 'none';
+  const military = wayGames.get('military') ?? 0;
+  const tally = (key: 'continuityFails' | 'goodLifeFails') => {
+    const m = new Map<string, number>();
+    for (const one of played) for (const p of one.peoples) for (const c of p[key]) m.set(c, (m.get(c) ?? 0) + 1);
+    return [...m].sort((a, b) => b[1] - a[1]).map(([c, k]) => `${c} ${k}`).join(', ') || 'none';
+  };
+  const total = played.reduce((k, one) => k + one.peoples.length, 0);
+  const survived = played.reduce((k, one) => k + one.peoples.filter((p) => p.towns > 0).length, 0);
+  const nations = [...new Set(played.flatMap((one) => Object.keys(one.colonies)))] as PlayerId[];
+  const colonies = nations
+    .map((id) => {
+      const list = played.flatMap((one) => (one.colonies[id] ? [one.colonies[id]!] : []));
+      return `${id} ${f1(avg(list.map((c) => c.now)))} (founded ${f1(avg(list.map((c) => c.founded)))}, ${list.filter((c) => c.now > 0).length} of ${list.length} games with one)`;
+    })
+    .join('; ');
+  const ms = played.map((one) => one.ms);
+  // How the Europeans got a playing people's land, by their level (section 19), per nation and game.
+  const dealt = entries.filter((e) => e.peopleLand);
+  const landRows = AI_LEVELS.filter((l) => dealt.some((e) => e.level === l)).map((level) => {
+    const list = dealt.filter((e) => e.level === level);
+    const per = (k: keyof PeopleLandTally) => f1(avg(list.map((e) => e.peopleLand![k])));
+    return `| ${AI_LEVEL_INFO[level].name} | ${list.length} | ${per('bought')} | ${per('refused')} | ${per('taken')} | ${per('leaseProposed')} | ${per('leaseRefused')} | ${per('leased')} |`;
+  });
+  const landTable = landRows.length ? ['| European level | Nations | Tiles bought | Offers refused | Tiles taken | Land use proposed | Land use refused | Leases made |', `| --- |${' ---: |'.repeat(7)}`, ...landRows].join('\n') : '';
+  return [
+    `Playing peoples: ${total} played in ${n} games, ${survived} still in the game at the end (${Math.round((100 * survived) / Math.max(1, total))}%).`,
+    '',
+    table,
+    '',
+    levelTable,
+    '',
+    ...(landTable ? ['How the Europeans got a playing people\'s land, per nation and game (leases made counts those the peoples proposed too):', '', landTable, ''] : []),
+    `Winners' ways per game (games in which someone won that way): ${ways}. Military victory: ${military} of ${n} games (${f1((100 * military) / n)} in 100).`,
+    `Continuity failed at the end on: ${tally('continuityFails')}. A good life failed on: ${tally('goodLifeFails')}.`,
+    `European colonies at the end, per nation and game: ${colonies}.`,
+    `Speed: ${f1(avg(ms) / 1000)} s a game on average (${f1(Math.min(...ms) / 1000)}–${f1(Math.max(...ms) / 1000)} s).`,
+  ].join('\n');
 }
 
 /**

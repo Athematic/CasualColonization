@@ -15,14 +15,15 @@
  *
  * Imports only the leaf rule tables, like the Americas, so any engine module can import the registry.
  */
-import { BUILDING_ORDER } from '../rules/buildings.js';
-import { FATHER_CATEGORIES, type FatherId } from '../rules/fathers.js';
+import { EUROPEAN_BUILDINGS } from '../rules/buildings.js';
+import type { FatherId } from '../rules/fathers.js';
+import { congress } from '../rules/councils.js';
 import { GOODS, type GoodId } from '../rules/goods.js';
 import { NATIONS, type CompanyId, type NationId } from '../rules/nations.js';
 import { SETTLEMENT_KINDS } from '../rules/natives.js';
 import type { PortEntry } from '../rules/ports.js';
 import type { TerrainId } from '../rules/terrain.js';
-import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
+import { EUROPEAN_UNIT_TYPES } from '../rules/units.js';
 import { CARIBBEAN_PEOPLES } from '../maps/caribbean.js';
 import { AMERICAS, AMERICAS_GENERATOR } from './americas.js';
 import type { Calendar } from './calendar.js';
@@ -328,9 +329,12 @@ export const CARIBBEAN: Scenario = {
     overrides: { tupi: { wants: ['tradeGoods', 'tools', 'cloth'] } },
   },
   goods: GOODS_IN_PLAY,
-  units: without(Object.keys(UNIT_TYPES) as UnitTypeId[], 'expertFurTrapper', 'masterFurTrader'),
-  buildings: without(BUILDING_ORDER, 'furTrader'),
-  council: { categories: [...FATHER_CATEGORIES], members: COUNCIL },
+  // No furs in the islands, so no fur trappers, fur traders or fur trading house.
+  nationTypes: {
+    european: { units: without(EUROPEAN_UNIT_TYPES, 'expertFurTrapper', 'masterFurTrader'), buildings: without(EUROPEAN_BUILDINGS, 'furTrader'), council: 'congress' },
+  },
+  // The Congress's rules with the period's members, named the Colonial Council by the terms below.
+  councils: { congress: congress(COUNCIL) },
   events: 'caribbean',
   ai: {
     // 202 turns instead of 609: the computer players' plans come about three times sooner.

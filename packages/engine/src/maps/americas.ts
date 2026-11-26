@@ -135,7 +135,7 @@ G^^GGhh^^^pTTTTTTTppPTmmmmmmmMmm..TTTTTTTTTTttTT...~~~~~~~~~~~~~~~~
 
 /** Where the Americas scenario's peoples live on the Americas map. */
 export const AMERICAS_PEOPLES: TribeRegion[] = [
-  { tribe: 'iroquois', region: [32, 18, 42, 23], count: 4 },
+  { tribe: 'haudenosaunee', region: [32, 18, 42, 23], count: 4 },
   { tribe: 'cherokee', region: [25, 24, 36, 32], count: 3 },
   { tribe: 'sioux', region: [16, 12, 26, 25], count: 6 },
   { tribe: 'apache', region: [9, 25, 21, 34], count: 4 },

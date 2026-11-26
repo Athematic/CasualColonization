@@ -132,7 +132,7 @@ describe('prosperity: the conditions', () => {
     checkVictory(s, { kind: 'round' });
     expect(s.gameOver?.winners).toEqual(['england']);
     expect(s.gameOver?.partners).toEqual([a]);
-    expect(s.gameOver?.reason).toMatch(new RegExp(`In peace and partnership with ${peopleList([a])}, England wins by prosperity\\.`));
+    expect(s.gameOver?.reason).toMatch(new RegExp(`In peace and partnership with ${peopleList(s, [a])}, England wins by prosperity\\.`));
   });
 
   it('peace: at war with a people met, or a war ended within 30 years, fails; one ended longer ago does not', () => {
@@ -264,7 +264,7 @@ describe('prosperity: winners', () => {
     // Partners in the order their first treaty was made, each once.
     expect(s.gameOver?.partners).toEqual([a, c]);
     expect(s.gameOver?.reason).toMatch(/France and England win together by prosperity/);
-    expect(s.gameOver?.reason).toContain(peopleList([a, c]));
+    expect(s.gameOver?.reason).toContain(peopleList(s, [a, c]));
   });
 
   it('concord comes first: an alliance that also qualifies wins as an alliance', () => {
@@ -294,7 +294,7 @@ describe('prosperity: winners', () => {
     checkVictory(s, { kind: 'round' });
     const back = deserialize(serialize(s));
     expect(back.gameOver?.partners).toEqual([a, b]);
-    expect(peopleList([a, b])).toMatch(/^the \S.* and the \S/);
+    expect(peopleList(s, [a, b])).toMatch(/^the \S.* and the \S/);
   });
 });
 

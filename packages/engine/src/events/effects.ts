@@ -3,6 +3,7 @@
  */
 import { track } from '../telemetry.js';
 import { addTension } from '../natives.js';
+import { makePeace } from '../diplomacy.js';
 import { notePeopleWarEnded } from '../prosperity.js';
 import { colonyWorkers, createUnit, isWater, player, reveal, tileAt, workArea } from '../queries.js';
 import { placeOnMap } from '../movement.js';
@@ -195,6 +196,9 @@ function applyEffect(s: GameState, eventId: string, e: Effect, v: EventVars, r: 
     case 'liftBoycotts':
       p.boycotts = {};
       return;
+    case 'makePeace':
+      for (const other of s.players) if (other.id !== p.id && other.id !== 'crown' && p.stance[other.id] === 'war') makePeace(s, p.id, other.id);
+      return;
   }
 }
 
@@ -312,6 +316,8 @@ export function valueEffects(s: GameState, effects: Effect[], v: EventVars): num
         break;
       case 'liftBoycotts':
         total += Object.keys(p.boycotts).length * 500;
+        break;
+      case 'makePeace':
         break;
     }
   }

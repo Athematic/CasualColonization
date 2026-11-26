@@ -45,6 +45,23 @@ export const SCORE_WEIGHTS = {
   tensionBelow: 200,
   /** Flat bonus for winning independence. */
   independence: 250,
+
+  // A playing people's score (native-nations.md T14): the people's own values, not gold, buildings
+  // or production. Drafted for Simon's review; a scenario changes them as the others, and a people
+  // its own through `peoples.overrides[id].score`. A people's treaties use `peopleTreaty` above.
+  /** Per person of the people: units and town folk. */
+  peoplePerson: 1,
+  /** Per tile of its starting homeland still kept (as continuity counts it). */
+  peopleHomeland: 0.5,
+  /** Times the average health (0–100) of its homeland's regions; nothing without land health. */
+  peopleLandHealth: 0.5,
+  /** Per year of food held in store, town by town, each town counting at most `peopleStoreCap` years. */
+  peopleStoreYear: 5,
+  peopleStoreCap: 2,
+  /** Per nation or people whose standing with it reads "Trusts you" (Beta 2's words, from the people's side). */
+  peopleTrust: 5,
+  /** Per member of its council. */
+  peopleCouncil: 5,
 };
 
 export type ScoreWeights = typeof SCORE_WEIGHTS;

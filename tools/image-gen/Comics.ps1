@@ -224,7 +224,9 @@ function Get-ComicJobs {
         [Parameter(Mandatory)][string]$PromptDoc,
         [Parameter(Mandatory)][string]$ComicsDir,
         [ValidateSet('page', 'panel', 'cast')][string]$Unit = 'page',
-        [string[]]$Comic
+        [string[]]$Comic,
+        # Target WxH for -ComicUnit page (default 1024x1536; e.g. 2160x3240 for print-res lossless PNG on gpt-image-2.5-*).
+        [ValidatePattern('^\d+x\d+$')][string]$PageSize = '1024x1536'
     )
     $blocks = Read-ComicPrompts -Path $PromptDoc
     $patterns = @(foreach ($p in $Comic) { foreach ($q in ($p -split ',')) { $q = $q.Trim(); if ($q) { if ($q -match '[\*\?\[]') { $q } else { "*$q*" } } } })
@@ -254,7 +256,7 @@ function Get-ComicJobs {
                 $prompt = New-ComicPrompt -Style $blocks.comic -Setting $s.Setting -Chars $chars -CastHeader 'CAST (draw each exactly as described, the same in every panel):' `
                     -UnitBlock $block -Body $body -Label "comics/$slug/page-$pn"
                 $note = "$($pg.Panels.Count) panels; characters: " + $(if ($chars) { $chars.Name -join ', ' } else { 'none named' })
-                $jobs.Add((New-ImageJob -Doc 'comics' -Id "$slug/page-$pn" -Section $section -Category 'comic-page' -Size '1024x1536' -Background 'opaque' `
+                $jobs.Add((New-ImageJob -Doc 'comics' -Id "$slug/page-$pn" -Section $section -Category 'comic-page' -Size $PageSize -Background 'opaque' `
                             -Prompt $prompt -Notes $note -Subject $body))
             } else {
                 foreach ($pl in $pg.Panels) {

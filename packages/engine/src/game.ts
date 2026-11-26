@@ -2,7 +2,7 @@ import { applyCommand, type Command, type CommandResult } from './commands.js';
 import { initialMarket, randomImmigrant } from './europe.js';
 import { placeOnMap } from './movement.js';
 import { createUnit, message, reveal } from './queries.js';
-import type { NationId } from './rules/nations.js';
+import type { NationId, PlayerId } from './rules/nations.js';
 import { DEFAULT_DIFFICULTY, resolveDifficulty } from './rules/difficulty.js';
 import { beginPlayerTurn, runAiUntilHuman } from './turn.js';
 import type { GameConfig, GameState, Player } from './types.js';
@@ -11,8 +11,13 @@ import { createWorld } from './world.js';
 import { initRelations } from './relations.js';
 import { initCrown } from './crown.js';
 import { entryPoints } from './mapgen.js';
-import { checkSavedScenario, checkScenarioConfig, difficultyOf, goodsOf, nationOf, peoplesOf, portMarketOf, term } from './scenarios/index.js';
+import { checkSavedScenario, checkScenarioConfig, difficultyOf, goodsOf, nationOf, peoplesOf, portMarketOf, scenarioOf, term } from './scenarios/index.js';
 import { modifiers } from './scenarios/modifiers.js';
+import { systemsOf, systemsOfId } from './playerkind.js';
+import { addPeoplePlayer } from './peopleplayer.js';
+import { initLand } from './land.js';
+import { recordHomelands } from './peoplevictory.js';
+import { laterArrivals } from './arrivals.js';
 
 /** Version of the save format. 3 is Alpha 0.4 (Favoured Nation); older saves are not converted. */
 export const SAVE_VERSION = 3;
@@ -30,7 +35,7 @@ export function createGame(config: GameConfig): GameState {
   // (version 1, the default) write nothing, so their saves and hashes stay as they were.
   if (config.scenario && config.scenarioVersion === undefined && scenario.version !== 1) config = { ...config, scenarioVersion: scenario.version };
   if (new Set(config.nations).size !== config.nations.length) throw new Error('Each nation can only take part once.');
-  for (const h of config.humans) if (!config.nations.includes(h)) throw new Error(`${h} is not taking part.`);
+  for (const h of config.humans) if (!(config.nations as readonly PlayerId[]).includes(h) && !(config.peoples as readonly PlayerId[] | undefined)?.includes(h)) throw new Error(`${h} is not taking part.`);
 
   const rngHolder = { rng: config.seed | 0 };
   const world = createWorld(rngHolder, config);
@@ -51,43 +56,72 @@ export function createGame(config: GameConfig): GameState {
     difficulty: resolveDifficulty(config.difficulty),
     relations: {},
   };
+  const entries = entryPoints(s.map, config.nations.length, world.entryRows, world.entrySide);
+  // A scenario may give a nation its own entry point on a stored map (StoredMapEntry.entries).
+  const own = config.map ? scenarioOf(s).map.stored.find((e) => e.id === config.map)?.entries : undefined;
+  if (own) config.nations.forEach((nation, i) => {
+    const at = own[nation];
+    if (at) entries[i] = { x: at[0], y: at[1] };
+  });
+  const heading = world.entrySide === 'west' ? 'east' : 'west';
+  // Nations that arrive later (NationEntry.arrives, native-nations.md T18) wait with their entry
+  // points (arrivals.ts) and have no relations yet; the others enter now, in the order chosen.
+  const arrivals = laterArrivals(s, entries);
+  if (arrivals) s.arrivals = arrivals;
   initRelations(s);
 
-  const entries = entryPoints(s.map, config.nations.length, world.entryRows, world.entrySide);
   config.nations.forEach((nation, i) => {
-    const entry = entries[i];
-    const p = newPlayer(s, nation, config.humans.includes(nation), entry);
-    if (!p.human) p.ai = config.ai?.[nation] ?? 'naive';
-    // The difficulty sets the economics of the people's nations, also while the computer plays
-    // them during a head start; other computer players stay at Conquistador (see rules/difficulty.ts).
-    if (p.human || config.headStart?.humans.includes(nation) || config.difficultyForAll) {
-      p.difficulty = s.difficulty;
-      const rules = difficultyOf(s, { difficulty: s.difficulty });
-      p.gold = rules.startingGold;
-      p.crossesRequired = Math.round(p.crossesRequired * rules.crosses);
-    }
-    initCrown(s, p);
-    s.players.push(p);
-    p.recruitPool = [randomImmigrant(s), randomImmigrant(s), randomImmigrant(s)];
-    offerFathers(s, p);
-    reveal(s, nation, entry.x, entry.y, 1);
-    startingUnits(s, nation, entry);
-    const heading = world.entrySide === 'west' ? 'east' : 'west';
-    message(s, term(s, 'arrival', { nation: nationOf(s, nation).name, heading }), nation, entry);
+    if (!arrivals?.some((a) => a.nation === nation)) enterNation(s, nation, entries[i], heading);
   });
+
+  // Peoples playing as nations (native-nations.md T3, T4) take their turns after the nations.
+  for (const people of config.peoples ?? []) addPeoplePlayer(s, people, config.humans.includes(people));
+  // The land's regions, hard years and health, in scenarios that have them (land.ts, T10).
+  initLand(s);
+  // What each people holds at the start, for its ways of winning (peoplevictory.ts, T14).
+  if (config.peoples?.length) recordHomelands(s);
 
   beginPlayerTurn(s, s.players[0]);
   runAiUntilHuman(s);
   return s;
 }
 
-export function newPlayer(s: GameState, nation: NationId, human: boolean, entry: { x: number; y: number }): Player {
+/**
+ * A nation enters the game at its entry point: its player record with its computer level and
+ * difficulty, its Crown, recruits and first council offer, its view of the entry and its starting
+ * units, and the arrival message. At setup it joins the end of the turn order; a nation arriving
+ * later (arrivals.ts) is put at `at`.
+ */
+export function enterNation(s: GameState, nation: NationId, entry: { x: number; y: number }, heading: 'east' | 'west', at = s.players.length): Player {
+  const config = s.config;
+  const p = newPlayer(s, nation, config.humans.includes(nation), entry);
+  if (!p.human) p.ai = config.ai?.[nation] ?? 'naive';
+  // The difficulty sets the economics of the people's nations, also while the computer plays
+  // them during a head start; other computer players stay at Conquistador (see rules/difficulty.ts).
+  if (p.human || config.headStart?.humans.includes(nation) || config.difficultyForAll) {
+    p.difficulty = s.difficulty;
+    const rules = difficultyOf(s, { difficulty: s.difficulty });
+    p.gold = rules.startingGold;
+    p.crossesRequired = Math.round(p.crossesRequired * rules.crosses);
+  }
+  initCrown(s, p);
+  s.players.splice(at, 0, p);
+  p.recruitPool = [randomImmigrant(s), randomImmigrant(s), randomImmigrant(s)];
+  offerFathers(s, p);
+  reveal(s, nation, entry.x, entry.y, 1);
+  if (systemsOf(p).startingCaravel) startingUnits(s, nation, entry);
+  message(s, term(s, 'arrival', { nation: nationOf(s, nation).name, heading }), nation, entry);
+  return p;
+}
+
+export function newPlayer(s: GameState, nation: PlayerId, human: boolean, entry: { x: number; y: number }): Player {
   return {
     id: nation,
     human,
     gold: 1000,
     tax: 0,
-    market: initialMarket(portMarketOf(s, nation), goodsOf(s)),
+    // A playing people has no home port, so no market (playerkind.ts `homePort`): an empty record.
+    market: systemsOfId(nation).homePort ? initialMarket(portMarketOf(s, nation), goodsOf(s)) : ({} as Player['market']),
     crosses: 0,
     crossesRequired: 30,
     recruitPool: [],
@@ -109,7 +143,7 @@ export function newPlayer(s: GameState, nation: NationId, human: boolean, entry:
   };
 }
 
-function startingUnits(s: GameState, nation: NationId, at: { x: number; y: number }): void {
+function startingUnits(s: GameState, nation: PlayerId, at: { x: number; y: number }): void {
   const ship = createUnit(s, nation, 'caravel', { kind: 'map', x: at.x, y: at.y });
   placeOnMap(s, ship, at.x, at.y);
   const aboard = () => ({ kind: 'carrier' as const, carrierId: ship.id });

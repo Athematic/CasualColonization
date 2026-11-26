@@ -9,7 +9,7 @@
  * scenario's nation entries as it is. Today's table is the Americas'.
  */
 import { GOOD_DEFS, GOODS, type GoodId } from './goods.js';
-import { HOME_PORTS, type AmericasNationId, type NationId } from './nations.js';
+import { HOME_PORTS, type AmericasNationId, type PlayerId } from './nations.js';
 
 export interface PortCharacter {
   /**
@@ -38,7 +38,7 @@ export interface PortEntry {
  * demand for cotton and plenty of tools; the Baltic ports iron, muskets, coats and furs. With
  * today's prices the factors move a good by 1–3 gold.
  */
-export const PORT_CHARACTER: Partial<Record<NationId, PortEntry>> = {
+export const PORT_CHARACTER: Partial<Record<PlayerId, PortEntry>> = {
   england: { name: HOME_PORTS.england, market: { prices: { tobacco: 1.25, cigars: 1.1, silver: 0.9 }, depth: { cotton: 1.5, tools: 1.5 } } },
   france: { name: HOME_PORTS.france, market: { prices: { furs: 1.25, coats: 1.2, silver: 0.9 }, depth: { furs: 1.25 } } },
   netherlands: { name: HOME_PORTS.netherlands, market: { prices: { tobacco: 1.25, furs: 1.25, cloth: 0.9, sugar: 0.75 }, depth: { tradeGoods: 2 } } },
@@ -55,7 +55,7 @@ const NONE: PortCharacter = {};
  * A home port: a game's port character (the engine passes the scenario's, `portEntryOf(s, nation)`
  * in europe.ts), or a nation id, which means the Americas' (PORT_CHARACTER; tests and tools).
  */
-export type PortRef = NationId | PortCharacter;
+export type PortRef = PlayerId | PortCharacter;
 
 /** A home port's character; none for a port without an entry (the Crown). */
 export function portCharacter(port: PortRef): PortCharacter {
@@ -126,7 +126,7 @@ export function portCharacterText(port: PortRef, goods: readonly GoodId[] = GOOD
  * "Amsterdam: tobacco and furs fetch more; plenty of trade goods; sugar and cloth fetch less". A
  * nation id means the Americas' port; the web game passes the game's (`nationOf(s, id).port`).
  */
-export function portSummary(port: NationId | PortEntry, goods: readonly GoodId[] = GOODS): string {
+export function portSummary(port: PlayerId | PortEntry, goods: readonly GoodId[] = GOODS): string {
   const entry: PortEntry = typeof port === 'string' ? (PORT_CHARACTER[port] ?? { name: HOME_PORTS[port as AmericasNationId] ?? port }) : port;
   const name = entry.name;
   const text = portCharacterText(entry.market ?? NONE, goods);

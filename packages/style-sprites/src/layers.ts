@@ -8,7 +8,7 @@
  * quarter turns) are not used (hex-maps.md H15): roads are drawn through the centres as placeholders, or
  * left to the renderer.
  */
-import { gridOf, nationOf, settlementKindOf, TERRAIN, type GameState, type TerrainId } from '@cc/engine';
+import { gridOf, kindOfId, nationOf, settlementKindOf, TERRAIN, type GameState, type TerrainId, type TribeId } from '@cc/engine';
 import type { LayerTile, MapLayerHooks } from '@cc/render-api';
 import type { SpriteIds } from './ids.js';
 import type { PackLayer, Placement, SpritePack } from './pack.js';
@@ -289,6 +289,9 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
   if (!off.has('colonies')) {
     const flagIds = ids.overlay('flag');
     hooks.colony = (ctx, c, size, px, py, z, state) => {
+      // A playing people's town (native-nations.md T2): its people's settlement sprite when the pack
+      // has one, else the procedural town of the style underneath (never a European colony).
+      if (kindOfId(c.owner) === 'people') return placed(ctx, ids.settlement(c.owner as TribeId, false), rules.settlement, px, py, z);
       const p = rules.colony;
       const town = ids.colony(size);
       const walls = ids.defence(c.buildings.stockade);

@@ -5,7 +5,7 @@ import type { BuildingKind } from './rules/buildings.js';
 import type { DifficultyId } from './rules/difficulty.js';
 import type { FatherCategory, FatherId } from './rules/fathers.js';
 import type { GoodId } from './rules/goods.js';
-import type { NationId, TribeId } from './rules/nations.js';
+import type { NationId, PlayerId, TribeId } from './rules/nations.js';
 import type { TerrainId } from './rules/terrain.js';
 import type { RoleId, UnitTypeId } from './rules/units.js';
 
@@ -20,12 +20,18 @@ export interface GameConfig {
   map?: string;
   /** European nations taking part, in turn order. Between 1 and 8. */
   nations: NationId[];
-  /** Nations controlled by people (hot-seat); the rest are AI. May be empty to let computers play each other. */
-  humans: NationId[];
+  /**
+   * Native peoples playing as nations (native-nations.md T3, T4), from the scenario's
+   * `peoples.playable`; they take their turns after the nations, in this order. Missing means none:
+   * every people stays settlements under Beta 2's rules.
+   */
+  peoples?: TribeId[];
+  /** Nations (and peoples) controlled by people (hot-seat); the rest are AI. May be empty to let computers play each other. */
+  humans: PlayerId[];
   /** Level of each computer nation; missing means Naive. */
-  ai?: Partial<Record<NationId, AiLevel>>;
+  ai?: Partial<Record<PlayerId, AiLevel>>;
   /** While a head start runs: the people's nations, played by the computer until hand-over. */
-  headStart?: { humans: NationId[]; level: AiLevel; turn: number };
+  headStart?: { humans: PlayerId[]; level: AiLevel; turn: number };
   /** Difficulty level (see rules/difficulty.ts); missing means Conquistador, the standard rules. */
   difficulty?: DifficultyId;
   /** Give computer players the chosen difficulty's economics too (tournaments); by default only people get it. */
@@ -86,13 +92,13 @@ export interface Tile {
   /** Worked out: the silver here has been mined thin (see mines.ts, rules/mines.ts). */
   d?: boolean;
   /** European nation that bought or took this land from the natives. */
-  claim?: NationId;
+  claim?: PlayerId;
   /**
    * European nation that leases this tile of a people's land while a land use treaty holds (Beta 2,
    * native-partners.md N5, peopletreaties.ts): its colonies next to the tile may work it, and the
    * land stays the people's (`nativeLandOwner` still names its settlement). Absent when unleased.
    */
-  use?: NationId;
+  use?: PlayerId;
 }
 
 export interface GameMap {
@@ -111,9 +117,13 @@ export interface MarketEntry {
 export type Stance = 'peace' | 'war';
 
 export interface Player {
-  id: NationId;
-  /** A chartered company (companies.ts) rather than a nation; missing means a nation (or the Crown). */
-  kind?: 'company';
+  id: PlayerId;
+  /**
+   * A chartered company (companies.ts) or a native people played as a nation (native-nations.md
+   * T1) rather than a European nation; missing means a nation (or the Crown). Read through
+   * `playerKind` and the systems table (playerkind.ts).
+   */
+  kind?: 'company' | 'people';
   /** A company's shareholders and bookkeeping; only on a company. */
   company?: CompanyBook;
   human: boolean;
@@ -162,7 +172,7 @@ export interface Player {
    * points not yet spent on units, land units added over the game, and the turn and target of the last royal
    * war. Missing in saves from before 0.5 (filled in, with the old formula's force, on the next round).
    */
-  royal?: { bells: number; points: number; added?: number; lastWar?: number; warOn?: NationId };
+  royal?: { bells: number; points: number; added?: number; lastWar?: number; warOn?: PlayerId };
   /** A demand for gold from the King, waiting to be paid or refused; `colony` is where goods would be seized. */
   pendingDemand?: { gold: number; colony: string | null; turn: number };
   /** The turn of the declaration of independence, the Royal Expeditionary Force then, and the old formula's size then (for measurements). */
@@ -183,10 +193,10 @@ export interface Player {
    */
   rebellion?: {
     bells: number;
-    friends?: NationId[];
+    friends?: PlayerId[];
     offers: number;
     lastOffer?: number;
-    intervention?: { by: NationId | 'foreign'; turn: number; land: number };
+    intervention?: { by: PlayerId | 'foreign'; turn: number; land: number };
   };
   /** Units of goods lost to full warehouses over the game; missing means none. */
   goodsSpoiled?: number;
@@ -197,14 +207,35 @@ export interface Player {
    * the remainder (in hundredths of a bell) not yet given. Written once the nation has allies.
    */
   allyBells?: { seen: number; carry: number };
+  /**
+   * A win recorded before the end (native-nations.md T14, victory.ts): in a game with a playing
+   * people, a nation that wins its War of Independence is finished with its win recorded and play
+   * goes on to the end year, where it is listed among the winners. Missing otherwise.
+   */
+  victory?: { way: string; turn: number };
+  /**
+   * A won War of Independence waiting for the person's answer (T14, Simon): the person was at war
+   * with a people when it was won, and is asked whether to keep playing (`answerIndependence`).
+   * `together` names a confederation's members. Missing otherwise.
+   */
+  independenceChoice?: { turn: number; text: string; together?: PlayerId[] };
+  /**
+   * A playing people's records for its ways of winning (peoplevictory.ts), written only for a
+   * playing people: the last turn it was at war with anyone (checked once a round), the last turn
+   * one of its towns went hungry, and the European units it beat and colonies it took (the
+   * military victory's ranking).
+   */
+  lastWar?: number;
+  lastHunger?: number;
+  defeats?: { units: number; colonies: number };
 }
 
 /** A chartered company's shareholders and bookkeeping (companies.ts). */
 export interface CompanyBook {
   /** Shares held, by nation. */
-  shares: Partial<Record<NationId, number>>;
+  shares: Partial<Record<PlayerId, number>>;
   /** The nation that founded it, and the turn. */
-  founder: NationId;
+  founder: PlayerId;
   founded: number;
   /** Turn of the last dividend, and the gold paid out in dividends so far. */
   lastDividend: number;
@@ -234,8 +265,8 @@ export type UnitLocation =
   | { readonly kind: 'colony'; readonly colonyId: string; readonly job: Job }
   | { readonly kind: 'carrier'; readonly carrierId: string }
   /** In a home port in Europe. `port` is a Favoured Nation partner whose port the ship visits; missing means the owner's own. */
-  | { readonly kind: 'europe'; port?: NationId }
-  | { readonly kind: 'sailing'; readonly to: 'europe' | 'america'; turnsLeft: number; port?: NationId };
+  | { readonly kind: 'europe'; port?: PlayerId }
+  | { readonly kind: 'sailing'; readonly to: 'europe' | 'america'; turnsLeft: number; port?: PlayerId };
 
 export type UnitState = 'active' | 'fortified' | 'sentry';
 
@@ -244,7 +275,7 @@ export type ImprovementKind = 'plow' | 'road' | 'clear';
 export interface Unit {
   id: string;
   /** Who owns the unit. Read-only: change it with setUnitOwner (unitindex.ts), which keeps the unit index up to date. */
-  readonly owner: NationId;
+  readonly owner: PlayerId;
   type: UnitTypeId;
   role: RoleId;
   /** Tools carried by a pioneer. */
@@ -262,18 +293,18 @@ export interface Unit {
   /** Turns left until a damaged ship is repaired. */
   repair?: number;
   /** For Royal troops: the rebel nation they were sent against. */
-  against?: NationId;
+  against?: PlayerId;
   /** A joint expedition's scout (alliances.ts): the ally that paid half, and gets half of what it finds. */
-  joint?: NationId;
+  joint?: PlayerId;
   /** A mercenary hired during the War of Independence (rebellion.ts). */
   mercenary?: true;
   /**
    * A unit of a foreign intervention force (rebellion.ts): owned by the rebels it helps, it fights
    * the Crown on its own and takes no orders; the value is the power that sent it.
    */
-  ally?: NationId | 'foreign';
+  ally?: PlayerId | 'foreign';
   /** Where the unit is going; for Europe, `port` is a Favoured Nation partner's port (missing: its own). */
-  dest?: { x: number; y: number } | { europe: true; port?: NationId };
+  dest?: { x: number; y: number } | { europe: true; port?: PlayerId };
   /** "Road to…": a pioneer roads each tile on the way to this one, then steps on (see `continueRoadTo`). Missing in older saves. */
   roadTo?: { x: number; y: number };
   cargo?: Partial<Record<GoodId, number>>;
@@ -302,7 +333,7 @@ export interface RouteStop {
    * For a Europe stop: the home port it calls at, a Favoured Nation partner's. Missing means the
    * owner's own. When the partnership ends the stop falls back to the home port.
    */
-  port?: NationId;
+  port?: PlayerId;
   load: RouteCargo[];
   unload: RouteCargo[];
   /** In Europe: take aboard the colonists waiting on the docks. They go ashore at the next colony stop. */
@@ -312,7 +343,7 @@ export interface RouteStop {
 /** A named, ordered round trip that ships and wagon trains follow on their own. */
 export interface TradeRoute {
   id: string;
-  owner: NationId;
+  owner: PlayerId;
   name: string;
   stops: RouteStop[];
 }
@@ -321,7 +352,7 @@ export type BuildTarget = { kind: 'building'; id: BuildingKind } | { kind: 'unit
 
 export interface Colony {
   id: string;
-  owner: NationId;
+  owner: PlayerId;
   name: string;
   /** A colony never moves (colonies are indexed by tile in unitindex.ts). */
   readonly x: number;
@@ -335,32 +366,67 @@ export interface Colony {
   /** Goods the custom house exports. */
   exports: Partial<Record<GoodId, boolean>>;
   /** For a colony the Crown has retaken: who held it before. */
-  takenFrom?: NationId;
+  takenFrom?: PlayerId;
+  /**
+   * A playing people's town that has gone hungry (native-nations.md T10, peopleeconomy.ts): the
+   * turn its run of hungry years began and the last turn it went hungry. Missing when it has not.
+   */
+  hunger?: { since: number; last: number };
+  /** The last turn a playing people's town was attacked (no birth that year, T10). Missing when never. */
+  foughtAt?: number;
+  /**
+   * An epidemic (native-nations.md T12, epidemics.ts): no birth or growth in the town or colony
+   * before this turn. Written only while the scenario has `mechanics.epidemics`; missing when well.
+   */
+  sickUntil?: number;
+  /**
+   * A playing people's town under a cultural exchange (Beta 3 step 4): the turn it last taught a
+   * colonist of each partner nation. Written only by a people player's exchange; missing when never.
+   */
+  taughtAt?: Partial<Record<PlayerId, number>>;
+}
+
+/**
+ * The land's regions (land.ts). A region is a square of `size` tiles (the map cut in `cols`
+ * columns), or, on a stored map with regions of its own (the North-east), the region its grid
+ * names (`map`); arrays are indexed by region.
+ */
+export interface LandState {
+  size: number;
+  cols: number;
+  /** The stored map whose regions these are (`StoredMap.regions`); missing means squares. */
+  map?: string;
+  /** Health per region, 0–100, starting at 100; only with land health. */
+  health?: number[];
+  /** Furs and game taken in each region so far this year; only with land health. */
+  taken?: number[];
+  /** The regions having a hard year this year, in order; only with hard years. */
+  hard?: number[];
 }
 
 export interface Tribe {
   id: TribeId;
   /** Per-European-nation stance; tribes become hostile when attacked. */
-  stance: Partial<Record<NationId, Stance>>;
+  stance: Partial<Record<PlayerId, Stance>>;
   /** Nations that disturbed one of the tribe's burial grounds: at war with them for good. Missing means none. */
-  burial?: NationId[];
+  burial?: PlayerId[];
   /** Nations the tribe submitted to after losing its capital (see natives.ts). Missing means none. */
-  submitted?: NationId[];
+  submitted?: PlayerId[];
   /**
    * The turn the tribe's last war with each nation ended (the `prosperity` victory, prosperity.ts).
    * Written only while the scenario plays for `prosperity`; missing means no war has ended.
    */
-  warEnded?: Partial<Record<NationId, number>>;
+  warEnded?: Partial<Record<PlayerId, number>>;
   /**
    * Nations that burned one of the tribe's settlements (the `prosperity` victory). Written only
    * while the scenario plays for `prosperity`; missing means none.
    */
-  burned?: NationId[];
+  burned?: PlayerId[];
   /**
    * Nations whose person has been told of the first meeting with the people (queries.ts,
    * `meetPeople`); written only for nations a person plays. Missing means none.
    */
-  met?: NationId[];
+  met?: PlayerId[];
 }
 
 /**
@@ -390,7 +456,7 @@ export type BraveTask =
   /** Waiting next to a colony for the answer to a demand. */
   | { kind: 'wait'; demandId: string; turns: number }
   /** `defend`: the partner nation whose colony the brave sets out to defend under a mutual defence pact (N7, written only then). */
-  | { kind: 'attack'; colonyId?: string; unitId?: string; defend?: NationId };
+  | { kind: 'attack'; colonyId?: string; unitId?: string; defend?: PlayerId };
 
 /**
  * A brave's demand for tribute, or offer of goods for sale, waiting for a person to answer it in
@@ -403,7 +469,7 @@ export interface NativeDemand {
    * people's offer of a treaty (`treaty` names its kind; no goods, `amount` 0).
    */
   kind: 'demand' | 'offer' | 'treaty';
-  nation: NationId;
+  nation: PlayerId;
   colonyId: string;
   settlementId: string;
   braveId: string;
@@ -426,7 +492,7 @@ export interface Settlement {
   /** Skill taught to one colonist; null once taught (a cultural exchange may teach its partner again, `taughtAt`). */
   skill: UnitTypeId | null;
   /** Nations whose scouts have spoken with the chief. */
-  visited: NationId[];
+  visited: PlayerId[];
   /**
    * Turn the settlement last taught a colonist (Beta 2, native-partners.md N7: a cultural exchange
    * makes it teach its partner again some 25 years later). Written only while the scenario has
@@ -442,13 +508,13 @@ export interface Settlement {
    * Turn each nation's scout last spoke with the chief (N7: a cultural exchange welcomes the
    * partner's scouts again once a decade). Written only while the scenario has cultural exchange.
    */
-  spokeAt?: Partial<Record<NationId, number>>;
+  spokeAt?: Partial<Record<PlayerId, number>>;
   defenders: number;
   gold: number;
   /** 0 (content) to 1000 (furious), per European nation. */
-  tension: Partial<Record<NationId, number>>;
+  tension: Partial<Record<PlayerId, number>>;
   /** Nation that runs a mission here. */
-  mission?: NationId;
+  mission?: PlayerId;
   missionExpert?: boolean;
   /** Goods the settlement has for sale, and muskets and horses it holds for its braves. Missing means none. */
   goods?: Partial<Record<GoodId, number>>;
@@ -459,7 +525,7 @@ export interface Settlement {
 export interface GameMessage {
   turn: number;
   /** Nation this message is for; absent means everyone. */
-  to?: NationId;
+  to?: PlayerId;
   text: string;
   at?: { x: number; y: number };
 }
@@ -473,8 +539,8 @@ export type ProposalKind = 'trade' | 'favoured' | 'alliance' | 'expedition' | 'c
  */
 export interface Relation {
   /** The pair, in the order of `GameConfig.nations`. */
-  a: NationId;
-  b: NationId;
+  a: PlayerId;
+  b: PlayerId;
   /** Turn the current run of peace began: game start, the last peace treaty, or the last cancellation. */
   peaceSince: number;
   /** Hidden: years of continuous peace needed for Favoured Nation (8–12, from the seed). */
@@ -490,7 +556,7 @@ export interface Relation {
   /** Cancellations so far; seeds the next waiting and hostility draws. */
   cancels?: number;
   /** A proposal waiting for the other side (a person) to answer. */
-  proposal?: { kind: ProposalKind; from: NationId; turn: number };
+  proposal?: { kind: ProposalKind; from: PlayerId; turn: number };
 }
 
 /**
@@ -502,7 +568,7 @@ export interface Relation {
  * later steps the rest.
  */
 export interface PeopleRelation {
-  nation: NationId;
+  nation: PlayerId;
   people: TribeId;
   /**
    * Turn the current run of good relations began (at peace with the people, its settlements
@@ -518,13 +584,45 @@ export interface PeopleRelation {
   /** Treaties with the people broken so far; seeds the next waiting and hostility draws. */
   breaks?: number;
   /** A proposal waiting for an answer: made by the nation to the people, or offered by the people. */
-  proposal?: { kind: PeopleTreatyKind; from: 'nation' | 'people'; turn: number };
+  proposal?: {
+    kind: PeopleTreatyKind;
+    from: 'nation' | 'people';
+    turn: number;
+    /**
+     * The player who proposed, in a pair with a playing people (native-nations.md T11, Beta 3 step
+     * 4): its answer waits for the person on the other side. Missing in Beta 2's pairs.
+     */
+    by?: PlayerId;
+  };
   /**
    * Turn the nation last took land from the people (without paying for it) (step 1, N8: the people
    * refuses new treaties for `PeopleTreatyRules.landYears` after). Written only while the
    * scenario has treaties with peoples.
    */
   tookLand?: number;
+  /**
+   * Turn the two last shared their maps (peoplemaps.ts, Beta 3 step 10b), in a pair with a playing
+   * people and the scenario's `mechanics.mapKnowledge.share`. Missing until they first do.
+   */
+  maps?: number;
+  /**
+   * A nation's offer for a tile of a playing person's people's land, waiting for the person's answer
+   * (peopleland.ts, native-nations.md section 18). One at a time per pair.
+   */
+  landOffer?: { x: number; y: number; gold: number; turn: number };
+  /** Turn a computer nation last asked the people for land or took some (it waits `landSales.waitYears` before asking again). */
+  landAsked?: number;
+  /** Tiles of its land the people sold to the nation, and the nation took from it, over the game. */
+  landSold?: number;
+  landTaken?: number;
+  /** Offers of the nation for the people's land that the people refused, over the game (section 19: Competent takes only after one). */
+  landRefused?: number;
+  /**
+   * Turn the two first met in person (native-nations.md section 19): a unit, town, colony or
+   * settlement of one within sight of one of the other's, not through a shared map. Written once a
+   * round where the scenario has `mechanics.mapKnowledge`; a good life counts only these as met.
+   */
+  metInPerson?: number;
 }
 
 /**
@@ -533,7 +631,7 @@ export interface PeopleRelation {
  * native people (docs/design/native-partners.md, N1) the `PeopleTreatyKind`s. A kind says what is
  * agreed, not who agrees, so code that reads European kinds (`'trade'`) never meets a people.
  */
-export type TreatyKind = 'trade' | 'favoured' | 'alliance' | 'confederation' | PeopleTreatyKind;
+export type TreatyKind = 'trade' | 'favoured' | 'alliance' | 'confederation' | PeopleTreatyKind | 'league';
 
 /**
  * Treaties between a nation and a native people (Beta 2, N1–N7): a trade treaty, land use,
@@ -541,6 +639,20 @@ export type TreatyKind = 'trade' | 'favoured' | 'alliance' | 'confederation' | P
  * others are only named.
  */
 export type PeopleTreatyKind = 'people-trade' | 'land-use' | 'exchange' | 'defence';
+
+/**
+ * A league proposed by a playing people (peopleleague.ts, native-nations.md T14's confederacy):
+ * a new league with `peoples`, or `peoples` invited into the league `league` (a treaty id).
+ * Computer peoples and peoples nobody plays answered when it was made; it waits for the persons in
+ * `waiting`.
+ */
+export interface LeagueProposal {
+  by: TribeId;
+  peoples: TribeId[];
+  league?: string;
+  waiting: TribeId[];
+  turn: number;
+}
 
 /** How a treaty ended. */
 export interface TreatyEnd {
@@ -556,7 +668,7 @@ export interface TreatyEnd {
    * nations is saved), a people as a party (`{ kind: 'people', id }`). Read with treaties.ts
    * `treatyEndedBy`.
    */
-  by?: NationId | TreatyParty;
+  by?: PlayerId | TreatyParty;
 }
 
 /**
@@ -565,7 +677,7 @@ export interface TreatyEnd {
  * through the helpers in treaties.ts (`partyIsNation`, `partyIsPeople`, `treatyNations`,
  * `treatyPeoples`), never by assuming that every party is a player.
  */
-export type TreatyParty = { kind: 'nation'; id: NationId } | { kind: 'people'; id: TribeId };
+export type TreatyParty = { kind: 'nation'; id: PlayerId } | { kind: 'people'; id: TribeId };
 
 /**
  * A treaty (treaties.ts). Treaties are kept after they end, with `end` set, so the diplomacy
@@ -630,6 +742,15 @@ export interface AllianceTerms {
  * Caches beside the state (unitindex.ts) are rebuilt from a loaded state in the same order.
  * test/roundtrip.test.ts plays games with a save and load after every round and checks this.
  */
+/** A European nation not yet in the game (GameState.arrivals). */
+export interface PendingArrival {
+  nation: NationId;
+  /** The first turn of its year of arrival (`NationEntry.arrives`). */
+  turn: number;
+  /** Its entry point, given at setup as if it had been there from the start. */
+  entry: { x: number; y: number };
+}
+
 export interface GameState {
   version: 3;
   config: GameConfig;
@@ -669,21 +790,52 @@ export interface GameState {
     turn: number;
     reason: string;
     /** The first winner, for code that knows one winner only; missing when nobody won. */
-    winner?: NationId;
-    scores: Partial<Record<NationId, number>>;
+    winner?: PlayerId;
+    scores: Partial<Record<PlayerId, number>>;
     /** The person ended the game early (leaving.ts). */
     retired?: boolean;
     /**
      * Every winner, best first (C3): one nation, or the members of an alliance that won together
      * (`concord`, victory.ts), ranked by their own score; empty when nobody won.
      */
-    winners: NationId[];
+    winners: PlayerId[];
     /**
      * The native peoples the winners are partners of (the `prosperity` victory, native-partners.md
      * N10): named on the game-over screen, not winners themselves. Missing for other endings.
      */
     partners?: TribeId[];
+    /**
+     * Each winner's way (native-nations.md T14: `military`, `independence-war`, `confederacy`,
+     * `concord`, `prosperity`, `continuity`, `good-life`, `time`). Written only in games with a
+     * playing people (both sides judged, victory.ts); `waysOf` reads it, or works it out for others.
+     */
+    ways?: Partial<Record<PlayerId, string>>;
+    /** The playing peoples' scores at the end (not compared with the Europeans'). Only in games with a playing people. */
+    peopleScores?: Partial<Record<PlayerId, number>>;
   };
+  /**
+   * What each people held when the game began (native-nations.md T14, peoplevictory.ts): its
+   * homeland's tiles (indexes into the map; a playing people's claimed land, a people nobody plays
+   * the land of its settlements) and, for a playing people, its people (units and town folk).
+   * Written at setup only in games with a playing people.
+   */
+  homelands?: Partial<Record<TribeId, { tiles: number[]; people?: number }>>;
+  /** League proposals waiting for persons' answers (peopleleague.ts). Missing means none. */
+  leagueProposals?: LeagueProposal[];
+  /** The turn every European was first seen defeated (the military victory's `years`), while it holds. */
+  europeansDefeated?: number;
+  /**
+   * The land's regions (native-nations.md T10, land.ts), while the scenario has hard years or land
+   * health: missing otherwise (the Americas and the Caribbean).
+   */
+  land?: LandState;
+  /**
+   * European nations still to arrive (native-nations.md T18, arrivals.ts), first to arrive first:
+   * each the turn it arrives on and the entry point it was given at setup. Written only in
+   * scenarios whose nations have `NationEntry.arrives`, and emptied away as they arrive; missing
+   * otherwise (the Americas and the Caribbean).
+   */
+  arrivals?: PendingArrival[];
   /** Silver and ore dug so far from mining tiles, by "x,y" (see mines.ts). Missing means none. */
   mined?: Record<string, number>;
   /** Set the first time a cheat is used and never cleared. Missing means the game is not cheated. */
@@ -693,14 +845,14 @@ export interface GameState {
     /** Multiplier on terrain yields (missing means 1). */
     yieldMultiplier?: number;
     /** Nations whose view shows the whole map without fog. */
-    reveal?: NationId[];
+    reveal?: PlayerId[];
   };
   /** Progress statistics, one snapshot per round (see stats.ts). Missing in older saves. */
   stats?: StatsHistory;
   /** Notable events for the History report, oldest first and capped (see history.ts). Missing in older saves. */
   history?: HistoryEntry[];
   /** Goods sold and delivered per nation, for the Trade report (see history.ts). Missing in older saves. */
-  ledger?: Partial<Record<NationId, Ledger>>;
+  ledger?: Partial<Record<PlayerId, Ledger>>;
   /** The event framework's state: fired events, temporary modifiers, pending choices (events/). Missing until first used. */
   events?: EventsState;
 }
@@ -732,7 +884,7 @@ export interface HistoryEntry {
   turn: number;
   kind: HistoryKind;
   /** The nations concerned; the first is the one that acted. */
-  nations: NationId[];
+  nations: PlayerId[];
   text: string;
   /** Known only to the nations concerned; otherwise every nation heard of it. */
   secret?: boolean;
@@ -748,6 +900,17 @@ export interface GoodsTally {
   /** Sold to native settlements, and bought from them (by wagon trains, ships and from visiting braves). Missing means none. */
   natives?: Partial<Record<GoodId, number>>;
   fromNatives?: Partial<Record<GoodId, number>>;
+  /**
+   * A playing people's trade (native-nations.md section 16, its Trade report): units sold to European
+   * nations and the gold they brought, units bought from them and the gold paid, and goods given and
+   * taken in barter with other peoples. Missing means none (and in every game without a playing people).
+   */
+  toNations?: Partial<Record<GoodId, number>>;
+  toNationsGold?: Partial<Record<GoodId, number>>;
+  fromNations?: Partial<Record<GoodId, number>>;
+  fromNationsGold?: Partial<Record<GoodId, number>>;
+  barterGiven?: Partial<Record<GoodId, number>>;
+  barterTaken?: Partial<Record<GoodId, number>>;
 }
 
 export interface Ledger {
@@ -765,7 +928,7 @@ export interface Ledger {
 export interface StatsHistory {
   keys: string[];
   turns: number[];
-  data: Partial<Record<NationId, number[]>>;
+  data: Partial<Record<PlayerId, number[]>>;
   /** Trade income, goods produced and crosses since the last snapshot. */
-  flows?: Partial<Record<NationId, { trade?: number; production?: number; crosses?: number }>>;
+  flows?: Partial<Record<PlayerId, { trade?: number; production?: number; crosses?: number }>>;
 }

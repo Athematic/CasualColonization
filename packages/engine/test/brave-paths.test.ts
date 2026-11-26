@@ -265,7 +265,7 @@ describe('the first meeting with a people', () => {
     const told = meetings('england');
     expect(told.length).toBe(before + 1);
     const last = told[told.length - 1];
-    expect(last.text).toBe(firstMeetingText(st!.tribe));
+    expect(last.text).toBe(firstMeetingText(s, st!.tribe));
     expect(last.text).toBe(`You have met the ${TRIBES[st!.tribe].name}. ${LINE}`);
     expect(last.at).toEqual({ x: st!.x, y: st!.y });
     expect(s.tribes.find((t) => t.id === st!.tribe)!.met).toEqual(['england']);
@@ -294,7 +294,7 @@ describe('the first meeting with a people', () => {
     processBraves(s);
     processBraves(s);
     const after = s.messages.slice(before);
-    const told = after.filter((m) => m.text === firstMeetingText(st.tribe));
+    const told = after.filter((m) => m.text === firstMeetingText(s, st.tribe));
     expect(told).toHaveLength(1);
     expect(told[0].to).toBe('england');
     expect(tribe.met).toEqual(['england']);

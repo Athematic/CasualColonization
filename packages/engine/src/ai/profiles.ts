@@ -1,5 +1,6 @@
+import type { BuildingKind } from '../rules/buildings.js';
 import type { GoodId } from '../rules/goods.js';
-import type { NationId } from '../rules/nations.js';
+import type { PlayerId } from '../rules/nations.js';
 export type AiLevel = 'naive' | 'competent' | 'combative' | 'creative';
 
 export const AI_LEVELS: AiLevel[] = ['naive', 'competent', 'combative', 'creative'];
@@ -136,6 +137,160 @@ export const COMPANY_PROFILE: AiProfile = {
   independence: null,
 };
 
+/**
+ * A computer people's profile at its level (docs/design/native-nations.md T15; Beta 3 step 9):
+ * Creative trades and makes treaties, Competent balances, Combative defends hard and raids rivals,
+ * Naive grows. Read by ai/people.ts and, for what the rules ask of a computer people (its reserve,
+ * its builds, its answers), by the people's modules. Drafted for Simon's review.
+ */
+export interface PeopleProfile {
+  /** The towns' reserve as a share of the people's `storeYears` (T10: Combative keeps half). */
+  stores: number;
+  /**
+   * Land health under which its hunters are held within the region's renewal: Creative and Competent
+   * 90, Combative 60 (T10 drafted 70 and 40; with those the levels' land ended alike, step 9); null
+   * follows the price and never holds back (Naive).
+   */
+  restraint: number | null;
+  /** Sells food above its towns' reserve to Europeans on its trade visits (T10: Naive). */
+  sellsFood: boolean;
+  /** European goods it buys with its gold on its trade visits, in order (muskets and horses arm its warriors, tools speed its builds, cloth and trade goods go in barter). */
+  buys: GoodId[];
+  /** Times Beta 2's `offer` chance for its proposals, and `accept` chance for its answers. */
+  offer: number;
+  accept: number;
+  /** The treaties it proposes to European nations (the ladder still applies). */
+  nationKinds: ('people-trade' | 'land-use' | 'exchange' | 'defence')[];
+  /** Proposes trade treaties and mutual defence pacts to other peoples. */
+  peoplePacts: boolean;
+  /** T14: Creative leads a league once it holds pacts; Competent joins one it is offered; Combative and Naive do neither. */
+  league: 'lead' | 'join' | 'none';
+  /** Barter visits to other peoples' towns and settlements nearby a year (its standing with them grows by what is traded). */
+  barter: number;
+  /** Goes to war with a European nation that settles on its homeland, and raids its units near its towns (Combative). */
+  raids: boolean;
+  /** Years of war after which it seeks peace. */
+  peaceAfter: number;
+  /** Its warriors attack an enemy beside its land only with at least this edge (offence over defence). */
+  margin: number;
+  /** Tiles of unclaimed land next to its own it claims a year. */
+  claims: number;
+  /** What its towns build when nothing is set, in order (the first it can). */
+  plan: BuildingKind[];
+  /**
+   * Shares its maps with the peoples it meets (peoplemaps.ts, Beta 3 step 10b, where the scenario's
+   * `mechanics.mapKnowledge.share` has it): every profile but Combative.
+   */
+  shareMaps: boolean;
+  /**
+   * Times the scenario's `mechanics.mapKnowledge.range`: how far from its towns its runners explore
+   * (ai/people.ts `explore`). Creative goes farthest to meet partners, Naive keeps near home.
+   */
+  explore: number;
+  /**
+   * Its answer to a European nation's offer for its land (peopleland.ts, native-nations.md section
+   * 18): times the scenario's `landSales.accept`; 0 never sells. It never sells a town's tile or a
+   * tile its towns work, nor below `keepsHomeland` of its starting homeland.
+   */
+  sellsLand: number;
+  keepsHomeland: number;
+  /** Chance it goes to war with a nation that takes its land. */
+  warOnTaking: number;
+}
+
+const competentPeople: PeopleProfile = {
+  stores: 1,
+  restraint: 90,
+  sellsFood: false,
+  buys: ['tools', 'muskets', 'cloth'],
+  offer: 1,
+  accept: 1,
+  nationKinds: ['people-trade', 'exchange', 'defence'],
+  peoplePacts: true,
+  league: 'join',
+  barter: 1,
+  raids: false,
+  peaceAfter: 8,
+  margin: 1.2,
+  claims: 1,
+  plan: ['storagePits', 'longhouse', 'palisade', 'canoeLanding', 'workshop', 'dryingRacks'],
+  shareMaps: true,
+  explore: 1,
+  sellsLand: 0.5,
+  keepsHomeland: 0.8,
+  warOnTaking: 0.5,
+};
+
+export const PEOPLE_PROFILES: Record<AiLevel, PeopleProfile> = {
+  // Grows: housing first, follows the price on the land, sells food when it can, makes few treaties.
+  naive: {
+    ...competentPeople,
+    restraint: null,
+    sellsFood: true,
+    buys: ['tools'],
+    offer: 0.5,
+    nationKinds: ['people-trade'],
+    peoplePacts: false,
+    league: 'none',
+    barter: 0,
+    peaceAfter: 12,
+    claims: 0,
+    plan: ['longhouse', 'storagePits', 'workshop', 'canoeLanding', 'dryingRacks', 'palisade'],
+    explore: 0.5,
+    // Follows the price for its land too, down to half its homeland, and seldom fights for it.
+    sellsLand: 1,
+    keepsHomeland: 0.5,
+    warOnTaking: 0.25,
+  },
+  competent: competentPeople,
+  // Defends hard and raids rivals: walls first, muskets and horses, a smaller store, slow to make peace.
+  combative: {
+    ...competentPeople,
+    stores: 0.5,
+    restraint: 60,
+    buys: ['muskets', 'horses', 'tools'],
+    offer: 0.5,
+    accept: 0.7,
+    nationKinds: ['people-trade'],
+    league: 'none',
+    barter: 0,
+    raids: true,
+    peaceAfter: 20,
+    margin: 0.9,
+    claims: 2,
+    plan: ['palisade', 'storagePits', 'longhouse', 'workshop', 'canoeLanding', 'dryingRacks'],
+    shareMaps: false,
+    explore: 0.75,
+    // Sells none of its land, and fights for what is taken.
+    sellsLand: 0,
+    keepsHomeland: 1,
+    warOnTaking: 1,
+  },
+  // Trades and makes treaties: every kind with the nations, pacts and a league with the peoples.
+  creative: {
+    ...competentPeople,
+    buys: ['tools', 'cloth', 'tradeGoods', 'muskets'],
+    offer: 2,
+    accept: 1.2,
+    nationKinds: ['people-trade', 'land-use', 'exchange', 'defence'],
+    league: 'lead',
+    barter: 2,
+    peaceAfter: 5,
+    plan: ['storagePits', 'longhouse', 'canoeLanding', 'workshop', 'dryingRacks', 'palisade'],
+    explore: 1.5,
+    // Leases rather than sells (its treaties include land use), and seeks peace rather than war.
+    sellsLand: 0.3,
+    keepsHomeland: 0.85,
+    warOnTaking: 0.25,
+  },
+};
+
+/** The profile of a people the computer plays (by its level), or undefined for a person's people and any other player. */
+export function peopleProfileOf(players: readonly { id: PlayerId; kind?: string; human: boolean; ai?: AiLevel }[], id: PlayerId): PeopleProfile | undefined {
+  for (const p of players) if (p.id === id) return p.kind === 'people' && !p.human ? PEOPLE_PROFILES[p.ai ?? 'naive'] : undefined;
+  return undefined;
+}
+
 /** What a Creative nation is concentrating on at the moment. */
 export type AiFocus = 'explore' | 'expand' | 'develop' | 'liberty' | 'independence' | 'defend' | 'war';
 
@@ -152,9 +307,9 @@ export interface AiMemory {
   /** No new proposal of this kind to this nation before the turn given, keyed `trade:france` or `favoured:france`. */
   proposalCooldown?: Record<string, number>;
   /** Goods bought in one European port to sell in another (Creative's triangle trading), by ship id. */
-  triangle?: Record<string, { good: GoodId; port: NationId; turn: number; net: number }>;
+  triangle?: Record<string, { good: GoodId; port: PlayerId; turn: number; net: number }>;
   /** After cancelling Favoured Nation to go to war: the nation, and the first turn war may be declared. */
-  warPlan?: { nation: NationId; turn: number };
+  warPlan?: { nation: PlayerId; turn: number };
   /** Wagon trains carrying goods bought from natives, and the port each is taking them to. */
   nativeHaul?: Record<string, string>;
   /** Turn a missionary last incited a tribe (Combative). */

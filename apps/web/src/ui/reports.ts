@@ -2,6 +2,10 @@ import {
   calendarOf,
   coloniesOverview,
   congressOverview,
+  councilOf,
+  councilText,
+  CouncilText,
+  systemsOfId,
   FATHERS,
   formatDate,
   GOOD_DEFS,
@@ -28,7 +32,9 @@ import {
   term,
   Term,
   tradeOverview,
+  peopleTradeOverview,
   TRIBES,
+  peopleName,
   UNIT_TYPES,
   warSupport,
   yearOf,
@@ -38,12 +44,14 @@ import {
   type GoodId,
   type HistoryEntry,
   type HistoryKind,
-  type NationId,
+  type PlayerId,
   type ProductId,
+  isPeoplePlayer,
 } from '@cc/engine';
 import type { App, Screen } from '../app.js';
 import { clear, h, type Child } from '../dom.js';
 import { activeStyle, icon } from '../styles.js';
+import { victoryTab } from './victoryreport.js';
 
 /**
  * The advisor reports, as in the original game's Reports menu: one screen with a tab per
@@ -60,7 +68,7 @@ import { activeStyle, icon } from '../styles.js';
 export interface ReportContext {
   app: App;
   /** The nation the reports are about. */
-  nation: NationId;
+  nation: PlayerId;
   /** True when an observer watches everything: history then shows every nation's events. */
   all: boolean;
   /** Rebuilds the screen, after a sort or filter change. */
@@ -73,7 +81,14 @@ export interface ReportTab {
   /** The advisor's title, shown as the tab's heading. */
   title: string;
   render: (ctx: ReportContext) => Child[];
+  /** A playing people's own words for the tab: its towns, its council (native-nations.md T2, T8). */
+  people?: { name: string; title: string };
+  /** Only for some players: a playing people has no home port market or crosses (native-nations.md T1). */
+  shown?: (s: GameState, nation: PlayerId) => boolean;
 }
+
+/** Whether a report is about a European system a playing people does not have. */
+const notPeople = (s: GameState, nation: PlayerId) => !isPeoplePlayer(s.players.find((p) => p.id === nation));
 
 // ---- Shared pieces ----
 
@@ -93,7 +108,7 @@ function turns(n: number | null, never = '—'): string {
   return n === null ? never : `${n} turn${n === 1 ? '' : 's'}`;
 }
 
-function flag(s: GameState, n: NationId): HTMLElement {
+function flag(s: GameState, n: PlayerId): HTMLElement {
   return h('span', { class: 'flag', style: `background:${nationOf(s, n).color}` });
 }
 
@@ -269,6 +284,60 @@ function tradeTab(ctx: ReportContext): Child[] {
   ];
 }
 
+// ---- 2b. A people's trade (native-nations.md section 16) ----
+
+/**
+ * A playing people's Trade report (Beta 3 step 10b, T10): what it sold to the Europeans and bought
+ * from them, with the gold, what it bartered with other peoples, and the prices at the colonies it
+ * knows of, nearest first. Its gold comes only from this trade.
+ */
+function peopleTradeTab(ctx: ReportContext): Child[] {
+  const { app, nation } = ctx;
+  const s = app.state;
+  const o = peopleTradeOverview(s, nation);
+  const rows = o.rows.filter((r) => r.sold.total || r.bought.total || r.given || r.taken || r.stored);
+  type Row = (typeof rows)[number];
+  const n = (v: number) => (v ? v.toLocaleString() : '');
+  const cols: Column<Row>[] = [
+    { key: 'good', label: 'Good', sort: (r) => GOOD_DEFS[r.good].name, cell: (r) => h('span', { class: 'report-good' }, goodIcon(r.good), GOOD_DEFS[r.good].name) },
+    { key: 'stored', label: 'In the towns', title: 'Units in all your towns now', num: true, sort: (r) => r.stored, cell: (r) => n(r.stored) },
+    { key: 'sold', label: 'Sold', title: 'Units sold to European nations this game', num: true, sort: (r) => r.sold.total, cell: (r) => n(r.sold.total) },
+    { key: 'soldGold', label: 'Gold in', title: 'Gold the sales brought this game', num: true, sort: (r) => r.sold.gold, cell: (r) => n(r.sold.gold) },
+    { key: 'bought', label: 'Bought', title: 'Units bought from European nations this game', num: true, sort: (r) => r.bought.total, cell: (r) => n(r.bought.total) },
+    { key: 'boughtGold', label: 'Gold out', title: 'Gold paid for them this game', num: true, sort: (r) => r.bought.gold, cell: (r) => n(r.bought.gold) },
+    { key: 'last', label: 'Last turn', title: 'Units sold / bought last turn', num: true, sort: (r) => r.sold.last + r.bought.last, cell: (r) => (r.sold.last || r.bought.last ? `${r.sold.last} / ${r.bought.last}` : '') },
+    { key: 'given', label: 'Bartered away', title: 'Units given in barter with other peoples this game', num: true, sort: (r) => r.given, cell: (r) => n(r.given) },
+    { key: 'taken', label: 'Bartered for', title: 'Units taken in barter with other peoples this game', num: true, sort: (r) => r.taken, cell: (r) => n(r.taken) },
+  ];
+  const furs = o.rows.find((r) => r.good === 'furs');
+  const goldIn = o.rows.reduce((t, r) => t + r.sold.gold, 0);
+  const goldOut = o.rows.reduce((t, r) => t + r.bought.gold, 0);
+  const priceCell = (e: { good: GoodId; price: number }, wanted = false) =>
+    h('span', { class: `report-chip${wanted ? ' good-text' : ''}`, title: `${GOOD_DEFS[e.good].name}${wanted ? ' (wanted: you pay more)' : ''}` }, goodIcon(e.good, 18), String(e.price));
+  return [
+    h('div', { class: 'report-stats' },
+      stat('Gold', o.gold.toLocaleString(), 'only from trade with the Europeans'),
+      stat('Furs sold', (furs?.sold.total ?? 0).toLocaleString(), furs?.sold.gold ? `for ${furs.sold.gold.toLocaleString()} gold` : 'none yet'),
+      stat('Gold from sales', goldIn.toLocaleString(), `spent ${goldOut.toLocaleString()} on goods`),
+      stat('Wanted most', o.wants.length ? GOOD_DEFS[o.wants[0]].name : '—', o.wants.length > 1 ? `then ${o.wants.slice(1).map((g) => GOOD_DEFS[g].name.toLowerCase()).join(', ')}` : undefined)),
+    card('Trade this game',
+      rows.length ? sortableTable('people-trade', cols, rows, ctx.rerender) : empty('Nothing sold, bought or bartered yet.'),
+      h('p', { class: 'muted small' }, 'A carrier beside a European colony or wagon train sells and buys there; barter with other peoples trades goods for goods. Under the computer (a head start), a people trades on its own once a year.')),
+    card('Prices at the colonies you know',
+      o.nations.length
+        ? scroll(h('table', { class: 'table report-table' },
+            h('thead', null, h('tr', null, h('th', null, 'Nation'), h('th', null, 'Nearest colony'), h('th', { class: 'num' }, 'Tiles'), h('th', null, 'They pay you'), h('th', null, 'You pay them'))),
+            h('tbody', null, o.nations.map((e) => h('tr', { class: e.atWar ? 'boycott' : undefined },
+              h('td', null, flag(s, e.nation), ' ', nationOf(s, e.nation).name, e.treaty ? h('span', { class: 'pill good', title: 'A trade treaty: you get its prices when you come to trade' }, 'treaty') : null, e.atWar ? h('span', { class: 'pill bad' }, 'war') : null),
+              h('td', null, where(app, e.colony.name, e.colony)),
+              h('td', { class: 'num' }, String(e.distance), e.nearby ? h('span', { class: 'muted small', title: 'Within a trade visit’s reach of one of your towns' }, ' near') : null),
+              h('td', null, e.sell.map((x) => priceCell(x))),
+              h('td', null, e.buy.map((x) => priceCell(x, o.wants.includes(x.good)))))))))
+        : empty('You know of no European colony yet.'),
+      h('p', { class: 'muted small' }, 'Gold a unit, when your people come to trade. A trade treaty gives better prices both ways; you pay more for the goods you want most.')),
+  ];
+}
+
 // ---- 3. Military ----
 
 const FORCE_NAMES: Record<ForceKind, string> = {
@@ -434,9 +503,9 @@ function religionTab(ctx: ReportContext): Child[] {
         ? scroll(h('table', { class: 'table report-table' },
             h('thead', null, h('tr', null, h('th', null, 'Tribe'), h('th', { class: 'num' }, 'Yours'), h('th', null, 'Others'))),
             h('tbody', null, r.missions.map((m) => h('tr', null,
-              h('td', null, h('span', { class: 'flag', style: `background:${TRIBES[m.tribe].color}` }), ' ', TRIBES[m.tribe].name),
+              h('td', null, h('span', { class: 'flag', style: `background:${TRIBES[m.tribe].color}` }), ' ', peopleName(s, m.tribe)),
               h('td', { class: 'num' }, String(m.own)),
-              h('td', null, (Object.entries(m.rival) as [NationId, number][]).map(([n, k]) => h('span', { class: 'report-chip' }, flag(app.state, n), `${nationOf(app.state, n).adjective} ${k}`))))))))
+              h('td', null, (Object.entries(m.rival) as [PlayerId, number][]).map(([n, k]) => h('span', { class: 'report-chip' }, flag(app.state, n), `${nationOf(app.state, n).adjective} ${k}`))))))))
         : empty('No missions among the settlements you know.'),
         h('p', { class: 'muted small' }, 'Missions calm their settlement and now and then send a convert to your nearest colony. Only settlements you have found are counted.'))),
   ];
@@ -472,7 +541,7 @@ function nativesTab(ctx: ReportContext): Child[] {
       ];
       return card(null,
         h('div', { class: 'report-tribe-head' },
-          h('h3', null, h('span', { class: 'flag', style: `background:${TRIBES[t.tribe].color}` }), ' ', TRIBES[t.tribe].name),
+          h('h3', null, h('span', { class: 'flag', style: `background:${TRIBES[t.tribe].color}` }), ' ', peopleName(app.state, t.tribe)),
           moodPill(t.tension, t.atWar),
           h('span', { class: 'muted small' }, `${t.known} settlement${t.known > 1 ? 's' : ''} known`)),
         sortableTable(`natives-${t.tribe}`, cols, t.settlements, ctx.rerender));
@@ -490,23 +559,28 @@ function congressTab(ctx: ReportContext): Child[] {
   const p = player(s, nation);
   const cur = c.current ? FATHERS[c.current] : null;
   const mine = nation === app.viewer && app.isMyTurn();
+  // The player's own council: the Congress, or a people's council with its own words (native-nations.md T8).
+  const word = (key: 'councilShort' | 'member' | 'members' | 'product') => councilText(s, nation, key);
+  const Word = (key: 'members' | 'product') => CouncilText(s, nation, key);
+  const congress = systemsOfId(nation).congress;
+  const seats = (councilOf(s, nation)?.members ?? []).filter((id) => !FATHERS[id].peoples || FATHERS[id].peoples!.includes(nation)).length;
   return [
     h('div', { class: 'report-stats' },
-      stat('Bells per turn', c.bellsPerTurn),
-      stat('Bells rung', c.bells.toLocaleString()),
-      stat('Rebels', `${c.rebels}%`, p.independence === 'none' ? (c.rebels >= 50 ? 'enough to declare independence' : '50% needed to declare') : p.independence === 'declared' ? `at war with ${term(app.state, 'crown')}` : p.independence),
-      stat(`${Term(app.state, 'members')}`, `${c.fathers.length}/25`)),
-    h('p', null, h('button', { class: 'btn', onclick: () => app.openCongress() }, `Open the ${term(app.state, 'councilShort')} hall`)),
-    card(`Next ${term(app.state, 'member')}`,
+      stat(`${Word('product')} per turn`, c.bellsPerTurn),
+      stat(congress ? 'Bells rung' : `${Word('product')} given`, c.bells.toLocaleString()),
+      congress ? stat('Rebels', `${c.rebels}%`, p.independence === 'none' ? (c.rebels >= 50 ? 'enough to declare independence' : '50% needed to declare') : p.independence === 'declared' ? `at war with ${term(app.state, 'crown')}` : p.independence) : null,
+      stat(`${Word('members')}`, `${c.fathers.length}/${seats}`)),
+    h('p', null, h('button', { class: 'btn', onclick: () => app.openCongress() }, `Open the ${word('councilShort')} hall`)),
+    card(`Next ${word('member')}`,
       cur
         ? h('div', null,
             h('div', { class: 'congress-sought' },
               icon({ kind: 'father', id: c.current!, category: cur.category }, 96, cur.name),
               h('p', null, h('strong', null, cur.name), h('span', { class: 'muted small' }, ` (${cur.category})`), ` — ${cur.effect}`)),
-            bar(c.fatherBells, c.fatherCost, `Bells towards the next ${term(app.state, 'member')}`),
-            h('p', { class: 'small' }, `${c.fatherBells} of ${c.fatherCost} bells · ${c.turnsToFather ? `joins in about ${turns(c.turnsToFather)}` : 'no bells are being rung'}`))
-        : h('p', null, `No candidate chosen (${c.fatherBells} bells collected). `, mine ? h('button', { class: 'btn small', onclick: () => { app.closeScreen(); void app.chooseFather(); } }, 'Choose one') : null)),
-    card('Sons of Liberty by colony', c.colonies.length
+            bar(c.fatherBells, c.fatherCost, `${Word('product')} towards the next ${word('member')}`),
+            h('p', { class: 'small' }, `${c.fatherBells} of ${c.fatherCost} ${word('product')} · ${c.turnsToFather ? `joins in about ${turns(c.turnsToFather)}` : congress ? 'no bells are being rung' : `no ${word('product')} is being given`}`))
+        : h('p', null, `No candidate chosen (${c.fatherBells} ${word('product')} collected). `, mine ? h('button', { class: 'btn small', onclick: () => { app.closeScreen(); void app.chooseFather(); } }, 'Choose one') : null)),
+    !congress ? null : card('Sons of Liberty by colony', c.colonies.length
       ? sortableTable('congress', [
           { key: 'name', label: 'Colony', sort: (r) => r.colony.name, cell: (r) => h('button', { class: 'link', onclick: () => app.openColony(r.colony.id) }, r.colony.name) },
           { key: 'pop', label: 'Pop', num: true, sort: (r) => r.population, cell: (r) => String(r.population) },
@@ -517,11 +591,11 @@ function congressTab(ctx: ReportContext): Child[] {
           { key: 'bells', label: 'Bells', num: true, sort: (r) => r.bells, cell: (r) => String(r.bells) },
         ], c.colonies, ctx.rerender)
       : empty('No colonies.')),
-    card(`Members of the ${term(app.state, 'councilShort')}`, c.fathers.length
+    card(`Members of the ${word('councilShort')}`, c.fathers.length
       ? h('ul', { class: 'report-fathers' }, c.fathers.map((id) => h('li', null,
           icon({ kind: 'father', id, category: FATHERS[id].category }, 48, FATHERS[id].name),
           h('div', null, h('strong', null, FATHERS[id].name), h('span', { class: 'muted small' }, ` ${FATHERS[id].category}`), h('div', { class: 'small' }, FATHERS[id].effect)))))
-      : empty(`No ${term(app.state, 'members')} have joined yet.`)),
+      : empty(`No ${word('members')} have joined yet.`)),
   ];
 }
 
@@ -581,19 +655,22 @@ function historyTab(ctx: ReportContext): Child[] {
 }
 
 export const REPORT_TABS: ReportTab[] = [
-  { id: 'colonies', name: 'Colonies', title: 'Colonial advisor', render: coloniesTab },
-  { id: 'trade', name: 'Trade', title: 'Trade advisor', render: tradeTab },
+  { id: 'colonies', name: 'Colonies', title: 'Colonial advisor', render: coloniesTab, people: { name: 'Towns', title: 'The towns' } },
+  // A people's own Trade report: its sales, purchases and barter, and the prices nearby (step 10b).
+  { id: 'trade', name: 'Trade', title: 'Trade advisor', render: (ctx) => (notPeople(ctx.app.state, ctx.nation) ? tradeTab(ctx) : peopleTradeTab(ctx)), people: { name: 'Trade', title: 'Trade with the Europeans and the peoples' } },
   { id: 'military', name: 'Military', title: 'Military advisor', render: militaryTab },
   { id: 'naval', name: 'Naval', title: 'Naval advisor', render: navalTab },
-  { id: 'religion', name: 'Religion', title: 'Religious advisor', render: religionTab },
-  { id: 'natives', name: 'Natives', title: 'Indian advisor', render: nativesTab },
+  { id: 'religion', name: 'Religion', title: 'Religious advisor', render: religionTab, shown: notPeople },
+  { id: 'natives', name: 'Natives', title: 'Indian advisor', render: nativesTab, people: { name: 'Peoples', title: 'The peoples nobody plays' } },
   { id: 'congress', name: '{councilShort}', title: '{council}', render: congressTab },
-  { id: 'history', name: 'History', title: 'History of the colonies', render: historyTab },
+  { id: 'history', name: 'History', title: 'History of the colonies', render: historyTab, people: { name: 'History', title: 'History' } },
+  // The scenario's ways to win and where the player stands (Beta 3 step 10; native-nations.md T14).
+  { id: 'victory', name: 'Victory', title: 'Ways to win', render: (ctx) => victoryTab(ctx) },
 ];
 
 // Remembered for the session.
 let lastTab = REPORT_TABS[0].id;
-let lastNation: NationId | undefined;
+let lastNation: PlayerId | undefined;
 
 export class ReportsScreen implements Screen {
   el: HTMLElement;
@@ -603,13 +680,31 @@ export class ReportsScreen implements Screen {
 
   constructor(private app: App, tab?: string) {
     this.tab = tab && REPORT_TABS.some((t) => t.id === tab) ? tab : lastTab;
+    if (!this.tabs().some((t) => t.id === this.tab)) this.tab = this.tabs()[0].id;
     lastTab = this.tab;
     this.body = h('div', { class: 'screen-body' });
     this.el = h('section', { class: 'screen reports-screen', role: 'dialog', 'aria-label': 'Reports' }, this.body);
   }
 
+  /** A tab's name or title in the words of the player it is about: a people's council is its own (T8). */
+  private words(t: ReportTab, key: 'name' | 'title'): string {
+    const s = this.app.state;
+    const nation = this.nation();
+    if (isPeoplePlayer(s.players.find((p) => p.id === nation))) {
+      if (t.people) return t.people[key];
+      if (t.id === 'congress') return CouncilText(s, nation, key === 'name' ? 'councilShort' : 'council');
+    }
+    return withTerms(s, t[key]);
+  }
+
+  /** The reports shown for the nation they are about. */
+  private tabs(): ReportTab[] {
+    const nation = this.nation();
+    return REPORT_TABS.filter((t) => !t.shown || t.shown(this.app.state, nation));
+  }
+
   /** The nation the reports are about: the player's own, or the one an observer picked. */
-  private nation(): NationId {
+  private nation(): PlayerId {
     const app = this.app;
     if (!app.observer) return app.viewer;
     if (app.watch !== 'all') return app.watch;
@@ -626,20 +721,22 @@ export class ReportsScreen implements Screen {
   }
 
   setTab(id: string): void {
-    if (!REPORT_TABS.some((t) => t.id === id)) return;
+    if (!this.tabs().some((t) => t.id === id)) return;
     this.tab = lastTab = id;
     this.build();
   }
 
   onKey(e: KeyboardEvent): boolean {
-    const n = /^Digit([1-8])$/.exec(e.code) ?? /^F([1-8])$/.exec(e.key);
+    const n = /^Digit([1-9])$/.exec(e.code) ?? /^F([1-9])$/.exec(e.key);
     if (n && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      this.setTab(REPORT_TABS[Number(n[1]) - 1].id);
+      const t = this.tabs()[Number(n[1]) - 1];
+      if (t) this.setTab(t.id);
       return true;
     }
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-      const i = REPORT_TABS.findIndex((t) => t.id === this.tab);
-      this.setTab(REPORT_TABS[(i + (e.key === 'ArrowRight' ? 1 : -1) + REPORT_TABS.length) % REPORT_TABS.length].id);
+      const tabs = this.tabs();
+      const i = tabs.findIndex((t) => t.id === this.tab);
+      this.setTab(tabs[(i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length].id);
       return true;
     }
     return false;
@@ -650,13 +747,15 @@ export class ReportsScreen implements Screen {
     const s = app.state;
     const nation = this.nation();
     this.drawnKey = `${this.tab}|${s.turn}|${s.current}|${s.messages.length}|${nation}|${app.watch}|${activeStyle().id}`;
-    const tab = REPORT_TABS.find((t) => t.id === this.tab)!;
+    const tabs = this.tabs();
+    if (!tabs.some((t) => t.id === this.tab)) this.tab = tabs[0].id;
+    const tab = tabs.find((t) => t.id === this.tab)!;
     const scrollTop = this.el.parentElement?.scrollTop ?? 0;
     clear(this.body);
     const ctx: ReportContext = { app, nation, all: app.observer && app.watch === 'all' && tab.id === 'history', rerender: () => this.build() };
     const pick = app.observer && app.watch === 'all'
       ? h('label', { class: 'field report-nation' }, h('span', null, 'Nation'),
-          h('select', { onchange: (e: Event) => { lastNation = (e.target as HTMLSelectElement).value as NationId; this.build(); } },
+          h('select', { onchange: (e: Event) => { lastNation = (e.target as HTMLSelectElement).value as PlayerId; this.build(); } },
             s.players.filter((p) => p.id !== 'crown').map((p) => h('option', { value: p.id, selected: p.id === nation || undefined }, nationTitle(app.state, p.id)))))
       : null;
     this.body.append(
@@ -666,14 +765,14 @@ export class ReportsScreen implements Screen {
         pick,
         h('button', { class: 'btn close', onclick: () => app.closeScreen(), 'aria-label': 'Close reports' }, 'Close')),
       h('nav', { class: 'report-tabs', role: 'tablist', 'aria-label': 'Advisors' },
-        REPORT_TABS.map((t, i) => h('button', {
+        tabs.map((t, i) => h('button', {
           class: `tab${t.id === this.tab ? ' active' : ''}`,
           role: 'tab',
           'aria-selected': String(t.id === this.tab),
-          title: `${withTerms(this.app.state, t.title)} (F${i + 1}, or ${i + 1} while the reports are open)`,
+          title: i < 8 ? `${this.words(t, 'title')} (F${i + 1}, or ${i + 1} while the reports are open)` : `${this.words(t, 'title')} (${i + 1} while the reports are open)`,
           onclick: () => this.setTab(t.id),
-        }, h('kbd', null, String(i + 1)), withTerms(this.app.state, t.name)))),
-      h('h3', { class: 'report-title' }, withTerms(this.app.state, tab.title)),
+        }, h('kbd', null, String(i + 1)), this.words(t, 'name')))),
+      h('h3', { class: 'report-title' }, this.words(tab, 'title')),
       h('div', { class: 'report-body', role: 'tabpanel' }, tab.render(ctx)),
     );
     // Keep the scroll position when a sort or filter rebuilds the same tab.

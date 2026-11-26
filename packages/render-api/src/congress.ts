@@ -199,3 +199,47 @@ export function drawCongressHallBackdrop(ctx: CanvasRenderingContext2D, width: n
   }
   ctx.restore();
 }
+
+/**
+ * A plain hall for a council with no picture of its own (a people's council house until step 10's
+ * art): a bark-brown wall under a rounded roof and an earthen floor. Nothing ceremonial is drawn.
+ */
+export function drawCouncilHouseBackdrop(ctx: CanvasRenderingContext2D, width: number, height: number, ink: string): void {
+  const W = width;
+  const H = height;
+  const lw = Math.max(1.2, H * 0.003);
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = lw;
+  const floorTop = 0.44 * H;
+  ctx.fillStyle = '#8a6a48';
+  ctx.fillRect(0, 0, W, floorTop);
+  // The rounded roof's arch.
+  ctx.fillStyle = '#6f5238';
+  ctx.beginPath();
+  ctx.moveTo(0, 0.18 * H);
+  ctx.quadraticCurveTo(W / 2, -0.12 * H, W, 0.18 * H);
+  ctx.lineTo(W, 0);
+  ctx.lineTo(0, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Bark panels on the wall.
+  ctx.lineWidth = lw * 0.7;
+  for (let x = 0.03 * W; x < W; x += 0.06 * W) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0.2 * H);
+    ctx.lineTo(x, floorTop);
+    ctx.stroke();
+  }
+  ctx.lineWidth = lw;
+  // Earthen floor.
+  ctx.fillStyle = '#c9a77a';
+  ctx.fillRect(0, floorTop, W, H - floorTop);
+  ctx.beginPath();
+  ctx.moveTo(0, floorTop);
+  ctx.lineTo(W, floorTop);
+  ctx.stroke();
+  ctx.restore();
+}

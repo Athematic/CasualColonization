@@ -4,7 +4,7 @@
  */
 import type { BuildingKind } from '../rules/buildings.js';
 import type { GoodId, ProductId } from '../rules/goods.js';
-import type { NationId, TribeId } from '../rules/nations.js';
+import type { PlayerId, TribeId } from '../rules/nations.js';
 import type { UnitTypeId } from '../rules/units.js';
 import type { GameState } from '../types.js';
 
@@ -12,7 +12,7 @@ export type EventKind = 'historical' | 'random';
 
 /** What an event is about: filled in by its target selector and `prepare`. Stored with a pending choice. */
 export interface EventVars {
-  nation: NationId;
+  nation: PlayerId;
   colony?: string;
   tribe?: TribeId;
   settlement?: string;
@@ -78,7 +78,9 @@ export type Effect =
   /** The nation's units of one type become another (Bartolomé de las Casas: converts become free colonists). */
   | { kind: 'convertUnits'; from: UnitTypeId; to: UnitTypeId }
   /** All the nation's boycotts end without arrears (Jakob Fugger). */
-  | { kind: 'liftBoycotts' };
+  | { kind: 'liftBoycotts' }
+  /** The nation makes peace with every player it is at war with, but the Crown (Garakontié). */
+  | { kind: 'makePeace' };
 
 export interface EventChoice {
   label: string;
@@ -92,7 +94,7 @@ export interface EventChoice {
 }
 
 /** Picks what an event targets for one nation, or null when the nation has nothing to target. */
-export type TargetSelector = (s: GameState, nation: NationId, r: () => number) => EventVars | null;
+export type TargetSelector = (s: GameState, nation: PlayerId, r: () => number) => EventVars | null;
 
 export interface EventDef {
   id: string;
@@ -124,7 +126,7 @@ export interface EventDef {
 
 /** A temporary production modifier (stored compactly in the save). */
 export interface EventModifier {
-  nation: NationId;
+  nation: PlayerId;
   /** Colony id; missing means all the nation's colonies. */
   colony?: string;
   /** Products affected; missing means all. */

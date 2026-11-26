@@ -13,6 +13,7 @@
  */
 import type { BuildingKind } from './buildings.js';
 import type { GoodId } from './goods.js';
+import type { WayId } from './peoples.js';
 import type { RoleId, UnitTypeId } from './units.js';
 
 /** The outcomes of a Lost City Rumour (rumours.ts). */
@@ -34,6 +35,16 @@ export type Modifier =
   | { hook: 'autoStockade'; minColonists: number }
   /** A building that needs a council member may be built (Peter Stuyvesant: the custom house). */
   | { hook: 'unlockBuilding'; building: BuildingKind }
+
+  // ---- A people's economy (native-nations.md T10; peopleeconomy.ts, land.ts) ----
+  /** A worked tile's yield got by one way (rules/peoples.ts `wayOf`), multiplied and rounded (the Weir Builders: fishing × 1.5). */
+  | { hook: 'wayYield'; way: WayId; mul: number }
+  /** Food each of a people's towns can keep in store, added (the Keepers of the Stores: +100). */
+  | { hook: 'townStore'; add: number }
+  /** Turns an elder needs to teach a skill of the people's ways, added (the Elders: −1). */
+  | { hook: 'teachTurns'; add: number }
+  /** Health a region where the people has a town regains in a year it is not over-hunted, added (the Hunt Leaders: +5). */
+  | { hook: 'landRecovery'; add: number }
 
   // ---- Europe (europe.ts, queries.ts) ----
   /** Turns to sail between Europe and the map, added (Magellan −1). */
@@ -76,7 +87,7 @@ export type Modifier =
   | { hook: 'offenceVsSettlements'; mul: number }
   /** Unarmed colonists defend as soldiers when the colony holds this many muskets (Paul Revere: 50). */
   | { hook: 'armedFromStock'; muskets: number }
-  /** Armed colonists who win a battle are always promoted (George Washington). */
+  /** Armed colonists who win a battle are always promoted (George Washington); a people's townsperson always becomes a warrior (the War Leaders). */
   | { hook: 'alwaysPromote' }
   /** Treasure from a burned city or capital, multiplied and rounded (Hernán Cortés × 1.5). */
   | { hook: 'conquestTreasure'; mul: number }

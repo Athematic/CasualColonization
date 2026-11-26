@@ -10,7 +10,7 @@
  * style, squares and hexes. With `fallback: 'placeholder'` missing sprites and icons are plain
  * placeholders (placeholder.ts) instead of the fallback's drawing.
  */
-import { UNIT_TYPES } from '@cc/engine';
+import { FATHERS, UNIT_TYPES } from '@cc/engine';
 import { FATHER_FIGURE_ASPECT, type IconRequest, type MapRenderer, type Scene, type StylePlugin } from '@cc/render-api';
 import { SpriteIds } from './ids.js';
 import { createLayerHooks } from './layers.js';
@@ -170,6 +170,8 @@ export function createSpriteStyle(input: SpritePack, fallback: StylePlugin, opts
       case 'building':
         return p.square(ctx, ids.building(icon.building, icon.level), 0, 0, size, dpr);
       case 'father': {
+        // A member without a likeness (native-nations.md T9) is always the procedural emblem.
+        if (FATHERS[icon.id]?.portrait === 'emblem') return false;
         if (icon.variant === 'figure') {
           // A full-length figure, 2:3, as tall as the box and centred in it.
           const w = size * FATHER_FIGURE_ASPECT;

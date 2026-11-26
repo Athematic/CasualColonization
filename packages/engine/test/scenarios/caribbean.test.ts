@@ -66,8 +66,8 @@ describe('the Caribbean scenario', () => {
 
   it('has no furs: no furs or coats, no fur trader, no fur experts', () => {
     for (const g of ['furs', 'coats'] as const) expect(CARIBBEAN.goods).not.toContain(g);
-    expect(CARIBBEAN.buildings).not.toContain('furTrader');
-    for (const u of ['expertFurTrapper', 'masterFurTrader'] as const) expect(CARIBBEAN.units).not.toContain(u);
+    expect(CARIBBEAN.nationTypes.european.buildings).not.toContain('furTrader');
+    for (const u of ['expertFurTrapper', 'masterFurTrader'] as const) expect(CARIBBEAN.nationTypes.european.units).not.toContain(u);
     const s = game();
     for (const t of CARIBBEAN.peoples.ids) for (const g of peopleOf(s, t).wants) expect(CARIBBEAN.goods).toContain(g);
     // The Tupi's coats become cloth here; the catalogue keeps the Americas' wants.
@@ -109,9 +109,9 @@ describe('the Caribbean scenario', () => {
 
 describe('the Caribbean council', () => {
   it('has fourteen Founding Fathers of the period and three new members', () => {
-    expect(CARIBBEAN.council.members).toHaveLength(17);
-    for (const id of ['henryMorgan', 'williamDampier', 'mariaSibyllaMerian'] as const) expect(CARIBBEAN.council.members).toContain(id);
-    for (const id of ['henryHudson', 'hernanCortes', 'simonBolivar', 'pocahontas'] as const) expect(CARIBBEAN.council.members).not.toContain(id);
+    expect(CARIBBEAN.councils.congress.members).toHaveLength(17);
+    for (const id of ['henryMorgan', 'williamDampier', 'mariaSibyllaMerian'] as const) expect(CARIBBEAN.councils.congress.members).toContain(id);
+    for (const id of ['henryHudson', 'hernanCortes', 'simonBolivar', 'pocahontas'] as const) expect(CARIBBEAN.councils.congress.members).not.toContain(id);
   });
 
   it('Henry Morgan: privateers × 1.5', () => {

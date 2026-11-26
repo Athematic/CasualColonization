@@ -267,7 +267,7 @@ describe('the schematic renderer with layer hooks', () => {
     placeholder.drawIcon(ctx, { kind: 'product', product: 'hammers' }, 40);
     placeholder.drawIcon(ctx, { kind: 'building', building: 'stockade', level: 2 }, 40);
     placeholder.drawIcon(ctx, { kind: 'tile', tile: { t: 'plains', f: true } as never }, 40);
-    placeholder.drawIcon(ctx, { kind: 'father', id: AMERICAS.council.members[0], category: 'trade' }, 40);
+    placeholder.drawIcon(ctx, { kind: 'father', id: AMERICAS.councils.congress.members[0], category: 'trade' }, 40);
     expect(placeholder.drawBackdrop!(ctx, 'congress-hall', 300, 200)).toBe(true);
     expect(ctx.calls).toContain('fillText');
   });

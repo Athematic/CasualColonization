@@ -5,7 +5,7 @@
  */
 import { buyableInPartnerPort, portsFor, train, trainPrice } from '../europe.js';
 import { colonyWorkers, isCoastal, isShip, player } from '../queries.js';
-import type { NationId } from '../rules/nations.js';
+import type { PlayerId } from '../rules/nations.js';
 import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
 import type { BuildTarget, Colony, GameState, Player } from '../types.js';
 import { ownColonies, safely } from './common.js';
@@ -84,9 +84,9 @@ export function warshipWanted(s: GameState, p: Player, prof: AiProfile, r: Fleet
  * Where to buy a ship: a Favoured Nation partner's port when one of the nation's ships is there and
  * the ship is cheaper there (merchant ships only), otherwise the home port (undefined).
  */
-export function shipPort(s: GameState, p: Player, type: UnitTypeId): NationId | undefined {
+export function shipPort(s: GameState, p: Player, type: UnitTypeId): PlayerId | undefined {
   if (!buyableInPartnerPort(type)) return undefined;
-  let best: { port?: NationId; price: number } = { price: trainPrice(s, p, type) };
+  let best: { port?: PlayerId; price: number } = { price: trainPrice(s, p, type) };
   for (const port of portsFor(s, p.id).slice(1)) {
     if (!ownedUnitsView(s, p.id).some((u) => u.loc.kind === 'europe' && u.loc.port === port)) continue;
     const price = trainPrice(s, player(s, port), type);

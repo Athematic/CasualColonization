@@ -5,16 +5,17 @@
  *
  * Imports only the leaf rule tables, so any engine module can import the registry.
  */
-import { BUILDING_ORDER } from '../rules/buildings.js';
+import { EUROPEAN_BUILDINGS } from '../rules/buildings.js';
 import { COLONY_CHARTER } from '../rules/difficulty.js';
-import { AMERICAS_FATHERS, FATHER_CATEGORIES } from '../rules/fathers.js';
+import { AMERICAS_FATHERS } from '../rules/fathers.js';
+import { congress } from '../rules/councils.js';
 import { GOODS } from '../rules/goods.js';
 import type { Modifier } from '../rules/modifiers.js';
 import { HOME_PORTS, NATION_ORDER, NATIONS, TRIBE_ORDER, type AmericasNationId, type NationId } from '../rules/nations.js';
 import { BURIAL_WEIGHT, NATIVE_PRODUCE, SETTLEMENT_KINDS } from '../rules/natives.js';
 import { PORT_CHARACTER } from '../rules/ports.js';
 import { TERRAIN, type TerrainId } from '../rules/terrain.js';
-import { UNIT_TYPES, type UnitTypeId } from '../rules/units.js';
+import { EUROPEAN_UNIT_TYPES } from '../rules/units.js';
 import { AMERICAS_PEOPLES } from '../maps/americas.js';
 import { AUSTRALIA_PLACEHOLDER_PEOPLES } from '../maps/australia.js';
 import { NORTH_AMERICA_PEOPLES } from '../maps/north-america.js';
@@ -145,11 +146,15 @@ export const AMERICAS: Scenario = {
     ids: [...TRIBE_ORDER],
     produce: [...NATIVE_PRODUCE],
     settlements: { nomadic: SETTLEMENT_KINDS.camp, agricultural: SETTLEMENT_KINDS.village, urban: SETTLEMENT_KINDS.city },
+    // The Haudenosaunee keep the name the Americas has always shown, and their seeded draws hash
+    // their id before native-nations.md section 18 (`iroquois`), so the Americas' games are as they were.
+    overrides: { haudenosaunee: { name: 'Iroquois', seedKey: 'iroquois' } },
   },
   goods: [...GOODS],
-  units: Object.keys(UNIT_TYPES) as UnitTypeId[],
-  buildings: [...BUILDING_ORDER],
-  council: { categories: [...FATHER_CATEGORIES], members: [...AMERICAS_FATHERS] },
+  // No people plays in the Americas (native-nations.md T4), so only the European nations' selection.
+  nationTypes: { european: { units: [...EUROPEAN_UNIT_TYPES], buildings: [...EUROPEAN_BUILDINGS], council: 'congress' } },
+  // The Continental Congress (rules/councils.ts), the European nations' council.
+  councils: { congress: congress(AMERICAS_FATHERS) },
   events: 'americas',
   ai: {
     // The pace the computer players' turn thresholds were tuned for (scenarios/index.ts aiTurn).

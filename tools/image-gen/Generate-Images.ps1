@@ -36,9 +36,11 @@ param(
     [ValidateSet('sprites', 'boxart', 'comics', 'all')][string]$Doc = 'all',
     # Comics (-Doc comics): slug patterns, e.g. 'a-landfall' or 'n-*' (no wildcard = matches anywhere in the slug).
     [string[]]$Comic,
-    # page: one 1024x1536 album page per script page (default). panel: one image per panel (about 900 in all).
+    # page: one portrait album page per script page (default). panel: one image per panel (about 900 in all).
     # cast: one 1536x1024 character model sheet per comic.
     [ValidateSet('page', 'panel', 'cast')][string]$ComicUnit = 'page',
+    # Target WxH for -ComicUnit page (default 1024x1536; e.g. 2160x3240 for print-resolution lossless PNG on gpt-image-2.5-*).
+    [ValidatePattern('^\d+x\d+$')][string]$ComicPageSize = '1024x1536',
     # Add the comics to -Doc all.
     [switch]$IncludeComics,
     # Wildcard patterns matched against the job id ("units/caravel__none") or key ("sprites/units/caravel__none").
@@ -58,6 +60,9 @@ param(
     # Write the fully assembled prompts as Markdown files (one per job, plus index.md) for pasting into an image
     # chat, and exit. Never calls the API: no key, no manifest, no cost confirmation. Works with every selection option.
     [switch]$OutputPrompts,
+    # With -OutputPrompts or -DryRun: rewrite transparent-background prompts to request a flat bright magenta (#ff00ff)
+    # chroma-key backdrop for opaque-only image generators (then extract real alpha with tools/image-gen/chroma_key.py).
+    [switch]$ChromaKey,
     # Folder for -OutputPrompts. Default: tools/image-gen/output/prompts
     [string]$PromptsDir,
     # Output folder for PNGs, manifest.json and index.html. Default: tools/image-gen/output
@@ -139,7 +144,7 @@ if ($Variant -ne 'full') {
 }
 $jobs = Get-ImageJobs -SpriteDoc $SpriteDoc -BoxArtDoc $BoxArtDoc -Doc $Doc -Only $Only -Variants $Variants -IncludeTitle:$IncludeTitle `
     -Variant $Variant -ThumbPrompts $thumbPrompts -DocumentOrder:$DocumentOrder `
-    -ComicPromptDoc $ComicPromptDoc -ComicsDir $ComicsDir -Comic $Comic -ComicUnit $ComicUnit -IncludeComics:$IncludeComics
+    -ComicPromptDoc $ComicPromptDoc -ComicsDir $ComicsDir -Comic $Comic -ComicUnit $ComicUnit -ComicPageSize $ComicPageSize -IncludeComics:$IncludeComics
 $byDoc = foreach ($d in 'sprites', 'boxart', 'thumbs', 'comics') {
     $n = @($jobs | Where-Object Doc -eq $d).Count
     if ($n) { "${d}: $n" }
@@ -171,7 +176,7 @@ if ($jobs.Count -eq 0) {
 }
 
 if ($OutputPrompts) {
-    $selNames = 'Doc', 'Only', 'Variant', 'Variants', 'IncludeTitle', 'Comic', 'ComicUnit', 'IncludeComics', 'DocumentOrder', 'Model', 'Quality'
+    $selNames = 'Doc', 'Only', 'Variant', 'Variants', 'IncludeTitle', 'Comic', 'ComicUnit', 'ComicPageSize', 'IncludeComics', 'DocumentOrder', 'ChromaKey', 'Model', 'Quality'
     $selParts = foreach ($n in $selNames) {
         if (-not $PSBoundParameters.ContainsKey($n)) { continue }
         $v = $PSBoundParameters[$n]
@@ -179,7 +184,7 @@ if ($OutputPrompts) {
     }
     $selText = '`' + ((@("-Doc $Doc") + @($selParts | Where-Object { $_ -notlike '-Doc *' })) -join ' ') + '`'
     $pset = [pscustomobject]@{ Model = $Model; Quality = $Quality }
-    $pr = Write-PromptFiles -Jobs $jobs -PromptsDir $PromptsDir -Settings $pset -SelectionText $selText
+    $pr = Write-PromptFiles -Jobs $jobs -PromptsDir $PromptsDir -Settings $pset -SelectionText $selText -ChromaKey:$ChromaKey
     Write-Host "Wrote $($pr.Count) prompt files and index.md to $PromptsDir. No request was sent; the manifest was not touched." -ForegroundColor Green
     exit 0
 }
@@ -199,6 +204,7 @@ if ($DryRun) {
     foreach ($p in $plan) {
         $j = $p.Job
         $body = New-ImageRequestBody -Job $j -Settings $settings
+        $promptOut = if ($ChromaKey) { ConvertTo-ChromaKeyPrompt -Prompt $j.Prompt -Background $j.Background } else { $j.Prompt }
         $runs = $runKeys.Contains($j.Key)
         Write-Output ('=' * 100)
         Write-Output "$($j.Key)   [$(if ($runs) { 'would run' } else { 'skip' }): $($p.Reason)]"
@@ -208,8 +214,8 @@ if ($DryRun) {
         Write-Output "output:  $(Join-Path $OutDir $j.OutputRel)"
         Write-Output "request: POST $($ApiBase.TrimEnd('/'))/images/generations model=$($body.model) size=$($body.size) quality=$($body.quality) background=$($body.background) output_format=$($body.output_format) n=$($body.n) moderation=$($body.moderation)"
         if ($j.Notes) { Write-Output "note:    $($j.Notes)" }
-        Write-Output "prompt ($($j.Prompt.Length) chars):"
-        Write-Output $j.Prompt
+        Write-Output "prompt ($($promptOut.Length) chars):"
+        Write-Output $promptOut
     }
     Write-Output ('=' * 100)
     Write-Output "Dry run: $($jobs.Count) jobs ($countText); $($toRun.Count) would call the API. No request was sent."

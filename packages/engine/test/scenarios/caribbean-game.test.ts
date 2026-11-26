@@ -35,7 +35,7 @@ describe('a full computer game in the Caribbean', () => {
   it('every nation takes part: colonies, colonists and trade', () => {
     const s = play();
     // The nations of the line; a chartered company founded during the game has no Founding Fathers.
-    for (const p of s.players.filter((o) => ALL.includes(o.id))) {
+    for (const p of s.players.filter((o) => ALL.includes(o.id as NationId))) {
       expect(p.coloniesFounded, p.id).toBeGreaterThan(0);
       expect(Object.values(s.colonies).some((c) => c.owner === p.id), p.id).toBe(true);
       expect(p.fathers.length, p.id).toBeGreaterThan(0);

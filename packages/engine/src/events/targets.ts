@@ -6,7 +6,7 @@
 import { gridOf } from '../grid.js';
 import { colonyAt, colonyWorkers, isCoastal, isShip, isWater, player, tileAt } from '../queries.js';
 import type { GoodId } from '../rules/goods.js';
-import type { NationId } from '../rules/nations.js';
+import type { PlayerId } from '../rules/nations.js';
 import type { Colony, GameState } from '../types.js';
 import type { EventVars, TargetSelector } from './types.js';
 import { colonyList, unitList } from '../unitindex.js';
@@ -15,7 +15,7 @@ function pickOne<T>(items: T[], r: () => number): T | undefined {
   return items.length ? items[Math.floor(r() * items.length)] : undefined;
 }
 
-export function coloniesOf(s: GameState, nation: NationId): Colony[] {
+export function coloniesOf(s: GameState, nation: PlayerId): Colony[] {
   return colonyList(s).filter((c) => c.owner === nation);
 }
 

@@ -5,7 +5,10 @@ A browser clone of Sid Meier's *Colonization*. The game engine is kept separate 
 **Alpha 0.2** focuses on cloning the original game. The planned changes come later and build on this engine:
 
 - the number of European nations is chosen when starting a game (1–8) — *already in the alpha*
-- relations with other nations and with indigenous peoples centre on **cooperation rather than combat** — *planned, see [Roadmap](#roadmap)*
+- relations with other nations and with indigenous peoples centre on **cooperation rather than combat** — *Beta 1 (alliances, chartered companies, winning together) and Beta 2 (treaties with the native peoples, winning by prosperity)*
+- native peoples can be played as nations of their own, in the North-east from the year 1000 — *Beta 3*
+
+What each release brought is in [docs/SHIPPED.md](docs/SHIPPED.md).
 
 ## Play
 
@@ -71,20 +74,22 @@ In a colony, click a colonist and then a field or building to put them to work. 
 
 ## Scenarios
 
-A scenario is the world a game is played in: its years, map, nations, peoples, goods, Founding Fathers (or their counterparts), events, rules and ways to win. The engine provides the mechanics; the scenario provides the data. Two are playable:
+A scenario is the world a game is played in: its years, map, nations, peoples, goods, Founding Fathers (or their counterparts), events, rules and ways to win. The engine provides the mechanics; the scenario provides the data. Three are playable:
 
 - **The Americas, 1492–1850**: the original game. Alternative history (all eight nations) or real rivals (England, France, the Netherlands and Spain); generated worlds or the stored maps. It ends with the War of Independence or in 1850.
 - **The Caribbean, 1650–1750**: the lesser powers (Courland, Brandenburg, Scotland and the Order of Malta, beside England, France, the Netherlands, Spain and Denmark) among the sugar islands. 202 spring and autumn turns, a map of the real West Indies (or a generated archipelago), the Arawak, the Kalinago and the Tupi, no furs, a Colonial Council, its own events. The Crown taxes and makes demands but sends no army, and nobody declares independence: it ends in 1750 and the highest score wins.
+- **The North-east, 1000–1850** (Beta 3, [design note](docs/design/native-nations.md)): play a native people (the Haudenosaunee, the Wendat, the Mi'kmaq or the Innu) from the year 1000, one turn a year, on a map of the real North-east, and meet the Europeans as they arrive one by one from 1497; or play a European nation among the peoples. A people grows from food and stores, keeps its land healthy, sits its own council, trades, makes treaties and leagues, and wins by continuity, a confederacy of peoples, a good life or by defeating every European nation. Head starts make a shorter game.
 
-Australia (1788–1901) and Vinland (around 1000) are planned and shown on the New game screen as disabled choices.
+Australia (1788–1901) and Vinland (around 1000, on hexagons, Beta 4) are planned and shown on the New game screen as disabled choices.
 
 **Choosing one.** The New game screen has a *Scenario* select. Changing it resets the nations, the map, the size and the start year to what the scenario offers. The *Rivals* select chooses the nations that were there (when the scenario has them) or alternative history. Game codes and share links carry the scenario.
 
-**Tools.** `--scenario <id>` (`americas` or `caribbean`) works for `npm run tournament`, the arena and `npm run bench`. Give a tournament the scenario's length with `--turns` (609 for the Americas, 202 for the Caribbean). `--rivals real` (or `alternative`) picks the nation set. `--play-on` (tournament) lets the computer players go on after a War of Independence, so every nation is measured to the end year; a nation that has fought its war keeps the score it had then.
+**Tools.** `--scenario <id>` (`americas`, `caribbean` or `north-east`) works for `npm run tournament`, the arena and `npm run bench`. Give a tournament the scenario's length with `--turns` (609 for the Americas, 202 for the Caribbean, 851 for the North-east, whose playing peoples play too: `--peoples` chooses them). `--rivals real` (or `alternative`) picks the nation set. `--play-on` (tournament) lets the computer players go on after a War of Independence, so every nation is measured to the end year; a nation that has fought its war keeps the score it had then.
 
 ```sh
 npm run tournament -- --scenario caribbean --games 6 --turns 202 --events
 npm run tournament -- --rivals real --play-on
+npm run tournament -- --scenario north-east --games 8 --turns 851 --play-on --events
 npm run bench -- --verify --scenario caribbean
 ```
 
@@ -209,11 +214,12 @@ The full plan is in [docs/ROADMAP.md](docs/ROADMAP.md). In short:
 
 1. **Alpha (now)**: a faithful clone of the classic game, with a configurable number of nations.
 2. **Alpha+**: visible native units, a smarter computer opponent, and balance passes.
-3. **Beta: Cooperation overhaul**:
-   - replace conquest with alliances, joint ventures and shared colonies between European nations;
-   - make indigenous peoples partners: trade agreements, cultural exchange, shared land use and mutual defence;
-   - set new victory paths around prosperity and cooperation instead of independence by war.
-4. More graphical styles as plugins.
+3. **Betas 1–3 (shipped)**:
+   - Beta 1: alliances, chartered companies and winning together between European nations;
+   - Beta 2: indigenous peoples as partners: trade agreements, cultural exchange, shared land use and mutual defence, and winning by prosperity;
+   - Beta 3: native peoples as nations of their own, in the North-east from the year 1000.
+4. **Beta 4**: hexagon maps, and Vinland with the Norse on them.
+5. More graphical styles as plugins.
 
 ## Credits
 

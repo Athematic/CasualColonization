@@ -5,6 +5,8 @@ import { readyToDeclare, runAdvanced } from './advanced.js';
 import { setConfederationJudge } from '../confederation.js';
 import { cooperationOf, LEVEL_COOPERATION } from '../alliances.js';
 import { companyRules } from '../companies.js';
+import { systemsOf } from '../playerkind.js';
+import { runPeopleAi } from './people.js';
 import { creativeProfile } from './creative.js';
 import { runNaive } from './naive.js';
 import { rentReserve } from './natives.js';
@@ -19,9 +21,13 @@ setConfederationJudge((s, nation, together) => {
 
 /** Plays one turn for a computer-controlled nation at its level. */
 export function runAi(s: GameState, p: Player): void {
-  if (p.id === 'crown') return runCrown(s);
-  // A chartered company plays its own simple profile (companies.ts).
-  if (p.kind === 'company') return runAdvanced(s, p, companyProfile(s));
+  // Who plays it by kind (playerkind.ts `ai`): the Crown's troops, a company's own simple profile
+  // (companies.ts), a people (step 9 gives it its own profiles; until then simple diplomacy, step 4),
+  // or a nation at its level.
+  const ai = systemsOf(p).ai;
+  if (ai === 'crown') return runCrown(s);
+  if (ai === 'company') return runAdvanced(s, p, companyProfile(s));
+  if (ai === 'people') return runPeopleAi(s, p);
   const level = p.ai ?? 'naive';
   if (level === 'naive') return runNaive(s, p);
   const base = inScenario(s, AI_PROFILES[level]);

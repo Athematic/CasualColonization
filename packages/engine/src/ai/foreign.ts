@@ -41,7 +41,8 @@ import {
 } from '../relations.js';
 import type { GoodId } from '../rules/goods.js';
 import { UNIT_TYPES } from '../rules/units.js';
-import type { NationId } from '../rules/nations.js';
+import type { PlayerId } from '../rules/nations.js';
+import { systemsOf } from '../playerkind.js';
 import { track } from '../telemetry.js';
 import type { Colony, GameState, Player, ProposalKind, Unit } from '../types.js';
 import { allianceRules, alliancesOn, allianceOf, longPeaceUnlocked, tiesUnlocked, expeditionProblem, allianceProblem, alliesOf, cooperationOf, isAllied, LEVEL_COOPERATION, leaveAlliance, warOnFriend } from '../alliances.js';
@@ -93,7 +94,7 @@ export const WAR_AFTER_CANCEL = 2;
 export const NATIVE_GRIEVANCE_CHANCE = 0.25;
 
 function reviewTurn(s: GameState, p: Player): boolean {
-  const i = Math.max(0, s.config.nations.indexOf(p.id));
+  const i = Math.max(0, (s.config.nations as readonly PlayerId[]).indexOf(p.id));
   return (s.turn + i) % FOREIGN_REVIEW_EVERY === 0;
 }
 
@@ -115,15 +116,15 @@ export function foreignAffairs(s: GameState, p: Player, prof: AiProfile, strengt
 // ---------------------------------------------------------------------------
 // Proposals
 
-function cooldownKey(kind: ProposalKind, nation: NationId): string {
+function cooldownKey(kind: ProposalKind, nation: PlayerId): string {
   return `${kind}:${nation}`;
 }
 
-function coolingDown(s: GameState, p: Player, kind: ProposalKind, nation: NationId): boolean {
+function coolingDown(s: GameState, p: Player, kind: ProposalKind, nation: PlayerId): boolean {
   return (p.aiMemory?.proposalCooldown?.[cooldownKey(kind, nation)] ?? -1) > s.turn;
 }
 
-function startCooldown(s: GameState, p: Player, kind: ProposalKind, nation: NationId): void {
+function startCooldown(s: GameState, p: Player, kind: ProposalKind, nation: PlayerId): void {
   const memory = (p.aiMemory = p.aiMemory ?? {});
   const cool = (memory.proposalCooldown = memory.proposalCooldown ?? {});
   const r = pairRandom(s, p.id, nation, `${p.id} cooldown ${kind} ${s.turn}`);
@@ -154,7 +155,7 @@ export function wagonSteps(s: GameState, p: Player, from: Colony, to: Colony): n
  * Whether two nations are trade neighbours: a colony of each within TRADE_NEIGHBOUR_TILES, both on
  * the coast (ships can trade) or joined by land a wagon train can cross.
  */
-export function tradeNeighbours(s: GameState, p: Player, other: NationId): boolean {
+export function tradeNeighbours(s: GameState, p: Player, other: PlayerId): boolean {
   const grid = gridOf(s);
   const theirs = colonyList(s).filter((c) => c.owner === other);
   if (!theirs.length) return false;
@@ -175,7 +176,7 @@ export function tradeNeighbours(s: GameState, p: Player, other: NationId): boole
  * A nation bent on war (aggression 0.5 or more) keeps its hands free towards a nation it could
  * attack: one with a colony its spare army would beat, near its own colonies.
  */
-export function favouredPays(s: GameState, p: Player, prof: AiProfile, other: NationId, strength: number): boolean {
+export function favouredPays(s: GameState, p: Player, prof: AiProfile, other: PlayerId, strength: number): boolean {
   const grid = gridOf(s);
   if (prof.aggression < 0.5) return true;
   const own = ownColonies(s, p);
@@ -187,7 +188,7 @@ export function favouredPays(s: GameState, p: Player, prof: AiProfile, other: Na
 function makeProposals(s: GameState, p: Player, prof: AiProfile, strength: number): void {
   const memory = p.aiMemory ?? {};
   for (const o of s.players) {
-    if (o.id === p.id || o.id === 'crown' || o.kind === 'company' || !atPeace(s, p.id, o.id) || isHostile(s, p.id, o.id)) continue;
+    if (o.id === p.id || !systemsOf(o).relations || !atPeace(s, p.id, o.id) || isHostile(s, p.id, o.id)) continue;
     if (memory.warTarget && s.colonies[memory.warTarget]?.owner === o.id) continue;
     if (memory.warPlan?.nation === o.id) continue;
     if (!hasTradeAgreement(s, p.id, o.id)) {
@@ -223,7 +224,7 @@ function makeProposals(s: GameState, p: Player, prof: AiProfile, strength: numbe
  * war) wants allies for war: only when the partner is at war, or it has a war target of its own,
  * so that the pact covers its back.
  */
-function wantsAlliance(s: GameState, p: Player, prof: AiProfile, other: NationId, strength: number): boolean {
+function wantsAlliance(s: GameState, p: Player, prof: AiProfile, other: PlayerId, strength: number): boolean {
   if (prof.aggression >= 0.5) {
     const partnerAtWar = s.players.some((o) => o.id !== 'crown' && o.id !== p.id && player(s, other).stance[o.id] === 'war');
     if (!partnerAtWar && !bestWarTarget(s, p, prof, strength)) return false;
@@ -342,9 +343,9 @@ function companyAffairs(s: GameState, p: Player, prof: AiProfile): void {
 function joinAlliesWars(s: GameState, p: Player, prof: AiProfile, strength: number, army: number): void {
   if (!allianceOf(s, p.id) || p.independence !== 'none' || army < 2 || s.turn <= aiTurn(s, 50) || prof.aggression <= 0) return;
   if (Object.entries(p.stance).some(([o, st]) => st === 'war' && o !== 'crown')) return;
-  const enemies = new Set<NationId>();
+  const enemies = new Set<PlayerId>();
   for (const a of alliesOf(s, p.id)) {
-    for (const [o, st] of Object.entries(player(s, a).stance)) if (st === 'war' && o !== 'crown' && o !== p.id) enemies.add(o as NationId);
+    for (const [o, st] of Object.entries(player(s, a).stance)) if (st === 'war' && o !== 'crown' && o !== p.id) enemies.add(o as PlayerId);
   }
   const grid = gridOf(s);
   const memory = (p.aiMemory = p.aiMemory ?? {});
@@ -402,7 +403,7 @@ export function bestWarTarget(s: GameState, p: Player, prof: AiProfile, strength
     if (s.treaties && (isAllied(s, p.id, c.owner) ? !favoured : warOnFriend(s, p.id, c.owner))) continue;
     if (memory.warPlan && memory.warPlan.nation === c.owner && s.turn < memory.warPlan.turn) continue;
     const enemy = s.players.find((o) => o.id === c.owner);
-    if (!enemy || enemy.independence !== 'none' || enemy.kind === 'company') continue;
+    if (!enemy || enemy.independence !== 'none' || !systemsOf(enemy).war) continue;
     const hostile = isHostile(s, p.id, c.owner);
     const aggression = hostile ? Math.max(prof.aggression, HOSTILE_AGGRESSION) : prof.aggression;
     if (aggression <= 0) continue;
@@ -477,7 +478,7 @@ export function exportShare(s: GameState, p: Player, good: GoodId): number {
 }
 
 /** Gold one unit of a good fetches in a port after that port's tax; 0 where it cannot be sold. */
-export function portNet(s: GameState, p: Player, port: NationId, good: GoodId): number {
+export function portNet(s: GameState, p: Player, port: PlayerId, good: GoodId): number {
   const market = port === p.id ? p : player(s, port);
   if (port === p.id && p.boycotts[good]) return 0;
   return (sellPrice(market, good) * (100 - market.tax)) / 100;
@@ -547,7 +548,7 @@ function colonistsForTrip(s: GameState, p: Player): number {
 }
 
 /** What a ship's cargo fetches in a port, after the port's tax. Supplies are not for sale. */
-export function cargoValue(s: GameState, p: Player, ship: Unit, port: NationId): number {
+export function cargoValue(s: GameState, p: Player, ship: Unit, port: PlayerId): number {
   let v = 0;
   for (const [g, n] of Object.entries(ship.cargo ?? {}) as [GoodId, number][]) {
     if (n > 0 && (exportGoods(s).includes(g) || g === 'tradeGoods')) v += n * portNet(s, p, port, g);
@@ -563,12 +564,12 @@ export function cargoValue(s: GameState, p: Player, ship: Unit, port: NationId):
  * on the docks, or recruits the treasury pays for), up to the ship's holds, costs a partner trip
  * COLONIST_TRIP_COST, and the partner must also beat home by PORT_MARGIN.
  */
-export function choosePort(s: GameState, p: Player, ship: Unit): NationId {
+export function choosePort(s: GameState, p: Player, ship: Unit): PlayerId {
   const ports = portsFor(s, p.id);
   if (ports.length < 2 || !ship.cargo) return p.id;
   const home = cargoValue(s, p, ship, p.id);
   const delay = Math.min(colonistsForTrip(s, p), UNIT_TYPES[ship.type].cargo) * COLONIST_TRIP_COST + PORT_MARGIN;
-  let best: { port: NationId; value: number } = { port: p.id, value: home };
+  let best: { port: PlayerId; value: number } = { port: p.id, value: home };
   for (const port of ports.slice(1)) {
     const v = cargoValue(s, p, ship, port) - delay;
     if (v > best.value) best = { port, value: v };
@@ -606,7 +607,7 @@ export function triangleBuy(s: GameState, p: Player, ship: Unit, prof: AiProfile
   const market = here === p.id ? p : player(s, here);
   const holds = Math.min(2, cargoFree(s, ship));
   if (holds <= 0) return;
-  let best: { good: GoodId; port: NationId; gain: number; net: number; price: number } | null = null;
+  let best: { good: GoodId; port: PlayerId; gain: number; net: number; price: number } | null = null;
   for (const g of exportGoods(s)) {
     if (here === p.id && p.boycotts[g]) continue;
     const price = buyPrice(s, market, g);

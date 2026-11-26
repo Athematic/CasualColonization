@@ -1,8 +1,8 @@
-import { TERRAIN, type Tile } from '@cc/engine';
+import { BUILDINGS, TERRAIN, type Tile } from '@cc/engine';
 import { drawFatherCameo, drawFatherFigure, type IconRequest, type StylePlugin } from '@cc/render-api';
 import { INK, LAND, PAPER } from './palette.js';
 import { LigneClaireMapRenderer, lineWidthFor } from './renderer.js';
-import { FONT, HEADING_FONT, house, productIcon, unitSprite } from './sprites.js';
+import { FONT, HEADING_FONT, house, peopleTownSprite, productIcon, unitSprite } from './sprites.js';
 
 function drawIcon(ctx: CanvasRenderingContext2D, icon: IconRequest, size: number): void {
   const lw = lineWidthFor(size) * 1.1;
@@ -15,6 +15,11 @@ function drawIcon(ctx: CanvasRenderingContext2D, icon: IconRequest, size: number
       productIcon(ctx, c, c, size, icon.product, lw);
       break;
     case 'building':
+      // A people's building (native-nations.md T7): bark longhouses, with the palisade's rows.
+      if (BUILDINGS[icon.building]?.people) {
+        peopleTownSprite(ctx, c, c, size * 0.95, '#c8a060', 0, icon.building === 'palisade' ? icon.level : 0, lw, 'village');
+        break;
+      }
       house(ctx, c, size * 0.86, size * 0.62, lw, icon.level > 1 ? '#3a6fb0' : undefined);
       break;
     case 'father':

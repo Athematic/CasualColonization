@@ -12,7 +12,7 @@
  * On hexes the square-only pieces (coast bands, terrain transitions, road spokes, water under rounded land
  * corners) are not needed and not listed.
  */
-import { BUILDINGS, TERRAIN, UNIT_TYPES, type GridKind, type ProductId, type Scenario, type TerrainId } from '@cc/engine';
+import { BUILDINGS, TERRAIN, UNIT_TYPES, type BuildingKind, type FatherId, type GridKind, type ProductId, type Scenario, type TerrainId, type UnitTypeId } from '@cc/engine';
 import { SpriteIds } from './ids.js';
 import { completePack, type SpritePack } from './pack.js';
 import { PLACEHOLDER_CATEGORIES, placeholderCovers, type SpriteCategory } from './placeholder.js';
@@ -94,8 +94,12 @@ export function missingIds(input: SpritePack, scenario: Scenario, has: (id: stri
     }
   }
 
+  const buildings = [...new Set(Object.values(scenario.nationTypes).flatMap((n) => n?.buildings ?? []))] as BuildingKind[];
+  const units = [...new Set(Object.values(scenario.nationTypes).flatMap((n) => n?.units ?? []))] as UnitTypeId[];
+  const fathers = [...new Set(Object.values(scenario.councils).flatMap((c) => c.members))] as FatherId[];
+
   for (const s of pack.mapping.colonies.sizes) need('colonies', `size ${s.min}`, ids.colony(s.min));
-  if (scenario.buildings.includes('stockade')) {
+  if (buildings.includes('stockade')) {
     for (let level = 1; level <= BUILDINGS.stockade.levels.length; level++) need('defences', String(level), ids.defence(level));
   }
 
@@ -105,7 +109,7 @@ export function missingIds(input: SpritePack, scenario: Scenario, has: (id: stri
   }
 
   const roles = ['none', 'soldier', 'dragoon', 'pioneer', 'scout', 'missionary'] as const;
-  for (const type of scenario.units) {
+  for (const type of units) {
     for (const role of roles) {
       if (role !== 'none' && !isColonist(type)) continue;
       need('units', `${type}:${role}`, ids.unit(type, role));
@@ -120,18 +124,18 @@ export function missingIds(input: SpritePack, scenario: Scenario, has: (id: stri
     need('braves', `${armed ? 'armed' : ''}${armed && mounted ? '-' : ''}${mounted ? 'mounted' : ''}` || 'plain', ids.brave(armed, mounted));
   }
 
-  for (const kind of scenario.buildings) {
+  for (const kind of buildings) {
     // The level's own id only: a lower level standing in is still a missing picture.
     for (let level = 1; level <= BUILDINGS[kind].levels.length; level++) need('buildings', `${kind}:${level}`, ids.building(kind, level).slice(0, 1));
   }
   for (const product of [...scenario.goods, ...PRODUCTS_BEYOND_GOODS]) need('goods', product, ids.good(product));
-  for (const father of scenario.council.members) need('fathers', father, ids.father(father));
+  for (const father of fathers) need('fathers', father, ids.father(father));
   for (const kind of ['pennant', 'flag', 'mission'] as const) need('overlays', kind, ids.overlay(kind));
   need('backdrops', 'congress-hall', ids.backdrop('congress-hall', scenario.art?.councilHall));
   return report;
 }
 
-function isColonist(type: Scenario['units'][number]): boolean {
+function isColonist(type: UnitTypeId): boolean {
   return UNIT_TYPES[type].kind === 'colonist';
 }
 

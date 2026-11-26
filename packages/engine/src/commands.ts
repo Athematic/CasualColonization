@@ -19,7 +19,13 @@ import {
 import { boardShip, leaveShip, moveUnit, setDestination, setRoadTo, startImprovement } from './movement.js';
 import { answerNativeDemand } from './braves.js';
 import { proposePeopleTreaty } from './peopletreaties.js';
+import { answerPairProposal, endPairTreaty, learnAtTown, proposePairTreaty } from './peoplediplomacy.js';
+import { answerLandOffer, offerForLand, takePeopleLand } from './peopleland.js';
+import { answerLeague, leaveLeague, proposeLeague } from './peopleleague.js';
+import { answerIndependence } from './victory.js';
+import { barter, tradeWithPeople } from './peopletrade.js';
 import { buyFromSettlement, buyLand, denounceMission, establishMission, giftToTribe, inciteTribe, learnSkill, speakToChief, takeLand, tradeWithSettlement } from './natives.js';
+import { claimLand } from './peopleeconomy.js';
 import { chooseFather } from './fathers.js';
 import { proposePeace, startWar } from './diplomacy.js';
 import { answerProposal, cancelFavoured, cancelTrade, proposeAlliance, proposeExpedition, proposeFavoured, proposeTrade } from './relations.js';
@@ -35,7 +41,7 @@ import type { FatherId } from './rules/fathers.js';
 import type { Direction } from './grid.js';
 import { cargoRoomFor, colonyAt, currentPlayer } from './queries.js';
 import type { GoodId } from './rules/goods.js';
-import type { NationId, TribeId } from './rules/nations.js';
+import type { PlayerId, TribeId } from './rules/nations.js';
 import type { RoleId, UnitTypeId } from './rules/units.js';
 import { endTurn } from './turn.js';
 import { assignRoute, createRoute, deleteRoute, editRoute, unassignRoute } from './routes.js';
@@ -47,7 +53,7 @@ export type Command =
   | { type: 'goto'; unitId: string; x: number; y: number }
   | { type: 'roadTo'; unitId: string; x: number; y: number }
   /** `port`: a Favoured Nation partner's home port to sail to; missing means the ship's own. */
-  | { type: 'gotoEurope'; unitId: string; port?: NationId }
+  | { type: 'gotoEurope'; unitId: string; port?: PlayerId }
   | { type: 'clearOrders'; unitId: string }
   | { type: 'foundColony'; unitId: string; name?: string }
   | { type: 'attack'; unitId: string; target: { unitId?: string; colonyId?: string; settlementId?: string; braveId?: string } }
@@ -59,7 +65,7 @@ export type Command =
   /** A missionary next to a settlement denounces a rival nation's mission there. */
   | { type: 'denounce'; unitId: string; settlementId: string }
   /** A missionary pays a settlement's tribe to turn against a rival nation. */
-  | { type: 'incite'; unitId: string; settlementId: string; nation: NationId }
+  | { type: 'incite'; unitId: string; settlementId: string; nation: PlayerId }
   /** Pays (or refuses) a brave's demand for tribute, or buys (or declines) goods a brave offers. */
   | { type: 'answerNativeDemand'; demandId: string; accept: boolean }
   | { type: 'fortify'; unitId: string }
@@ -81,13 +87,15 @@ export type Command =
   | { type: 'buyGoods'; carrierId: string; good: GoodId; amount: number }
   | { type: 'recruit'; slot: number }
   /** `port`: buy a merchant ship in a Favoured Nation partner's port, where one of your ships is. */
-  | { type: 'train'; unitType: UnitTypeId; port?: NationId }
-  | { type: 'sailToEurope'; unitId: string; port?: NationId }
+  | { type: 'train'; unitType: UnitTypeId; port?: PlayerId }
+  | { type: 'sailToEurope'; unitId: string; port?: PlayerId }
   | { type: 'sailToAmerica'; unitId: string }
   | { type: 'disband'; unitId: string }
   | { type: 'chooseFather'; father: FatherId }
   | { type: 'buyLand'; x: number; y: number }
   | { type: 'takeLand'; x: number; y: number }
+  /** A native people claims unclaimed land next to its own (native-nations.md T5; peopleeconomy.ts). */
+  | { type: 'claimLand'; x: number; y: number }
   | { type: 'mission'; unitId: string; settlementId: string }
   | { type: 'cashTreasure'; unitId: string }
   | { type: 'answerTax'; accept: boolean }
@@ -101,30 +109,60 @@ export type Command =
   | { type: 'setEvents'; historical?: boolean; random?: boolean }
   | { type: 'payArrears'; good: GoodId }
   | { type: 'setExport'; colonyId: string; good: GoodId; on: boolean }
-  | { type: 'declareWar'; nation: NationId }
-  | { type: 'proposePeace'; nation: NationId }
-  | { type: 'proposeTrade'; nation: NationId }
-  | { type: 'proposeFavoured'; nation: NationId }
+  | { type: 'declareWar'; nation: PlayerId }
+  | { type: 'proposePeace'; nation: PlayerId }
+  | { type: 'proposeTrade'; nation: PlayerId }
+  | { type: 'proposeFavoured'; nation: PlayerId }
   /** Answers the proposal (trade agreement or Favoured Nation) that `nation` made. */
-  | { type: 'answerProposal'; nation: NationId; accept: boolean }
-  | { type: 'cancelTrade'; nation: NationId }
-  | { type: 'cancelFavoured'; nation: NationId }
+  | { type: 'answerProposal'; nation: PlayerId; accept: boolean }
+  | { type: 'cancelTrade'; nation: PlayerId }
+  | { type: 'cancelFavoured'; nation: PlayerId }
   /** Proposes an alliance to `nation`, or invites it to join yours (alliances.ts). */
-  | { type: 'proposeAlliance'; nation: NationId }
+  | { type: 'proposeAlliance'; nation: PlayerId }
   | { type: 'leaveAlliance' }
   /** Proposes a joint expedition to an ally: each pays half, the gold it finds is shared (alliances.ts). */
-  | { type: 'proposeExpedition'; nation: NationId }
+  | { type: 'proposeExpedition'; nation: PlayerId }
   /** Proposes to an ally that both declare independence now, together (confederation.ts). */
-  | { type: 'proposeConfederation'; nation: NationId }
+  | { type: 'proposeConfederation'; nation: PlayerId }
   /** Founds a chartered company from the scenario's list, or buys new shares in one (companies.ts). */
-  | { type: 'foundCompany'; company: NationId }
-  | { type: 'buyShares'; company: NationId; count: number }
+  | { type: 'foundCompany'; company: PlayerId }
+  | { type: 'buyShares'; company: PlayerId; count: number }
   /** A ship or wagon train in an ally's colony sells goods to it, or buys goods from it (alliances.ts). */
   | { type: 'sellInColony'; carrierId: string; good: GoodId; amount: number }
   | { type: 'buyInColony'; carrierId: string; good: GoodId; amount: number }
   | { type: 'giftTribe'; tribe: TribeId; gold: number }
   /** Proposes a treaty to a native people, which answers at once (peopletreaties.ts); a trade treaty when `kind` is left out. */
   | { type: 'proposePeopleTreaty'; people: TribeId; kind?: PeopleTreatyKind }
+  /**
+   * Diplomacy with a playing people (peoplediplomacy.ts, native-nations.md T11): a treaty proposed
+   * to a nation or people by a playing people, or to a playing people by a nation; a person answers
+   * later, a computer at once.
+   */
+  | { type: 'proposePairTreaty'; to: PlayerId; kind?: PeopleTreatyKind }
+  /** Answers the treaty proposal `from` made (a pair with a playing people). */
+  | { type: 'answerPairProposal'; from: PlayerId; accept: boolean }
+  /** A European nation offers gold (the asking price when missing) for a tile of a playing people's land beside its colony (peopleland.ts). */
+  | { type: 'offerForLand'; x: number; y: number; gold?: number }
+  /** A European nation takes a tile of a playing people's land beside its colony, breaking faith with it. */
+  | { type: 'takePeopleLand'; x: number; y: number }
+  /** A playing people answers `nation`'s offer for its land. */
+  | { type: 'answerLandOffer'; nation: PlayerId; accept: boolean }
+  /** A playing people proposes a league to `peoples` (a new league, or, as a member, invites them into its own; peopleleague.ts). */
+  | { type: 'proposeLeague'; peoples: PlayerId[] }
+  /** Answers the league `by` proposed. */
+  | { type: 'answerLeague'; by: PlayerId; accept: boolean }
+  /** Leaves the player's league. */
+  | { type: 'leaveLeague' }
+  /** After winning the War of Independence at war with a people: keep playing, or end the game with the victory (victory.ts). */
+  | { type: 'answerIndependence'; keepPlaying: boolean }
+  /** Ends a treaty with a playing people, or a playing people's treaty: breaking faith. */
+  | { type: 'endPairTreaty'; with: PlayerId; kind: PeopleTreatyKind }
+  /** A carrier next to a town or colony of the other side (a nation and a playing people) sells (`load` false) or buys goods for gold (peopletrade.ts). */
+  | { type: 'tradeWithPeople'; unitId: string; colonyId: string; good: GoodId; amount: number; load: boolean }
+  /** A playing people's carrier next to another people's town or settlement gives goods for goods (peopletrade.ts). */
+  | { type: 'barter'; unitId: string; colonyId?: string; settlementId?: string; give: GoodId; amount: number; take: GoodId }
+  /** A colonist next to a playing people's town learns a skill there, under a cultural exchange (peoplediplomacy.ts). */
+  | { type: 'learnAtTown'; unitId: string; colonyId: string }
   | { type: 'declareIndependence' }
   /** Abandons a small colony without a stockade (leaving.ts). */
   | { type: 'abandonColony'; colonyId: string }
@@ -136,13 +174,13 @@ export type Command =
   | { type: 'assignRoute'; unitId: string; routeId: string }
   | { type: 'unassignRoute'; unitId: string }
   /** A cheat (see cheats.ts). `nation` defaults to the nation whose turn it is; `on` sets a toggle, omitted flips it. */
-  | { type: 'cheat'; cheat: CheatId; nation?: NationId; on?: boolean }
+  | { type: 'cheat'; cheat: CheatId; nation?: PlayerId; on?: boolean }
   | { type: 'endTurn' };
 
 /** `id` names what the command created (a new trade route). */
 export type CommandResult = { ok: true; text?: string; id?: string } | { ok: false; error: string };
 
-function ownUnit(s: GameState, nation: NationId, unitId: string) {
+function ownUnit(s: GameState, nation: PlayerId, unitId: string) {
   const u = s.units[unitId];
   if (!u) fail('No such unit.');
   if (u.owner !== nation) fail('That is not your unit.');
@@ -150,7 +188,7 @@ function ownUnit(s: GameState, nation: NationId, unitId: string) {
   return u;
 }
 
-function ownColony(s: GameState, nation: NationId, colonyId: string) {
+function ownColony(s: GameState, nation: PlayerId, colonyId: string) {
   const c = s.colonies[colonyId];
   if (!c) fail('No such colony.');
   if (c.owner !== nation) fail('That is not your colony.');
@@ -158,7 +196,7 @@ function ownColony(s: GameState, nation: NationId, colonyId: string) {
 }
 
 /** Loads or unloads goods between a carrier and the colony it is in. */
-function transferGoods(s: GameState, nation: NationId, carrierId: string, good: GoodId, amount: number, load: boolean): void {
+function transferGoods(s: GameState, nation: PlayerId, carrierId: string, good: GoodId, amount: number, load: boolean): void {
   const carrier = ownUnit(s, nation, carrierId);
   if (carrier.loc.kind !== 'map') fail('The carrier must be in a colony.');
   const colony = colonyAt(s, carrier.loc.x, carrier.loc.y);
@@ -360,6 +398,9 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
       case 'buyLand':
         text = buyLand(s, nation, cmd.x, cmd.y);
         break;
+      case 'claimLand':
+        text = claimLand(s, nation, cmd.x, cmd.y);
+        break;
       case 'takeLand':
         text = takeLand(s, nation, cmd.x, cmd.y);
         break;
@@ -446,6 +487,47 @@ export function applyCommand(s: GameState, cmd: Command): CommandResult {
         break;
       case 'proposePeopleTreaty':
         text = proposePeopleTreaty(s, nation, cmd.people, cmd.kind ?? 'people-trade');
+        break;
+      case 'proposePairTreaty':
+        text = proposePairTreaty(s, nation, cmd.to, cmd.kind ?? 'people-trade');
+        break;
+      case 'offerForLand':
+        text = offerForLand(s, nation, cmd.x, cmd.y, cmd.gold);
+        break;
+      case 'takePeopleLand':
+        text = takePeopleLand(s, nation, cmd.x, cmd.y);
+        break;
+      case 'answerLandOffer':
+        text = answerLandOffer(s, nation, cmd.nation, cmd.accept);
+        break;
+      case 'answerPairProposal':
+        text = answerPairProposal(s, nation, cmd.from, cmd.accept);
+        break;
+      case 'proposeLeague':
+        text = proposeLeague(s, nation, cmd.peoples);
+        break;
+      case 'answerLeague':
+        text = answerLeague(s, nation, cmd.by, cmd.accept);
+        break;
+      case 'leaveLeague':
+        text = leaveLeague(s, nation);
+        break;
+      case 'answerIndependence':
+        text = answerIndependence(s, nation, cmd.keepPlaying);
+        break;
+      case 'endPairTreaty':
+        text = endPairTreaty(s, nation, cmd.with, cmd.kind);
+        break;
+      case 'tradeWithPeople':
+        text = tradeWithPeople(s, nation, cmd.unitId, cmd.colonyId, cmd.good, cmd.amount, cmd.load);
+        break;
+      case 'barter':
+        ownUnit(s, nation, cmd.unitId);
+        text = barter(s, nation, cmd.unitId, { colonyId: cmd.colonyId, settlementId: cmd.settlementId }, cmd.give, cmd.amount, cmd.take);
+        break;
+      case 'learnAtTown':
+        ownUnit(s, nation, cmd.unitId);
+        text = learnAtTown(s, cmd.unitId, cmd.colonyId);
         break;
       case 'abandonColony':
         ownColony(s, nation, cmd.colonyId);

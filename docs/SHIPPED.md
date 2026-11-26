@@ -118,7 +118,7 @@ Before Beta 1 (Simon, November 2026): the computer players' turns are slow, and 
 
 ## Beta 1: Cooperation between Europeans
 
-Builds on 0.4. Built and in a pull request (November 2026); the plan for Beta 2 is in [ROADMAP.md](ROADMAP.md#beta-2-cooperation).
+Builds on 0.4. Released on 11 November 2026 (pull request #19).
 
 Beta 1, cooperation between Europeans: design in [design/cooperation.md](design/cooperation.md) (C1–C11 decided by Simon, November 2026). Built: steps 0–6; the choices made while building are in its section 9, confirmed by Simon (concord's share raised to 0.7).
 
@@ -131,6 +131,42 @@ Beta 1, cooperation between Europeans: design in [design/cooperation.md](design/
 | Step 4: joint expeditions and shared bells | S–M | P2 | done: a tenth of each ally's bells helps the others' Congress; a scout funded half each, gold shared |
 | Step 5: confederation, declaring independence together | M | P2 | done: one war for both, won or lost together; computer allies answer by their readiness; on in the Americas |
 | Step 6: tuning with tournaments (alliances, companies, concord's share, the Caribbean's cooperation), docs | M | P1 | done (`[outcomes]`): old friends ally after a long peace (`alliances.longPeace`), allies wait to declare together, companies keep a treasury and pay dividends, Caribbean companies come earlier. Americas 24 games: alliance in 8, concord 2, company 3; all-Creative 96 games: alliance in 26, confederation 3; Caribbean 16: company in 8, 318 gold of dividends a game. Decisions made while building in the design note, section 9 (confirmed) |
+
+## Beta 2: Native peoples as partners
+
+Builds on 0.4 and Beta 1. Released on 11 November 2026 (pull request #22). Design: [design/native-partners.md](design/native-partners.md) (status: `built`; N1–N14 decided by Simon, 11 November 2026, as recommended, with the five fixes of today's native rules in step 0). A people becomes a partner, with agreements that bind both sides, and a way to win by prosperity in partnership.
+
+| Item | Size | Prio | Status |
+| --- | --- | --- | --- |
+| Step 0: a people as a treaty party (party helpers), `peopleRelations`, `peoples.rules`, the `burialGrounds` and `surrender` switches, `landRadius`, and five fixes of today's native rules | M | P1 | done (section 8 of the note) |
+| Step 1: the trade treaty with a people (`people-trade`): unlocking from the standing record, proposals and the people's seeded answers and own offers, better prices and goods, more trade visits, route stops at partner settlements, breaking faith, computer nations per level, the Native peoples card | L | P1 | done; on in the Americas and the Caribbean (section 9) |
+| Step 2: land use (`land-use`): a lease of a trade partner's land beside the nation's colonies for a yearly rent per tile (`Tile.use`, `LandUseTerms`), the rent paid each year or the lease lapses, leased tiles marked on the map, "Lease land" in Foreign Affairs and on the colony screen | M–L | P1 | done; on in the Americas and the Caribbean (section 10) |
+| Step 3: cultural exchange (`exchange`): a settlement teaches the partner again 25 ± 5 years after it last taught, chiefs welcome the partner's scouts again once a decade, the people gathers 25% more | M | P2 | done; on in the Americas and the Caribbean (section 11) |
+| Step 4: mutual defence (`defence`): an attack on the people is war with its partner, the people's braves defend the partner's colonies near it and fight the King's troops in a revolt, nobody can incite the people against its partner; then Simon's decisions: Combative makes no defence pacts, braves find their way with a path search and move to defend as if following a river | L | P2 | done: a pact in 12 of 48 Americas games, 9 of 16 in the Caribbean (sections 12 and 13) |
+| Step 5: the `prosperity` victory: at the end year, every nation at peace with each people it has met for 30 years, that never burned a settlement, with treaties with half the peoples met and 0.8 of the best score wins; its partner peoples named on the game-over screen | M | P1 | done: the Americas `[independence-war, concord, prosperity, time]`, the Caribbean `[concord, prosperity, time]` (section 14) |
+| Step 6: tuning with 96-game tournaments on two seeds against N12 and Beta 1's C11 | M–L | P1 | done (`[outcomes]`): every N12 target met in 192 four-level Americas games (a trade treaty in 191, land use 49%, exchange 55%, defence 1 in 3.6, a breach 1 in 2.8, prosperity 1 in 21); C11's rates as in Beta 1; no level weaker than before (section 15) |
+
+## Beta 3: Native nations
+
+Builds on Beta 2 (whose people treaty party was made to grow into this) and Beta 1 (a non-European player). Released in November 2026. Design: [design/native-nations.md](design/native-nations.md) (status: `built`, released; T1–T22 decided by Simon, 11 November 2026, all as recommended except T16 (one turn a year), T17 (the Norse wait for Vinland, Beta 4) and T21 (no save compatibility); T10 and T14 decided after a rewrite from the peoples' own view). The history behind the North-east, with its sources and the items still to be checked, is in [research/north-east-peoples.md](research/north-east-peoples.md).
+
+A native people becomes a nation type of its own, played by a person or the computer, with its own units, buildings and council and no Home Port. A new scenario, the North-east, 1000–1850: start as a people in the year 1000 and face the Europeans as they arrive from 1497, one turn a year, with head starts for a shorter game. A people wins by continuity, a confederacy of peoples, a good life, or by defeating every European nation. The Americas and the Caribbean play exactly as before (bench and golden hashes; the Americas' hashes re-recorded once for the people id `haudenosaunee`, with proof that the states are byte-identical but for the id).
+
+| Item | Size | Prio | Status |
+| --- | --- | --- | --- |
+| Step 1: the nation type: `PlayerId`, `kind: 'people'`, `playerKind` and one systems table (the company checks moved onto it); Europe-only systems off for a people; per-type selections of units and buildings; a people player at setup with its settlements as towns | L | P1 | done (section 7 of the note) |
+| Step 2: economy and growth without Europe (T10): the people's units and buildings, hunting, fishing, gardens and crafts, births from food above a town's reserve, stores, housing and hunger, elders teaching, hard years and land health per region (`mechanics.hardYears`, `mechanics.landHealth`), a people's claimed land | L | P1 | done (section 8) |
+| Step 3: the council system (T8, T9): `Scenario.councils`, the Continental Congress as one council, a people's council (household, land, knowledge, defence and peace) with collective members and source lines | M | P1 | done (section 9; members drafted for review) |
+| Step 4: diplomacy from the people's side (T11, T12): Beta 2's treaties proposed and broken by a playing people, treaties between peoples, war and peace between any players, trade for gold, epidemics behind a switch | L | P1 | done (section 10) |
+| Steps 5 and 6: knowledge of the land as a trait of the people nation type (T13); arrivals (`NationEntry.arrives`, T18) | S each | P1, P2 | done (section 11) |
+| Step 7: victory and score (T14): `continuity`, `confederacy` with the `league` treaty kind, `good-life` and the military victory, both sides judged at the end year (`gameOver.ways`), the independence keep-playing question, a people's score lines | M–L | P1 | done (section 12) |
+| Step 8: the North-east, 1000–1850: a stored 84 by 74 map from Natural Earth data with thirty-one rivers and fifty land-health regions, nineteen peoples researched with sources (the Haudenosaunee, the Wendat, the Mi'kmaq and the Innu playable), the Europeans arriving one by one at their own entry points, its own events | L | P1 | done (section 13; history drafted for review) |
+| Step 9: computer peoples per level (stores, restraint on the land, treaties and leagues by profile) and the North-east's tuning against T15 | L | P1 | done (section 14) |
+| Step 10 and 10b: the interface: the New game screen offers the scenario's peoples (the North-east on it, a person plays a people by default); the town screen, the council house, Foreign Affairs and a Trade report from the people's side; claimed land's borders and a Land overlay; a Victory report; procedural art for towns and units; peoples sharing maps and exploring | M–L | P1 | done but for the Mac sprite trial (sections 15 and 16) |
+| Clean-up: every nation type's selection in one place (`nationTypes`), unused helpers removed, the research in its own file | S | P2 | done (section 17) |
+| Land: one id per people (`haudenosaunee`, the Americas still saying "Iroquois" through `peoples.overrides`, `seedKey` keeping their seeded draws), continuity per people, Europeans buying or taking a playing people's land (`mechanics.landSales`; the land dialog for a person) | M | P1 | done (`[outcomes]` for the Americas' hashes only; section 18) |
+| Land, second round: the Europeans press on the homelands gently (`landSales.pull`), each level's way with land (Combative takes, Competent and Creative lease and offer first), trust grown in peace, a good life counting the sides met in person, a new runner | M | P1 | done (section 19) |
+| Tuning against step 9's targets (48 North-east games, seeds 3000 and 4000) | — | P1 | a people wins in 9 of 48 (19%; target about 1 in 5); every computer people survived (target 3 in 4); confederacy in 5 of 48; no military win (target 1 in 100 or fewer); Europeans still grow (colonists per nation: Competent 30.4, Combative 32.0, Creative 27.2, Naive 12.8) |
 
 ## Scenarios (content)
 

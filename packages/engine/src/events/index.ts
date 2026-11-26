@@ -10,15 +10,17 @@ import { fail } from '../errors.js';
 import { noteHistory } from '../history.js';
 import { random } from '../rng.js';
 import { message, player, unitName } from '../queries.js';
-import { calendarOf, formatDate, nationOf, nationTitle, scenarioOf, yearOf } from '../scenarios/index.js';
+import { calendarOf, formatDate, nationOf, nationTitle, peopleName, scenarioOf, yearOf } from '../scenarios/index.js';
 import { buildingName } from '../rules/buildings.js';
 import { GOOD_DEFS } from '../rules/goods.js';
-import { TRIBES, type NationId } from '../rules/nations.js';
+import { type PlayerId } from '../rules/nations.js';
+import { systemsOf } from '../playerkind.js';
 import { UNIT_TYPES } from '../rules/units.js';
 import { track, tracking } from '../telemetry.js';
 import type { GameState, Player } from '../types.js';
 import { AMERICAS_EVENTS } from './americas.js';
 import { CARIBBEAN_EVENTS } from './caribbean.js';
+import { NORTH_EAST_EVENTS } from './north-east.js';
 import { applyEffects, atRoundEnd, eventsState, num, valueEffects } from './effects.js';
 import type { EventChoice, EventDef, EventKind, EventVars, PendingEvent } from './types.js';
 import { colonyList } from '../unitindex.js';
@@ -27,6 +29,7 @@ export * from './types.js';
 export { eventProductionPct } from './modifiers.js';
 export { HISTORICAL_EVENTS, RANDOM_EVENTS, AMERICAS_EVENTS } from './americas.js';
 export { CARIBBEAN_EVENTS } from './caribbean.js';
+export { NORTH_EAST_EVENTS } from './north-east.js';
 export { applyEffects, valueEffects, tensionCost, tensionValue, TAX_POINT_VALUE } from './effects.js';
 
 /** Chance per round that a nation has a random event (if one has a target). */
@@ -37,7 +40,7 @@ export const RANDOM_COOLDOWN = 40;
 // ---------------------------------------------------------------------------
 // Registry
 
-const SETS: Record<string, EventDef[]> = { americas: AMERICAS_EVENTS, caribbean: CARIBBEAN_EVENTS };
+const SETS: Record<string, EventDef[]> = { americas: AMERICAS_EVENTS, caribbean: CARIBBEAN_EVENTS, 'north-east': NORTH_EAST_EVENTS };
 
 /** Registers an event set (a scenario's), replacing one with the same id. */
 export function registerEventSet(id: string, defs: EventDef[]): void {
@@ -96,7 +99,7 @@ export function eventText(s: GameState, text: string, v: EventVars): string {
       case 'colony':
         return (v.colony && s.colonies[v.colony]?.name) || 'the colony';
       case 'tribe':
-        return v.tribe ? TRIBES[v.tribe].name : 'the natives';
+        return v.tribe ? peopleName(s, v.tribe) : 'the natives';
       case 'good':
         return v.good ? GOOD_DEFS[v.good].name.toLowerCase() : 'goods';
       case 'building': {
@@ -167,7 +170,7 @@ export function choiceAvailable(s: GameState, c: EventChoice, v: EventVars): boo
 }
 
 /** The pending event choices for a nation, oldest first. */
-export function pendingEvents(s: GameState, nation: NationId): PendingEvent[] {
+export function pendingEvents(s: GameState, nation: PlayerId): PendingEvent[] {
   return (s.events?.pending ?? []).filter((p) => p.vars.nation === nation);
 }
 
@@ -232,7 +235,7 @@ function resolveChoice(s: GameState, def: EventDef, v: EventVars, index: number,
 }
 
 /** A person answers a pending event (the `answerEvent` command). */
-export function answerEvent(s: GameState, nation: NationId, pendingId: string, choice: number): string {
+export function answerEvent(s: GameState, nation: PlayerId, pendingId: string, choice: number): string {
   const ev = s.events;
   const i = ev?.pending.findIndex((p) => p.id === pendingId && p.vars.nation === nation) ?? -1;
   if (!ev || i < 0) fail('There is no such event waiting for an answer.');
@@ -251,9 +254,9 @@ export function answerEvent(s: GameState, nation: NationId, pendingId: string, c
  * Fires an event for one nation: picks its target (unless given), applies its effects and either
  * resolves its choice (computer players) or leaves it pending (people). Returns whether it fired.
  */
-export function fireEvent(s: GameState, def: EventDef, nation: NationId, given?: EventVars): boolean {
+export function fireEvent(s: GameState, def: EventDef, nation: PlayerId, given?: EventVars): boolean {
   const p = s.players.find((x) => x.id === nation);
-  if (!p || nation === 'crown') return false;
+  if (!p || !systemsOf(p).events) return false;
   const r = eventStream(s, `fire ${def.id} ${nation} ${s.turn}`);
   const v = given ? { ...given } : def.target(s, nation, r);
   if (!v) return false;
@@ -289,7 +292,7 @@ export function fireEvent(s: GameState, def: EventDef, nation: NationId, given?:
 
 /** Fires a historical (world) event for every nation still taking part. */
 function fireWorld(s: GameState, def: EventDef): void {
-  for (const p of s.players) if (p.kind !== 'company') fireEvent(s, def, p.id);
+  for (const p of s.players) if (systemsOf(p).events) fireEvent(s, def, p.id);
   // Marked as fired even if no nation had a target, so it stays once-only.
   eventsState(s).fired[def.id] = s.turn;
 }
@@ -313,7 +316,7 @@ function drawHistorical(s: GameState): void {
 function drawRandom(s: GameState): void {
   const defs = eventDefs(s).filter((d) => d.kind === 'random' && !d.hidden);
   for (const p of s.players) {
-    if (p.id === 'crown' || p.kind === 'company' || !colonyList(s).some((c) => c.owner === p.id)) continue;
+    if (!systemsOf(p).events || !colonyList(s).some((c) => c.owner === p.id)) continue;
     if (eventRandom(s, `random ${s.turn} ${p.id}`) >= RANDOM_EVENT_RATE) continue;
     const options: { def: EventDef; vars: EventVars; weight: number }[] = [];
     for (const def of defs) {

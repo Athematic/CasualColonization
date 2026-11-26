@@ -534,11 +534,13 @@ describe('the data drives the behaviour', () => {
     ...AMERICAS,
     id: 'test-hudson-ore',
     name: 'Test: Hudson mines ore',
-    council: {
-      ...AMERICAS.council,
-      effects: {
-        henryHudson: { modifiers: [{ hook: 'tileYield', good: 'ore', mul: 3 }] },
-        jakobFugger: { onJoin: [{ kind: 'gold', amount: 1000 }] },
+    councils: {
+      congress: {
+        ...AMERICAS.councils.congress,
+        effects: {
+          henryHudson: { modifiers: [{ hook: 'tileYield', good: 'ore', mul: 3 }] },
+          jakobFugger: { onJoin: [{ kind: 'gold', amount: 1000 }] },
+        },
       },
     },
   };

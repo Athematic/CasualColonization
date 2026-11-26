@@ -24,16 +24,17 @@ import {
 import { alliesGoHome, isToryColony, offerMercenaries, processRebellion, startRebellion, TORY_LANDING } from './rebellion.js';
 import { lapseFavoured } from './relations.js';
 import { difficultyOf, mechanicsOf, nationOf, term, Term } from './scenarios/index.js';
-import { type NationId } from './rules/nations.js';
+import { type PlayerId } from './rules/nations.js';
 import { checkVictory, finishNation } from './victory.js';
 import { crownSideOf } from './world.js';
 import type { Colony, GameState, Player, Unit } from './types.js';
 import { concludeConfederation, confederationOf } from './confederation.js';
 import { treatyNations } from './treaties.js';
 import { removeUnit, colonyList, unitList } from './unitindex.js';
+import { systemsOf } from './playerkind.js';
 
 /** Share of all colonists, across every colony, who support independence. */
-export function rebelShare(s: GameState, nation: NationId): number {
+export function rebelShare(s: GameState, nation: PlayerId): number {
   let pop = 0;
   let rebels = 0;
   for (const c of colonyList(s)) {
@@ -47,10 +48,10 @@ export function rebelShare(s: GameState, nation: NationId): number {
 
 export const DECLARE_AT = 50;
 
-export function canDeclareIndependence(s: GameState, nation: NationId): string | null {
+export function canDeclareIndependence(s: GameState, nation: PlayerId): string | null {
   if (!mechanicsOf(s).independence) return 'There is no declaring independence in this scenario.';
   const p = player(s, nation);
-  if (p.kind === 'company') return 'A chartered company has no Crown to break with.';
+  if (!systemsOf(p).independence) return p.kind === 'company' ? 'A chartered company has no Crown to break with.' : 'Only a European nation can declare independence.';
   if (p.independence !== 'none') return 'Independence has already been declared.';
   if (!colonyList(s).some((c) => c.owner === nation)) return 'You have no colonies.';
   const share = rebelShare(s, nation);
@@ -71,7 +72,7 @@ function ensureCrown(s: GameState): Player {
   return crown;
 }
 
-export function declareIndependence(s: GameState, nation: NationId): string {
+export function declareIndependence(s: GameState, nation: PlayerId): string {
   const reason = canDeclareIndependence(s, nation);
   if (reason) fail(reason);
   const p = player(s, nation);
@@ -318,7 +319,7 @@ export function runCrown(s: GameState): void {
 function crownUnit(s: GameState, u: Unit): void {
   const grid = gridOf(s);
   const pos = unitPosition(s, u)!;
-  const enemy = (o: { owner: NationId }) => o.owner === u.against;
+  const enemy = (o: { owner: PlayerId }) => o.owner === u.against;
   if (isShip(u)) {
     const prey = neighbours(s, pos.x, pos.y).flatMap((q) => unitsAt(s, q.x, q.y)).find((o) => enemy(o) && isShip(o));
     if (prey && u.moves > 0) attack(s, u.id, { unitId: prey.id });
