@@ -60,7 +60,7 @@ const NORSE: NationEntry = {
     ],
   },
   departs: {
-    years: [1030, 1045],
+    years: [1035, 1050],
     thriving: { colonies: 2, population: 8, selfSufficient: true, treaties: 1 },
   },
   colonyNames: [
@@ -144,8 +144,8 @@ export const VINLAND: Scenario = {
       {
         id: 'vinland-atlantic',
         peoples: VINLAND_ATLANTIC_PEOPLES,
-        // Off southwestern Greenland / Davis Strait, sailing west to Helluland, Markland and Vinland.
-        entries: { norse: [58, 22] },
+        // Off the Strait of Belle Isle between Markland (Labrador) and Vinland (northern Newfoundland).
+        entries: { norse: [46, 46] },
       },
     ],
     default: 'north-east-hex',
@@ -179,8 +179,8 @@ export const VINLAND: Scenario = {
   },
   events: 'vinland',
   ai: {
-    dates: false,
-    stretch: 1,
+    pace: 0.33,
+    islands: true,
     goods: AMERICAS.ai.goods,
   },
   mechanics: {

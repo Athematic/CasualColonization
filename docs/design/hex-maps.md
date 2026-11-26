@@ -1,6 +1,6 @@
 # Design note: Hex maps (Beta 4)
 
-Status: **steps 1 to 3, 5 and 6 built** (see "Implementation (step 1)", "Implementation (steps 2 and 3)", "Implementation (step 5)" and "Implementation (step 6)" at the end); **design, decisions mostly made** (11 November 2026): H1–H4, H6–H9, H11 and H17 are decided; the rest are recommendations for Simon to confirm. Simon agreed the outline of Beta 4 on 11 November 2026 ([ROADMAP.md](../ROADMAP.md#beta-4-hex-maps)): Vinland is hex-only; Australia is built on hexes after Beta 4; no map editor unless it helps make the maps; no locally generated terrain sprites, a placeholder sprite pack instead; Ligne claire is tried on hexes. On the same day he decided four of this note's questions: the scenario chooses the hexes' orientation (H1), rivers run through tile centres (H3), movement keys follow what players of Civilization-like games expect (H6), and a colony's work area may grow to two rings, gated by scenario data, with today's single ring the default (H7). The rest is proposed. The note builds on the 0.10 grid work (`packages/engine/src/grid.ts`; [SHIPPED.md](../SHIPPED.md#010-faster-turns-done); [SCENARIOS.md](../SCENARIOS.md#the-map-grid)) and on Beta 3, [native-nations.md](native-nations.md), whose North-east map (T19) becomes Vinland's map and whose Norse proposal (T17) is built here.
+Status: **steps 1 to 6 built** (see "Implementation (step 1)", "Implementation (steps 2 and 3)", "Implementation (step 4)", "Implementation (step 5)" and "Implementation (step 6)" at the end); **design, decisions made** (11 and 26 November 2026): H1–H4, H6–H9, H11, H17 and H21 are decided; ready for Simon's review before opening the Beta 4 PR. Simon agreed the outline of Beta 4 on 11 November 2026 ([ROADMAP.md](../ROADMAP.md#beta-4-hex-maps)): Vinland is hex-only; Australia is built on hexes after Beta 4; no map editor unless it helps make the maps; no locally generated terrain sprites, a placeholder sprite pack instead; Ligne claire is tried on hexes. On the same day he decided four of this note's questions: the scenario chooses the hexes' orientation (H1), rivers run through tile centres (H3), movement keys follow what players of Civilization-like games expect (H6), and a colony's work area may grow to two rings, gated by scenario data, with today's single ring the default (H7). The rest is proposed. The note builds on the 0.10 grid work (`packages/engine/src/grid.ts`; [SHIPPED.md](../SHIPPED.md#010-faster-turns-done); [SCENARIOS.md](../SCENARIOS.md#the-map-grid)) and on Beta 3, [native-nations.md](native-nations.md), whose North-east map (T19) becomes Vinland's map and whose Norse proposal (T17) is built here.
 
 ## 1. Goal
 
@@ -322,3 +322,33 @@ Agreed with Simon (26 November 2026) before building step 4. Historical and arch
 5. **Playable peoples:**
    - **The Beothuk** (Newfoundland — immediate neighbours of L'Anse aux Meadows), **the Innu** (Markland / Labrador & North Shore), **the Mi'kmaq** (Gulf of St. Lawrence & Maritimes), and **the Haudenosaunee** (inland confederacy, carrying over Beta 3's tuning). Other northern peoples (including the **Dorset** in Helluland/northern Labrador) appear as active settlements on the map.
 6. **Work area:** two rings (`workArea: { rings: [{}, { size: 5 }] }`), tuned by tournaments in step 4.
+
+## Implementation (step 4)
+
+Built on `claude/beta4-hex-maps` (after merging `origin/main` with Beta 3 and speed round 5), 26 November 2026.
+
+**Conversion tool and maps (H11, H21):**
+- `scripts/convert-hex-map.ts` audits any stored map across `SQUARE` and `HEX_POINTY`/`HEX_FLAT` for river problems and land/water component splits or merges.
+- **`north-east-hex`** (`packages/engine/src/maps/north-east-hex.ts`, 84×74): all 15 water components and all 9 land components stayed intact on `HEX_POINTY` with zero splits or merges. Only 1 of 31 rivers needed adjustment: the Kennebec was given an explicit waypoint at `31,58` so its mouth stays on land. Beta 3's `north-east.ts` is untouched.
+- **`vinland-atlantic`** (`packages/engine/src/maps/vinland-atlantic.ts`, 84×74, built by `tools/maps/vinland/build_vinland_atlantic.py`): secondary expanded hex map combining the north-eastern 58×52 slice of `north-east` with Helluland (southern Baffin Island) and southwestern Greenland (Eastern & Western Settlements), 10 rivers (including *Eiríksfjörðr*), 0 river problems, and identical land/water components on both grids.
+
+**The Norse, thriving/departure, and the Thing:**
+- Added `'norse'` to `NationId` / `NATION_IDS` (no global `NATIONS` entry; everything Norse stays inside `scenarios/vinland.ts`, T17).
+- Added `NationEntry.departs` (`DepartureRule`, `ThrivingCriteria`) and `packages/engine/src/departures.ts` (`departureYearFor`, `isThriving`, `processDepartures`), plus the `'thriving'` victory kind in `victory.ts`. Thriving combines settlement (≥ 2 colonies or ≥ 8 population), self-sufficiency (non-negative net food & lumber, or winter food stores), and standing with peoples (≥ 1 active treaty and not at war with all met peoples).
+- Added the 18-member **`THING_COUNCIL`** (`rules/councils.ts`, `rules/fathers.ts`) grounded in `docs/research/vinland.md`, using emblem portraits (T9).
+- Registered **`VINLAND`** (`scenarios/vinland.ts`: 1000–1100, 2 turns/year Summer & Winter, pointy-top hexes, 2-ring work area at size 5, `north-east-hex` + `vinland-atlantic`, playable Beothuk, Innu, Mi'kmaq, and Haudenosaunee) and removed the disabled placeholder from `apps/web/src/ui/newgame.ts`.
+
+**Vinland tournaments and tuning (H12):**
+- Tuning `ai.pace: 0.33`, `ai.islands: true`, departure window `1035–1050`, and placing the `vinland-atlantic` entry off the Strait of Belle Isle (`[46, 46]`) brought 12-game computer tournaments (Norse `creative` vs Beothuk, Innu, Mi'kmaq `competent`) to:
+  - `north-east-hex`: **5/12 thrived (42%)**, 7/12 departed; mean 5.3 colonies, 4 colonies unlocking ring 2.
+  - `vinland-atlantic`: **4/12 thrived (33%)**, 8/12 departed; mean 4.8 colonies, 4 colonies unlocking ring 2.
+
+**Mac speed gate and square determinism (H17):**
+- `hex-test` (pointy, 2 rings) to 1700: **1.1 s** vs `americas` (squares) to 1700: **1.3 s** (~15% faster on hexes, well within the +25% H17 limit).
+- `vinland` full game to 1100 (200 turns): **0.2 s**.
+- `npm run perf:gate -- --runs 3` on this Mac: Americas & Caribbean **`same`** on all 8 games; `to 1700` median **0.7 s** (spread 0.0 s), `to 1750` median **0.7 s** (spread 0.0 s), `to 1850:keep` median **2.3 s** (spread 0.4 s).
+- `npx tsc -b` clean; `npm test` **86/86** files passed (**1,083** passed, 1 skipped), including `test/scenarios/vinland.test.ts` and T17 isolation checks.
+
+**Open for Simon:**
+- Review `docs/research/vinland.md`, the 18 Thing members and their effects, and the thriving/departure balance (currently ~33–42% AI thrive rate).
+- Preview Vinland (`north-east-hex` and `vinland-atlantic`) in the browser and review the open visual items from steps 1–6 (coast corner rounding, default hex style, placeholder style visibility in menu) before opening the Beta 4 PR.
