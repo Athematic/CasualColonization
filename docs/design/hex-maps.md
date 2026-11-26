@@ -300,3 +300,25 @@ Built on `beta4/step6` (from `claude/beta4-hex-maps`), 11 November 2026. No engi
 - The painted pack now draws hex maps with its square sprites clipped to hexes, rather than the hex game falling back to the schematic style; say if it should stay square-only until hex terrain art exists (one line: `grids: ['square']` on the pack's style).
 - The rounding of coast corners (0.42 tiles) turns rows of single coastal hexes into scallops; a smaller radius gives sharper capes. A matter of taste.
 - The default style is the painted pack, so a hex game started from a link now shows Ligne claire (painted) instead of the schematic style.
+
+## H21: Vinland scenario design (Step 4)
+
+Agreed with Simon (26 November 2026) before building step 4. Historical and archaeological sources live in [research/vinland.md](../research/vinland.md) and [research/north-east-peoples.md](../research/north-east-peoples.md). Rule T17 applies throughout: everything about the Norse, Greenland, and the Vikings stays inside the Vinland scenario.
+
+1. **Years and calendar:** **1000–1100**, **2 turns per year** (Summer and Winter, 201 turns total — matching the Caribbean's pace and reflecting the Vinland sagas' summer voyages and hard winters). Head start options: 1020 and 1050.
+2. **Maps (pointy-top hexes, hex-only):**
+   - **Primary (`north-east-hex`, default):** converted and reviewed pointy-top hex copy of Beta 3's 84×74 `north-east` map (Newfoundland, Labrador, Gulf & valley of the St. Lawrence, Maritimes, Great Lakes).
+   - **Secondary (`vinland-atlantic`):** an expanded pointy-top hex map extending north-east to include **southwestern Greenland** (Eastern and Western Settlements), **Helluland** (southern Baffin Island), **Markland** (Labrador), and **Vinland** (Newfoundland & Gulf of St. Lawrence).
+3. **The Norse and "thriving" (`NationEntry.departs`):**
+   - One Norse nation (`norse`), sailing from **Brattahlíð (Greenland)** as its home port: longer/riskier sea lane, scarce colonists, bog-iron and timber focus, no Crown/independence war (survival and permanence instead).
+   - **Departure check:** by a seeded year (e.g. 1030–1045), the Norse withdraw to Greenland unless their Vinland footing is **thriving** — a combined metric of:
+     1. **Settlement:** at least 2 colonies or ≥ 8 total colonists in Vinland;
+     2. **Self-sufficiency:** positive net food and lumber production (or winter food stores covering the settlements);
+     3. **Standing with peoples:** at least one active peace/trade treaty (not at war with all neighbouring peoples).
+   - **Norse victory:** surviving and thriving through the scenario's end (or meeting the thriving threshold and holding it).
+4. **The Thing (Norse council):**
+   - Defined in `Scenario.councils.thing` with 5 categories (`seafaring`, `craft`, `homestead`, `trade`, `law`) and **18 members** grounded in `docs/research/vinland.md` (Bjarni Herjólfsson, Leif Erikson, Bjarni Grímólfsson, Thorstein Eiriksson; Thorvald Eiriksson, Thorhall the Hunter, Tyrkir, Haki & Hekja; Gudrid Thorbjarnardóttir, Snorri Thorfinnsson, Thjodhild; Thorfinn Karlsefni, Thorhall Gamlason, Helgi & Finnbogi, Freydís Eiríksdóttir; Erik the Red, Herjólf Bárdarson, Thorbjörn Vífilsson).
+   - Emblem/silhouette icons (T9); effects wired to existing `FatherDef` modifiers.
+5. **Playable peoples:**
+   - **The Beothuk** (Newfoundland — immediate neighbours of L'Anse aux Meadows), **the Innu** (Markland / Labrador & North Shore), **the Mi'kmaq** (Gulf of St. Lawrence & Maritimes), and **the Haudenosaunee** (inland confederacy, carrying over Beta 3's tuning). Other northern peoples (including the **Dorset** in Helluland/northern Labrador) appear as active settlements on the map.
+6. **Work area:** two rings (`workArea: { rings: [{}, { size: 5 }] }`), tuned by tournaments in step 4.
