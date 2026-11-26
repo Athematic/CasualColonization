@@ -21,6 +21,7 @@ import { AMERICAS } from './americas.js';
 import { CARIBBEAN } from './caribbean.js';
 import { HEX_TEST, HEX_TEST_FLAT } from './hex-test.js';
 import { NORTH_EAST } from './north-east.js';
+import { VINLAND } from './vinland.js';
 import { turnOfYear, yearOf, type Calendar } from './calendar.js';
 import { AMERICAS_TEXT, capitalise, fillTemplate, type TermKey } from './terms.js';
 import type { Council, CouncilId, CouncilTextKey, Mechanics, NationEntry, NationType, NationTypeSelection, PeopleSelection, PlayerEntry, PlayablePeople, Rivals, RumourEntry, Scenario, ScenarioAi } from './types.js';
@@ -32,6 +33,7 @@ export { AMERICAS, AMERICAS_GENERATOR } from './americas.js';
 export { CARIBBEAN, CARIBBEAN_CALENDAR, CARIBBEAN_GENERATOR } from './caribbean.js';
 export { HEX_TEST, HEX_TEST_FLAT } from './hex-test.js';
 export { NORTH_EAST, NORTH_EAST_CALENDAR } from './north-east.js';
+export { VINLAND, VINLAND_CALENDAR } from './vinland.js';
 
 /** The scenario of games that do not name one. */
 export const DEFAULT_SCENARIO = 'americas';
@@ -571,6 +573,7 @@ export function checkSavedScenario(s: GameState): Scenario {
 registerScenario(AMERICAS);
 registerScenario(CARIBBEAN);
 registerScenario(NORTH_EAST);
+registerScenario(VINLAND);
 // Hidden: the Americas' rules on generated hex maps, for tests and tournaments (docs/design/hex-maps.md).
 registerScenario(HEX_TEST);
 registerScenario(HEX_TEST_FLAT);

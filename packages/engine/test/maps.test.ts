@@ -31,7 +31,7 @@ function play(def: StoredMap, nations: number, seed = 7, humans = 1): GameState 
 
 describe('stored maps', () => {
   it('lists each map once with a name and description', () => {
-    expect(STORED_MAPS.map((m) => m.id)).toEqual(['north-america', 'south-america', 'americas', 'australia', 'caribbean', 'north-east']);
+    expect(STORED_MAPS.map((m) => m.id)).toEqual(['north-america', 'south-america', 'americas', 'australia', 'caribbean', 'north-east', 'north-east-hex', 'vinland-atlantic']);
     for (const def of STORED_MAPS) {
       expect(def.name).toBeTruthy();
       expect(def.description).toBeTruthy();

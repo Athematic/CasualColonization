@@ -84,7 +84,7 @@ export const CARIBBEAN_GENERATOR: GeneratorSettings = {
 };
 
 /** The home ports and their markets in this century. Factors as in rules/ports.ts: 10–30%, no furs or coats. */
-const PORTS: Record<Exclude<NationId, 'portugal' | 'sweden' | 'russia' | 'crown' | CompanyId>, PortEntry> = {
+const PORTS: Record<Exclude<NationId, 'portugal' | 'sweden' | 'russia' | 'norse' | 'crown' | CompanyId>, PortEntry> = {
   // London: the great sugar and tobacco market, protected by the duties on foreign sugar.
   england: { name: 'London', market: { prices: { sugar: 1.15, tobacco: 1.2, silver: 0.9 }, depth: { cotton: 1.5, tools: 1.5 } } },
   // La Rochelle: the sugar of the Antilles; France banned colonial rum in 1713 to protect its brandy.

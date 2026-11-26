@@ -9,7 +9,7 @@ export type AmericasNationId = 'england' | 'france' | 'netherlands' | 'spain' | 
  * Every nation id a scenario may use (Q2: a scenario's `NationEntry` says all about the nation).
  * The lesser powers of the Caribbean, 1650–1750 (scenarios/caribbean.ts) have no catalogue entry.
  */
-export type NationId = AmericasNationId | 'courland' | 'brandenburg' | 'scotland' | 'malta' | 'crown' | CompanyId;
+export type NationId = AmericasNationId | 'courland' | 'brandenburg' | 'scotland' | 'malta' | 'norse' | 'crown' | CompanyId;
 
 /**
  * Chartered companies (docs/design/cooperation.md, step 3): players of their own (`Player.kind`
@@ -25,7 +25,7 @@ export const COMPANY_IDS: ReadonlySet<PlayerId> = new Set<CompanyId>(['hudsonsBa
  * Every nation id but the Crown, in a fixed order that never changes: game codes store a nation as
  * its index here (seedphrase.ts). The Americas' eight come first, as NATION_ORDER.
  */
-export const NATION_IDS: Exclude<NationId, 'crown'>[] = ['england', 'france', 'netherlands', 'spain', 'portugal', 'sweden', 'denmark', 'russia', 'courland', 'brandenburg', 'scotland', 'malta'];
+export const NATION_IDS: Exclude<NationId, 'crown'>[] = ['england', 'france', 'netherlands', 'spain', 'portugal', 'sweden', 'denmark', 'russia', 'courland', 'brandenburg', 'scotland', 'malta', 'norse'];
 
 export interface NationDef {
   id: NationId;

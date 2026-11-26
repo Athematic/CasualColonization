@@ -40,7 +40,7 @@ export const RANDOM_COOLDOWN = 40;
 // ---------------------------------------------------------------------------
 // Registry
 
-const SETS: Record<string, EventDef[]> = { americas: AMERICAS_EVENTS, caribbean: CARIBBEAN_EVENTS, 'north-east': NORTH_EAST_EVENTS };
+const SETS: Record<string, EventDef[]> = { americas: AMERICAS_EVENTS, caribbean: CARIBBEAN_EVENTS, 'north-east': NORTH_EAST_EVENTS, vinland: [] };
 
 /** Registers an event set (a scenario's), replacing one with the same id. */
 export function registerEventSet(id: string, defs: EventDef[]): void {

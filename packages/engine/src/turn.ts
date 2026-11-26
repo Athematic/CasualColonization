@@ -20,6 +20,7 @@ import { maxMoves, message, unitName, unitPosition } from './queries.js';
 import { calendarOf, formatDate } from './scenarios/index.js';
 import { checkVictory } from './victory.js';
 import { processArrivals } from './arrivals.js';
+import { processDepartures } from './departures.js';
 import { processPeopleMoves } from './peoplemoves.js';
 import { notePeopleWars } from './peoplevictory.js';
 import { recordStats } from './stats.js';
@@ -154,6 +155,8 @@ function advance(s: GameState): void {
     message(s, `${formatDate(s.turn, calendarOf(s))} begins.`);
     // Nations arriving this year enter before the round's first turn (arrivals.ts, T18).
     if (s.arrivals) processArrivals(s);
+    // Nations with a departure check (departures.ts, H21: Norse in Vinland).
+    processDepartures(s);
     // Peoples who come to a region or leave it this year, on a stored map that says so (peoplemoves.ts).
     if (s.config.map) processPeopleMoves(s);
   }

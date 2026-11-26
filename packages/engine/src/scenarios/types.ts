@@ -800,6 +800,29 @@ export interface NationEntry extends PlayerEntry {
    * means it is there from the start. Not read for companies (they have `from`) or the Crown.
    */
   arrives?: number;
+  /**
+   * Optional departure check (Beta 4, hex-maps.md H21; departures.ts): by a seeded year in `years`,
+   * the nation withdraws to its homeland unless its colonies meet `thriving`.
+   */
+  departs?: DepartureRule;
+}
+
+/** Thresholds for whether a fragile expedition (such as the Norse in Vinland) has taken root. */
+export interface ThrivingCriteria {
+  /** At least this many colonies, OR at least `population` total colonists across its colonies. */
+  colonies: number;
+  population: number;
+  /** Require non-negative net food and lumber production (or sufficient food in store). */
+  selfSufficient: boolean;
+  /** At least this many active treaties with peoples (and not at war with all met peoples). */
+  treaties: number;
+}
+
+/** A seeded year window in which a nation withdraws unless it meets `thriving`. */
+export interface DepartureRule {
+  /** Inclusive [earliest, latest] year window; the game seed picks the exact year. */
+  years: [number, number];
+  thriving: ThrivingCriteria;
 }
 
 /**

@@ -40,7 +40,9 @@ import { australia } from './australia.js';
 import { caribbean } from './caribbean.js';
 import { northAmerica } from './north-america.js';
 import { northEast } from './north-east.js';
+import { northEastHex } from './north-east-hex.js';
 import { southAmerica } from './south-america.js';
+import { vinlandAtlantic } from './vinland-atlantic.js';
 
 /** Where a people lives on a stored map (scenarios/types.ts PeopleRegion). */
 export type TribeRegion = PeopleRegion;
@@ -80,7 +82,7 @@ export interface MapRegion {
   name: string;
 }
 
-export const STORED_MAPS: StoredMap[] = [northAmerica, southAmerica, americas, australia, caribbean, northEast];
+export const STORED_MAPS: StoredMap[] = [northAmerica, southAmerica, americas, australia, caribbean, northEast, northEastHex, vinlandAtlantic];
 
 export function storedMap(id: string): StoredMap {
   const def = STORED_MAPS.find((m) => m.id === id);
@@ -152,18 +154,20 @@ export function mapRegionGrid(id: string): Int16Array | undefined {
   if (cached) return cached;
   const def = storedMap(id);
   if (!def.regions) return undefined;
-  const map = parseStoredMap(def);
+  const mapLines = def.rows.split('\n').map((l) => l.trimEnd()).filter((l) => l);
+  const mapHeight = mapLines.length;
+  const mapWidth = mapLines[0]?.length ?? 0;
   const lines = def.regions.rows.split('\n').map((l) => l.trim()).filter((l) => l);
-  if (lines.length !== map.height) throw new Error(`${id}: the region grid has ${lines.length} rows, the map ${map.height}.`);
+  if (lines.length !== mapHeight) throw new Error(`${id}: the region grid has ${lines.length} rows, the map ${mapHeight}.`);
   const index = new Map(def.regions.list.map((r, i) => [r.char, i]));
   if (def.regions.list.some((r) => !REGION_CHARS.includes(r.char) || r.char.length !== 1)) throw new Error(`${id}: a region's character must be one of ${REGION_CHARS}.`);
-  const grid = new Int16Array(map.width * map.height);
+  const grid = new Int16Array(mapWidth * mapHeight);
   lines.forEach((line, y) => {
-    if (line.length !== map.width) throw new Error(`${id}: region row ${y} has ${line.length} tiles, expected ${map.width}.`);
+    if (line.length !== mapWidth) throw new Error(`${id}: region row ${y} has ${line.length} tiles, expected ${mapWidth}.`);
     for (let x = 0; x < line.length; x++) {
       const r = index.get(line[x]);
       if (r === undefined) throw new Error(`${id}: unknown region "${line[x]}" in row ${y}.`);
-      grid[y * map.width + x] = r;
+      grid[y * mapWidth + x] = r;
     }
   });
   REGION_GRIDS.set(id, grid);

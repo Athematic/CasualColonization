@@ -62,6 +62,7 @@ export * from './stats.js';
 export * from './history.js';
 export * from './events/index.js';
 export * from './scenarios/index.js';
+export { departureYearFor, isThriving, processDepartures, type ThrivingStatus } from './departures.js';
 export * from './scenarios/modifiers.js';
 export * from './rules/modifiers.js';
 export * from './reports.js';

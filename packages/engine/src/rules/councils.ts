@@ -43,3 +43,24 @@ export const PEOPLE_COUNCIL: Council = {
 
 /** Councils the engine supplies when a scenario does not define them, by id. */
 export const ENGINE_COUNCILS: Readonly<Record<string, Council>> = { people: PEOPLE_COUNCIL };
+
+/**
+ * Vinland's Thing (hex-maps.md H21; research/vinland.md): the Norse assembly of Greenland and
+ * Vinland. Used only by the Vinland scenario (T17).
+ */
+export const THING_COUNCIL: Council = {
+  categories: ['seafaring', 'craft', 'homestead', 'trade', 'law'],
+  members: [
+    'bjarniHerjolfsson', 'leifErikson', 'bjarniGrimolfsson', 'thorsteinEiriksson',
+    'thorvaldEiriksson', 'thorhallTheHunter', 'tyrkir', 'hakiAndHekja',
+    'gudridThorbjarnardottir', 'snorriThorfinnsson', 'thjodhild',
+    'thorfinnKarlsefni', 'thorhallGamlason', 'helgiAndFinnbogi', 'freydisEiriksdottir',
+    'erikTheRed', 'herjolfBardarson', 'thorbjornVifilsson',
+  ],
+  text: { council: 'The Thing', councilShort: 'Thing', member: 'Thing member', members: 'Thing members', product: 'law' },
+  aiPreference: [
+    'gudridThorbjarnardottir', 'leifErikson', 'thorvaldEiriksson', 'erikTheRed',
+    'thorfinnKarlsefni', 'herjolfBardarson', 'snorriThorfinnsson', 'thorhallTheHunter',
+  ],
+  hall: 'ui/council-house',
+};

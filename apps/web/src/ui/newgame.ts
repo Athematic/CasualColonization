@@ -66,7 +66,7 @@ const DEFAULT = scenarioOf({ config: {} });
 const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** Scenarios still to come, shown as disabled choices (Q15). */
-const PLANNED_SCENARIOS = ['Australia, 1788–1901', 'Vinland, around 1000'];
+const PLANNED_SCENARIOS = ['Australia, 1788–1901'];
 
 
 /** The line under the seed field: the number the text gives, and the phrase it came from. */

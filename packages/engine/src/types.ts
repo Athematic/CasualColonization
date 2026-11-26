@@ -162,6 +162,10 @@ export interface Player {
    * and it takes no more turns. Its score and the score's parts are kept as they were then.
    */
   finished?: { turn: number; score: number; parts: Record<string, number> };
+  /** Passed its scenario departure check (`NationEntry.departs`, departures.ts) by thriving. */
+  thrived?: boolean;
+  /** Withdrew from the map at its scenario departure check (`NationEntry.departs`, departures.ts). */
+  departed?: boolean;
   /**
    * The Royal Expeditionary Force: before independence, the force the Crown has built up so far
    * (it grows during the game, see crown.ts); after the declaration, what is still to land.

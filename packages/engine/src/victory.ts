@@ -41,7 +41,8 @@
  * other kinds or the end year. Computer nations take the win at once.
  */
 import { finalScores, peopleScores, scoreBreakdown } from './score.js';
-import { calendarOf, lastTurn, nationOf, scenarioOf, term, yearValue } from './scenarios/index.js';
+import { isThriving } from './departures.js';
+import { calendarOf, lastTurn, nationEntry, nationOf, scenarioOf, term, yearValue } from './scenarios/index.js';
 import { anyPlayingPeople, sideName } from './peoplediplomacy.js';
 import { confederacyLeagues, continuityStanding, europeansDefeated, goodLifeStanding, militaryWinners, MILITARY, victoryParams } from './peoplevictory.js';
 import { fail } from './errors.js';
@@ -126,6 +127,34 @@ export function checkVictory(s: GameState, moment: VictoryMoment): void {
 function leader(scores: Partial<Record<PlayerId, number>>): PlayerId | undefined {
   return (Object.entries(scores) as [PlayerId, number][]).sort((a, b) => b[1] - a[1])[0]?.[0];
 }
+
+registerVictory({
+  id: 'thriving',
+  name: 'A thriving Norse settlement endures in Vinland',
+  check(s, moment) {
+    if (moment.kind !== 'round') return null;
+    const cal = calendarOf(s);
+    if (s.turn < lastTurn(cal)) return null;
+    const sc = scenarioOf(s);
+    const winners: PlayerId[] = [];
+    for (const p of s.players) {
+      if (p.kind || p.finished || p.departed) continue;
+      const rule = nationEntry(sc, s.config.rivals, p.id)?.departs;
+      if (!rule) continue;
+      if (isThriving(s, p.id, rule.thriving).thriving) winners.push(p.id);
+    }
+    if (!winners.length) return null;
+    const scores = finalScores(s);
+    const names = winners.map((id) => nationOf(s, id).name).join(', ');
+    return {
+      turn: s.turn,
+      reason: `By ${cal.end.year}, ${names} has built a thriving, lasting foothold in Vinland.`,
+      winner: winners[0],
+      winners,
+      scores,
+    };
+  },
+});
 
 registerVictory({
   id: 'time',

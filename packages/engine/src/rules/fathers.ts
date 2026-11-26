@@ -57,7 +57,26 @@ export type FatherId =
   | 'thayendanegea'
   // The North-east's people's council (scenarios/north-east.ts; native-nations.md section 13).
   | 'membertou'
-  | 'kondiaronk';
+  | 'kondiaronk'
+  // Vinland's Thing (scenarios/vinland.ts; hex-maps.md H21; research/vinland.md).
+  | 'bjarniHerjolfsson'
+  | 'leifErikson'
+  | 'bjarniGrimolfsson'
+  | 'thorsteinEiriksson'
+  | 'thorvaldEiriksson'
+  | 'thorhallTheHunter'
+  | 'tyrkir'
+  | 'hakiAndHekja'
+  | 'gudridThorbjarnardottir'
+  | 'snorriThorfinnsson'
+  | 'thjodhild'
+  | 'thorfinnKarlsefni'
+  | 'thorhallGamlason'
+  | 'helgiAndFinnbogi'
+  | 'freydisEiriksdottir'
+  | 'erikTheRed'
+  | 'herjolfBardarson'
+  | 'thorbjornVifilsson';
 
 export interface FatherDef {
   id: FatherId;
@@ -298,6 +317,105 @@ Object.assign(FATHERS, {
     source: 'Dictionary of Canadian Biography, vol. 2 (University of Toronto Press, 1969), "Kondiaronk"; Gilles Havard, The Great Peace of Montreal of 1701 (McGill-Queen\'s University Press, 2001)',
     onJoin: [{ kind: 'makePeace' }],
   }),
+} satisfies Partial<Record<FatherId, FatherDef>>);
+
+/**
+ * Members of Vinland's Thing (rules/councils.ts THING_COUNCIL; hex-maps.md H21; research/vinland.md).
+ * Kept inside the Vinland scenario (T17). Every member uses an emblem portrait (T9).
+ */
+const thingMember = (id: FatherId, name: string, category: FatherCategory, effect: string, source: string, more: Partial<FatherDef> = {}): FatherDef =>
+  f(id, name, category, effect, 5, { portrait: 'emblem', source, ...more });
+
+Object.assign(FATHERS, {
+  // ---- Seafaring & Navigation ----
+  bjarniHerjolfsson: thingMember('bjarniHerjolfsson', 'Bjarni Herjólfsson', 'seafaring', 'Ships gain one extra move on the North Atlantic.',
+    'Grœnlendinga saga (Kunz & Gísli Sigurðsson, Penguin, 2008)', {
+      modifiers: [{ hook: 'shipMoves', add: 1 }],
+    }),
+  leifErikson: thingMember('leifErikson', 'Leif Erikson', 'seafaring', 'The crossing between Vinland and Greenland takes one turn less.',
+    'Grœnlendinga saga; Eiríks saga rauða; Birgitta Wallace, Westward Vikings (2006)', {
+      modifiers: [{ hook: 'sailTurns', add: -1 }],
+    }),
+  bjarniGrimolfsson: thingMember('bjarniGrimolfsson', 'Bjarni Grímólfsson', 'seafaring', 'Ships gain one extra move and sail swiftly through coastal waters.',
+    'Eiríks saga rauða (Kunz & Gísli Sigurðsson, Penguin, 2008)', {
+      modifiers: [{ hook: 'shipMoves', add: 1 }],
+    }),
+  thorsteinEiriksson: thingMember('thorsteinEiriksson', 'Thorstein Eiriksson', 'seafaring', 'Expeditions avoid being lost to storms and rumours.',
+    'Grœnlendinga saga; Eiríks saga rauða', {
+      modifiers: [{ hook: 'rumourOutcome', outcome: 'lost', mul: 0 }],
+    }),
+
+  // ---- Scouting, Timber & Craft ----
+  thorvaldEiriksson: thingMember('thorvaldEiriksson', 'Thorvald Eiriksson', 'craft', 'Lumber yields rise by 50% for ship repair and halls.',
+    'Grœnlendinga saga; Eiríks saga rauða; L’Anse aux Meadows woodworking finds (Wallace, 2006)', {
+      modifiers: [{ hook: 'tileYield', good: 'lumber', mul: 1.5 }],
+    }),
+  thorhallTheHunter: thingMember('thorhallTheHunter', 'Thorhall the Hunter', 'craft', 'Trappers and hunters bring in 50% more furs.',
+    'Eiríks saga rauða (Kunz & Gísli Sigurðsson, Penguin, 2008)', {
+      modifiers: [{ hook: 'tileYield', good: 'furs', mul: 1.5 }],
+    }),
+  tyrkir: thingMember('tyrkir', 'Tyrkir', 'craft', 'Land units see one tile further into the interior.',
+    'Grœnlendinga saga (Kunz & Gísli Sigurðsson, Penguin, 2008)', {
+      modifiers: [{ hook: 'sight', add: 1, land: true }],
+    }),
+  hakiAndHekja: thingMember('hakiAndHekja', 'Haki and Hekja', 'craft', 'Scouts see one tile further and find travellers’ accounts twice as often.',
+    'Eiríks saga rauða (Kunz & Gísli Sigurðsson, Penguin, 2008)', {
+      plural: true,
+      modifiers: [
+        { hook: 'sight', add: 1, roles: ['scout'] },
+        { hook: 'rumourOutcome', outcome: 'tales', mul: 2 },
+      ],
+    }),
+
+  // ---- Homestead & Kin ----
+  gudridThorbjarnardottir: thingMember('gudridThorbjarnardottir', 'Gudrid Thorbjarnardóttir', 'homestead', 'Settlements need 160 food to grow instead of 200.',
+    'Eiríks saga rauða; Grœnlendinga saga; Landnámabók', {
+      modifiers: [{ hook: 'foodToGrow', set: 160 }],
+    }),
+  snorriThorfinnsson: thingMember('snorriThorfinnsson', 'Snorri Thorfinnsson', 'homestead', 'Settlements of three or more build a stockade automatically.',
+    'Grœnlendinga saga; Eiríks saga rauða; Landnámabók', {
+      modifiers: [{ hook: 'autoStockade', minColonists: 3 }],
+    }),
+  thjodhild: thingMember('thjodhild', 'Thjodhild', 'homestead', 'Chapels and churches draw 50% more settlers from Greenland.',
+    'Eiríks saga rauða; Landnámabók; Brattahlíð church excavation', {
+      modifiers: [{ hook: 'buildingOutput', building: 'church', mul: 1.5 }],
+    }),
+
+  // ---- Trade & Ventures ----
+  thorfinnKarlsefni: thingMember('thorfinnKarlsefni', 'Thorfinn Karlsefni', 'trade', 'Greenland markets recover twice as fast, and peoples give gifts more readily.',
+    'Grœnlendinga saga; Eiríks saga rauða; Landnámabók', {
+      modifiers: [
+        { hook: 'priceRecovery', mul: 2 },
+        { hook: 'nativeGifts', add: 0.15 },
+      ],
+    }),
+  thorhallGamlason: thingMember('thorhallGamlason', 'Thorhall Gamlason', 'trade', 'Workshops and smithies produce 50% more.',
+    'Eiríks saga rauða; Grettis saga', {
+      modifiers: [{ hook: 'manufactureCapacity', mul: 1.5, except: ['carpenter'] }],
+    }),
+  helgiAndFinnbogi: thingMember('helgiAndFinnbogi', 'Helgi and Finnbogi', 'trade', 'Carpenters produce 50% more hammers for halls and ships.',
+    'Grœnlendinga saga (Kunz & Gísli Sigurðsson, Penguin, 2008)', {
+      plural: true,
+      modifiers: [{ hook: 'buildingOutput', building: 'carpenter', mul: 1.5 }],
+    }),
+  freydisEiriksdottir: thingMember('freydisEiriksdottir', 'Freydís Eiríksdóttir', 'trade', 'Armed settlers who win a battle are always promoted.',
+    'Grœnlendinga saga; Eiríks saga rauða', {
+      modifiers: [{ hook: 'alwaysPromote' }],
+    }),
+
+  // ---- Law & Settlement ----
+  erikTheRed: thingMember('erikTheRed', 'Erik the Red', 'law', 'The Thing’s law output rises by 25% in every settlement.',
+    'Íslendingabók; Landnámabók; Eiríks saga rauða', {
+      modifiers: [{ hook: 'bellsBonus', add: 25 }],
+    }),
+  herjolfBardarson: thingMember('herjolfBardarson', 'Herjólf Bárdarson', 'law', 'Fewer crosses are needed for new settlers from Greenland.',
+    'Landnámabók; Grœnlendinga saga; Herjólfsnes excavations', {
+      modifiers: [{ hook: 'crossesStep', set: 12 }],
+    }),
+  thorbjornVifilsson: thingMember('thorbjornVifilsson', 'Thorbjörn Vífilsson', 'law', 'Peoples do not demand payment for land beside your settlements.',
+    'Eiríks saga rauða; Landnámabók', {
+      modifiers: [{ hook: 'landPrice', set: 0 }],
+    }),
 } satisfies Partial<Record<FatherId, FatherDef>>);
 
 /** The Americas' Continental Congress: the 25 Founding Fathers, in catalogue order. */
