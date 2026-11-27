@@ -84,6 +84,19 @@ function storedMapSize(id: string): string {
   return `Fixed (${width}×${height})`;
 }
 
+/**
+ * The playable peoples present on the selected map. For a generated map (`map === ''`) or a map
+ * not listed in `scenario.map.stored`, returns all playable peoples of the scenario; for a stored
+ * map, keeps only peoples that have at least one settlement region (`count > 0`) on that map.
+ */
+export function playablePeoplesForMap<T extends { id: TribeId }>(scenario: Scenario, peoples: T[], map: string): T[] {
+  if (!map) return peoples;
+  const entry = scenario.map.stored.find((e) => e.id === map);
+  if (!entry) return peoples;
+  const onMap = new Set(entry.peoples.filter((r) => r.count > 0).map((r) => r.tribe));
+  return peoples.filter((p) => onMap.has(p.id));
+}
+
 /** A "Planned" badge naming the roadmap release (docs/ROADMAP.md) that brings the option. */
 const planned = (release: string) => h('span', { class: 'planned', title: `Planned for ${release}; see docs/ROADMAP.md` }, `Planned · ${release}`);
 
@@ -174,14 +187,26 @@ export function newGameScreen(
    * every nation is a computer; elsewhere peoples start unplayed and a seat stays the person's.
    */
   let peopleSlots: PeopleSlot[] = [];
+  const peoplesForMap = () => playablePeoplesForMap(scenario, options.peoples, map);
   function resetPeoples(): void {
-    peopleSlots = options.peoples.map((p, i): PeopleSlot => ({ people: p.id, controller: options.peoplesFirst ? (i === 0 ? 'human' : i === 1 ? 'competent' : 'off') : 'off' }));
+    peopleSlots = peoplesForMap().map((p, i): PeopleSlot => ({ people: p.id, controller: options.peoplesFirst ? (i === 0 ? 'human' : i === 1 ? 'competent' : 'off') : 'off' }));
     if (options.peoplesFirst) {
       for (const slot of slots) if (slot.controller === 'human') slot.controller = 'competent';
     } else if (!slots.some((x) => x.controller === 'human') && slots[0]) {
       slots[0].controller = 'human';
     }
   }
+  const setMap = (next: string) => {
+    map = next;
+    const avail = peoplesForMap();
+    const prev = new Map(peopleSlots.map((p) => [p.people, p.controller]));
+    const removedHuman = peopleSlots.some((p) => p.controller === 'human' && !avail.some((a) => a.id === p.people));
+    peopleSlots = avail.map((p): PeopleSlot => ({ people: p.id, controller: prev.get(p.id) ?? 'off' }));
+    if (removedHuman && !peopleSlots.some((p) => p.controller === 'human') && !slots.slice(0, count).some((s) => s.controller === 'human')) {
+      if (options.peoplesFirst && peopleSlots[0]) peopleSlots[0].controller = 'human';
+      else if (!options.peoplesFirst && slots[0]) slots[0].controller = 'human';
+    }
+  };
   resetPeoples();
 
   /** Restores the New game choices from a game code. Returns false (and says why) when it is not one. */
@@ -211,7 +236,7 @@ export function newGameScreen(
     colonyCharter = c.colonyCharter;
     headYear = options.startYears.find((y) => y.turn === c.headStartTurn)?.year ?? 0;
     seedText = c.seedPhrase ?? String(c.seed);
-    peopleSlots = options.peoples.map((p): PeopleSlot => ({ people: p.id, controller: c.peoples?.find((x) => x.people === p.id)?.controller ?? 'off' }));
+    peopleSlots = peoplesForMap().map((p): PeopleSlot => ({ people: p.id, controller: c.peoples?.find((x) => x.people === p.id)?.controller ?? 'off' }));
     fromCode = true;
     codeNote = r.versionWarning ?? `Game code applied (game version ${r.version}).`;
     return true;
@@ -328,7 +353,7 @@ export function newGameScreen(
       scenario.mechanics.confederation && scenario.mechanics.independence ? 'declaring independence together' : null,
       // Beta 2 (docs/design/native-partners.md) and Beta 3 (docs/design/native-nations.md), where the scenario has them.
       scenario.mechanics.peopleTreaties?.length ? 'treaties with the native peoples (trade, land use, cultural exchange, defence)' : null,
-      options.peoples.length ? 'native peoples played as nations, by a person or the computer' : null,
+      peopleSlots.length ? 'native peoples played as nations, by a person or the computer' : null,
       scenario.mechanics.landSales ? "buying or taking a playing people's land" : null,
     ].filter((x): x is string => !!x);
     const scenarios = playableScenarios();
@@ -393,7 +418,7 @@ export function newGameScreen(
               return year ? `Arrives in ${year}.` : '';
             })()].filter(Boolean).join(' ')));
         })),
-        options.peoples.length ? peoplesTable() : null,
+        peopleSlots.length ? peoplesTable() : null,
         h('div', { class: 'row wrap' },
           h('label', { class: 'field', title: `${DIFFICULTY[difficulty].description} Applies to the players; computer players use the standard (Conquistador) economics.` },
             h('span', null, 'Difficulty'),
@@ -406,7 +431,7 @@ export function newGameScreen(
         noPeopleNoNation ? h('p', { class: 'save-error', role: 'status' }, `Every nation arrives after ${options.firstYear}: choose at least one people to play, by you or by the computer.`) : null,
         h('div', { class: 'row wrap' },
           h('label', { class: 'field' }, h('span', null, 'Map'),
-            h('select', { 'aria-label': 'Map', onchange: (e: Event) => { map = (e.target as HTMLSelectElement).value; render(); } },
+            h('select', { 'aria-label': 'Map', onchange: (e: Event) => { setMap((e.target as HTMLSelectElement).value); render(); } },
               // A generated map only where the scenario has a generator; then its stored maps.
               options.generated ? h('option', { value: '', selected: !map || undefined }, 'Random (generated)') : null,
               options.maps.map((m) => h('option', { value: m.id, selected: m.id === map || undefined, title: m.description }, m.name)))),

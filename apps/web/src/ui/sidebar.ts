@@ -430,9 +430,10 @@ export class Sidebar {
     const hex = grid.kind === 'hex';
     const world = worldSize(grid, s.map);
     const cw = Math.ceil(world.width * scale);
-    if (c.width !== cw) {
+    const ch = Math.ceil(world.height * scale);
+    if (c.width !== cw || c.height !== ch) {
       c.width = cw;
-      c.height = Math.ceil(world.height * scale);
+      c.height = ch;
     }
     const ctx = c.getContext('2d')!;
     ctx.fillStyle = style.theme['--paper'];

@@ -3,7 +3,7 @@
  * hexes, and the missing-ids check run for the shipped packs.
  */
 import { describe, expect, it } from 'vitest';
-import { AMERICAS, CARIBBEAN, createGame, getScenario, gridOf, headStartConfig, playUntil, TERRAIN, type GameConfig, type GameState, type Scenario } from '@cc/engine';
+import { AMERICAS, CARIBBEAN, createGame, getScenario, gridOf, headStartConfig, kindOfId, NORTH_EAST, playUntil, TERRAIN, VINLAND, type GameConfig, type GameState, type Scenario } from '@cc/engine';
 import { computeVisibility, drawsGrid, type MapLayerHooks, type Scene } from '@cc/render-api';
 import schematic from '@cc/style-schematic';
 import { ligneClairePaintedPack } from '../packs/ligne-claire-painted.js';
@@ -123,6 +123,8 @@ describe('the missing-ids check', () => {
   const scenarios: [Scenario, string][] = [
     [AMERICAS, 'square'],
     [CARIBBEAN, 'square'],
+    [NORTH_EAST, 'square'],
+    [VINLAND, 'hex'],
     [getScenario('hex-test')!, 'hex'],
     [getScenario('hex-test-flat')!, 'hex'],
   ];
@@ -229,6 +231,34 @@ describe('placeholder hooks', () => {
     const before = ctx.calls.length;
     ph.shore!(ctx, [tileAt(water)], 48, s);
     if (gridOf(s).kind === 'hex') expect(ctx.calls.length).toBe(before);
+  });
+
+  it('draws a playing people’s town via placeholder fallback when sprites are missing', () => {
+    const people = NORTH_EAST.peoples.playable![0].id;
+    const s = createGame({
+      seed: 5,
+      mapSize: 'medium',
+      nations: ['england'],
+      peoples: [people],
+      humans: [],
+      scenario: 'north-east',
+      ...(NORTH_EAST.map.generator ? {} : { map: NORTH_EAST.map.stored[0].id }),
+    });
+    const town = Object.values(s.colonies).find((c) => kindOfId(c.owner) === 'people');
+    expect(town).toBeDefined();
+    const ph = hooksFor(placeholderPack);
+    const proc = hooksFor({ ...placeholderPack, fallback: undefined });
+    const ctx = recorder();
+    const scene = sceneOf(s);
+    ph.beginFrame!(ctx, scene);
+    proc.beginFrame!(ctx, scene);
+    const before = ctx.calls.length;
+    expect(ph.colony!(ctx, town!, 3, 10, 10, 48, s)).toBe(true);
+    expect(ctx.calls.length).toBeGreaterThan(before);
+    expect(ctx.calls).toContain('fill');
+    const afterPh = ctx.calls.length;
+    expect(proc.colony!(ctx, town!, 3, 10, 10, 48, s)).toBe(false);
+    expect(ctx.calls.length).toBe(afterPh);
   });
 });
 

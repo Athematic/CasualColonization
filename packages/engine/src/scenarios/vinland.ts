@@ -4,7 +4,7 @@
  * The first hex-only scenario: pointy-top hexagons with a growing two-ring work area (opening at
  * size 5). One Norse expedition sails from Brattahlíð in Greenland across a fragile supply line
  * and must build a thriving foothold — settlement, self-sufficiency, and peace/trade with the
- * local peoples — by a seeded year (1030–1045) or withdraw to Greenland.
+ * local peoples — by a seeded year (1035–1050) or withdraw to Greenland.
  *
  * Offers two stored hex maps:
  *   - `north-east-hex` (default): converted pointy-top hex copy of Beta 3's 84×74 North-east map.
@@ -216,6 +216,14 @@ export const VINLAND: Scenario = {
   ],
   rumours: AMERICAS.rumours,
   text: {
+    homeland: 'Greenland',
+    homelandAdjective: 'Norse',
+    colonyLand: 'Vinland',
+    council: 'The Thing',
+    councilShort: 'Thing',
+    member: 'Thing member',
+    members: 'Thing members',
+    arrival: 'Your expedition for {nation} has reached {colonyLand} from {homeland}. Sail {heading} to find land!',
     'landing.eyebrow': 'Vinland, around 1000',
     'landing.heading': 'Cross the cold sea from Greenland and take root — or hold your homeland.',
     'landing.pitch':
@@ -223,5 +231,7 @@ export const VINLAND: Scenario = {
     'landing.maps': 'Hexagonal maps of Vinland, Markland, Helluland and southwestern Greenland',
     'newGame.tagline': 'Norse voyages and North-east peoples on hexagons, around 1000.',
     'gameOver.time': 'The year {year} has come.',
+    'gameOver.judged': 'The year {year} has come. {Verdicts}.',
+    'gameOver.prosperity': 'The year {year} has come. In peace and partnership with {partners}, {winners} {win} by prosperity.',
   },
 };

@@ -10,6 +10,7 @@
  */
 import {
   BUILDINGS,
+  colonyAt,
   FATHERS,
   PRODUCT_NAMES,
   TERRAIN,
@@ -205,12 +206,26 @@ export const PLACEHOLDER_RELIEF: Record<'forest' | 'hills' | 'mountains', { colo
 /** Line widths of the walls around a colony, by stockade level (1 stockade, 2 fort, 3 fortress). */
 export const PLACEHOLDER_WALLS: Record<number, number> = { 1: 1.5, 2: 2.5, 3: 3.5 };
 
+const DEFAULT_CATEGORY_COLOR = '#6b7280';
+
 const CATEGORY_COLORS: Record<FatherCategory, string> = {
+  // Continental Congress
   trade: '#b8892f',
   exploration: '#3f7f6a',
   military: '#9b3b32',
   political: '#3d5f99',
   religious: '#6d4f8f',
+  // People council
+  household: '#b0643b',
+  land: '#547d3d',
+  knowledge: '#4b6c8c',
+  defence: '#8c3f45',
+  peace: '#687f5a',
+  // Thing council
+  seafaring: '#2f6b8a',
+  craft: '#996b38',
+  homestead: '#6e7c3e',
+  law: '#5a4e7c',
 };
 
 /** Fills and outlines a silhouette scaled to a box of `s` px centred on (cx, cy). */
@@ -308,9 +323,19 @@ export function placeholderRumour(ctx: Ctx, px: number, py: number, z: number): 
 }
 
 /** A road: plain brown lines through the tile's centre to its road neighbours (render-api's curves, any grid). */
-export function placeholderRoad(ctx: Ctx, s: Readonly<GameState>, x: number, y: number, px: number, py: number, z: number): void {
-  const towns = new Set(Object.values(s.colonies).map((c) => c.y * s.map.width + c.x));
-  const linked = (nx: number, ny: number) => !!s.map.tiles[ny * s.map.width + nx].r || towns.has(ny * s.map.width + nx);
+export function placeholderRoad(
+  ctx: Ctx,
+  s: Readonly<GameState>,
+  x: number,
+  y: number,
+  px: number,
+  py: number,
+  z: number,
+  colonyTiles?: ReadonlySet<number>,
+): void {
+  const linked = colonyTiles
+    ? (nx: number, ny: number) => !!s.map.tiles[ny * s.map.width + nx].r || colonyTiles.has(ny * s.map.width + nx)
+    : (nx: number, ny: number) => !!s.map.tiles[ny * s.map.width + nx].r || !!colonyAt(s as GameState, nx, ny);
   const { strands } = roadDrawing(s, x, y, roadMask(s, x, y, linked));
   const cx = px + z / 2;
   const cy = py + z / 2;
@@ -469,7 +494,7 @@ export function placeholderIcon(ctx: Ctx, icon: IconRequest, size: number): void
       ctx.save();
       ctx.beginPath();
       ctx.arc(size / 2, size / 2, size * 0.44, 0, Math.PI * 2);
-      ctx.fillStyle = CATEGORY_COLORS[icon.category];
+      ctx.fillStyle = CATEGORY_COLORS[icon.category] ?? DEFAULT_CATEGORY_COLOR;
       ctx.fill();
       ctx.lineWidth = Math.max(1, size * 0.03);
       ctx.strokeStyle = PLACEHOLDER_INK;

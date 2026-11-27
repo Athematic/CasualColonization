@@ -13,6 +13,7 @@ import {
   gridOf,
   goodsOf,
   hurryPrice,
+  inColonyWorkArea,
   isCarrier,
   isWater,
   landPrice,
@@ -43,6 +44,7 @@ import {
   type BuildTarget,
   type BuildingKind,
   type Colony,
+  type GameState,
   type GoodId,
   type Job,
   type ProductId,
@@ -66,6 +68,29 @@ const HEX_TILE_TWO_RINGS = 54;
 
 function targetKey(t: BuildTarget | null): string {
   return t ? `${t.kind}:${t.id}` : '';
+}
+
+/** What opens a work-area ring ("opens at size 5", "opens with the Docks", or "not open yet"). */
+function ringGate(s: GameState, ring: number): string {
+  const g = scenarioOf(s).map.workArea?.rings?.[ring - 1];
+  const size = g?.size !== undefined ? `at size ${g.size}` : '';
+  const building = g?.building ? `with the ${buildingName(g.building, 1)}` : '';
+  return size || building ? `opens ${[size, building].filter(Boolean).join(' ')}` : 'not open yet';
+}
+
+/**
+ * Error message when a tile is outside the colony's currently open work area, or null when it is
+ * open to work. Checked before native/people land prompts and Docks checks so clicking a closed
+ * outer ring never opens Buy/Lease/Take or shows a misleading Docks message.
+ */
+export function closedWorkAreaMessage(s: GameState, colony: Colony, x: number, y: number): string | null {
+  if (inColonyWorkArea(s, colony, x, y)) return null;
+  const ring = gridOf(s).distance(colony.x, colony.y, x, y);
+  if (ring > openRings(s, colony) && ring <= workReach(s)) {
+    const why = ringGate(s, ring);
+    return why.startsWith('opens ') ? `Ring ${ring} ${why}.` : `Ring ${ring} is ${why}.`;
+  }
+  return "That tile is outside the colony's work area.";
 }
 
 export class ColonyScreen implements Screen {
@@ -265,12 +290,7 @@ export class ColonyScreen implements Screen {
       const g = rings[ring - 1];
       return [g?.size !== undefined ? `size ${g.size}` : '', g?.building ? buildingName(g.building, 1) : ''].filter(Boolean).join(' + ');
     };
-    const gate = (ring: number): string => {
-      const g = rings[ring - 1];
-      const size = g?.size !== undefined ? `at size ${g.size}` : '';
-      const building = g?.building ? `with the ${buildingName(g.building, 1)}` : '';
-      return size || building ? `opens ${[size, building].filter(Boolean).join(' ')}` : 'not open yet';
-    };
+    const gate = (ring: number): string => ringGate(s, ring);
     const iconSize = Math.round(T * 0.52);
     const cells: HTMLElement[] = [];
     for (const t of tiles) {
@@ -357,6 +377,11 @@ export class ColonyScreen implements Screen {
       return;
     }
     if (sel && UNIT_TYPES[sel.type].kind === 'colonist') {
+      const closed = closedWorkAreaMessage(s, colony, x, y);
+      if (closed) {
+        toast(closed, 'error');
+        return;
+      }
       // Native land not leased to the colony's nation must be bought, taken or leased first.
       const native = nativeLandClosedTo(s, colony.owner, x, y);
       if (native) {

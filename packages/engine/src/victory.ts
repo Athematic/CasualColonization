@@ -98,11 +98,17 @@ export function getVictory(id: string): VictoryKind | undefined {
  */
 export const VICTORY_ORDER = ['military', 'independence-war', 'confederacy', 'concord', 'prosperity', 'continuity', 'good-life', 'time'];
 
+/** Scenario-specific victory kinds that rank ahead of the default pre-`time` slot in `orderedVictory`. */
+const EXTRA_VICTORY_RANK: Record<string, number> = {
+  thriving: VICTORY_ORDER.indexOf('prosperity') - 0.5,
+};
+
 /** The scenario's victory rules in VICTORY_ORDER (a stable sort; unknown kinds just before `time`). */
 export function orderedVictory(s: GameState): VictoryRule[] {
   const rank = (id: string) => {
     const i = VICTORY_ORDER.indexOf(id);
-    return i >= 0 ? i : VICTORY_ORDER.length - 1.5;
+    if (i >= 0) return i;
+    return EXTRA_VICTORY_RANK[id] ?? VICTORY_ORDER.length - 1.5;
   };
   return [...scenarioOf(s).victory].sort((a, b) => rank(a.id) - rank(b.id));
 }
@@ -130,7 +136,7 @@ function leader(scores: Partial<Record<PlayerId, number>>): PlayerId | undefined
 
 registerVictory({
   id: 'thriving',
-  name: 'A thriving Norse settlement endures in Vinland',
+  name: 'A thriving settlement endures',
   check(s, moment) {
     if (moment.kind !== 'round') return null;
     const cal = calendarOf(s);
@@ -145,10 +151,11 @@ registerVictory({
     }
     if (!winners.length) return null;
     const scores = finalScores(s);
-    const names = winners.map((id) => nationOf(s, id).name).join(', ');
+    const names = winners.map((id) => nationOf(s, id).name);
+    const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
     return {
       turn: s.turn,
-      reason: `By ${cal.end.year}, ${names} has built a thriving, lasting foothold in Vinland.`,
+      reason: term(s, 'gameOver.thriving', { year: cal.end.year, winners: list, have: names.length > 1 ? 'have' : 'has' }),
       winner: winners[0],
       winners,
       scores,
@@ -342,11 +349,20 @@ function personPlays(s: GameState): boolean {
 }
 
 /** A game with persons where none plays any more ends now, with the wins recorded so far as its winners. */
-function endIfNobodyPlays(s: GameState, text: string): void {
-  if (!s.config.humans.length || personPlays(s)) return;
+export function endIfNobodyPlays(s: GameState, text: string): void {
+  if (s.gameOver || s.config.playOn || !s.config.humans.length || personPlays(s)) return;
+  if (s.arrivals?.some((a) => s.config.humans.includes(a.nation))) return;
   const winners = recordedWins(s);
+  const hasPeoples = anyPlayingPeople(s);
   const ways = Object.fromEntries(winners.map((id) => [id, 'independence-war']));
-  s.gameOver = { turn: s.turn, reason: text, ...(winners.length ? { winner: winners[0] } : {}), winners, scores: finalScores(s), ways, peopleScores: peopleScores(s) };
+  s.gameOver = {
+    turn: s.turn,
+    reason: text,
+    ...(winners.length ? { winner: winners[0] } : {}),
+    winners,
+    scores: finalScores(s),
+    ...(hasPeoples ? { ways, peopleScores: peopleScores(s) } : {}),
+  };
 }
 
 /** The nations whose War of Independence was won and recorded, in the order won (ties in turn order). */

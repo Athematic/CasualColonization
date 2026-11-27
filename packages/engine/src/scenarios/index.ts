@@ -146,6 +146,19 @@ export function playablePeoples(scenario: Scenario): readonly PlayablePeople[] {
 }
 
 /**
+ * The peoples a scenario lets setup play on a given map: `playablePeoples(scenario)` filtered to
+ * those that appear in the chosen stored map's `peoples` regions (when the map names any).
+ */
+export function playablePeoplesForMap(scenario: Scenario, mapId?: string): readonly PlayablePeople[] {
+  const all = playablePeoples(scenario);
+  if (!mapId) return all;
+  const entry = scenario.map.stored.find((e) => e.id === mapId);
+  if (!entry?.peoples?.length) return all;
+  const onMap = new Set(entry.peoples.map((r) => r.tribe));
+  return all.filter((pp) => onMap.has(pp.id));
+}
+
+/**
  * The catalogue selection of a nation type (native-nations.md T6, T7, T8): the scenario's
  * `nationTypes.european` for European nations (companies and the Crown use it too), its
  * `nationTypes.people` for a playing people, or the engine's `PEOPLE_SELECTION`.
@@ -543,6 +556,10 @@ export function checkScenarioConfig(config: GameConfig): Scenario {
   }
   if (config.map) {
     if (!scenario.map.stored.some((e) => e.id === config.map)) throw new Error(`${scenario.name} has no map "${config.map}".`);
+    const onMap = playablePeoplesForMap(scenario, config.map);
+    for (const people of peoples) {
+      if (!onMap.some((e) => e.id === people)) throw new Error(`${people} does not live on the map "${config.map}".`);
+    }
   } else if (!scenario.map.generator) {
     throw new Error(`${scenario.name} has no generated maps; choose one of its maps.`);
   }

@@ -7,15 +7,16 @@
  * Scenarios without `departs` do nothing and draw no random numbers.
  */
 import { colonyReport } from './production.js';
+import { hasMetPeople } from './prosperity.js';
 import { colonyWorkers, message } from './queries.js';
 import type { PlayerId } from './rules/nations.js';
 import { scoreBreakdown } from './score.js';
-import { calendarOf, nationEntry, nationOf, scenarioOf, yearValue } from './scenarios/index.js';
+import { calendarOf, nationEntry, nationOf, nationTitle, scenarioOf, term, yearValue } from './scenarios/index.js';
 import { turnOfYear } from './scenarios/calendar.js';
 import type { DepartureRule, ThrivingCriteria } from './scenarios/types.js';
 import type { GameState } from './types.js';
-import { colonyList, removeUnit, unitList } from './unitindex.js';
-import { peoplesAtWarWith } from './victory.js';
+import { colonyList, removeColony, removeUnit, unitList } from './unitindex.js';
+import { endIfNobodyPlays, peoplesAtWarWith } from './victory.js';
 
 export interface ThrivingStatus {
   thriving: boolean;
@@ -79,12 +80,12 @@ export function isThriving(s: GameState, id: PlayerId, criteria: ThrivingCriteri
   const wars = peoplesAtWarWith(s, id);
   const metPeoples = new Set<string>();
   for (const tr of s.tribes) {
-    if (tr.met?.includes(id)) metPeoples.add(tr.id);
+    if (tr.met?.includes(id) || hasMetPeople(s, id, tr)) metPeoples.add(tr.id);
   }
   for (const p of s.players) {
     if (p.kind === 'people') metPeoples.add(p.id);
   }
-  const atWarWithAll = metPeoples.size > 0 && wars.length >= metPeoples.size;
+  const atWarWithAll = metPeoples.size > 0 && [...metPeoples].every((m) => wars.includes(m as PlayerId));
   const standing = treaties >= criteria.treaties && !atWarWithAll;
 
   return {
@@ -121,20 +122,30 @@ export function processDepartures(s: GameState): void {
     const name = nationOf(s, p.id).name;
     if (status.thriving) {
       p.thrived = true;
+      const text = `${nationTitle(s, p.id)} has taken root in ${term(s, 'colonyLand')} and will endure.`;
       for (const other of s.players) {
-        message(s, `${name} has taken root in Vinland and will endure.`, other.id);
+        message(s, text, other.id);
       }
     } else {
       p.departed = true;
       const bd = scoreBreakdown(s, p);
-      p.finished = { turn: s.turn, score: bd.total, parts: Object.fromEntries(bd.lines.map((l) => [l.label, l.points])) };
-      // Withdraw all units back to Greenland.
+      p.finished = { turn: s.turn, score: bd.total, parts: Object.fromEntries(bd.lines.map((l) => [l.key, l.points])) };
+      // Withdraw all units, colonies, leases, and land claims back to the homeland.
       for (const u of unitList(s).filter((x) => x.owner === p.id)) {
         removeUnit(s, u.id);
       }
-      for (const other of s.players) {
-        message(s, `Without enough settlers, stores, and peace with the peoples, ${name} withdraws to ${entry.port.name}.`, other.id);
+      for (const c of colonyList(s).filter((x) => x.owner === p.id)) {
+        removeColony(s, c.id);
       }
+      for (const tile of s.map.tiles) {
+        if (tile.use === p.id) delete tile.use;
+        if (tile.claim === p.id) delete tile.claim;
+      }
+      const text = `Without enough settlers, stores, and peace with the peoples, ${name} withdraws to ${entry.port.name}.`;
+      for (const other of s.players) {
+        message(s, text, other.id);
+      }
+      endIfNobodyPlays(s, text);
     }
   }
 }

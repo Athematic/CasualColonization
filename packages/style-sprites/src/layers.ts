@@ -80,6 +80,7 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
   const ph = pack.fallback === 'placeholder';
   let dpr = 1;
   const plowed = new Set<LayerTile>();
+  const colonyTiles = new Set<number>();
   let seed = 0;
   let hex = false;
   let state: Readonly<GameState> | undefined;
@@ -97,6 +98,11 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
       state = scene.state;
       hex = !!scene.state?.map && gridOf(scene.state).kind === 'hex';
       plowed.clear();
+      colonyTiles.clear();
+      if (scene.state?.map) {
+        const w = scene.state.map.width;
+        for (const c of Object.values(scene.state.colonies)) colonyTiles.add(c.y * w + c.x);
+      }
     },
   };
 
@@ -216,7 +222,7 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
     const road = ids.road();
     const roadPlaceholder = (ctx: CanvasRenderingContext2D, t: LayerTile, z: number, s: Readonly<GameState>): boolean => {
       if (!ph) return false;
-      placeholderRoad(ctx, s, t.x, t.y, t.px, t.py, z);
+      placeholderRoad(ctx, s, t.x, t.y, t.px, t.py, z, colonyTiles);
       return true;
     };
     hooks.road = (ctx, t, z, s) => {
@@ -290,8 +296,15 @@ export function createLayerHooks(pack: SpritePack, ids: SpriteIds, painter: Pain
     const flagIds = ids.overlay('flag');
     hooks.colony = (ctx, c, size, px, py, z, state) => {
       // A playing people's town (native-nations.md T2): its people's settlement sprite when the pack
-      // has one, else the procedural town of the style underneath (never a European colony).
-      if (kindOfId(c.owner) === 'people') return placed(ctx, ids.settlement(c.owner as TribeId, false), rules.settlement, px, py, z);
+      // has one, else a settlement placeholder or the procedural town of the style underneath (never a European colony).
+      if (kindOfId(c.owner) === 'people') {
+        const tribe = c.owner as TribeId;
+        if (placed(ctx, ids.settlement(tribe, false), rules.settlement, px, py, z)) return true;
+        if (!ph) return false;
+        const look = settlementKindOf(state, { tribe }).look;
+        placeholderSettlement(ctx, look, tribe, false, undefined, px, py, z);
+        return true;
+      }
       const p = rules.colony;
       const town = ids.colony(size);
       const walls = ids.defence(c.buildings.stockade);

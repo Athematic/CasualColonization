@@ -74,17 +74,18 @@ In a colony, click a colonist and then a field or building to put them to work. 
 
 ## Scenarios
 
-A scenario is the world a game is played in: its years, map, nations, peoples, goods, Founding Fathers (or their counterparts), events, rules and ways to win. The engine provides the mechanics; the scenario provides the data. Three are playable:
+A scenario is the world a game is played in: its years, map, nations, peoples, goods, Founding Fathers (or their counterparts), events, rules and ways to win. The engine provides the mechanics; the scenario provides the data. Four are playable:
 
 - **The Americas, 1492–1850**: the original game. Alternative history (all eight nations) or real rivals (England, France, the Netherlands and Spain); generated worlds or the stored maps. It ends with the War of Independence or in 1850.
 - **The Caribbean, 1650–1750**: the lesser powers (Courland, Brandenburg, Scotland and the Order of Malta, beside England, France, the Netherlands, Spain and Denmark) among the sugar islands. 202 spring and autumn turns, a map of the real West Indies (or a generated archipelago), the Arawak, the Kalinago and the Tupi, no furs, a Colonial Council, its own events. The Crown taxes and makes demands but sends no army, and nobody declares independence: it ends in 1750 and the highest score wins.
 - **The North-east, 1000–1850** (Beta 3, [design note](docs/design/native-nations.md)): play a native people (the Haudenosaunee, the Wendat, the Mi'kmaq or the Innu) from the year 1000, one turn a year, on a map of the real North-east, and meet the Europeans as they arrive one by one from 1497; or play a European nation among the peoples. A people grows from food and stores, keeps its land healthy, sits its own council, trades, makes treaties and leagues, and wins by continuity, a confederacy of peoples, a good life or by defeating every European nation. Head starts make a shorter game.
+- **Vinland, around 1000** (Beta 4, [design note](docs/design/hex-maps.md)): the first hex-only scenario (pointy-top hexagons with a growing two-ring work area), 202 Summer and Winter turns from 1000 to 1100 on `north-east-hex` or the expanded North Atlantic map (`vinland-atlantic`). Sail west from Brattahlíð in Greenland as the Norse, sit the 18-member Thing, and build a thriving foothold before the Greenland supply line fails—or play the Beothuk, Innu, Mi'kmaq or Haudenosaunee.
 
-Australia (1788–1901) and Vinland (around 1000, on hexagons, Beta 4) are planned and shown on the New game screen as disabled choices.
+Australia (1788–1901, on hexagons) is planned and shown on the New game screen as a disabled choice.
 
 **Choosing one.** The New game screen has a *Scenario* select. Changing it resets the nations, the map, the size and the start year to what the scenario offers. The *Rivals* select chooses the nations that were there (when the scenario has them) or alternative history. Game codes and share links carry the scenario.
 
-**Tools.** `--scenario <id>` (`americas`, `caribbean` or `north-east`) works for `npm run tournament`, the arena and `npm run bench`. Give a tournament the scenario's length with `--turns` (609 for the Americas, 202 for the Caribbean, 851 for the North-east, whose playing peoples play too: `--peoples` chooses them). `--rivals real` (or `alternative`) picks the nation set. `--play-on` (tournament) lets the computer players go on after a War of Independence, so every nation is measured to the end year; a nation that has fought its war keeps the score it had then.
+**Tools.** `--scenario <id>` (`americas`, `caribbean`, `north-east` or `vinland`) works for `npm run tournament`, the arena and `npm run bench`. Give a tournament the scenario's length with `--turns` (609 for the Americas, 202 for the Caribbean, 851 for the North-east, 202 for Vinland; where playing peoples exist, `--peoples` chooses them). `--rivals real` (or `alternative`) picks the nation set. `--play-on` (tournament) lets the computer players go on after a War of Independence, so every nation is measured to the end year; a nation that has fought its war keeps the score it had then.
 
 ```sh
 npm run tournament -- --scenario caribbean --games 6 --turns 202 --events

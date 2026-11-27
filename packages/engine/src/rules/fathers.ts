@@ -336,9 +336,9 @@ Object.assign(FATHERS, {
     'Grœnlendinga saga; Eiríks saga rauða; Birgitta Wallace, Westward Vikings (2006)', {
       modifiers: [{ hook: 'sailTurns', add: -1 }],
     }),
-  bjarniGrimolfsson: thingMember('bjarniGrimolfsson', 'Bjarni Grímólfsson', 'seafaring', 'Ships gain one extra move and sail swiftly through coastal waters.',
+  bjarniGrimolfsson: thingMember('bjarniGrimolfsson', 'Bjarni Grímólfsson', 'seafaring', 'A caravel joins your fleet in Greenland.',
     'Eiríks saga rauða (Kunz & Gísli Sigurðsson, Penguin, 2008)', {
-      modifiers: [{ hook: 'shipMoves', add: 1 }],
+      onJoin: [{ kind: 'unit', type: 'caravel', where: 'europe', always: true }],
     }),
   thorsteinEiriksson: thingMember('thorsteinEiriksson', 'Thorstein Eiriksson', 'seafaring', 'Expeditions avoid being lost to storms and rumours.',
     'Grœnlendinga saga; Eiríks saga rauða', {

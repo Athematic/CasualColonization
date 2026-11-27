@@ -23,7 +23,7 @@ import type { UnitTypeId } from './rules/units.js';
 import { newPlayer } from './game.js';
 import { createUnit, message, newId, reveal, tileAt } from './queries.js';
 import type { TribeId } from './rules/nations.js';
-import { bornType, difficultyOf, goodsOf, nationOf, nationTypeOf, newColonyBuildings, peopleOf, playablePeoples, scenarioOf } from './scenarios/index.js';
+import { bornType, difficultyOf, goodsOf, nationOf, nationTypeOf, newColonyBuildings, peopleOf, playablePeoples, playablePeoplesForMap, scenarioOf } from './scenarios/index.js';
 import { settlementName } from './natives.js';
 import { emptyGoods } from './rules/goods.js';
 import type { Colony, GameState, Player } from './types.js';
@@ -33,6 +33,9 @@ import { addColony, removeUnit, setUnitLoc } from './unitindex.js';
 export function addPeoplePlayer(s: GameState, id: TribeId, human: boolean): Player {
   const name = nationOf(s, id).name;
   if (!playablePeoples(scenarioOf(s)).some((e) => e.id === id)) throw new Error(`The ${name} cannot play as a nation in this scenario.`);
+  if (s.config.map && !playablePeoplesForMap(scenarioOf(s), s.config.map).some((e) => e.id === id)) {
+    throw new Error(`${id} does not live on the map "${s.config.map}".`);
+  }
   // Its capital first, then the others in the order the map made them.
   const settlements = Object.values(s.settlements).filter((st) => st.tribe === id);
   settlements.sort((a, b) => Number(b.capital) - Number(a.capital));
